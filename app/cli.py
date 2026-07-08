@@ -108,6 +108,31 @@ def cmd_deploy(args) -> None:
     print("deployed: " + deploy.deploy_site(out_dir))
 
 
+def cmd_flow(args) -> None:
+    cfg = _load_company(args.company)
+    store = Store(settings.data_path)
+    fm = store.flow_metrics(cfg["slug"])
+    print(f"== flow: {cfg.get('name')} ==")
+    print(f"throughput(done): {fm['throughput']}   wip: {fm['wip']}   "
+          f"tokens/task: {fm['tokens_per_completed_task']}   "
+          f"bottleneck: {fm['bottleneck'] or 'none'}")
+    print(f"waste: {fm['defects']} defects (failed actions), "
+          f"{fm['waiting']} waiting (pending approvals)")
+    for t, n in sorted(fm["by_target"].items()):
+        print(f"  {t:12} {n} open")
+
+
+def cmd_board(args) -> None:
+    cfg = _load_company(args.company)
+    store = Store(settings.data_path)
+    rows = store.list_tasks(cfg["slug"])
+    print(f"== board: {cfg.get('name')} ==")
+    for col in ("proposed", "approved", "in_progress", "done", "rejected"):
+        items = [t for t in rows if t["status"] == col]
+        head = ", ".join(f"#{t['id']}:{t['target']}" for t in items[:6])
+        print(f"{col:12} ({len(items)}): {head}")
+
+
 def cmd_approvals(args) -> None:
     cfg = _load_company(args.company)
     store = Store(settings.data_path)
@@ -161,6 +186,9 @@ def main(argv=None) -> None:
     sp.add_argument("--approve", action="store_true")
     sp.add_argument("--reject", action="store_true")
     sp.set_defaults(fn=cmd_task)
+
+    with_company(sub.add_parser("flow")).set_defaults(fn=cmd_flow)
+    with_company(sub.add_parser("board")).set_defaults(fn=cmd_board)
     with_company(sub.add_parser("approvals")).set_defaults(fn=cmd_approvals)
 
     sp = with_company(sub.add_parser("approve"))

@@ -134,7 +134,7 @@ app/
   hitl.py          approval gate and queue
   orchestrator.py  scheduler (cadences) + runtime (the tick loop)
   store.py         SQLite persistence
-  cli.py           init / run / status / tasks / task / site / deploy / approvals
+  cli.py           init / run / status / tasks / task / board / flow / site / deploy
   mcp_server.py    optional MCP server (drive corparius from an MCP host)
 companies/example/ a sample company config
 docs/              architecture, safety, compliance, and the RE dossier
@@ -154,6 +154,7 @@ tests/             guard and routing unit tests
 - `docs/pipeline.md` covers enrichment, the deliverability guard, simple company memory, and signal watching.
 - `docs/backlog.md` covers the CEO-governed task backlog (create, arbitrate, execute, propose).
 - `docs/mcp.md` covers the optional MCP server that drives corparius from Cowork, Claude Code or any MCP host.
+- `docs/lean.md` covers the lean organisation layer (pull with WIP limits, flow metrics, kaizen).
 - `docs/reverse-engineering/` holds teardowns of NanoCorp, Polsia and Uclic, plus a comparison.
 
 ## Disclaimer

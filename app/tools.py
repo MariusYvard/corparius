@@ -107,10 +107,13 @@ def _create_tasks(ctx) -> str:
     open_pairs = {(t["target"], t.get("tool") or "") for t in store.list_tasks(slug)
                   if t["status"] in ("approved", "in_progress")}
     created: list[str] = []
+    wip_limit = int(os.environ.get("CORP_WIP_LIMIT", "2") or 2)
 
     def queue(title, target, tool, priority):
         if not enabled.get(target) or (target, tool) in open_pairs:
             return
+        if store.wip_count(slug, target) >= wip_limit:
+            return   # pull system: do not overproduce past the WIP limit
         store.add_task(slug, title, target, priority, "approved", "ceo", tool=tool)
         open_pairs.add((target, tool))
         created.append(target)
@@ -169,6 +172,22 @@ def _propose_task(ctx) -> str:
     return f"{role} proposed a task to the CEO"
 
 
+def _kaizen(ctx) -> str:
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "Backlog unavailable"
+    slug = ctx.company.get("slug", "company")
+    fm = store.flow_metrics(slug)
+    bottleneck = fm.get("bottleneck")
+    if bottleneck and fm["by_target"].get(bottleneck, 0) >= 2:
+        store.add_task(slug, f"Kaizen: unblock {bottleneck} ({fm['by_target'][bottleneck]} open)",
+                       bottleneck, priority=2, status="proposed", created_by="strategy",
+                       tool=ROLE_TOOL.get(bottleneck, ""))
+        return f"Kaizen: bottleneck {bottleneck}, proposed an improvement to the CEO"
+    return (f"Kaizen: flow healthy (throughput {fm['throughput']}, wip {fm['wip']}, "
+            f"{fm['tokens_per_completed_task']} tokens/task)")
+
+
 _ALL = [
     Tool("set_daily_plan", "Set the day's 1-3 priorities", needs_draft=True,
          prompt=lambda c: (f"Yesterday: {c.memory[0] if getattr(c, 'memory', None) else 'no prior summary'}. "
@@ -183,6 +202,8 @@ _ALL = [
          effect=lambda c, d: _ok(_review_proposals(c))),
     Tool("propose_task", "Suggest a task to the CEO for review",
          effect=lambda c, d: _ok(_propose_task(c))),
+    Tool("kaizen", "Continuous improvement: find the bottleneck, propose a fix",
+         effect=lambda c, d: _ok(_kaizen(c))),
     Tool("draft_social_post", "Draft a post for X or LinkedIn", needs_draft=True,
          prompt=lambda c: f"Draft one short LinkedIn post for {_name(c)}.",
          effect=lambda c, d: _ok(f"Post drafted: {d[:120]}")),

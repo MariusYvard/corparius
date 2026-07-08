@@ -177,3 +177,23 @@ class Store:
         self.db.execute(f"UPDATE tasks SET {sets} WHERE id=?",
                         [v for _, v in items] + [task_id])
         self.db.commit()
+
+    def wip_count(self, company, target) -> int:
+        return self.db.execute(
+            "SELECT COUNT(*) n FROM tasks WHERE company=? AND target=?"
+            " AND status IN ('approved','in_progress')", (company, target)).fetchone()["n"]
+
+    def flow_metrics(self, company) -> dict:
+        rows = self.list_tasks(company)
+        done = [t for t in rows if t["status"] == "done"]
+        wip = [t for t in rows if t["status"] in ("approved", "in_progress")]
+        by_target: dict = {}
+        for t in wip:
+            by_target[t["target"]] = by_target.get(t["target"], 0) + 1
+        bottleneck = max(by_target, key=by_target.get) if by_target else None
+        st = self.status(company)
+        defects = self.db.execute(
+            "SELECT COUNT(*) n FROM actions WHERE company=? AND ok=0", (company,)).fetchone()["n"]
+        return {"throughput": len(done), "wip": len(wip), "by_target": by_target,
+                "bottleneck": bottleneck, "waiting": st["pending_approvals"], "defects": defects,
+                "tokens_per_completed_task": round(st["tokens"] / len(done)) if done else 0}

@@ -53,8 +53,8 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         ["reconcile_stripe", "send_financial_transaction"]),
     AgentRole.STRATEGY: AgentSpec(
         AgentRole.STRATEGY, 24, Difficulty.HARD,
-        "You own strategy, pricing and the roadmap.",
-        ["review_kpis", "update_pricing", "propose_task"]),
+        "You own strategy, pricing, the roadmap and continuous improvement (kaizen).",
+        ["review_kpis", "update_pricing", "kaizen"]),
     AgentRole.COMPETITOR: AgentSpec(
         AgentRole.COMPETITOR, 24, Difficulty.TRIVIAL,
         "You track the competitive landscape and buying signals.",

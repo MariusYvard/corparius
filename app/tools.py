@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Callable
 
 from .models import ToolResult
+from . import integrations
 
 
 class Tool:
@@ -50,7 +51,8 @@ _ALL = [
          effect=lambda c, d: _ok("Found 5 ICP-matching targets from enriched data")),
     Tool("send_outreach", "Send a cold email sequence", needs_draft=True,
          prompt=lambda c: f"Draft a 2-line cold email opener for {_name(c)}.",
-         effect=lambda c, d: _ok(f"Cold email sent to 5 targets. Opener: {d[:90]}")),
+         effect=lambda c, d: _ok(integrations.send_outreach_email(c, d)
+                                 or f"Cold email sent to 5 targets. Opener: {d[:90]}")),
     Tool("triage_inbox", "Triage the support inbox",
          effect=lambda c, d: _ok("Inbox triaged: 3 support, 1 sales, 0 urgent")),
     Tool("draft_support_reply", "Draft a reply to the top ticket", needs_draft=True,
@@ -62,7 +64,8 @@ _ALL = [
          prompt=lambda c: f"Write one ad headline for {_name(c)}.",
          effect=lambda c, d: _ok(f"Bid variant written: {d[:90]}")),
     Tool("reconcile_stripe", "Reconcile Stripe cashflow",
-         effect=lambda c, d: _ok("Stripe reconciled: MRR 27 EUR, 3 active subs (mock)")),
+         effect=lambda c, d: _ok(integrations.stripe_reconcile()
+                                 or "Stripe reconciled: MRR 27 EUR, 3 active subs (mock)")),
     Tool("send_financial_transaction", "Pay an invoice / move money", hitl=True,
          effect=lambda c, d: _ok("Paid infrastructure invoice 12 EUR (mock)")),
     Tool("review_kpis", "Review KPIs against targets",

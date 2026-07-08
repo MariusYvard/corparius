@@ -135,6 +135,7 @@ tests/             guard and routing unit tests
 - `docs/securite.md` covers the safety firewall, the Agent SRE mapping and human-in-the-loop.
 - `docs/conformite-fr.md` covers e-invoicing (PDP and Factur-X), legal forms and the EU AI Act.
 - `docs/roadmap-90j.md` covers the 90-day build cycle and the path to production.
+- `docs/integrations.md` covers the real-or-mock backend pattern and the wired Stripe and SMTP integrations.
 - `docs/reverse-engineering/` holds teardowns of NanoCorp, Polsia and Uclic, plus a comparison.
 
 ## Disclaimer

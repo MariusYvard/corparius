@@ -1,5 +1,7 @@
 # corparius
 
+![CI](https://github.com/MariusYvard/corparius/actions/workflows/ci.yml/badge.svg)
+
 Self-hosted framework for autonomous AI micro-companies. You describe a business
 in plain language; corparius runs it as a set of scheduled cognitive agents, a
 CEO plus operational roles, that pursue a single signal (revenue) while a budget

@@ -24,6 +24,7 @@ class RunContext:
     breaker: CircuitBreaker
     data_path: str = "./data"
     memory: list[str] = field(default_factory=list)
+    leads: list = field(default_factory=list)
 
 
 def due_roles(tick: int, enabled: dict) -> list[AgentSpec]:

@@ -30,22 +30,22 @@ def stripe_reconcile(timeout: int = 15) -> str | None:
         return None
 
 
-def send_outreach_email(company: dict, draft: str, timeout: int = 15) -> str | None:
-    """Send the drafted opener over SMTP to a test/notification address. Set
-    CORP_SMTP_HOST and CORP_OUTREACH_TEST_TO (plus auth if your relay needs it)."""
+def send_email(to: str, subject: str, body: str, timeout: int = 15) -> str | None:
+    """Send one email over SMTP, gated by the deliverability guard. Returns None
+    when SMTP is not configured (so the caller falls back), else "sent",
+    "skipped (reason)" or "error"."""
     host = os.environ.get("CORP_SMTP_HOST", "")
-    to = os.environ.get("CORP_OUTREACH_TEST_TO", "")
     if not host or not to:
         return None
     ok, reason = deliverability.can_send(to)
     if not ok:
-        return f"Outreach skipped for {to}: {reason}"
+        return f"skipped ({reason})"
     try:
         msg = EmailMessage()
-        msg["Subject"] = f"{company.get('name', 'corparius')} outreach"
+        msg["Subject"] = subject
         msg["From"] = os.environ.get("CORP_SMTP_FROM") or os.environ.get("CORP_SMTP_USER", "corparius@localhost")
         msg["To"] = to
-        msg.set_content(draft or "Outreach draft")
+        msg.set_content(body or "")
         with smtplib.SMTP(host, int(os.environ.get("CORP_SMTP_PORT", "587")), timeout=timeout) as s:
             s.starttls()
             user = os.environ.get("CORP_SMTP_USER", "")
@@ -53,6 +53,20 @@ def send_outreach_email(company: dict, draft: str, timeout: int = 15) -> str | N
                 s.login(user, os.environ.get("CORP_SMTP_PASSWORD", ""))
             s.send_message(msg)
         deliverability.record_send()
-        return f"Outreach email sent to {to} via SMTP (live)"
+        return "sent"
     except (OSError, smtplib.SMTPException, ValueError):
+        return "error"
+
+
+def send_outreach_email(company: dict, draft: str) -> str | None:
+    """Fallback path: send the opener to a single test/notification address
+    (CORP_OUTREACH_TEST_TO). Used when no real leads are available."""
+    to = os.environ.get("CORP_OUTREACH_TEST_TO", "")
+    if not to:
         return None
+    res = send_email(to, f"{company.get('name', 'corparius')} outreach", draft)
+    if res is None:
+        return None
+    if res == "sent":
+        return f"Outreach email sent to {to} via SMTP (live)"
+    return f"Outreach {res} for {to}"

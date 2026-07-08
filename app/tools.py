@@ -56,6 +56,7 @@ def _find_targets(ctx) -> str:
     icp = company.get("icp", {}) or {}
     query = icp.get("segment", "") or company.get("name", "")
     leads = enrich.enrich_all(leadsource.find_leads(query, 5))
+    ctx.leads = leads
     if leads:
         return f"Found {len(leads)} leads via {leads[0].source}: " + ", ".join(
             lead.label() for lead in leads[:5])
@@ -70,6 +71,24 @@ def _scan_signals(ctx) -> str:
     if hits:
         return f"Signals detected ({len(hits)}): " + " | ".join(hits[:3])
     return "No buying signals in configured sources (mock)"
+
+
+def _send_outreach(ctx, draft: str) -> str:
+    company = ctx.company
+    leads = [lead for lead in getattr(ctx, "leads", []) if lead.email]
+    if leads:
+        cap = int(os.environ.get("CORP_OUTREACH_MAX_PER_RUN", "20") or 20)
+        sent, skipped = [], []
+        for lead in leads[:cap]:
+            res = integrations.send_email(
+                lead.email, f"{company.get('name', 'corparius')} outreach", draft)
+            if res is None:
+                break   # SMTP not configured, fall back below
+            (sent if res == "sent" else skipped).append(lead.email)
+        if sent or skipped:
+            return f"Outreach: {len(sent)} sent, {len(skipped)} skipped. {', '.join(sent[:3])}"
+    return integrations.send_outreach_email(company, draft) or \
+        f"Cold email sent to 5 targets. Opener: {draft[:90]}"
 
 
 _ALL = [
@@ -89,8 +108,7 @@ _ALL = [
          effect=lambda c, d: _ok(_find_targets(c))),
     Tool("send_outreach", "Send a cold email sequence", needs_draft=True,
          prompt=lambda c: f"Draft a 2-line cold email opener for {_name(c)}.",
-         effect=lambda c, d: _ok(integrations.send_outreach_email(c, d)
-                                 or f"Cold email sent to 5 targets. Opener: {d[:90]}")),
+         effect=lambda c, d: _ok(_send_outreach(c, d))),
     Tool("triage_inbox", "Triage the support inbox",
          effect=lambda c, d: _ok("Inbox triaged: 3 support, 1 sales, 0 urgent")),
     Tool("draft_support_reply", "Draft a reply to the top ticket", needs_draft=True,

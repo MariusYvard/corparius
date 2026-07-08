@@ -16,4 +16,4 @@ CORP_LEAD_SOURCES fixe l'ordre, par défaut "browser,local". Une source indispon
 
 ## Contact
 
-L'agent de prospection appelle find_targets pour obtenir les leads, puis send_outreach rédige et envoie l'accroche via le SMTP configuré (voir integrations.md). Relier l'envoi directement aux leads trouvés est l'étape suivante.
+L'agent de prospection appelle find_targets pour obtenir les leads, posés sur le contexte du cycle, puis send_outreach rédige l'accroche et l'envoie à chaque lead via le SMTP configuré (voir integrations.md), sous le garde-fou de délivrabilité et un plafond par cycle (CORP_OUTREACH_MAX_PER_RUN). Sans SMTP configuré, l'envoi retombe sur une adresse de test puis sur le mode mock.

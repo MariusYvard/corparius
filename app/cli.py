@@ -66,6 +66,15 @@ def cmd_site(args) -> None:
     print(f"sales site built: {path}")
 
 
+def cmd_deploy(args) -> None:
+    from . import sitegen, deploy
+    cfg = _load_company(args.company)
+    out_dir = os.path.join(settings.data_path, "sites", cfg["slug"])
+    if not os.path.exists(os.path.join(out_dir, "index.html")):
+        sitegen.build_site(cfg, out_dir)
+    print("deployed: " + deploy.deploy_site(out_dir))
+
+
 def cmd_approvals(args) -> None:
     cfg = _load_company(args.company)
     store = Store(settings.data_path)
@@ -106,6 +115,8 @@ def main(argv=None) -> None:
     sp = with_company(sub.add_parser("site"))
     sp.add_argument("--headline", default="", help="override the hero headline")
     sp.set_defaults(fn=cmd_site)
+
+    with_company(sub.add_parser("deploy")).set_defaults(fn=cmd_deploy)
     with_company(sub.add_parser("approvals")).set_defaults(fn=cmd_approvals)
 
     sp = with_company(sub.add_parser("approve"))

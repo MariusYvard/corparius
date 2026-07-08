@@ -42,7 +42,8 @@ class Settings:
     # Human in the loop.
     hitl_tools: list[str] = field(
         default_factory=lambda: _csv(
-            os.environ.get("CORP_HITL_TOOLS", "send_financial_transaction,publish_production_code")
+            os.environ.get("CORP_HITL_TOOLS",
+                           "send_financial_transaction,publish_production_code,deploy_site")
         )
     )
 

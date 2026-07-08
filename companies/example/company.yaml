@@ -43,3 +43,4 @@ budgets:
 hitl_tools:
   - send_financial_transaction
   - publish_production_code
+  - deploy_site

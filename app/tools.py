@@ -7,7 +7,7 @@ from typing import Callable
 import os
 
 from .models import ToolResult
-from . import integrations, sitegen
+from . import integrations, sitegen, deploy
 from .config import settings
 
 
@@ -42,6 +42,14 @@ def _build_site(company: dict, draft: str) -> str:
     out_dir = os.path.join(settings.data_path, "sites", slug)
     path = sitegen.build_site(company, out_dir, headline=(draft.strip() or None))
     return f"Sales site built at {path}"
+
+
+def _deploy_site(company: dict) -> str:
+    slug = company.get("slug", "company")
+    out_dir = os.path.join(settings.data_path, "sites", slug)
+    if not os.path.exists(os.path.join(out_dir, "index.html")):
+        sitegen.build_site(company, out_dir)
+    return "Site published: " + deploy.deploy_site(out_dir)
 
 
 _ALL = [
@@ -98,6 +106,8 @@ _ALL = [
     Tool("build_sales_site", "Generate the sales landing page", needs_draft=True,
          prompt=lambda c: f"Write one punchy sales headline, under 10 words, for {_name(c)}.",
          effect=lambda c, d: _ok(_build_site(c, d))),
+    Tool("deploy_site", "Publish the sales site to the configured hosts", hitl=True,
+         effect=lambda c, d: _ok(_deploy_site(c))),
 ]
 
 TOOLS: dict[str, Tool] = {t.name: t for t in _ALL}

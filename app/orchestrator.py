@@ -22,6 +22,7 @@ class RunContext:
     tick: int
     budget: TokenBudget
     breaker: CircuitBreaker
+    data_path: str = "./data"
 
 
 def due_roles(tick: int, enabled: dict) -> list[AgentSpec]:
@@ -59,7 +60,8 @@ class Runtime:
                 budgets.get("tokens_per_minute", self.settings.tokens_per_minute_limit))
             for offset in range(ticks):
                 tick = start + offset
-                ctx = RunContext(company=company, tick=tick, budget=budget, breaker=breaker)
+                ctx = RunContext(company=company, tick=tick, budget=budget,
+                                 breaker=breaker, data_path=self.settings.data_path)
                 for spec in due_roles(tick, enabled):
                     for line in executor.run_turn(slug, spec, ctx):
                         log.info("tick %d [%s] %s", tick, spec.role.value, line)

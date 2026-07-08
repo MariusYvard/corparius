@@ -123,6 +123,7 @@ app/
   tools.py         the business toolbox, with HITL flags
   sitegen.py       single-file sales-page generator
   deploy.py        interchangeable deploy providers (local, Netlify, S3, SSH)
+  leadsource.py    interchangeable lead sources (local dataset, headless browser)
   agents.py        the ten-agent roster + the turn executor
   hitl.py          approval gate and queue
   orchestrator.py  scheduler (cadences) + runtime (the tick loop)
@@ -142,6 +143,7 @@ tests/             guard and routing unit tests
 - `docs/integrations.md` covers the real-or-mock backend pattern and the wired Stripe and SMTP integrations.
 - `docs/site.md` covers the one-command sales-site generator.
 - `docs/deploiement.md` covers multi-provider publishing (local, Netlify, S3, SSH) with fallback.
+- `docs/leads.md` covers lead research (local dataset, headless browser) and the responsibility note.
 - `docs/reverse-engineering/` holds teardowns of NanoCorp, Polsia and Uclic, plus a comparison.
 
 ## Disclaimer

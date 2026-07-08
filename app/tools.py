@@ -7,8 +7,7 @@ from typing import Callable
 import os
 
 from .models import ToolResult
-from . import integrations, sitegen, deploy
-from .config import settings
+from . import integrations, sitegen, deploy, leadsource
 
 
 class Tool:
@@ -37,19 +36,30 @@ def _ok(text: str) -> ToolResult:
     return ToolResult(ok=True, output=text)
 
 
-def _build_site(company: dict, draft: str) -> str:
-    slug = company.get("slug", "company")
-    out_dir = os.path.join(settings.data_path, "sites", slug)
+def _build_site(ctx, draft: str) -> str:
+    company = ctx.company
+    out_dir = os.path.join(ctx.data_path, "sites", company.get("slug", "company"))
     path = sitegen.build_site(company, out_dir, headline=(draft.strip() or None))
     return f"Sales site built at {path}"
 
 
-def _deploy_site(company: dict) -> str:
-    slug = company.get("slug", "company")
-    out_dir = os.path.join(settings.data_path, "sites", slug)
+def _deploy_site(ctx) -> str:
+    company = ctx.company
+    out_dir = os.path.join(ctx.data_path, "sites", company.get("slug", "company"))
     if not os.path.exists(os.path.join(out_dir, "index.html")):
         sitegen.build_site(company, out_dir)
     return "Site published: " + deploy.deploy_site(out_dir)
+
+
+def _find_targets(ctx) -> str:
+    company = ctx.company
+    icp = company.get("icp", {}) or {}
+    query = icp.get("segment", "") or company.get("name", "")
+    leads = leadsource.find_leads(query, 5)
+    if leads:
+        return f"Found {len(leads)} leads via {leads[0].source}: " + ", ".join(
+            lead.label() for lead in leads[:5])
+    return "Found 5 ICP-matching targets from enriched data (mock)"
 
 
 _ALL = [
@@ -65,7 +75,7 @@ _ALL = [
     Tool("schedule_post", "Schedule the drafted post",
          effect=lambda c, d: _ok("Post scheduled for +2h on linkedin")),
     Tool("find_targets", "Find ICP-matching prospects",
-         effect=lambda c, d: _ok("Found 5 ICP-matching targets from enriched data")),
+         effect=lambda c, d: _ok(_find_targets(c))),
     Tool("send_outreach", "Send a cold email sequence", needs_draft=True,
          prompt=lambda c: f"Draft a 2-line cold email opener for {_name(c)}.",
          effect=lambda c, d: _ok(integrations.send_outreach_email(c, d)

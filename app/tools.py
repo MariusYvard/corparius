@@ -4,9 +4,11 @@ live. Tools flagged `hitl` never execute until a human approves them.
 """
 from __future__ import annotations
 from typing import Callable
+import os
 
 from .models import ToolResult
-from . import integrations
+from . import integrations, sitegen
+from .config import settings
 
 
 class Tool:
@@ -33,6 +35,13 @@ def _name(ctx) -> str:
 
 def _ok(text: str) -> ToolResult:
     return ToolResult(ok=True, output=text)
+
+
+def _build_site(company: dict, draft: str) -> str:
+    slug = company.get("slug", "company")
+    out_dir = os.path.join(settings.data_path, "sites", slug)
+    path = sitegen.build_site(company, out_dir, headline=(draft.strip() or None))
+    return f"Sales site built at {path}"
 
 
 _ALL = [
@@ -86,6 +95,9 @@ _ALL = [
          effect=lambda c, d: _ok(f"Design brief drafted: {d[:120]}")),
     Tool("produce_mockup", "Produce a landing or ad mockup",
          effect=lambda c, d: _ok("Mockup produced: landing hero and one ad variant (mock)")),
+    Tool("build_sales_site", "Generate the sales landing page", needs_draft=True,
+         prompt=lambda c: f"Write one punchy sales headline, under 10 words, for {_name(c)}.",
+         effect=lambda c, d: _ok(_build_site(c, d))),
 ]
 
 TOOLS: dict[str, Tool] = {t.name: t for t in _ALL}

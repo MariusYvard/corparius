@@ -58,6 +58,14 @@ def cmd_status(args) -> None:
         print(f"  {agent:12} {n}")
 
 
+def cmd_site(args) -> None:
+    from . import sitegen
+    cfg = _load_company(args.company)
+    out_dir = os.path.join(settings.data_path, "sites", cfg["slug"])
+    path = sitegen.build_site(cfg, out_dir, headline=args.headline or None)
+    print(f"sales site built: {path}")
+
+
 def cmd_approvals(args) -> None:
     cfg = _load_company(args.company)
     store = Store(settings.data_path)
@@ -94,6 +102,10 @@ def main(argv=None) -> None:
     sp.set_defaults(fn=cmd_run)
 
     with_company(sub.add_parser("status")).set_defaults(fn=cmd_status)
+
+    sp = with_company(sub.add_parser("site"))
+    sp.add_argument("--headline", default="", help="override the hero headline")
+    sp.set_defaults(fn=cmd_site)
     with_company(sub.add_parser("approvals")).set_defaults(fn=cmd_approvals)
 
     sp = with_company(sub.add_parser("approve"))

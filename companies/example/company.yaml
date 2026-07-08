@@ -9,6 +9,7 @@ offer:
   product: Self-serve web app, pay per optimised CV plus a monthly subscription.
   price_eur: 9
   billing: stripe
+  payment_link: ""   # Stripe Payment Link URL; the sales-site CTA points here
 
 # Ideal customer profile. Agents use this to target outreach and content.
 icp:

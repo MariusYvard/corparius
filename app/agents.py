@@ -61,8 +61,8 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         ["scan_competitors"]),
     AgentRole.DESIGN: AgentSpec(
         AgentRole.DESIGN, 24, Difficulty.EASY,
-        "You own visual design, brand consistency and mockups.",
-        ["draft_design_brief", "produce_mockup"]),
+        "You own visual design, brand consistency and the sales site.",
+        ["draft_design_brief", "produce_mockup", "build_sales_site"]),
     AgentRole.CODER: AgentSpec(
         AgentRole.CODER, None, Difficulty.HARD,
         "You ship product changes behind human review.",

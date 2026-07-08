@@ -53,7 +53,7 @@ so the company does not spend its whole budget in one burst.
 | Finance | every 6h | Reconciles Stripe flows, tracks spend, computes the balance |
 | Strategy | daily | Reads KPIs, adjusts pricing, updates the roadmap |
 | Competitor | daily | Web research, updates competitor profiles |
-| Design | daily | Visual direction, brand consistency, landing and ad mockups |
+| Design | daily | Visual direction, brand consistency, builds the sales site |
 | Coder | on demand | Builds features, fixes bugs, opens pull requests |
 
 ## Quick start
@@ -69,6 +69,7 @@ cp .env.example .env
 python -m app.cli init --company companies/example/company.yaml
 python -m app.cli run  --company example --ticks 6   # simulate a day
 python -m app.cli status   --company example
+python -m app.cli site     --company example         # build the sales page
 python -m app.cli approvals --company example        # pending human gates
 ```
 
@@ -119,6 +120,7 @@ app/
   llm.py           HybridRouter + Ollama, Anthropic and Mock providers
   safety.py        TokenBudget, LoopGuard, CircuitBreaker
   tools.py         the business toolbox, with HITL flags
+  sitegen.py       single-file sales-page generator
   agents.py        the ten-agent roster + the turn executor
   hitl.py          approval gate and queue
   orchestrator.py  scheduler (cadences) + runtime (the tick loop)
@@ -136,6 +138,7 @@ tests/             guard and routing unit tests
 - `docs/conformite-fr.md` covers e-invoicing (PDP and Factur-X), legal forms and the EU AI Act.
 - `docs/roadmap-90j.md` covers the 90-day build cycle and the path to production.
 - `docs/integrations.md` covers the real-or-mock backend pattern and the wired Stripe and SMTP integrations.
+- `docs/site.md` covers the one-command sales-site generator.
 - `docs/reverse-engineering/` holds teardowns of NanoCorp, Polsia and Uclic, plus a comparison.
 
 ## Disclaimer

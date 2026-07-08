@@ -72,6 +72,8 @@ def test_backlog_task_runs_the_real_tool(tmp_path):
     s = _settings(tmp_path)
     store = Store(s.data_path)
     store.save_state("t", {"tick": 0})
+    store.record_action("t", "competitor", "scan_signals", {},
+                        "Signals detected (1): Acme is hiring a CISO", True)  # data for the CEO
     cfg = {
         "slug": "t", "name": "T", "offer": {"product": "p"},
         "icp": {"segment": "b", "pains": ["x"]},
@@ -85,3 +87,26 @@ def test_backlog_task_runs_the_real_tool(tmp_path):
     done = store.list_tasks("t", "done")
     assert done and done[0]["tool"] == "send_outreach"        # task carried a tool
     assert store.status("t")["by_agent"].get("outreach", 0) >= 1   # the tool ran
+
+
+def test_ceo_creates_tasks_from_signals(tmp_path):
+    store = Store(str(tmp_path))
+    store.record_action("t", "competitor", "scan_signals", {},
+                        "Signals detected (2): Beta raised a round", True)
+    ctx = types.SimpleNamespace(
+        company={"slug": "t", "agents": {"outreach": True, "social": True, "support": True}},
+        store=store)
+    tools._create_tasks(ctx)
+    outreach = [t for t in store.list_tasks("t", "approved") if t["target"] == "outreach"]
+    assert outreach and outreach[0]["tool"] == "send_outreach"
+    assert outreach[0]["priority"] == 3   # a live signal raises the priority
+
+
+def test_ceo_queues_baseline_without_data(tmp_path):
+    store = Store(str(tmp_path))
+    ctx = types.SimpleNamespace(
+        company={"slug": "t", "agents": {"outreach": True, "social": True, "support": True}},
+        store=store)
+    tools._create_tasks(ctx)
+    targets = {t["target"] for t in store.list_tasks("t", "approved")}
+    assert targets == {"social", "support"}   # no data -> baseline only, no outreach

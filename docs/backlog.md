@@ -21,3 +21,7 @@ Chaque tâche porte un outil. Quand un agent prend une tâche approuvée, il n'e
 ## Consultation
 
 La commande `python -m app.cli tasks --company example` liste les tâches avec leur statut, leur priorité, la cible, l'outil et l'auteur.
+
+## Création pilotée par les données
+
+Le CEO ne crée pas une tâche générique par rôle. Il lit le journal d'actions pour voir ce que l'entreprise a observé, puis en tire des tâches ciblées. Un signal d'achat détecté par la veille ouvre une tâche de prospection prioritaire. Des leads réels trouvés ouvrent une tâche d'envoi. Un KPI faible ouvre une tâche de refonte de la page. Chaque tâche est dédupliquée contre les tâches déjà ouvertes, et une base minimale garde le social et le support actifs. Le CEO agit en début de tour, il réagit donc aux observations des tours précédents.

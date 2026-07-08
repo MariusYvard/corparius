@@ -96,16 +96,40 @@ ROLE_TOOL = {"outreach": "send_outreach", "social": "draft_social_post",
 
 
 def _create_tasks(ctx) -> str:
+    """Data-driven: the CEO reads what the company observed (buying signals,
+    leads, KPIs) from the action log and queues targeted tasks, deduped against
+    what is already open, plus a light baseline."""
     store = getattr(ctx, "store", None)
     if store is None:
         return "Backlog unavailable"
     slug = ctx.company.get("slug", "company")
     enabled = ctx.company.get("agents", {}) or {}
-    targets = [r for r in ROLE_TOOL if enabled.get(r)][:3]
-    for role in targets:
-        store.add_task(slug, f"{role} objective for the day", role, priority=2,
-                       status="approved", created_by="ceo", tool=ROLE_TOOL[role])
-    return f"CEO added {len(targets)} task(s) to the backlog"
+    open_pairs = {(t["target"], t.get("tool") or "") for t in store.list_tasks(slug)
+                  if t["status"] in ("approved", "in_progress")}
+    created: list[str] = []
+
+    def queue(title, target, tool, priority):
+        if not enabled.get(target) or (target, tool) in open_pairs:
+            return
+        store.add_task(slug, title, target, priority, "approved", "ceo", tool=tool)
+        open_pairs.add((target, tool))
+        created.append(target)
+
+    signals = [o for o in store.recent_outputs(slug, "scan_signals", 3) if "detected" in o.lower()]
+    if signals:
+        queue(f"Act on buying signal: {signals[0][:60]}", "outreach", "send_outreach", 3)
+    leads = store.recent_outputs(slug, "find_targets", 1)
+    if leads and "found" in leads[0].lower() and "mock" not in leads[0].lower():
+        queue("Contact the freshly found leads", "outreach", "send_outreach", 2)
+    kpis = store.recent_outputs(slug, "review_kpis", 1)
+    if kpis and ("flat" in kpis[0].lower() or "conversion" in kpis[0].lower()):
+        queue("Refresh the landing page to lift conversion", "design", "build_sales_site", 2)
+    queue("Publish a post today", "social", "draft_social_post", 1)
+    queue("Clear the support inbox", "support", "draft_support_reply", 1)
+
+    if not created:
+        return "CEO backlog review: nothing new to queue"
+    return f"CEO queued {len(created)} data-driven task(s): {', '.join(created)}"
 
 
 def _review_proposals(ctx) -> str:

@@ -29,7 +29,7 @@ class AgentSpec:
 ROSTER: dict[AgentRole, AgentSpec] = {
     AgentRole.CEO: AgentSpec(
         AgentRole.CEO, 12, Difficulty.EASY,
-        "You are the CEO. Own the backlog: create and arbitrate tasks, keep the company solvent.",
+        "You are the CEO. Own the backlog: create data-driven tasks from what the company observes, arbitrate proposals, keep it solvent.",
         ["set_daily_plan", "review_proposals", "create_tasks", "write_eod_summary"]),
     AgentRole.SOCIAL: AgentSpec(
         AgentRole.SOCIAL, 2, Difficulty.TRIVIAL,

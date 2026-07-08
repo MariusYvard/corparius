@@ -65,6 +65,21 @@ class LocalDatasetSource(LeadSource):
         return out
 
 
+def render_page_text(url: str, timeout_ms: int = 30000) -> str:
+    """Fetch a URL with headless Chromium and return the rendered body text.
+    Requires Playwright. Always headless. Shared by lead and signal sources."""
+    from playwright.sync_api import sync_playwright
+    ua = os.environ.get("CORP_BROWSER_UA", "Mozilla/5.0 (compatible; corparius/0.1)")
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)   # always headless
+        try:
+            page = browser.new_context(user_agent=ua).new_page()
+            page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
+            return page.inner_text("body")
+        finally:
+            browser.close()
+
+
 class BrowserSource(LeadSource):
     """Pull candidate leads from a public page rendered by headless Chromium.
     Set CORP_LEADS_URL (use {query} as a placeholder). Needs Playwright
@@ -83,17 +98,8 @@ class BrowserSource(LeadSource):
         return True
 
     def find(self, query: str, limit: int) -> list[Lead]:
-        from playwright.sync_api import sync_playwright
         url = os.environ["CORP_LEADS_URL"].replace("{query}", query)
-        ua = os.environ.get("CORP_BROWSER_UA", "Mozilla/5.0 (compatible; corparius/0.1)")
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True)   # always headless
-            try:
-                page = browser.new_context(user_agent=ua).new_page()
-                page.goto(url, timeout=30000, wait_until="domcontentloaded")
-                text = page.inner_text("body")
-            finally:
-                browser.close()
+        text = render_page_text(url)
         leads: list[Lead] = []
         seen: set[str] = set()
         for email in EMAIL_RE.findall(text):

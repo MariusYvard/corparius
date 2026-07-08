@@ -10,6 +10,8 @@ from email.message import EmailMessage
 
 import requests
 
+from . import deliverability
+
 
 def stripe_reconcile(timeout: int = 15) -> str | None:
     """Live Stripe balance read. Set STRIPE_API_KEY (a restricted read key)."""
@@ -35,6 +37,9 @@ def send_outreach_email(company: dict, draft: str, timeout: int = 15) -> str | N
     to = os.environ.get("CORP_OUTREACH_TEST_TO", "")
     if not host or not to:
         return None
+    ok, reason = deliverability.can_send(to)
+    if not ok:
+        return f"Outreach skipped for {to}: {reason}"
     try:
         msg = EmailMessage()
         msg["Subject"] = f"{company.get('name', 'corparius')} outreach"
@@ -47,6 +52,7 @@ def send_outreach_email(company: dict, draft: str, timeout: int = 15) -> str | N
             if user:
                 s.login(user, os.environ.get("CORP_SMTP_PASSWORD", ""))
             s.send_message(msg)
+        deliverability.record_send()
         return f"Outreach email sent to {to} via SMTP (live)"
     except (OSError, smtplib.SMTPException, ValueError):
         return None

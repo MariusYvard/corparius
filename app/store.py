@@ -51,6 +51,12 @@ class Store:
         )
         self.db.commit()
 
+    def recent_outputs(self, company, tool, limit=3) -> list[str]:
+        rows = self.db.execute(
+            "SELECT output FROM actions WHERE company=? AND tool=? AND ok=1"
+            " ORDER BY ts DESC LIMIT ?", (company, tool, limit)).fetchall()
+        return [r["output"] for r in rows]
+
     def add_approval(self, req) -> None:
         self.db.execute(
             "INSERT OR REPLACE INTO approvals"

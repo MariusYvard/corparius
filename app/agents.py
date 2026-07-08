@@ -57,8 +57,8 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         ["review_kpis", "update_pricing"]),
     AgentRole.COMPETITOR: AgentSpec(
         AgentRole.COMPETITOR, 24, Difficulty.TRIVIAL,
-        "You track the competitive landscape.",
-        ["scan_competitors"]),
+        "You track the competitive landscape and buying signals.",
+        ["scan_competitors", "scan_signals"]),
     AgentRole.DESIGN: AgentSpec(
         AgentRole.DESIGN, 24, Difficulty.EASY,
         "You own visual design, brand consistency and the sales site.",

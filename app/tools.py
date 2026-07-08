@@ -7,7 +7,7 @@ from typing import Callable
 import os
 
 from .models import ToolResult
-from . import integrations, sitegen, deploy, leadsource
+from . import integrations, sitegen, deploy, leadsource, enrich, signals
 
 
 class Tool:
@@ -55,16 +55,27 @@ def _find_targets(ctx) -> str:
     company = ctx.company
     icp = company.get("icp", {}) or {}
     query = icp.get("segment", "") or company.get("name", "")
-    leads = leadsource.find_leads(query, 5)
+    leads = enrich.enrich_all(leadsource.find_leads(query, 5))
     if leads:
         return f"Found {len(leads)} leads via {leads[0].source}: " + ", ".join(
             lead.label() for lead in leads[:5])
     return "Found 5 ICP-matching targets from enriched data (mock)"
 
 
+def _scan_signals(ctx) -> str:
+    company = ctx.company
+    icp = company.get("icp", {}) or {}
+    keywords = [k for k in (icp.get("pains", []) + [icp.get("segment", "")]) if k]
+    hits = signals.find_signals(keywords or [company.get("name", "")], 5)
+    if hits:
+        return f"Signals detected ({len(hits)}): " + " | ".join(hits[:3])
+    return "No buying signals in configured sources (mock)"
+
+
 _ALL = [
     Tool("set_daily_plan", "Set the day's 1-3 priorities", needs_draft=True,
-         prompt=lambda c: f"In one sentence, set today's top priority for {_name(c)}.",
+         prompt=lambda c: (f"Yesterday: {c.memory[0] if getattr(c, 'memory', None) else 'no prior summary'}. "
+                           f"In one sentence, set today's top priority for {_name(c)}."),
          effect=lambda c, d: _ok(f"Daily plan set: {d[:140]}")),
     Tool("write_eod_summary", "Summarise the day", needs_draft=True,
          prompt=lambda c: f"In one sentence, summarise the day for {_name(c)}.",
@@ -103,6 +114,8 @@ _ALL = [
     Tool("scan_competitors", "Scan and summarise competitors", needs_draft=True,
          prompt=lambda c: f"Name one competitor risk for {_name(c)} in a sentence.",
          effect=lambda c, d: _ok(f"Competitor scan: {d[:120]}")),
+    Tool("scan_signals", "Watch configured sources for buying signals",
+         effect=lambda c, d: _ok(_scan_signals(c))),
     Tool("generate_code", "Draft a feature or fix", needs_draft=True,
          prompt=lambda c: f"Describe a small feature for {_name(c)} in one sentence.",
          effect=lambda c, d: _ok(f"Feature branch drafted: {d[:110]}")),

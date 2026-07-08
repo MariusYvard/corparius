@@ -124,6 +124,9 @@ app/
   sitegen.py       single-file sales-page generator
   deploy.py        interchangeable deploy providers (local, Netlify, S3, SSH)
   leadsource.py    interchangeable lead sources (local dataset, headless browser)
+  enrich.py        lead enrichment providers (local heuristic, API-ready)
+  deliverability.py outreach guard (suppression list, daily cap / warmup)
+  signals.py       buying-signal watcher (local feed, headless browser)
   agents.py        the ten-agent roster + the turn executor
   hitl.py          approval gate and queue
   orchestrator.py  scheduler (cadences) + runtime (the tick loop)
@@ -144,6 +147,7 @@ tests/             guard and routing unit tests
 - `docs/site.md` covers the one-command sales-site generator.
 - `docs/deploiement.md` covers multi-provider publishing (local, Netlify, S3, SSH) with fallback.
 - `docs/leads.md` covers lead research (local dataset, headless browser) and the responsibility note.
+- `docs/pipeline.md` covers enrichment, the deliverability guard, simple company memory, and signal watching.
 - `docs/reverse-engineering/` holds teardowns of NanoCorp, Polsia and Uclic, plus a comparison.
 
 ## Disclaimer

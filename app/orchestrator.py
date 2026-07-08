@@ -6,7 +6,7 @@ cadence, so the roster is naturally staggered instead of firing all at once.
 from __future__ import annotations
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .agents import ROSTER, Executor, AgentSpec
 from .safety import TokenBudget, CircuitBreaker
@@ -23,6 +23,7 @@ class RunContext:
     budget: TokenBudget
     breaker: CircuitBreaker
     data_path: str = "./data"
+    memory: list[str] = field(default_factory=list)
 
 
 def due_roles(tick: int, enabled: dict) -> list[AgentSpec]:
@@ -51,6 +52,7 @@ class Runtime:
         enabled = company.get("agents", {})
 
         start = int(self.store.load_state(slug).get("tick", 0))
+        memory = self.store.recent_outputs(slug, "write_eod_summary", 3)
         days = 0
         frozen = False
         last = {"mode": CircuitBreaker.NORMAL, "budget_used": 0, "frozen": False}
@@ -61,7 +63,8 @@ class Runtime:
             for offset in range(ticks):
                 tick = start + offset
                 ctx = RunContext(company=company, tick=tick, budget=budget,
-                                 breaker=breaker, data_path=self.settings.data_path)
+                                 breaker=breaker, data_path=self.settings.data_path,
+                                 memory=memory)
                 for spec in due_roles(tick, enabled):
                     for line in executor.run_turn(slug, spec, ctx):
                         log.info("tick %d [%s] %s", tick, spec.role.value, line)

@@ -82,14 +82,14 @@ models, so set `CORP_CLOUD_ENABLED=true` and `ANTHROPIC_API_KEY`. Each tier is a
 An autonomous agent left alone with an API and a credit card is a runaway-cost
 incident waiting to happen. Three guards sit in front of every turn:
 
-- **TokenBudget** — a hard per-session ceiling. Checked before each call, updated
-  after. Once spent, the agent halts and Operations is notified.
-- **LoopGuard** — catches semantic stutter. If the cosine similarity between the
+- `TokenBudget` is a hard per-session ceiling, checked before each call and
+  updated after. Once spent, the agent halts and Operations is notified.
+- `LoopGuard` catches semantic stutter. If the cosine similarity between the
   last outputs stays above the threshold across successive turns, or the same tool
   is called with identical parameters too many times, the turn is suspended.
-- **CircuitBreaker** — watches spend velocity. Normal work stays under a few
-  thousand tokens a minute; a sustained burst past the limit trips the breaker
-  into a conservative, then safe, mode.
+- `CircuitBreaker` watches spend velocity. Normal work stays under a few thousand
+  tokens a minute, and a sustained burst past the limit trips the breaker into a
+  conservative, then safe, mode.
 
 See `docs/securite.md` for the model and thresholds.
 
@@ -130,11 +130,11 @@ tests/             guard and routing unit tests
 
 ## Docs
 
-- `docs/architecture.md` — orchestration topology, the tiered router, durable execution, MCP
-- `docs/securite.md` — the safety firewall, Agent SRE mapping, human-in-the-loop
-- `docs/conformite-fr.md` — e-invoicing (PDP / Factur-X), legal forms, the EU AI Act
-- `docs/roadmap-90j.md` — the 90-day build cycle and the path to production
-- `docs/reverse-engineering/` — teardowns of NanoCorp, Polsia and Uclic, plus a comparison
+- `docs/architecture.md` covers the orchestration topology, the tiered router, durable execution and MCP.
+- `docs/securite.md` covers the safety firewall, the Agent SRE mapping and human-in-the-loop.
+- `docs/conformite-fr.md` covers e-invoicing (PDP and Factur-X), legal forms and the EU AI Act.
+- `docs/roadmap-90j.md` covers the 90-day build cycle and the path to production.
+- `docs/reverse-engineering/` holds teardowns of NanoCorp, Polsia and Uclic, plus a comparison.
 
 ## Disclaimer
 

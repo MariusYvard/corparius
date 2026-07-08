@@ -91,6 +91,48 @@ def _send_outreach(ctx, draft: str) -> str:
         f"Cold email sent to 5 targets. Opener: {draft[:90]}"
 
 
+def _create_tasks(ctx) -> str:
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "Backlog unavailable"
+    slug = ctx.company.get("slug", "company")
+    enabled = ctx.company.get("agents", {}) or {}
+    targets = [r for r in ("outreach", "social", "support", "design") if enabled.get(r)][:3]
+    for role in targets:
+        store.add_task(slug, f"{role} objective for the day", role,
+                       priority=2, status="approved", created_by="ceo")
+    return f"CEO added {len(targets)} task(s) to the backlog"
+
+
+def _review_proposals(ctx) -> str:
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "Backlog unavailable"
+    slug = ctx.company.get("slug", "company")
+    proposals = store.list_tasks(slug, "proposed")
+    cap = int(os.environ.get("CORP_CEO_APPROVE_CAP", "3") or 3)
+    approved = rejected = 0
+    for i, task in enumerate(proposals):
+        if i < cap:
+            store.set_task_status(task["id"], "approved", "validated by CEO")
+            approved += 1
+        else:
+            store.set_task_status(task["id"], "rejected", "declined by CEO")
+            rejected += 1
+    return f"CEO reviewed {len(proposals)} proposal(s): {approved} approved, {rejected} rejected"
+
+
+def _propose_task(ctx) -> str:
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "Backlog unavailable"
+    slug = ctx.company.get("slug", "company")
+    role = getattr(ctx, "role", "agent")
+    store.add_task(slug, f"Idea from {role}", role, priority=1,
+                   status="proposed", created_by=role)
+    return f"{role} proposed a task to the CEO"
+
+
 _ALL = [
     Tool("set_daily_plan", "Set the day's 1-3 priorities", needs_draft=True,
          prompt=lambda c: (f"Yesterday: {c.memory[0] if getattr(c, 'memory', None) else 'no prior summary'}. "
@@ -99,6 +141,12 @@ _ALL = [
     Tool("write_eod_summary", "Summarise the day", needs_draft=True,
          prompt=lambda c: f"In one sentence, summarise the day for {_name(c)}.",
          effect=lambda c, d: _ok(f"EOD summary: {d[:140]}")),
+    Tool("create_tasks", "CEO adds tasks to the backlog",
+         effect=lambda c, d: _ok(_create_tasks(c))),
+    Tool("review_proposals", "CEO validates or refuses proposed tasks",
+         effect=lambda c, d: _ok(_review_proposals(c))),
+    Tool("propose_task", "Suggest a task to the CEO for review",
+         effect=lambda c, d: _ok(_propose_task(c))),
     Tool("draft_social_post", "Draft a post for X or LinkedIn", needs_draft=True,
          prompt=lambda c: f"Draft one short LinkedIn post for {_name(c)}.",
          effect=lambda c, d: _ok(f"Post drafted: {d[:120]}")),

@@ -47,7 +47,7 @@ so the company does not spend its whole budget in one burst.
 
 | Agent | Cadence | Does |
 | --- | --- | --- |
-| CEO (orchestrator) | twice a day | Sets the morning plan, arbitrates priorities, writes the end-of-day summary |
+| CEO (orchestrator) | twice a day | Owns the backlog: creates and arbitrates tasks, sets the plan, writes the EOD summary |
 | Social media | every 2h | Drafts and schedules posts for X and LinkedIn |
 | Outreach | every 3h | Finds targets from enriched data, sends cold email |
 | Support | every 3h | Triages the inbox, drafts replies |
@@ -74,6 +74,7 @@ python -m app.cli status   --company example
 python -m app.cli site     --company example         # build the sales page
 python -m app.cli deploy   --company example         # publish it (local by default)
 python -m app.cli approvals --company example        # pending human gates
+python -m app.cli tasks     --company example         # the CEO-governed backlog
 ```
 
 To go live, set `CORP_LLM_MOCK=false` and start the self-hosted stack
@@ -150,6 +151,7 @@ tests/             guard and routing unit tests
 - `docs/deploiement.md` covers multi-provider publishing (local, Netlify, S3, SSH) with fallback.
 - `docs/leads.md` covers lead research (local dataset, headless browser) and the responsibility note.
 - `docs/pipeline.md` covers enrichment, the deliverability guard, simple company memory, and signal watching.
+- `docs/backlog.md` covers the CEO-governed task backlog (create, arbitrate, execute, propose).
 - `docs/reverse-engineering/` holds teardowns of NanoCorp, Polsia and Uclic, plus a comparison.
 
 ## Disclaimer

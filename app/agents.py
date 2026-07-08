@@ -29,8 +29,8 @@ class AgentSpec:
 ROSTER: dict[AgentRole, AgentSpec] = {
     AgentRole.CEO: AgentSpec(
         AgentRole.CEO, 12, Difficulty.EASY,
-        "You are the CEO. Set priorities and keep the company solvent.",
-        ["set_daily_plan", "write_eod_summary"]),
+        "You are the CEO. Own the backlog: create and arbitrate tasks, keep the company solvent.",
+        ["set_daily_plan", "review_proposals", "create_tasks", "write_eod_summary"]),
     AgentRole.SOCIAL: AgentSpec(
         AgentRole.SOCIAL, 2, Difficulty.TRIVIAL,
         "You run social media for the company.",
@@ -42,7 +42,7 @@ ROSTER: dict[AgentRole, AgentSpec] = {
     AgentRole.SUPPORT: AgentSpec(
         AgentRole.SUPPORT, 3, Difficulty.EASY,
         "You handle customer support.",
-        ["triage_inbox", "draft_support_reply"]),
+        ["triage_inbox", "draft_support_reply", "propose_task"]),
     AgentRole.ADS: AgentSpec(
         AgentRole.ADS, 6, Difficulty.TRIVIAL,
         "You manage paid acquisition.",
@@ -54,7 +54,7 @@ ROSTER: dict[AgentRole, AgentSpec] = {
     AgentRole.STRATEGY: AgentSpec(
         AgentRole.STRATEGY, 24, Difficulty.HARD,
         "You own strategy, pricing and the roadmap.",
-        ["review_kpis", "update_pricing"]),
+        ["review_kpis", "update_pricing", "propose_task"]),
     AgentRole.COMPETITOR: AgentSpec(
         AgentRole.COMPETITOR, 24, Difficulty.TRIVIAL,
         "You track the competitive landscape and buying signals.",
@@ -94,6 +94,16 @@ class Executor:
         loop = LoopGuard(self.settings.loop_similarity_threshold,
                          max_identical_calls=self.settings.max_identical_tool_calls)
         done: list[str] = []
+        ctx.role = spec.role.value
+        # Non-CEO agents pull the top approved task for their role from the backlog.
+        if spec.role.value != "ceo":
+            task = self.store.claim_next_task(company, spec.role.value)
+            if task:
+                self.store.complete_task(task["id"], "done by agent")
+                self.store.record_action(company, spec.role.value, "work_backlog",
+                                         {"task": task["id"]},
+                                         f"Completed task: {task['title']}", True)
+                done.append(f"work_backlog: #{task['id']} {task['title']}")
         for tool_name in spec.playbook:
             tool = TOOLS[tool_name]
             try:

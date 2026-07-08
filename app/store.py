@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS approvals (
 CREATE TABLE IF NOT EXISTS state (
     company TEXT PRIMARY KEY, data TEXT
 );
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company TEXT, title TEXT, target TEXT, priority INTEGER,
+    status TEXT, created_by TEXT, note TEXT, ts REAL
+);
 """
 
 
@@ -117,4 +122,43 @@ class Store:
             "by_agent": {r["agent"]: r["n"] for r in by_agent},
             "tokens": tokens,
             "pending_approvals": len(self.list_approvals(company, "pending")),
+            "open_tasks": len(self.list_tasks(company, "approved")),
         }
+
+    def add_task(self, company, title, target, priority=2, status="approved",
+                 created_by="ceo", note="") -> int:
+        cur = self.db.execute(
+            "INSERT INTO tasks (company, title, target, priority, status, created_by, note, ts)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            (company, title, target, priority, status, created_by, note, time.time()))
+        self.db.commit()
+        return cur.lastrowid
+
+    def list_tasks(self, company, status=None) -> list[dict]:
+        if status:
+            rows = self.db.execute(
+                "SELECT * FROM tasks WHERE company=? AND status=? ORDER BY priority DESC, ts",
+                (company, status)).fetchall()
+        else:
+            rows = self.db.execute(
+                "SELECT * FROM tasks WHERE company=? ORDER BY status, priority DESC, ts",
+                (company,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def claim_next_task(self, company, target):
+        row = self.db.execute(
+            "SELECT * FROM tasks WHERE company=? AND target=? AND status='approved'"
+            " ORDER BY priority DESC, ts ASC LIMIT 1", (company, target)).fetchone()
+        if row is None:
+            return None
+        self.db.execute("UPDATE tasks SET status='in_progress' WHERE id=?", (row["id"],))
+        self.db.commit()
+        return dict(row)
+
+    def complete_task(self, task_id, note="") -> None:
+        self.db.execute("UPDATE tasks SET status='done', note=? WHERE id=?", (note, task_id))
+        self.db.commit()
+
+    def set_task_status(self, task_id, status, note="") -> None:
+        self.db.execute("UPDATE tasks SET status=?, note=? WHERE id=?", (status, note, task_id))
+        self.db.commit()

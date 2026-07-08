@@ -25,6 +25,8 @@ class RunContext:
     data_path: str = "./data"
     memory: list[str] = field(default_factory=list)
     leads: list = field(default_factory=list)
+    store: object = None
+    role: str = ""
 
 
 def due_roles(tick: int, enabled: dict) -> list[AgentSpec]:
@@ -65,7 +67,7 @@ class Runtime:
                 tick = start + offset
                 ctx = RunContext(company=company, tick=tick, budget=budget,
                                  breaker=breaker, data_path=self.settings.data_path,
-                                 memory=memory)
+                                 memory=memory, store=self.store)
                 for spec in due_roles(tick, enabled):
                     for line in executor.run_turn(slug, spec, ctx):
                         log.info("tick %d [%s] %s", tick, spec.role.value, line)

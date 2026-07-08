@@ -66,6 +66,18 @@ def cmd_site(args) -> None:
     print(f"sales site built: {path}")
 
 
+def cmd_tasks(args) -> None:
+    cfg = _load_company(args.company)
+    store = Store(settings.data_path)
+    rows = store.list_tasks(cfg["slug"])
+    if not rows:
+        print("no tasks")
+        return
+    for t in rows:
+        print(f"#{t['id']:<3} [{t['status']:<11}] p{t['priority']} {t['target']:<9} "
+              f"{t['title']}  (by {t['created_by']})")
+
+
 def cmd_deploy(args) -> None:
     from . import sitegen, deploy
     cfg = _load_company(args.company)
@@ -117,6 +129,7 @@ def main(argv=None) -> None:
     sp.set_defaults(fn=cmd_site)
 
     with_company(sub.add_parser("deploy")).set_defaults(fn=cmd_deploy)
+    with_company(sub.add_parser("tasks")).set_defaults(fn=cmd_tasks)
     with_company(sub.add_parser("approvals")).set_defaults(fn=cmd_approvals)
 
     sp = with_company(sub.add_parser("approve"))

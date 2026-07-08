@@ -107,7 +107,7 @@ def _create_tasks(ctx) -> str:
     open_pairs = {(t["target"], t.get("tool") or "") for t in store.list_tasks(slug)
                   if t["status"] in ("approved", "in_progress")}
     created: list[str] = []
-    wip_limit = int(os.environ.get("CORP_WIP_LIMIT", "2") or 2)
+    wip_limit = int(os.environ.get("CORP_WIP_LIMIT", "4") or 4)
 
     def queue(title, target, tool, priority):
         if not enabled.get(target) or (target, tool) in open_pairs:

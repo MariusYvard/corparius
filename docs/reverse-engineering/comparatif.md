@@ -12,7 +12,7 @@ Positionnement de corparius face aux plateformes de référence. Les figures sur
 
 ## Ce que corparius prend à chacun
 
-De NanoCorp, le signal de récompense unique et la boucle d'agents planifiés, sans la dépendance à une plateforme tierce. De Polsia, le catalogue des neuf rôles et leurs cadences décalées, mais avec des garde-fous en tête et un flux déterministe plutôt qu'une délégation dynamique. De Pancake, l'idée de se brancher sur la stack réelle, reprise via des outils remplaçables un par un. D'Uclic, l'ingénierie d'acquisition par signaux d'intention et l'inversion de persona, portées par l'agent de prospection.
+De NanoCorp, le signal de récompense unique et la boucle d'agents planifiés, sans la dépendance à une plateforme tierce. De Polsia, le catalogue des rôles et leurs cadences décalées, mais avec des garde-fous en tête et un flux déterministe plutôt qu'une délégation dynamique. De Pancake, l'idée de se brancher sur la stack réelle, reprise via des outils remplaçables un par un. D'Uclic, l'ingénierie d'acquisition par signaux d'intention et l'inversion de persona, portées par l'agent de prospection.
 
 ## Sources
 

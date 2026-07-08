@@ -10,7 +10,7 @@ company config, the runtime state and the models stay on your own machine. Cloud
 LLMs are an opt-in escalation, never a requirement. Ship nothing you cannot audit.
 
 > Status: working MVP. The orchestrator, safety firewall, human-in-the-loop gate
-> and the nine-agent roster run end to end against a deterministic mock LLM, so
+> and the ten-agent roster runs end to end against a deterministic mock LLM, so
 > you can watch a full company "day" with no network and no API keys. Real
 > Ollama and Anthropic providers are wired in and selected by config.
 
@@ -40,7 +40,7 @@ action and token, and stops the moment a guard trips.
 
 ## The roster
 
-Nine roles, each with a fixed cadence and a narrow toolset. Cadences are staggered
+Ten roles, each with a fixed cadence and a narrow toolset. Cadences are staggered
 so the company does not spend its whole budget in one burst.
 
 | Agent | Cadence | Does |
@@ -53,6 +53,7 @@ so the company does not spend its whole budget in one burst.
 | Finance | every 6h | Reconciles Stripe flows, tracks spend, computes the balance |
 | Strategy | daily | Reads KPIs, adjusts pricing, updates the roadmap |
 | Competitor | daily | Web research, updates competitor profiles |
+| Design | daily | Visual direction, brand consistency, landing and ad mockups |
 | Coder | on demand | Builds features, fixes bugs, opens pull requests |
 
 ## Quick start
@@ -118,7 +119,7 @@ app/
   llm.py           HybridRouter + Ollama, Anthropic and Mock providers
   safety.py        TokenBudget, LoopGuard, CircuitBreaker
   tools.py         the business toolbox, with HITL flags
-  agents.py        the nine-agent roster + the turn executor
+  agents.py        the ten-agent roster + the turn executor
   hitl.py          approval gate and queue
   orchestrator.py  scheduler (cadences) + runtime (the tick loop)
   store.py         SQLite persistence

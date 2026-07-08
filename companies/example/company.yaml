@@ -29,6 +29,7 @@ agents:
   finance: true
   strategy: true
   competitor: true
+  design: true
   coder: false      # on demand only
 
 # Safety budgets for this company (override the global .env defaults).

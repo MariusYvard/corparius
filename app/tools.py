@@ -78,6 +78,11 @@ _ALL = [
          effect=lambda c, d: _ok(f"Feature branch drafted: {d[:110]}")),
     Tool("publish_production_code", "Merge a PR to production", hitl=True,
          effect=lambda c, d: _ok("Merged PR #42 to production (mock)")),
+    Tool("draft_design_brief", "Draft a visual direction or brief", needs_draft=True,
+         prompt=lambda c: f"Describe a visual direction for {_name(c)} in one sentence.",
+         effect=lambda c, d: _ok(f"Design brief drafted: {d[:120]}")),
+    Tool("produce_mockup", "Produce a landing or ad mockup",
+         effect=lambda c, d: _ok("Mockup produced: landing hero and one ad variant (mock)")),
 ]
 
 TOOLS: dict[str, Tool] = {t.name: t for t in _ALL}

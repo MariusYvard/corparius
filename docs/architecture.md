@@ -6,7 +6,7 @@ corparius exécute une entreprise autonome comme une boucle d'agents planifiés.
 
 Quatre schémas de contrôle existent pour un système multi-agents: centralisé (un coordinateur unique planifie et délègue), décentralisé (des pairs se coordonnent sans superviseur), hiérarchique (plusieurs couches de délégation) et hybride (planification centrale, exécution déléguée en parallèle). corparius adopte un contrôle centralisé à flux déterministe. Le code décide quels agents s'exécutent et dans quel ordre, le modèle ne choisit pas le routage. Ce choix vient du cas Polsia, où la délégation dynamique sans contrôle produit des dérives, et d'une règle de conception simple: si le code peut décider, le code décide.
 
-La spécialisation des agents reste utile. Une évaluation d'Anthropic mesure qu'une architecture à agent principal plus sous-agents spécialisés dépasse un agent unique de même génération de 90,2 % sur des tâches de recherche complexes, par l'isolation du contexte et la parallélisation. corparius garde la spécialisation (neuf rôles, chacun avec son contexte et ses outils) sans l'autonomie de routage qui fragilise la production.
+La spécialisation des agents reste utile. Une évaluation d'Anthropic mesure qu'une architecture à agent principal plus sous-agents spécialisés dépasse un agent unique de même génération de 90,2 % sur des tâches de recherche complexes, par l'isolation du contexte et la parallélisation. corparius garde la spécialisation (dix rôles, chacun avec son contexte et ses outils) sans l'autonomie de routage qui fragilise la production.
 
 | Topologie | Coordination | Statut dans corparius |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ La spécialisation des agents reste utile. Une évaluation d'Anthropic mesure qu
 | Superviseur hiérarchique | routage pyramidal en couches | rôle léger tenu par l'agent CEO |
 | Dynamique (routeur) | aiguillage adaptatif par le modèle | écartée, le routage reste dans le code |
 
-## Les neuf agents
+## Les dix agents
 
 | Agent | Cadence | Tier de modèle |
 | --- | --- | --- |
@@ -27,6 +27,7 @@ La spécialisation des agents reste utile. Une évaluation d'Anthropic mesure qu
 | Finance | 6 h | très simple |
 | Stratégie | 24 h | lourd |
 | Concurrence | 24 h | très simple |
+| Design | 24 h | normal |
 | Générateur de code | à la demande | lourd (modèle de code épinglé) |
 
 ## Routage LLM à trois tiers

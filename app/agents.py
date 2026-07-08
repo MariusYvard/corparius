@@ -1,4 +1,4 @@
-"""The nine-agent roster and the turn executor.
+"""The ten-agent roster and the turn executor.
 
 Control flow is deterministic: code decides which tools run, and in what order.
 The LLM only drafts content. Routing stays out of the model. Each role carries a
@@ -59,6 +59,10 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         AgentRole.COMPETITOR, 24, Difficulty.TRIVIAL,
         "You track the competitive landscape.",
         ["scan_competitors"]),
+    AgentRole.DESIGN: AgentSpec(
+        AgentRole.DESIGN, 24, Difficulty.EASY,
+        "You own visual design, brand consistency and mockups.",
+        ["draft_design_brief", "produce_mockup"]),
     AgentRole.CODER: AgentSpec(
         AgentRole.CODER, None, Difficulty.HARD,
         "You ship product changes behind human review.",

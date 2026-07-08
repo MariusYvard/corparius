@@ -14,6 +14,7 @@ class AgentRole(str, Enum):
     FINANCE = "finance"
     STRATEGY = "strategy"
     COMPETITOR = "competitor"
+    DESIGN = "design"
     CODER = "coder"
 
 

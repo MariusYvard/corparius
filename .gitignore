@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+.pytest_cache/
+# Runtime state (SQLite, generated artifacts, per-company data)
+/data/
+*.sqlite
+*.sqlite3
+companies/*/data/
+companies/*/state.json
+# Local model caches
+.ollama/

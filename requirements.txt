@@ -1,0 +1,10 @@
+requests>=2.31
+PyYAML>=6.0
+
+# Dev / test
+pytest>=8.0
+
+# Optional cloud fallback provider (only needed if CORP_CLOUD_ENABLED=true).
+# The Anthropic API is called over plain HTTP via requests, so this SDK is
+# not required. Uncomment if you prefer the official client.
+# anthropic>=0.39

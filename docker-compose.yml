@@ -1,0 +1,62 @@
+services:
+  corparius:
+    build: .
+    container_name: corparius
+    env_file:
+      - .env
+    environment:
+      CORP_OLLAMA_URL: http://ollama:11434
+    volumes:
+      - ./companies:/app/companies       # company configs and state
+      - corparius_data:/app/data         # SQLite runtime store
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: corparius-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+    # For GPU: install the NVIDIA container toolkit and uncomment.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # Vector-capable Postgres for the production RAG store (pgvector).
+  # The MVP uses SQLite; this is here for when you outgrow it.
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: corparius-postgres
+    environment:
+      POSTGRES_USER: corparius
+      POSTGRES_PASSWORD: change_me
+      POSTGRES_DB: corparius
+    volumes:
+      - corparius_pg:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # n8n hosts the human-in-the-loop approval flows (Slack, Telegram, email).
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: corparius-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_SECURE_COOKIE: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+
+volumes:
+  corparius_data:
+  corparius_pg:
+  ollama_models:
+  n8n_data:

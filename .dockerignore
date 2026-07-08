@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+companies/*/data/
+companies/*/state.json
+.env
+docs/
+tests/

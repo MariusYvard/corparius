@@ -39,6 +39,11 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
         self.db.commit()
+        try:   # migrate older DBs that predate the task tool column
+            self.db.execute("ALTER TABLE tasks ADD COLUMN tool TEXT")
+            self.db.commit()
+        except sqlite3.OperationalError:
+            pass
 
     def record_action(self, company, agent, tool, parameters, output, ok) -> None:
         self.db.execute(
@@ -126,11 +131,11 @@ class Store:
         }
 
     def add_task(self, company, title, target, priority=2, status="approved",
-                 created_by="ceo", note="") -> int:
+                 created_by="ceo", note="", tool="") -> int:
         cur = self.db.execute(
-            "INSERT INTO tasks (company, title, target, priority, status, created_by, note, ts)"
-            " VALUES (?,?,?,?,?,?,?,?)",
-            (company, title, target, priority, status, created_by, note, time.time()))
+            "INSERT INTO tasks (company, title, target, priority, status, created_by, note, tool, ts)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (company, title, target, priority, status, created_by, note, tool, time.time()))
         self.db.commit()
         return cur.lastrowid
 
@@ -161,4 +166,14 @@ class Store:
 
     def set_task_status(self, task_id, status, note="") -> None:
         self.db.execute("UPDATE tasks SET status=?, note=? WHERE id=?", (status, note, task_id))
+        self.db.commit()
+
+    def update_task(self, task_id, **fields) -> None:
+        allowed = {"title", "target", "priority", "note", "status", "tool"}
+        items = [(k, v) for k, v in fields.items() if k in allowed]
+        if not items:
+            return
+        sets = ", ".join(f"{k}=?" for k, _ in items)
+        self.db.execute(f"UPDATE tasks SET {sets} WHERE id=?",
+                        [v for _, v in items] + [task_id])
         self.db.commit()

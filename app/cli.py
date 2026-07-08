@@ -74,8 +74,29 @@ def cmd_tasks(args) -> None:
         print("no tasks")
         return
     for t in rows:
+        tool = t.get("tool") or "-"
         print(f"#{t['id']:<3} [{t['status']:<11}] p{t['priority']} {t['target']:<9} "
-              f"{t['title']}  (by {t['created_by']})")
+              f"{t['title']} [{tool}] (by {t['created_by']})")
+
+
+def cmd_task(args) -> None:
+    store = Store(settings.data_path)
+    fields = {}
+    if args.title is not None:
+        fields["title"] = args.title
+    if args.priority is not None:
+        fields["priority"] = args.priority
+    if args.target is not None:
+        fields["target"] = args.target
+    if args.tool is not None:
+        fields["tool"] = args.tool
+    if fields:
+        store.update_task(args.id, **fields)
+    if args.approve:
+        store.set_task_status(args.id, "approved", "validated via CLI")
+    elif args.reject:
+        store.set_task_status(args.id, "rejected", "refused via CLI")
+    print(f"task {args.id} updated")
 
 
 def cmd_deploy(args) -> None:
@@ -130,6 +151,16 @@ def main(argv=None) -> None:
 
     with_company(sub.add_parser("deploy")).set_defaults(fn=cmd_deploy)
     with_company(sub.add_parser("tasks")).set_defaults(fn=cmd_tasks)
+
+    sp = with_company(sub.add_parser("task"))
+    sp.add_argument("--id", type=int, required=True)
+    sp.add_argument("--title")
+    sp.add_argument("--target")
+    sp.add_argument("--tool")
+    sp.add_argument("--priority", type=int)
+    sp.add_argument("--approve", action="store_true")
+    sp.add_argument("--reject", action="store_true")
+    sp.set_defaults(fn=cmd_task)
     with_company(sub.add_parser("approvals")).set_defaults(fn=cmd_approvals)
 
     sp = with_company(sub.add_parser("approve"))

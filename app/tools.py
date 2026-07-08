@@ -91,16 +91,20 @@ def _send_outreach(ctx, draft: str) -> str:
         f"Cold email sent to 5 targets. Opener: {draft[:90]}"
 
 
+ROLE_TOOL = {"outreach": "send_outreach", "social": "draft_social_post",
+             "support": "draft_support_reply", "design": "build_sales_site"}
+
+
 def _create_tasks(ctx) -> str:
     store = getattr(ctx, "store", None)
     if store is None:
         return "Backlog unavailable"
     slug = ctx.company.get("slug", "company")
     enabled = ctx.company.get("agents", {}) or {}
-    targets = [r for r in ("outreach", "social", "support", "design") if enabled.get(r)][:3]
+    targets = [r for r in ROLE_TOOL if enabled.get(r)][:3]
     for role in targets:
-        store.add_task(slug, f"{role} objective for the day", role,
-                       priority=2, status="approved", created_by="ceo")
+        store.add_task(slug, f"{role} objective for the day", role, priority=2,
+                       status="approved", created_by="ceo", tool=ROLE_TOOL[role])
     return f"CEO added {len(targets)} task(s) to the backlog"
 
 
@@ -111,15 +115,23 @@ def _review_proposals(ctx) -> str:
     slug = ctx.company.get("slug", "company")
     proposals = store.list_tasks(slug, "proposed")
     cap = int(os.environ.get("CORP_CEO_APPROVE_CAP", "3") or 3)
-    approved = rejected = 0
+    approved = rejected = modified = 0
     for i, task in enumerate(proposals):
         if i < cap:
+            fields = {}
+            if task["priority"] < 2:
+                fields["priority"] = 2   # CEO re-prioritises the suggestion
+            if not task.get("tool") and task["target"] in ROLE_TOOL:
+                fields["tool"] = ROLE_TOOL[task["target"]]   # make it executable
+            if fields:
+                store.update_task(task["id"], **fields)
+                modified += 1
             store.set_task_status(task["id"], "approved", "validated by CEO")
             approved += 1
         else:
             store.set_task_status(task["id"], "rejected", "declined by CEO")
             rejected += 1
-    return f"CEO reviewed {len(proposals)} proposal(s): {approved} approved, {rejected} rejected"
+    return f"CEO reviewed {len(proposals)}: {approved} approved ({modified} modified), {rejected} rejected"
 
 
 def _propose_task(ctx) -> str:

@@ -36,7 +36,7 @@ def test_agents_propose_and_ceo_decides(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_CEO_APPROVE_CAP", "1")
     ceo_ctx = types.SimpleNamespace(company={"slug": "t"}, store=store)
     out = tools._review_proposals(ceo_ctx)
-    assert "1 approved, 1 rejected" in out
+    assert "1 approved" in out and "1 rejected" in out
     assert not store.list_tasks("t", "proposed")   # every proposal was decided
 
 
@@ -55,3 +55,33 @@ def test_ceo_creates_and_agents_execute(tmp_path):
     }
     Runtime(s, store).run(cfg, ticks=6)
     assert store.list_tasks("t", "done"), "agents should complete CEO-created tasks"
+
+
+def test_ceo_modifies_proposal_on_approval(tmp_path):
+    store = Store(str(tmp_path))
+    tid = store.add_task("t", "Idea", "support", 1, "proposed", "support")
+    ceo_ctx = types.SimpleNamespace(company={"slug": "t"}, store=store)
+    tools._review_proposals(ceo_ctx)
+    task = next(x for x in store.list_tasks("t") if x["id"] == tid)
+    assert task["status"] == "approved"
+    assert task["priority"] == 2                    # re-prioritised by the CEO
+    assert task["tool"] == "draft_support_reply"    # made executable by the CEO
+
+
+def test_backlog_task_runs_the_real_tool(tmp_path):
+    s = _settings(tmp_path)
+    store = Store(s.data_path)
+    store.save_state("t", {"tick": 0})
+    cfg = {
+        "slug": "t", "name": "T", "offer": {"product": "p"},
+        "icp": {"segment": "b", "pains": ["x"]},
+        "agents": {"ceo": True, "outreach": True, "social": False, "support": False,
+                   "finance": False, "strategy": False, "competitor": False,
+                   "ads": False, "design": False, "coder": False},
+        "budgets": {"session_tokens": 100000, "tokens_per_minute": 100000},
+        "hitl_tools": [],
+    }
+    Runtime(s, store).run(cfg, ticks=1)
+    done = store.list_tasks("t", "done")
+    assert done and done[0]["tool"] == "send_outreach"        # task carried a tool
+    assert store.status("t")["by_agent"].get("outreach", 0) >= 1   # the tool ran

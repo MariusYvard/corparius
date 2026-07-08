@@ -95,47 +95,65 @@ class Executor:
                          max_identical_calls=self.settings.max_identical_tool_calls)
         done: list[str] = []
         ctx.role = spec.role.value
-        # Non-CEO agents pull the top approved task for their role from the backlog.
+        # Non-CEO agents execute the top approved task for their role by running
+        # its mapped tool for real, then completing it with the tool's output.
         if spec.role.value != "ceo":
             task = self.store.claim_next_task(company, spec.role.value)
-            if task:
-                self.store.complete_task(task["id"], "done by agent")
-                self.store.record_action(company, spec.role.value, "work_backlog",
-                                         {"task": task["id"]},
-                                         f"Completed task: {task['title']}", True)
-                done.append(f"work_backlog: #{task['id']} {task['title']}")
+            if task and self._work_task(company, spec, ctx, task, loop, done):
+                return done
         for tool_name in spec.playbook:
-            tool = TOOLS[tool_name]
-            try:
-                ctx.budget.check_before()
-            except BudgetExceeded as exc:
-                log.warning("[%s] budget stop: %s", spec.role.value, exc)
-                self.store.record_action(company, spec.role.value, tool_name, {}, str(exc), False)
-                break
-
-            draft = ""
-            if tool.needs_draft:
-                res = self.router.generate(_messages(spec, ctx, tool),
-                                           difficulty=spec.difficulty, model=spec.model)
-                ctx.budget.record_usage(res.usage.input_tokens, res.usage.output_tokens)
-                ctx.breaker.record(res.usage.total)
-                self.store.record_usage(company, spec.role.value,
-                                        res.usage.input_tokens, res.usage.output_tokens)
-                if loop.observe_output(self.router.embed(res.text)):
-                    log.warning("[%s] loop stop: semantic stutter", spec.role.value)
-                    break
-                draft = res.text
-
-            params = {"draft": draft[:80]} if tool.needs_draft else {}
-            if loop.observe_tool_call(tool_name, params):
-                log.warning("[%s] loop stop: repeated call to %s", spec.role.value, tool_name)
-                break
-
-            result = self.gate.execute(company, spec.role.value, tool, ctx, draft, params)
-            self.store.record_action(company, spec.role.value, tool_name, params,
-                                     result.output, result.ok)
-            done.append(f"{tool_name}: {result.output}")
-            if result.pending:
-                log.info("[%s] paused for human approval on %s", spec.role.value, tool_name)
+            result, stop = self._invoke(company, spec, ctx, tool_name, loop)
+            if result is not None:
+                done.append(f"{tool_name}: {result.output}")
+            if stop or (result is not None and result.pending):
                 break
         return done
+
+    def _work_task(self, company, spec, ctx, task, loop, done) -> bool:
+        """Run a backlog task's tool for real. Returns True if a guard tripped."""
+        tool_name = (task.get("tool") or "").strip()
+        if tool_name not in TOOLS:
+            self.store.complete_task(task["id"], "done (no tool mapped)")
+            done.append(f"backlog #{task['id']} {task['title']} (symbolic)")
+            return False
+        result, stop = self._invoke(company, spec, ctx, tool_name, loop)
+        if result is not None and result.ok and not result.pending:
+            self.store.complete_task(task["id"], result.output[:120])
+            done.append(f"backlog #{task['id']} done via {tool_name}: {result.output}")
+        else:
+            self.store.set_task_status(task["id"], "approved", "returned to backlog")
+            done.append(f"backlog #{task['id']} returned to backlog")
+        return stop
+
+    def _invoke(self, company, spec, ctx, tool_name, loop):
+        """Run one tool through budget, draft, loop guards and the HITL gate.
+        Returns (result, stop); stop=True means a guard tripped, halt the turn."""
+        tool = TOOLS[tool_name]
+        try:
+            ctx.budget.check_before()
+        except BudgetExceeded as exc:
+            log.warning("[%s] budget stop: %s", spec.role.value, exc)
+            self.store.record_action(company, spec.role.value, tool_name, {}, str(exc), False)
+            return None, True
+        draft = ""
+        if tool.needs_draft:
+            res = self.router.generate(_messages(spec, ctx, tool),
+                                       difficulty=spec.difficulty, model=spec.model)
+            ctx.budget.record_usage(res.usage.input_tokens, res.usage.output_tokens)
+            ctx.breaker.record(res.usage.total)
+            self.store.record_usage(company, spec.role.value,
+                                    res.usage.input_tokens, res.usage.output_tokens)
+            if loop.observe_output(self.router.embed(res.text)):
+                log.warning("[%s] loop stop: semantic stutter", spec.role.value)
+                return None, True
+            draft = res.text
+        params = {"draft": draft[:80]} if tool.needs_draft else {}
+        if loop.observe_tool_call(tool_name, params):
+            log.warning("[%s] loop stop: repeated call to %s", spec.role.value, tool_name)
+            return None, True
+        result = self.gate.execute(company, spec.role.value, tool, ctx, draft, params)
+        self.store.record_action(company, spec.role.value, tool_name, params,
+                                 result.output, result.ok)
+        if result.pending:
+            log.info("[%s] paused for human approval on %s", spec.role.value, tool_name)
+        return result, False

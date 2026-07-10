@@ -133,6 +133,11 @@ def cmd_board(args) -> None:
         print(f"{col:12} ({len(items)}): {head}")
 
 
+def cmd_ui(args) -> None:
+    from .webui import serve
+    serve(settings, host=args.host, port=args.port)
+
+
 def cmd_approvals(args) -> None:
     cfg = _load_company(args.company)
     store = Store(settings.data_path)
@@ -190,6 +195,11 @@ def main(argv=None) -> None:
     with_company(sub.add_parser("flow")).set_defaults(fn=cmd_flow)
     with_company(sub.add_parser("board")).set_defaults(fn=cmd_board)
     with_company(sub.add_parser("approvals")).set_defaults(fn=cmd_approvals)
+
+    sp = sub.add_parser("ui", help="serve the operator console")
+    sp.add_argument("--host", default=None)
+    sp.add_argument("--port", type=int, default=None)
+    sp.set_defaults(fn=cmd_ui)
 
     sp = with_company(sub.add_parser("approve"))
     sp.add_argument("--id", required=True)

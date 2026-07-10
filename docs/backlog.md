@@ -25,3 +25,7 @@ La commande `python -m app.cli tasks --company example` liste les tâches avec l
 ## Création pilotée par les données
 
 Le CEO ne crée pas une tâche générique par rôle. Il lit le journal d'actions pour voir ce que l'entreprise a observé, puis en tire des tâches ciblées. Un signal d'achat détecté par la veille ouvre une tâche de prospection prioritaire. Des leads réels trouvés ouvrent une tâche d'envoi. Un KPI faible ouvre une tâche de refonte de la page. Chaque tâche est dédupliquée contre les tâches déjà ouvertes, et une base minimale garde le social et le support actifs. Le CEO agit en début de tour, il réagit donc aux observations des tours précédents.
+
+## Console opérateur, reliquat d'audit (null-to-hero, 10 juillet 2026)
+
+Retenues pour plus tard, par ordre de valeur : afficher les paramètres d'une approbation en champs lisibles plutôt qu'en JSON brut, avec un court délai d'annulation après la décision ; montrer la progression d'un run (ticks faits sur ticks demandés) et permettre son annulation ; état de chargement squelette au premier affichage ; aligner les tailles de police sur l'échelle documentée et regrouper les styles inline répétés en classes utilitaires ; passer les derniers libellés techniques ("cloud", noms d'endpoints) par la couche i18n.

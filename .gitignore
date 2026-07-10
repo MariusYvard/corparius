@@ -11,3 +11,5 @@ companies/*/data/
 companies/*/state.json
 # Local model caches
 .ollama/
+
+data-demo/

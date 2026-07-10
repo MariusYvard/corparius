@@ -50,6 +50,11 @@ class Settings:
     loop_similarity_threshold: float = float(os.environ.get("CORP_LOOP_SIMILARITY_THRESHOLD", "0.95"))
     max_identical_tool_calls: int = int(os.environ.get("CORP_MAX_IDENTICAL_TOOL_CALLS", "2"))
 
+    # Operator console (app/webui.py). Binds to localhost; set CORP_UI_TOKEN
+    # to require the X-Corp-Token header on every mutating call.
+    ui_host: str = os.environ.get("CORP_UI_HOST", "127.0.0.1")
+    ui_port: int = int(os.environ.get("CORP_UI_PORT", "8600"))
+
     # Human in the loop.
     hitl_tools: list[str] = field(
         default_factory=lambda: _csv(

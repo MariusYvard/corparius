@@ -31,6 +31,17 @@ class Settings:
     local_model: str = os.environ.get("CORP_LOCAL_MODEL", "qwen2.5:7b-instruct")
     cloud_enabled: bool = _bool("CORP_CLOUD_ENABLED")
     anthropic_api_key: str = os.environ.get("ANTHROPIC_API_KEY", "")
+    # Anthropic through the local Claude Code CLI (subscription auth, no API
+    # credits). Enables the "claudecode:" target.
+    claude_code_enabled: bool = _bool("CORP_CLAUDE_CODE")
+    # Fallback chain: remote steps tried in order when a remote call fails,
+    # e.g. "groq:llama-3.3-70b-versatile,cerebras:gpt-oss-120b". Local
+    # (CORP_LOCAL_MODEL) always ends the chain. Free-provider API keys are
+    # read straight from the environment by app/llm.py (one variable per
+    # provider, see OPENAI_COMPAT_PROVIDERS and .env.example).
+    llm_fallback: list[str] = field(
+        default_factory=lambda: _csv(os.environ.get("CORP_LLM_FALLBACK", ""))
+    )
     llm_mock: bool = _bool("CORP_LLM_MOCK", "true")
 
     # Safety budgets.

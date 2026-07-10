@@ -32,7 +32,7 @@ La spécialisation des agents reste utile. Une évaluation d'Anthropic mesure qu
 
 ## Routage LLM à trois tiers
 
-Le routeur choisit un modèle selon le tier de difficulté. Les tâches très simples (publication sociale, veille, finance déterministe) tournent sur un petit modèle local, gemma4:e4b. Les tâches normales passent sur un modèle cloud. Les tâches lourdes (stratégie, code) prennent un modèle cloud adapté, et un agent peut épingler un modèle précis, tel un modèle de code local pour le générateur de code. Chaque modèle s'écrit "local:nom" ou "cloud:nom", ce qui rend chaque tier reconfigurable sans toucher au code. Si le cloud est indisponible, le routeur bascule sur un modèle local de repli.
+Le routeur choisit un modèle selon le tier de difficulté. Les tâches très simples (publication sociale, veille, finance déterministe) tournent sur un petit modèle local, gemma4:e4b. Les tâches normales passent sur un modèle cloud. Les tâches lourdes (stratégie, code) prennent un modèle cloud adapté, et un agent peut épingler un modèle précis, tel un modèle de code local pour le générateur de code. Chaque modèle s'écrit "cible:nom", où la cible est "local", "cloud" (API Anthropic), "claudecode" (CLI Claude Code sur abonnement) ou l'un des providers gratuits OpenAI-compatibles du registre (groq, cerebras, openrouter, mistral et les autres, voir llm-providers.md), ce qui rend chaque tier reconfigurable sans toucher au code. Quand un appel distant échoue, le routeur déroule la chaîne CORP_LLM_FALLBACK puis bascule sur un modèle local de repli.
 
 ## Persistance et exécution durable
 

@@ -79,9 +79,17 @@ python -m app.cli tasks     --company example         # the CEO-governed backlog
 
 To go live, set `CORP_LLM_MOCK=false` and start the self-hosted stack
 (`docker compose up -d`). Routing is tiered: trivial work runs on a tiny local
-model (`ollama pull gemma4:e4b`), while the normal and hard tiers point at cloud
-models, so set `CORP_CLOUD_ENABLED=true` and `ANTHROPIC_API_KEY`. Each tier is a
-`local:` / `cloud:` string in `.env`; flip a prefix to keep that tier on-prem.
+model (`ollama pull gemma4:e4b`), while the normal and hard tiers point at
+remote models behind `CORP_CLOUD_ENABLED=true`. Each tier is a
+`<target>:<model>` string in `.env`; flip a prefix to keep that tier on-prem.
+Besides Anthropic (`cloud:` + `ANTHROPIC_API_KEY`), twelve free-tier providers
+are wired in (Groq, Cerebras, OpenRouter, Mistral, Gemini, NVIDIA NIM, GitHub
+Models, Cohere, HuggingFace, OVHcloud, Zhipu, SiliconFlow): set a provider key
+and use its prefix, e.g. `CORP_NORMAL_MODEL=groq:llama-3.3-70b-versatile`. Two
+more targets round it out: `claudecode:` runs a Claude subscription through the
+local CLI with no API credits, and `custom:` points at any OpenAI-compatible
+gateway (OmniRoute, LiteLLM, vLLM). `CORP_LLM_FALLBACK` chains providers when
+one fails; local always ends the chain. Details in `docs/llm-providers.md`.
 
 ## Safety firewall
 
@@ -121,7 +129,8 @@ point this at real customers.
 app/
   config.py        env-driven settings (dataclass, CORP_ prefix)
   models.py        typed records: agents, actions, approvals, LLM results
-  llm.py           HybridRouter + Ollama, Anthropic and Mock providers
+  llm.py           HybridRouter + Ollama, Anthropic, free OpenAI-compatible,
+                   Claude Code CLI and Mock providers
   safety.py        TokenBudget, LoopGuard, CircuitBreaker
   tools.py         the business toolbox, with HITL flags
   sitegen.py       single-file sales-page generator

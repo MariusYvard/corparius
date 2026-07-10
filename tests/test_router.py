@@ -1,7 +1,9 @@
 """The HybridRouter must run offline in mock mode and pick the right tier model."""
 from app.config import Settings
-from app.llm import HybridRouter, _split
-from app.models import Difficulty
+from app.llm import (HybridRouter, LLMProvider, OPENAI_COMPAT_PROVIDERS, _split)
+import requests
+
+from app.models import Difficulty, LLMResult, Usage
 
 
 def _mock_settings() -> Settings:
@@ -40,3 +42,70 @@ def test_pinned_model_overrides_tier():
     res = r.generate([{"role": "user", "content": "x"}],
                      difficulty=Difficulty.EASY, model="local:qwen2.5-coder:14b")
     assert "qwen2.5-coder:14b" in res.text
+
+
+def test_split_reads_free_provider_prefix():
+    assert _split("groq:llama-3.3-70b-versatile") == ("groq", "llama-3.3-70b-versatile")
+    assert _split("openrouter:deepseek/deepseek-r1-0528:free") == \
+        ("openrouter", "deepseek/deepseek-r1-0528:free")
+    assert _split("claudecode:sonnet") == ("claudecode", "sonnet")
+    # Unknown prefixes are Ollama tags, not providers.
+    assert _split("gemma4:e4b") == ("local", "gemma4:e4b")
+
+
+def test_provider_registry_is_well_formed():
+    for name, spec in OPENAI_COMPAT_PROVIDERS.items():
+        assert spec.get("key_env"), name
+        assert spec.get("base") or spec.get("base_env"), name
+        assert not spec.get("base", "").endswith("/"), name
+
+
+class _Down(LLMProvider):
+    name = "down"
+
+    def generate(self, messages, model, max_tokens=512):
+        raise requests.exceptions.ConnectionError("down")
+
+
+class _Up(LLMProvider):
+    name = "up"
+
+    def generate(self, messages, model, max_tokens=512):
+        return LLMResult(text=f"up:{model}", usage=Usage(1, 1),
+                         model=model, provider=self.name)
+
+
+def _live_settings() -> Settings:
+    s = Settings()
+    s.llm_mock = False
+    s.cloud_enabled = True
+    return s
+
+
+def test_failed_remote_walks_fallback_chain():
+    s = _live_settings()
+    s.llm_fallback = ["cerebras:backup-model"]
+    r = HybridRouter(s)
+    r.remotes = {"groq": _Down(), "cerebras": _Up()}
+    res = r.generate([{"role": "user", "content": "x"}], model="groq:main-model")
+    assert (res.provider, res.model) == ("up", "backup-model")
+
+
+def test_exhausted_chain_falls_back_to_local():
+    s = _live_settings()
+    r = HybridRouter(s)
+    r.remotes = {"groq": _Down()}
+    r.local = _Up()
+    res = r.generate([{"role": "user", "content": "x"}], model="groq:main-model")
+    assert res.provider == "up"
+    assert res.model == s.local_model
+
+
+def test_unavailable_provider_skips_to_local():
+    # Key not set: the provider is absent from the pool, no crash.
+    s = _live_settings()
+    r = HybridRouter(s)
+    r.remotes = {}
+    r.local = _Up()
+    res = r.generate([{"role": "user", "content": "x"}], model="groq:main-model")
+    assert res.model == s.local_model

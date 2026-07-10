@@ -1,10 +1,20 @@
 """LLM layer. A HybridRouter runs local by default (Ollama) and escalates hard
-tasks to a cloud model when explicitly enabled. A deterministic MockProvider
+tasks to a remote model when explicitly enabled. A deterministic MockProvider
 lets the whole system run offline, with no models and no network.
+
+Remote capacity is provider-agnostic. Besides Anthropic ("cloud:") and the
+Claude Code CLI ("claudecode:", subscription auth, no API credits), any entry
+in OPENAI_COMPAT_PROVIDERS can serve a tier or a fallback step; they all speak
+the OpenAI chat-completions dialect. A provider is enabled by its API key in
+the environment; a missing key simply removes it from the pool. When a remote
+call fails, the router walks the CORP_LLM_FALLBACK chain in order, and local
+Ollama always ends the chain.
 """
 from __future__ import annotations
 import json
 import logging
+import os
+import subprocess
 from abc import ABC, abstractmethod
 
 import requests
@@ -15,6 +25,10 @@ from .safety import hash_embed
 log = logging.getLogger("corparius.llm")
 
 
+class ProviderError(Exception):
+    """Raised by non-HTTP providers so the fallback chain can catch failures."""
+
+
 def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
@@ -23,13 +37,54 @@ def _flatten(messages: list[dict]) -> str:
     return "\n".join(m.get("content", "") for m in messages)
 
 
+# Free-tier remote providers, all OpenAI chat-completions compatible.
+#   base: default endpoint (no trailing slash).
+#   key_env: environment variable holding the API key. The provider joins the
+#            pool only when the key is set, unless key_optional is true.
+#   base_env: overrides base when the endpoint depends on the account
+#             (Cloudflare) or is self-chosen (custom: OmniRoute, LiteLLM,
+#             vLLM, LM Studio, any OpenAI-compatible gateway).
+# Free-tier limits and signup links are documented in docs/llm-providers.md.
+OPENAI_COMPAT_PROVIDERS: dict[str, dict] = {
+    "groq":        {"base": "https://api.groq.com/openai/v1",
+                    "key_env": "GROQ_API_KEY"},
+    "cerebras":    {"base": "https://api.cerebras.ai/v1",
+                    "key_env": "CEREBRAS_API_KEY"},
+    "openrouter":  {"base": "https://openrouter.ai/api/v1",
+                    "key_env": "OPENROUTER_API_KEY"},
+    "mistral":     {"base": "https://api.mistral.ai/v1",
+                    "key_env": "MISTRAL_API_KEY"},
+    "gemini":      {"base": "https://generativelanguage.googleapis.com/v1beta/openai",
+                    "key_env": "GEMINI_API_KEY"},
+    "nvidia":      {"base": "https://integrate.api.nvidia.com/v1",
+                    "key_env": "NVIDIA_API_KEY"},
+    "github":      {"base": "https://models.github.ai/inference",
+                    "key_env": "GITHUB_TOKEN"},
+    "cohere":      {"base": "https://api.cohere.ai/compatibility/v1",
+                    "key_env": "CO_API_KEY"},
+    "huggingface": {"base": "https://router.huggingface.co/v1",
+                    "key_env": "HF_TOKEN"},
+    "ovh":         {"base": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+                    "key_env": "OVH_AI_ENDPOINTS_ACCESS_TOKEN", "key_optional": True},
+    "zhipu":       {"base": "https://open.bigmodel.cn/api/paas/v4",
+                    "key_env": "ZHIPU_API_KEY"},
+    "siliconflow": {"base": "https://api.siliconflow.cn/v1",
+                    "key_env": "SILICONFLOW_API_KEY"},
+    "cloudflare":  {"base": "", "base_env": "CF_AI_BASE_URL",
+                    "key_env": "CLOUDFLARE_API_TOKEN"},
+    "custom":      {"base": "", "base_env": "CORP_CUSTOM_LLM_URL",
+                    "key_env": "CORP_CUSTOM_LLM_KEY", "key_optional": True},
+}
+
+
 def _split(model_str: str) -> tuple[str, str]:
-    """Split a tier model into (target, name). "cloud:x" -> ("cloud", "x");
-    a bare name defaults to local. Real model names never start with these."""
-    if model_str.startswith("cloud:"):
-        return "cloud", model_str[len("cloud:"):]
-    if model_str.startswith("local:"):
-        return "local", model_str[len("local:"):]
+    """Split a tier model into (target, name). "cloud:x" -> ("cloud", "x") and
+    "groq:x" -> ("groq", "x") for any registered provider. A bare name or an
+    unknown prefix (Ollama tags like "gemma4:e4b") defaults to local."""
+    prefix, sep, rest = model_str.partition(":")
+    if sep and (prefix in ("cloud", "local", "claudecode")
+                or prefix in OPENAI_COMPAT_PROVIDERS):
+        return prefix, rest
     return "local", model_str
 
 
@@ -95,7 +150,7 @@ class OllamaProvider(LLMProvider):
 
 
 class AnthropicProvider(LLMProvider):
-    """Cloud fallback for hard tasks. Called over plain HTTP; no SDK required."""
+    """Cloud escalation for hard tasks. Called over plain HTTP; no SDK required."""
 
     name = "anthropic"
 
@@ -122,10 +177,90 @@ class AnthropicProvider(LLMProvider):
         return LLMResult(text=text, usage=usage, model=model, provider=self.name)
 
 
+class OpenAICompatProvider(LLMProvider):
+    """Any endpoint speaking the OpenAI chat-completions dialect: the free
+    tiers in OPENAI_COMPAT_PROVIDERS or a self-hosted gateway. One class,
+    many providers."""
+
+    def __init__(self, name: str, base_url: str, api_key: str = "", timeout: int = 120):
+        self.name = name
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.timeout = timeout
+
+    def generate(self, messages: list[dict], model: str, max_tokens: int = 512) -> LLMResult:
+        headers = {"content-type": "application/json"}
+        if self.api_key:
+            headers["authorization"] = f"Bearer {self.api_key}"
+        r = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers=headers,
+            json={"model": model, "messages": messages, "max_tokens": max_tokens},
+            timeout=self.timeout,
+        )
+        r.raise_for_status()
+        data = r.json()
+        choice = (data.get("choices") or [{}])[0]
+        text = (choice.get("message") or {}).get("content") or ""
+        u = data.get("usage") or {}
+        usage = Usage(u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
+        return LLMResult(text=text, usage=usage, model=model, provider=self.name)
+
+
+class ClaudeCodeProvider(LLMProvider):
+    """Anthropic models through the local Claude Code CLI in headless mode
+    ("claude -p"). Uses whatever auth the CLI holds, including a Claude
+    subscription login, so no API credits are required. Needs the CLI
+    installed and logged in; subscription rate limits apply. max_tokens is
+    not supported by the CLI and is ignored."""
+
+    name = "claudecode"
+
+    def __init__(self, timeout: int = 300):
+        self.timeout = timeout
+
+    def generate(self, messages: list[dict], model: str, max_tokens: int = 512) -> LLMResult:
+        system = "\n".join(m["content"] for m in messages if m.get("role") == "system")
+        prompt = _flatten([m for m in messages if m.get("role") != "system"])
+        cmd = ["claude", "-p", prompt, "--output-format", "json"]
+        if model:
+            cmd += ["--model", model]
+        if system:
+            cmd += ["--append-system-prompt", system]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True,
+                                  timeout=self.timeout)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ProviderError(f"claude CLI unavailable: {exc}") from exc
+        if proc.returncode != 0:
+            raise ProviderError(
+                f"claude CLI exited {proc.returncode}: {proc.stderr.strip()[:300]}")
+        try:
+            data = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise ProviderError("claude CLI returned non-JSON output") from exc
+        u = data.get("usage") or {}
+        usage = Usage(u.get("input_tokens", 0), u.get("output_tokens", 0))
+        return LLMResult(text=data.get("result", ""), usage=usage,
+                         model=model, provider=self.name)
+
+
+def _remote_providers() -> dict[str, LLMProvider]:
+    """Instantiate every registered provider whose key (and endpoint) is set."""
+    remotes: dict[str, LLMProvider] = {}
+    for name, spec in OPENAI_COMPAT_PROVIDERS.items():
+        base = os.environ.get(spec.get("base_env", ""), "").strip() or spec["base"]
+        key = os.environ.get(spec["key_env"], "").strip()
+        if base and (key or spec.get("key_optional")):
+            remotes[name] = OpenAICompatProvider(name, base, key)
+    return remotes
+
+
 class HybridRouter:
-    """Local first, cloud on escalation. If mock mode is on, everything is served
-    by the MockProvider. Otherwise EASY tasks stay on Ollama and HARD tasks go to
-    the cloud when it is enabled, falling back to local if the cloud call fails.
+    """Local first, remote on escalation. If mock mode is on, everything is
+    served by the MockProvider. Otherwise EASY tasks stay on Ollama and HARD
+    tasks go to a remote provider when enabled. A failing remote call walks
+    the CORP_LLM_FALLBACK chain, then falls back to local.
     """
 
     def __init__(self, settings):
@@ -133,6 +268,7 @@ class HybridRouter:
         if settings.llm_mock:
             self.local: LLMProvider = MockProvider()
             self.cloud: LLMProvider | None = None
+            self.remotes: dict[str, LLMProvider] = {}
         else:
             self.local = OllamaProvider(settings.ollama_url, settings.embed_model)
             self.cloud = (
@@ -140,6 +276,9 @@ class HybridRouter:
                 if settings.cloud_enabled and settings.anthropic_api_key
                 else None
             )
+            self.remotes = _remote_providers() if settings.cloud_enabled else {}
+            if settings.cloud_enabled and settings.claude_code_enabled:
+                self.remotes["claudecode"] = ClaudeCodeProvider()
 
     def _tier_model(self, difficulty: Difficulty) -> str:
         return {
@@ -148,6 +287,21 @@ class HybridRouter:
             Difficulty.HARD: self.settings.hard_model,
         }.get(difficulty, self.settings.normal_model)
 
+    def _remote(self, target: str) -> LLMProvider | None:
+        return self.cloud if target == "cloud" else self.remotes.get(target)
+
+    def _chain(self, target: str, name: str) -> list[tuple[str, str]]:
+        """The requested provider, then each CORP_LLM_FALLBACK step. A local
+        step ends the chain; the final local fallback always applies anyway."""
+        steps = [(target, name)]
+        for entry in self.settings.llm_fallback:
+            t, n = _split(entry)
+            if t == "local":
+                break
+            if (t, n) not in steps:
+                steps.append((t, n))
+        return steps
+
     def generate(self, messages: list[dict], difficulty: Difficulty = Difficulty.EASY,
                  model: str | None = None, max_tokens: int = 512) -> LLMResult:
         target, name = _split(model or self._tier_model(difficulty))
@@ -155,14 +309,19 @@ class HybridRouter:
         # which model each agent would have used.
         if self.settings.llm_mock:
             return self.local.generate(messages, name, max_tokens)
-        if target == "cloud" and self.cloud is not None:
-            try:
-                return self.cloud.generate(messages, name, max_tokens)
-            except requests.RequestException as exc:
-                log.warning("cloud call failed, falling back to local %s: %s",
-                            self.settings.local_model, exc)
-                return self.local.generate(messages, self.settings.local_model, max_tokens)
-        # Local target, or cloud was requested but is unavailable.
+        if target != "local":
+            for step_target, step_name in self._chain(target, name):
+                provider = self._remote(step_target)
+                if provider is None:
+                    continue
+                try:
+                    return provider.generate(messages, step_name, max_tokens)
+                except (requests.RequestException, ProviderError) as exc:
+                    log.warning("%s call failed (%s), trying next step: %s",
+                                step_target, step_name, exc)
+            log.warning("all remote steps failed or unavailable, "
+                        "falling back to local %s", self.settings.local_model)
+        # Local target, or every remote step was exhausted.
         local_name = name if target == "local" else self.settings.local_model
         return self.local.generate(messages, local_name, max_tokens)
 

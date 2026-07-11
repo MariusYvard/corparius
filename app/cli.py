@@ -133,6 +133,29 @@ def cmd_board(args) -> None:
         print(f"{col:12} ({len(items)}): {head}")
 
 
+def cmd_doctor(args) -> None:
+    from .doctor import main as doctor_main
+    sys.exit(doctor_main(quiet=args.quiet))
+
+
+def cmd_backup(args) -> None:
+    import time
+    import zipfile
+    out_dir = args.out or os.path.join(ROOT, "backups")
+    os.makedirs(out_dir, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    path = os.path.join(out_dir, f"corparius-backup-{stamp}.zip")
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for base in (settings.data_path, os.path.join(ROOT, "companies")):
+            if not os.path.isdir(base):
+                continue
+            for root, _dirs, files in os.walk(base):
+                for name in files:
+                    full = os.path.join(root, name)
+                    zf.write(full, os.path.relpath(full, ROOT))
+    print(f"backup written: {path}")
+
+
 def cmd_ui(args) -> None:
     from .webui import serve
     serve(settings, host=args.host, port=args.port)
@@ -195,6 +218,14 @@ def main(argv=None) -> None:
     with_company(sub.add_parser("flow")).set_defaults(fn=cmd_flow)
     with_company(sub.add_parser("board")).set_defaults(fn=cmd_board)
     with_company(sub.add_parser("approvals")).set_defaults(fn=cmd_approvals)
+
+    sp = sub.add_parser("doctor", help="diagnose the installation")
+    sp.add_argument("--quiet", action="store_true")
+    sp.set_defaults(fn=cmd_doctor)
+
+    sp = sub.add_parser("backup", help="zip the store and company configs")
+    sp.add_argument("--out", default=None)
+    sp.set_defaults(fn=cmd_backup)
 
     sp = sub.add_parser("ui", help="serve the operator console")
     sp.add_argument("--host", default=None)

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,6 +22,7 @@ from urllib.parse import parse_qs, urlparse
 import yaml
 
 from .agents import ROSTER
+from .doctor import run_checks
 from .config import Settings
 from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter
 from .models import AgentRole, Difficulty
@@ -211,6 +213,50 @@ def _start_run(state: UiState, slug: str, ticks: int) -> dict:
     return {"ok": True, "running": True}
 
 
+_DEFAULT_AGENTS = {"ceo": True, "social": True, "outreach": True, "support": True,
+                   "ads": False, "finance": True, "strategy": True,
+                   "competitor": True, "design": True, "coder": False}
+
+
+def _create_company(state: UiState, body: dict) -> dict:
+    name = str(body.get("name", "")).strip()
+    product = str(body.get("product", "")).strip()
+    if not name or not product:
+        return {"ok": False, "error": "name and product are required"}
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40]
+    if not slug:
+        return {"ok": False, "error": "the name must contain letters or digits"}
+    path = ROOT / "companies" / slug / "company.yaml"
+    if path.exists():
+        return {"ok": False, "error": f"company '{slug}' already exists"}
+    agents = dict(_DEFAULT_AGENTS)
+    for role, on in dict(body.get("agents", {})).items():
+        if role in agents:
+            agents[role] = bool(on)
+    try:
+        budget = max(1000, min(int(body.get("session_tokens", 80000)), 5_000_000))
+    except (TypeError, ValueError):
+        budget = 80000
+    cfg = {
+        "slug": slug, "name": name,
+        "one_liner": str(body.get("one_liner", "")).strip() or product,
+        "offer": {"product": product, "price_eur": 0, "billing": "stripe", "payment_link": ""},
+        "icp": {"segment": str(body.get("segment", "")).strip() or "To be defined",
+                "channels": ["linkedin", "x"], "pains": []},
+        "agents": agents,
+        "budgets": {"session_tokens": budget,
+                    "tokens_per_minute": max(1000, budget // 10),
+                    "daily_ad_spend_eur": 0},
+        "hitl_tools": ["send_financial_transaction", "publish_production_code", "deploy_site"],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        yaml.safe_dump(cfg, fh, sort_keys=False, allow_unicode=True)
+    state.store().save_state(slug, {"tick": 0})
+    log.info("company created from the console: %s", slug)
+    return {"ok": True, "slug": slug, "companies": _companies()}
+
+
 def _set_env(state: UiState, values: dict) -> dict:
     clean: dict[str, str] = {}
     for key, value in values.items():
@@ -265,6 +311,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, _overview(self.state, slug))
             elif url.path == "/api/providers":
                 self._send(200, _providers_payload())
+            elif url.path == "/api/doctor":
+                self._send(200, {"ok": True, "checks": run_checks(_fresh_settings())})
             elif url.path == "/api/chat" and slug:
                 history = list(self.state.chats.get(slug, []))
                 self._send(200, {"ok": True, "history": history})
@@ -283,7 +331,9 @@ class Handler(BaseHTTPRequestHandler):
         slug = str(body.get("company", ""))
         store = self.state.store()
         try:
-            if url.path == "/api/approvals":
+            if url.path == "/api/companies":
+                self._send(200, _create_company(self.state, body))
+            elif url.path == "/api/approvals":
                 decision = body.get("decision")
                 if decision not in ("approved", "rejected"):
                     self._send(400, {"ok": False, "error": "decision must be approved or rejected"})

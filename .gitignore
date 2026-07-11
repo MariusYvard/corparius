@@ -13,3 +13,4 @@ companies/*/state.json
 .ollama/
 
 data-demo/
+backups/

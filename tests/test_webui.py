@@ -107,3 +107,29 @@ def test_ceo_chat_answers_offline_in_mock_mode(server):
     assert "What is the plan?" in data["reply"]
     status, data = _call(server, "GET", "/api/chat?company=example")
     assert len(data["history"]) == 2
+
+
+def test_doctor_endpoint_reports_checks(server):
+    status, data = _call(server, "GET", "/api/doctor")
+    assert status == 200 and data["ok"]
+    names = {c["name"] for c in data["checks"]}
+    assert {"python", "mode", "store", "ollama"} <= names
+    assert all(c["level"] in ("ok", "warn", "fail") for c in data["checks"])
+
+
+def test_company_wizard_creates_and_lists(server, tmp_path, monkeypatch):
+    import app.webui as webui_mod
+    monkeypatch.setattr(webui_mod, "ROOT", tmp_path)
+    (tmp_path / "companies").mkdir()
+    status, data = _call(server, "POST", "/api/companies",
+                         {"name": "Atelier Brumaire", "product": "Handmade candles online",
+                          "agents": {"coder": True}, "session_tokens": 50000})
+    assert status == 200 and data["ok"] and data["slug"] == "atelier-brumaire"
+    import yaml as yaml_mod
+    cfg = yaml_mod.safe_load((tmp_path / "companies" / "atelier-brumaire" / "company.yaml").read_text(encoding="utf-8"))
+    assert cfg["agents"]["coder"] is True and cfg["budgets"]["session_tokens"] == 50000
+    status, data = _call(server, "POST", "/api/companies",
+                         {"name": "Atelier Brumaire", "product": "dup"})
+    assert data["ok"] is False
+    status, data = _call(server, "POST", "/api/companies", {"name": "!!!", "product": "x"})
+    assert data["ok"] is False

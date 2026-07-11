@@ -215,10 +215,25 @@ footer { color: var(--muted); font-size: 12.5px; padding: 16px 0 28px; border-to
 </nav>
 <main class="wrap" id="main">
   <div id="conn" class="banner error" hidden role="alert"></div>
-  <div id="no-company" class="card empty" hidden>
-    <span data-i18n="empty.noCompany">No company found. Create one, run a day, then reload:</span>
-    <br><span class="mono">python -m app.cli init --company example</span>
-    <span class="mono">python -m app.cli run --company example --ticks 6</span>
+  <div id="wizard" class="card" hidden style="max-width:640px; margin:0 auto">
+    <h2 data-i18n="wiz.title">Create your first company</h2>
+    <p class="desc" data-i18n="wiz.desc">Two fields are enough to start; everything else has sensible defaults you can change later in companies/&lt;slug&gt;/company.yaml.</p>
+    <div class="stack" style="gap:14px">
+      <label class="stack" style="gap:6px"><span data-i18n="wiz.name">Company name</span>
+        <input type="text" id="wiz-name" maxlength="60" placeholder="Atelier Brumaire"></label>
+      <label class="stack" style="gap:6px"><span data-i18n="wiz.product">What does it sell?</span>
+        <textarea id="wiz-product" rows="2" maxlength="300" data-i18n-ph="wiz.productPh" placeholder="Handmade scented candles, sold online in France."></textarea></label>
+      <details>
+        <summary class="note" style="cursor:pointer" data-i18n="wiz.advanced">Agents and budget (defaults are fine)</summary>
+        <div id="wiz-agents" style="display:flex; gap:10px; flex-wrap:wrap; padding:12px 0"></div>
+        <label class="stack" style="gap:6px; max-width:240px"><span data-i18n="wiz.budget">Token budget per run</span>
+          <input type="number" id="wiz-budget" value="80000" min="1000" step="1000"></label>
+      </details>
+      <div style="display:flex; gap:10px; align-items:center">
+        <button class="primary" id="wiz-create" data-i18n="wiz.create">Create the company</button>
+        <span class="note" id="wiz-hint" data-i18n="wiz.hint">Runs offline in mock mode by default.</span>
+      </div>
+    </div>
   </div>
 
   <section id="tab-overview" role="tabpanel" aria-labelledby="t-overview" class="stack">
@@ -328,6 +343,12 @@ footer { color: var(--muted); font-size: 12.5px; padding: 16px 0 28px; border-to
 
   <section id="tab-settings" role="tabpanel" aria-labelledby="t-settings" class="stack" hidden>
     <div class="card" style="max-width:560px">
+      <h2 data-i18n="doc.title">Diagnostics</h2>
+      <p class="desc" data-i18n="doc.desc">Checks Python, the store, Ollama, providers and the network, and says what to fix.</p>
+      <button id="run-doctor" data-i18n="doc.run">Run diagnostics</button>
+      <div id="doctor-out" class="stack" style="gap:6px; margin-top:12px"></div>
+    </div>
+    <div class="card" style="max-width:560px">
       <h2 data-i18n="settings.title">Console settings</h2>
       <p class="desc" data-i18n="settings.desc">Stored in this browser only; they change nothing on the server.</p>
       <div class="kv"><span data-i18n="settings.language">Interface language</span>
@@ -345,7 +366,7 @@ footer { color: var(--muted); font-size: 12.5px; padding: 16px 0 28px; border-to
 
   <div id="toast" aria-live="polite"><div></div></div>
 </main>
-<footer><div class="wrap" data-i18n="footer">corparius operator console · serves on localhost · state is read from the local SQLite store</div></footer>
+<footer><div class="wrap"><span data-i18n="footer">corparius operator console · serves on localhost · state is read from the local SQLite store</span> · <a href="https://github.com/sponsors/MariusYvard" target="_blank" rel="noopener" data-i18n="footer.support">Support the project</a></div></footer>
 
 <script>
 "use strict";
@@ -430,7 +451,13 @@ en: {
   "toast.approved":"Approved","toast.rejected":"Rejected","toast.taskApproved":"Task approved","toast.taskRejected":"Task rejected",
   "toast.runStarted":"Run started","toast.runDone":"Run finished:","toast.saved":"Saved","toast.keySaved":"Key saved to .env","toast.tiersSaved":"Tiers saved",
   "toast.nothing":"Nothing to save","toast.pasteFirst":"Paste a key first",
-  "empty.noCompany":"No company found. Create one, run a day, then reload:",
+  "wiz.title":"Create your first company","wiz.desc":"Two fields are enough to start; everything else has sensible defaults you can change later in companies/<slug>/company.yaml.",
+  "wiz.name":"Company name","wiz.product":"What does it sell?","wiz.productPh":"Handmade scented candles, sold online in France.",
+  "wiz.advanced":"Agents and budget (defaults are fine)","wiz.budget":"Token budget per run",
+  "wiz.create":"Create the company","wiz.hint":"Runs offline in mock mode by default.","wiz.created":"Company created",
+  "wiz.newOption":"+ New company…",
+  "doc.title":"Diagnostics","doc.desc":"Checks Python, the store, Ollama, providers and the network, and says what to fix.",
+  "doc.run":"Run diagnostics","footer.support":"Support the project",
   "conn.error":"Cannot reach the corparius server:",
   "footer":"corparius operator console · serves on localhost · state is read from the local SQLite store"
 },
@@ -488,7 +515,13 @@ fr: {
   "toast.approved":"Approuvé","toast.rejected":"Rejeté","toast.taskApproved":"Tâche approuvée","toast.taskRejected":"Tâche rejetée",
   "toast.runStarted":"Run lancé","toast.runDone":"Run terminé :","toast.saved":"Enregistré","toast.keySaved":"Clé écrite dans .env","toast.tiersSaved":"Tiers enregistrés",
   "toast.nothing":"Rien à enregistrer","toast.pasteFirst":"Collez d'abord une clé",
-  "empty.noCompany":"Aucune société trouvée. Créez-en une, lancez une journée, puis rechargez :",
+  "wiz.title":"Créez votre première société","wiz.desc":"Deux champs suffisent pour démarrer ; tout le reste a des valeurs par défaut modifiables ensuite dans companies/<slug>/company.yaml.",
+  "wiz.name":"Nom de la société","wiz.product":"Que vend-elle ?","wiz.productPh":"Bougies parfumées artisanales, vendues en ligne en France.",
+  "wiz.advanced":"Agents et budget (les défauts conviennent)","wiz.budget":"Budget tokens par run",
+  "wiz.create":"Créer la société","wiz.hint":"Tourne hors ligne en mode mock par défaut.","wiz.created":"Société créée",
+  "wiz.newOption":"+ Nouvelle société…",
+  "doc.title":"Diagnostics","doc.desc":"Vérifie Python, le store, Ollama, les providers et le réseau, et dit quoi corriger.",
+  "doc.run":"Lancer le diagnostic","footer.support":"Soutenir le projet",
   "conn.error":"Impossible de joindre le serveur corparius :",
   "footer":"console opérateur corparius · sert sur localhost · l'état est lu depuis le store SQLite local"
 }};
@@ -567,17 +600,22 @@ async function boot() {
   try {
     const { companies } = await api("/api/companies");
     const sel = $("#company");
-    sel.innerHTML = companies.map(c => `<option>${esc(c)}</option>`).join("");
-    $("#no-company").hidden = companies.length > 0;
+    sel.innerHTML = companies.map(c => `<option>${esc(c)}</option>`).join("")
+      + `<option value="__new__">${t("wiz.newOption")}</option>`;
+    $("#wizard").hidden = companies.length > 0;
+    renderWizardAgents();
     if (!companies.length) {
       $$("[role=tabpanel]").forEach(pn => { if (pn.id !== "tab-settings") pn.hidden = true; });
-      ["run", "ticks", "company"].forEach(id => $("#" + id).disabled = true);
+      ["run", "ticks"].forEach(id => $("#" + id).disabled = true);
       return;
     }
     state.company = localStorage.getItem("corparius-company");
     if (!companies.includes(state.company)) state.company = companies[0];
     sel.value = state.company;
-    sel.addEventListener("change", () => { state.company = sel.value; localStorage.setItem("corparius-company", sel.value); refresh(); loadChat(); });
+    sel.addEventListener("change", () => {
+      if (sel.value === "__new__") { $("#wizard").hidden = false; $("#wizard").scrollIntoView({behavior:"smooth"}); sel.value = state.company; return; }
+      state.company = sel.value; localStorage.setItem("corparius-company", sel.value); refresh(); loadChat();
+    });
     await Promise.all([refresh(), loadProviders(), loadChat()]);
     state.timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
   } catch (e) { connError(e); }
@@ -807,6 +845,51 @@ $("#chat-input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.
 
 $$("[role=tab]").forEach(b => {
   if (TAB_ICONS[b.id]) b.insertAdjacentHTML("afterbegin", `<img class="ai" src="${TAB_ICONS[b.id]}" alt="" aria-hidden="true">`);
+});
+const WIZ_ROLES = ["ceo","social","outreach","support","ads","finance","strategy","competitor","design","coder"];
+const WIZ_DEFAULT_OFF = new Set(["ads","coder"]);
+function renderWizardAgents() {
+  if ($("#wiz-agents").children.length) return;
+  $("#wiz-agents").innerHTML = WIZ_ROLES.map(r => `
+    <label style="display:inline-flex; align-items:center; gap:6px; font-size:13.5px; background:var(--raised); border:1px solid var(--border); border-radius:999px; padding:5px 12px; cursor:pointer">
+      <input type="checkbox" data-wiz-role="${r}" ${WIZ_DEFAULT_OFF.has(r) ? "" : "checked"} style="accent-color:var(--accent)">
+      ${AGENT_ICONS[r] ? `<img class="ai" style="width:16px;height:16px" src="${AGENT_ICONS[r]}" alt="">` : ""}${r}</label>`).join("");
+}
+$("#wiz-create").addEventListener("click", async () => {
+  const btn = $("#wiz-create");
+  btn.disabled = true;
+  try {
+    const agents = {};
+    $$("input[data-wiz-role]").forEach(i => agents[i.dataset.wizRole] = i.checked);
+    const d = await api("/api/companies", {
+      name: $("#wiz-name").value, product: $("#wiz-product").value,
+      agents, session_tokens: +$("#wiz-budget").value || 80000,
+    });
+    toast(t("wiz.created"));
+    state.company = d.slug; localStorage.setItem("corparius-company", d.slug);
+    $("#wizard").hidden = true;
+    $$("[role=tabpanel]").forEach(pn => pn.hidden = pn.id !== "tab-overview");
+    $$("[role=tab]").forEach(x => x.setAttribute("aria-selected", x.id === "t-overview"));
+    ["run", "ticks"].forEach(id => $("#" + id).disabled = false);
+    const sel = $("#company");
+    sel.innerHTML = d.companies.map(c => `<option>${esc(c)}</option>`).join("")
+      + `<option value="__new__">${t("wiz.newOption")}</option>`;
+    sel.value = d.slug;
+    await Promise.all([refresh(), loadChat()]);
+  } catch (e) { toast(e.message, true); }
+  finally { btn.disabled = false; }
+});
+$("#run-doctor").addEventListener("click", async () => {
+  const out = $("#doctor-out");
+  out.innerHTML = `<span class="note">…</span>`;
+  try {
+    const { checks } = await api("/api/doctor");
+    const cls = { ok: "ok", warn: "warn", fail: "danger" };
+    out.innerHTML = checks.map(c => `
+      <div style="display:flex; gap:10px; align-items:baseline; font-size:13.5px">
+        <span class="badge ${cls[c.level]}" style="min-width:52px; justify-content:center">${c.level}</span>
+        <span><strong>${esc(c.name)}</strong> · ${esc(c.message)}</span></div>`).join("");
+  } catch (e) { out.innerHTML = `<span class="badge danger">${esc(e.message)}</span>`; }
 });
 boot();
 </script>

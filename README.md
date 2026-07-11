@@ -90,21 +90,22 @@ so the company does not spend its whole budget in one burst.
 ## Quick start
 
 Runs offline out of the box (mock LLM, SQLite). No keys, no models, no accounts.
+One command, either way:
 
 ```bash
 git clone https://github.com/MariusYvard/corparius.git && cd corparius
-python -m venv .venv && . .venv/Scripts/activate   # Windows; use bin/activate on Linux
-pip install -r requirements.txt
-cp .env.example .env
-
-python -m app.cli init --company companies/example/company.yaml
-python -m app.cli run  --company example --ticks 6   # simulate a day
-python -m app.cli ui                                 # operator console on :8600
+python start.py        # venv, dependencies, .env, example company, console, browser
 ```
 
-The CLI covers everything the console does: `status`, `tasks`, `task`, `board`,
-`flow`, `approvals`, `approve`, `reject`, `site`, `deploy`. Docker users:
-`docker compose up -d` starts the loop against the example company.
+```bash
+docker compose up -d   # operator console on http://127.0.0.1:8600 + local Ollama
+```
+
+The console walks you through creating your first company; `python -m app.cli
+doctor` diagnoses the installation and says what to fix. The CLI covers
+everything the console does: `run`, `status`, `tasks`, `board`, `flow`,
+`approvals`, `site`, `deploy`, `backup`. Compose profiles: `--profile loop`
+adds the background company loop, `--profile extras` adds Postgres and n8n.
 
 ## Operator console
 
@@ -229,6 +230,12 @@ tests/             63 tests: guards, routing, backlog, console, pipeline
 | `docs/mcp.md` | driving corparius from any MCP host |
 | `docs/roadmap-90j.md` | the 90-day build cycle |
 | `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia and Uclic |
+
+## Support
+
+corparius is free, MIT-licensed and self-hosted; there is no paid tier and no
+telemetry. If it earns its keep in your homelab, you can support the work
+through [GitHub Sponsors](https://github.com/sponsors/MariusYvard).
 
 ## Contributing
 

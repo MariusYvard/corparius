@@ -18,9 +18,13 @@ Overview donne le pouls de la company : tick courant, actions, tokens cumulés, 
 
 Le logo corparius (organigramme pixel-art, un carré CEO au-dessus de trois agents) et les pictogrammes des rôles et des onglets sont des créations du propriétaire du projet (sources dans docs/icons/). Le logo sert de favicon et de marque du header ; le README utilise les bannières docs/banner.svg et banner-dark.svg (thème GitHub), qui embarquent le logo. Ils sont embarqués dans la page en data URI (PNG, fond rendu transparent, mise à l'échelle au plus proche voisin) sur une pastille ivoire lisible dans les deux thèmes.
 
+## Première utilisation et diagnostics
+
+Sans company existante, la console affiche un formulaire de création (nom et offre suffisent ; agents et budget ont des valeurs par défaut). L'option "+ Nouvelle société" du sélecteur rouvre ce formulaire ensuite. L'onglet Réglages embarque le diagnostic (équivalent de `python -m app.cli doctor`) : chaque vérification indique son niveau et l'action corrective.
+
 ## API
 
-GET /api/companies, /api/overview?company=, /api/providers, /api/chat?company=. POST /api/approvals {id, decision, note}, /api/tasks {id, decision}, /api/run {company, ticks}, /api/providers {values}, /api/chat {company, message}. Toutes les réponses portent un champ ok.
+GET /api/companies, /api/overview?company=, /api/providers, /api/doctor, /api/chat?company=. POST /api/companies {name, product, agents, session_tokens}, /api/approvals {id, decision, note}, /api/tasks {id, decision}, /api/run {company, ticks}, /api/providers {values}, /api/chat {company, message}. Toutes les réponses portent un champ ok.
 
 ## Modèle de sécurité
 

@@ -16,7 +16,7 @@ Overview donne le pouls de la company : tick courant, actions, tokens cumulés, 
 
 ## Icônes
 
-Le logo corparius (organigramme pixel-art, un carré CEO au-dessus de trois agents) et les pictogrammes des rôles et des onglets sont des créations du propriétaire du projet (sources dans docs/icons/). Le logo sert de favicon et de marque du header ; le README utilise les variantes logo-corparius-full-light et full-dark selon le thème GitHub. Ils sont embarqués dans la page en data URI (PNG, fond rendu transparent, mise à l'échelle au plus proche voisin) sur une pastille ivoire lisible dans les deux thèmes.
+Le logo corparius (organigramme pixel-art, un carré CEO au-dessus de trois agents) et les pictogrammes des rôles et des onglets sont des créations du propriétaire du projet (sources dans docs/icons/). Le logo sert de favicon et de marque du header ; le README utilise les bannières docs/banner.svg et banner-dark.svg (thème GitHub), qui embarquent le logo. Ils sont embarqués dans la page en data URI (PNG, fond rendu transparent, mise à l'échelle au plus proche voisin) sur une pastille ivoire lisible dans les deux thèmes.
 
 ## API
 

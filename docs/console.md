@@ -14,6 +14,10 @@ CORP_UI_HOST et CORP_UI_PORT font la même chose depuis .env
 
 Overview donne le pouls de la company : tick courant, actions, tokens cumulés, travail ouvert, avancement des tâches, dépense par agent, métriques de flux lean (débit, encours, goulot, défauts, attente) et l'activité récente. Operations regroupe la file d'approbations HITL (décision inline avec note), le backlog kanban (les propositions s'arbitrent en un clic) et le journal des actions. Providers expose les bascules d'exécution (mock, cloud, Claude Code), les tiers de routage et la saisie des clés d'API par provider. CEO est une conversation avec l'agent CEO, alimentée par l'état réel de la company et servie par le routage configuré (en mode mock, la réponse est déterministe et hors ligne).
 
+## Icônes
+
+Les pictogrammes pixel-art des rôles d'agents et des onglets sont des créations du propriétaire du projet (sources dans docs/icons/). Ils sont embarqués dans la page en data URI (PNG, fond rendu transparent, mise à l'échelle au plus proche voisin) sur une pastille ivoire lisible dans les deux thèmes.
+
 ## API
 
 GET /api/companies, /api/overview?company=, /api/providers, /api/chat?company=. POST /api/approvals {id, decision, note}, /api/tasks {id, decision}, /api/run {company, ticks}, /api/providers {values}, /api/chat {company, message}. Toutes les réponses portent un champ ok.

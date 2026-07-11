@@ -33,4 +33,4 @@ Cards: surface bg, 1px border, radius 10, padding 24, no shadow in dark (border 
 
 ## Bans (project-level)
 
-No gradients, no glassmorphism, no side-stripe borders, no modals (inline confirmation), no emoji in UI (inline SVG icons, 1.5px stroke, currentColor), no spinners mid-content (skeletons).
+No gradients, no glassmorphism, no side-stripe borders, no modals (inline confirmation), no emoji in UI; icons are the owner's pixel-art set on ivory chips (image-rendering: pixelated), inline SVG (1.5px stroke, currentColor) for the rare glyph the set lacks, no spinners mid-content (skeletons).

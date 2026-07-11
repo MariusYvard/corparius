@@ -1,9 +1,14 @@
-# corparius
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg">
+    <img src="docs/banner.svg" alt="corparius, Self-hosted framework for autonomous AI micro-companies." width="100%">
+  </picture>
+</p>
 
 [![CI](https://github.com/MariusYvard/corparius/actions/workflows/ci.yml/badge.svg)](https://github.com/MariusYvard/corparius/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Self-hosted](https://img.shields.io/badge/self--hosted-first-8A2BE2)](docs/architecture.md)
+[![Python](https://img.shields.io/badge/python-3.10%2B-215876?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-102857.svg)](LICENSE)
+[![Self-hosted](https://img.shields.io/badge/self--hosted-first-D97F30)](docs/architecture.md)
 
 Self-hosted framework for autonomous AI micro-companies. Describe a business in
 plain language; corparius runs it as a set of scheduled cognitive agents (a CEO
@@ -67,6 +72,9 @@ action and token, and stops the moment a guard trips.
 Ten roles, each with a fixed cadence and a narrow toolset. Cadences are staggered
 so the company does not spend its whole budget in one burst.
 
+<details>
+<summary><b>Full roster table</b></summary>
+
 | Agent | Cadence | Does |
 | --- | --- | --- |
 | CEO (orchestrator) | twice a day | Owns the backlog: creates and arbitrates tasks, sets the plan, writes the EOD summary |
@@ -79,6 +87,8 @@ so the company does not spend its whole budget in one burst.
 | Competitor | daily | Web research, updates competitor profiles |
 | Design | daily | Visual direction, brand consistency, builds the sales site |
 | Coder | on demand | Builds features, fixes bugs, opens pull requests |
+
+</details>
 
 ## Quick start
 
@@ -207,6 +217,9 @@ tests/             63 tests: guards, routing, backlog, console, pipeline
 
 ## Documentation
 
+<details>
+<summary><b>Documentation table</b></summary>
+
 | Doc | Covers |
 | --- | --- |
 | `docs/architecture.md` | orchestration topology, tiered router, durable execution |
@@ -222,6 +235,8 @@ tests/             63 tests: guards, routing, backlog, console, pipeline
 | `docs/mcp.md` | driving corparius from any MCP host |
 | `docs/roadmap-90j.md` | the 90-day build cycle |
 | `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia and Uclic |
+
+</details>
 
 ## Contributing
 

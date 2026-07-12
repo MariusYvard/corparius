@@ -109,3 +109,28 @@ def test_unavailable_provider_skips_to_local():
     r.local = _Up()
     res = r.generate([{"role": "user", "content": "x"}], model="groq:main-model")
     assert res.model == s.local_model
+
+
+def test_local_target_retries_once_on_failure():
+    class _FlakyLocal(LLMProvider):
+        name = "flaky"
+        calls = 0
+
+        def generate(self, messages, model, max_tokens=512):
+            type(self).calls += 1
+            if type(self).calls == 1:
+                raise requests.exceptions.ConnectTimeout("cold load")
+            return LLMResult(text="warm", usage=Usage(1, 1), model=model, provider=self.name)
+
+    s = _live_settings()
+    r = HybridRouter(s)
+    r.local = _FlakyLocal()
+    res = r.generate([{"role": "user", "content": "x"}], model="local:gemma4:e4b")
+    assert res.text == "warm" and _FlakyLocal.calls == 2
+
+
+def test_ollama_timeout_is_configurable():
+    s = _live_settings()
+    s.ollama_timeout = 900
+    r = HybridRouter(s)
+    assert r.local.timeout == 900

@@ -20,6 +20,9 @@ class Settings:
 
     # LLM routing (hybrid: local first, cloud on escalation).
     ollama_url: str = os.environ.get("CORP_OLLAMA_URL", "http://localhost:11434")
+    # Local generations on CPU can take minutes; raise this rather than letting
+    # runs die on slow hardware. Seconds.
+    ollama_timeout: int = int(os.environ.get("CORP_OLLAMA_TIMEOUT", "420"))
     # Model per routing tier, written as "local:<name>" or "cloud:<name>". Very
     # simple tasks run a tiny local model; normal and big tasks use cloud models
     # sized to the task. Change a prefix to keep any tier fully on-prem.

@@ -43,3 +43,10 @@ User=corparius
 [Install]
 WantedBy=multi-user.target
 ```
+
+
+## Premier jour en mode réel
+
+Le chemin le plus court vers un run réel est 100 % local : `CORP_LLM_MOCK=false` et `CORP_CLOUD_ENABLED=false` dans .env, un modèle présent dans Ollama (le doctor liste ceux qui manquent) et `CORP_LOCAL_MODEL` pointé dessus si vous ne voulez pas télécharger le modèle de repli par défaut. Le premier appel après démarrage charge le modèle en mémoire et peut être lent : le routeur réessaie une fois automatiquement. Si le backend reste injoignable, le run s'arrête proprement et laisse une action système `llm_unreachable` visible dans la console, avec le renvoi vers le doctor.
+
+Les générations locales sur CPU prennent de quelques secondes à plusieurs dizaines de secondes chacune : un tick complet peut durer plusieurs minutes. Lancez depuis la console (le run tourne en arrière-plan) ou en CLI dans un terminal dédié. Pour passer sur un provider gratuit distant ensuite : collez une clé dans l'onglet Providers, activez le cloud, pointez un tier dessus (`CORP_NORMAL_MODEL=groq:llama-3.3-70b-versatile`).

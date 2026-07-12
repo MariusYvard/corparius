@@ -270,7 +270,8 @@ class HybridRouter:
             self.cloud: LLMProvider | None = None
             self.remotes: dict[str, LLMProvider] = {}
         else:
-            self.local = OllamaProvider(settings.ollama_url, settings.embed_model)
+            self.local = OllamaProvider(settings.ollama_url, settings.embed_model,
+                                        timeout=getattr(settings, "ollama_timeout", 420))
             self.cloud = (
                 AnthropicProvider(settings.anthropic_api_key)
                 if settings.cloud_enabled and settings.anthropic_api_key
@@ -321,9 +322,15 @@ class HybridRouter:
                                 step_target, step_name, exc)
             log.warning("all remote steps failed or unavailable, "
                         "falling back to local %s", self.settings.local_model)
-        # Local target, or every remote step was exhausted.
+        # Local target, or every remote step was exhausted. One retry covers
+        # Ollama cold starts, where the first call can time out while the
+        # model is still loading into memory.
         local_name = name if target == "local" else self.settings.local_model
-        return self.local.generate(messages, local_name, max_tokens)
+        try:
+            return self.local.generate(messages, local_name, max_tokens)
+        except requests.RequestException as exc:
+            log.warning("local %s failed (%s), retrying once", local_name, exc)
+            return self.local.generate(messages, local_name, max_tokens)
 
     def embed(self, text: str) -> list[float]:
         return self.local.embed(text)

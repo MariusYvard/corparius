@@ -68,3 +68,26 @@ def test_circuit_breaker_freezes_the_session(tmp_path):
     assert result["frozen"] is True
     # It froze inside the first tick, so most of the roster never ran.
     assert store.status("t")["actions"] < 10
+
+
+def test_dead_llm_stops_the_run_cleanly(tmp_path, monkeypatch):
+    """An unreachable LLM must leave a system action in the store and stop the
+    run instead of crashing without a trace."""
+    import requests as _requests
+    from app.orchestrator import Runtime
+
+    s = _settings(tmp_path)
+    s.llm_mock = False
+    store = Store(s.data_path)
+    rt = Runtime(s, store)
+
+    def _boom(*a, **k):
+        raise _requests.exceptions.ConnectionError("ollama down")
+
+    monkeypatch.setattr(rt.router, "generate", _boom)
+    result = rt.run(_cfg(), ticks=2)
+    assert result["frozen"] is True
+    rows = store.db.execute(
+        "SELECT tool, output FROM actions WHERE company='t' AND tool='llm_unreachable'").fetchall()
+    assert len(rows) == 1
+    assert "doctor" in rows[0]["output"]

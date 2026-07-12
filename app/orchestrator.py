@@ -6,6 +6,8 @@ cadence, so the roster is naturally staggered instead of firing all at once.
 from __future__ import annotations
 import logging
 import time
+
+import requests
 from dataclasses import dataclass, field
 
 from .agents import ROSTER, Executor, AgentSpec
@@ -69,8 +71,21 @@ class Runtime:
                                  breaker=breaker, data_path=self.settings.data_path,
                                  memory=memory, store=self.store)
                 for spec in due_roles(tick, enabled):
-                    for line in executor.run_turn(slug, spec, ctx):
-                        log.info("tick %d [%s] %s", tick, spec.role.value, line)
+                    try:
+                        for line in executor.run_turn(slug, spec, ctx):
+                            log.info("tick %d [%s] %s", tick, spec.role.value, line)
+                    except requests.RequestException as exc:
+                        # LLM unreachable even after retries: leave a trace the
+                        # operator can see and stop cleanly instead of crashing.
+                        log.error("tick %d [%s] LLM unreachable: %s",
+                                  tick, spec.role.value, exc)
+                        self.store.record_action(
+                            slug, "system", "llm_unreachable",
+                            {"agent": spec.role.value},
+                            f"run stopped: {exc}. Check `python -m app.cli doctor`.",
+                            False)
+                        frozen = True
+                        break
                     # Graceful degradation: a SAFE breaker freezes the whole session.
                     if breaker.mode == CircuitBreaker.SAFE:
                         log.error("tick %d circuit breaker SECURISE: freezing session", tick)

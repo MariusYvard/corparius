@@ -22,9 +22,13 @@ Le logo corparius (organigramme pixel-art, un carré CEO au-dessus de trois agen
 
 Sans company existante, la console affiche un formulaire de création (nom et offre suffisent ; agents et budget ont des valeurs par défaut). L'option "+ Nouvelle société" du sélecteur rouvre ce formulaire ensuite. L'onglet Réglages embarque le diagnostic (équivalent de `python -m app.cli doctor`) : chaque vérification indique son niveau et l'action corrective.
 
+## Site et paiements
+
+La carte "Site de vente" de la vue d'ensemble montre un aperçu réduit du site généré (data/sites/<slug>/index.html, servi sur /site/<slug>/), avec génération et régénération en un clic ; le déploiement reste une action HITL. La carte "Paiements" lit les encaissements Stripe avec STRIPE_API_KEY (clé de lecture restreinte) et affiche des données d'exemple étiquetées sinon.
+
 ## API
 
-GET /api/companies, /api/overview?company=, /api/providers, /api/doctor, /api/chat?company=. POST /api/companies {name, product, agents, session_tokens}, /api/approvals {id, decision, note}, /api/tasks {id, decision}, /api/run {company, ticks}, /api/providers {values}, /api/chat {company, message}. Toutes les réponses portent un champ ok.
+GET /api/companies, /api/overview?company=, /api/providers, /api/doctor, /api/site?company=, /api/payments, /api/chat?company=, /site/<slug>/. POST /api/companies {name, product, agents, session_tokens}, /api/site {company}, /api/approvals {id, decision, note}, /api/tasks {id, decision}, /api/run {company, ticks}, /api/providers {values}, /api/chat {company, message}. Toutes les réponses portent un champ ok.
 
 ## Modèle de sécurité
 

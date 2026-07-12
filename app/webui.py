@@ -24,9 +24,11 @@ import yaml
 from .agents import ROSTER
 from .doctor import run_checks
 from .config import Settings
+from .integrations import stripe_payments
 from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter
 from .models import AgentRole, Difficulty
 from .orchestrator import Runtime
+from . import sitegen
 from .store import Store
 
 log = logging.getLogger("corparius.webui")
@@ -311,6 +313,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, _overview(self.state, slug))
             elif url.path == "/api/providers":
                 self._send(200, _providers_payload())
+            elif url.path == "/api/site" and slug:
+                site = Path(_fresh_settings().data_path) / "sites" / slug / "index.html"
+                self._send(200, {"ok": True, "built": site.is_file(),
+                                 "mtime": site.stat().st_mtime if site.is_file() else None})
+            elif url.path.startswith("/site/"):
+                slug2 = url.path.split("/")[2] if len(url.path.split("/")) > 2 else ""
+                site = Path(_fresh_settings().data_path) / "sites" / slug2 / "index.html"
+                if slug2 in _companies() and site.is_file():
+                    self._send(200, site.read_bytes(), "text/html")
+                else:
+                    self._send(404, {"ok": False, "error": "site not built yet"})
+            elif url.path == "/api/payments":
+                self._send(200, {"ok": True, **stripe_payments()})
             elif url.path == "/api/doctor":
                 self._send(200, {"ok": True, "checks": run_checks(_fresh_settings())})
             elif url.path == "/api/chat" and slug:
@@ -349,6 +364,14 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 store.set_task_status(int(body.get("id")), decision, "via console")
                 self._send(200, {"ok": True})
+            elif url.path == "/api/site":
+                cfg = _load_company(slug)
+                if cfg is None:
+                    self._send(404, {"ok": False, "error": f"unknown company '{slug}'"})
+                    return
+                out_dir = Path(_fresh_settings().data_path) / "sites" / slug
+                sitegen.build_site(cfg, str(out_dir))
+                self._send(200, {"ok": True, "built": True})
             elif url.path == "/api/run":
                 ticks = max(1, min(int(body.get("ticks", 6)), 48))
                 self._send(200, _start_run(self.state, slug, ticks))

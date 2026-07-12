@@ -133,3 +133,21 @@ def test_company_wizard_creates_and_lists(server, tmp_path, monkeypatch):
     assert data["ok"] is False
     status, data = _call(server, "POST", "/api/companies", {"name": "!!!", "product": "x"})
     assert data["ok"] is False
+
+
+def test_site_generate_and_serve(server):
+    status, data = _call(server, "GET", "/api/site?company=example")
+    assert status == 200 and data["built"] is False
+    status, data = _call(server, "POST", "/api/site", {"company": "example"})
+    assert status == 200 and data["ok"]
+    status, page = _call(server, "GET", "/site/example/")
+    assert status == 200 and b"<html" in page.lower()
+    status, _ = _call(server, "GET", "/site/does-not-exist/")
+    assert status == 404
+
+
+def test_payments_mock_when_no_key(server, monkeypatch):
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    status, data = _call(server, "GET", "/api/payments")
+    assert status == 200 and data["source"] == "mock"
+    assert data["total_paid"] > 0 and len(data["payments"]) >= 1

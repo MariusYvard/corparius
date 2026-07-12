@@ -48,6 +48,9 @@ body {
 .ai { width: 20px; height: 20px; padding: 2px; box-sizing: border-box; border-radius: 5px;
   background: oklch(0.97 0.012 106); image-rendering: pixelated; vertical-align: -5px; flex: none; }
 [role="tab"] .ai { width: 18px; height: 18px; vertical-align: -4px; margin-right: 7px; }
+.site-frame { width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--border); border-radius: 10px;
+  background: oklch(0.97 0.012 106); overflow: hidden; }
+.site-frame iframe { width: 400%; height: 400%; border: 0; transform: scale(0.25); transform-origin: 0 0; pointer-events: none; }
 .mono { font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 13px; }
 a { color: var(--accent); }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
@@ -253,6 +256,11 @@ footer { color: var(--muted); font-size: 12.5px; padding: 16px 0 28px; border-to
           <div id="progress"></div>
         </div>
         <div class="card">
+          <h2 data-i18n="site.title">Sales site</h2>
+          <p class="desc" data-i18n="site.desc">The single-file page the design agent builds from the company config.</p>
+          <div id="site-box"></div>
+        </div>
+        <div class="card">
           <h2 data-i18n="activity.title">Recent activity</h2>
           <p class="desc" data-i18n="activity.desc">The last things agents did. Full log in Operations.</p>
           <div id="activity"></div>
@@ -263,6 +271,11 @@ footer { color: var(--muted); font-size: 12.5px; padding: 16px 0 28px; border-to
           <h2 data-i18n="spend.title">Spend by agent</h2>
           <p class="desc" data-i18n="spend.desc">Who consumes the LLM budget.</p>
           <div id="spend"></div>
+        </div>
+        <div class="card">
+          <h2 data-i18n="pay.title">Payments</h2>
+          <p class="desc" data-i18n="pay.desc">Money actually received, read from Stripe.</p>
+          <div id="payments"></div>
         </div>
         <div class="card">
           <h2 data-i18n="flow.title">Flow</h2>
@@ -449,7 +462,13 @@ en: {
   "settings.title":"Console settings","settings.desc":"Stored in this browser only; they change nothing on the server.",
   "settings.language":"Interface language","settings.theme":"Theme","settings.dark":"Dark","settings.light":"Light",
   "toast.approved":"Approved","toast.rejected":"Rejected","toast.taskApproved":"Task approved","toast.taskRejected":"Task rejected",
-  "toast.runStarted":"Run started","toast.runDone":"Run finished:","toast.saved":"Saved","toast.keySaved":"Key saved to .env","toast.tiersSaved":"Tiers saved",
+  "toast.runStarted":"Run started","toast.runDone":"Run finished:",
+  "site.title":"Sales site","site.desc":"The single-file page the design agent builds from the company config.",
+  "site.none":"Not built yet. Generate it, then the design agent keeps it fresh.",
+  "site.generate":"Generate the site","site.regenerate":"Regenerate","site.open":"Open full size","site.built":"Site generated",
+  "pay.title":"Payments","pay.desc":"Money actually received, read from Stripe.",
+  "pay.total":"Total received","pay.none":"No payments yet.","pay.mock":"sample data: set STRIPE_API_KEY (restricted read key) for live payments",
+  "pay.error":"Stripe unreachable:","toast.saved":"Saved","toast.keySaved":"Key saved to .env","toast.tiersSaved":"Tiers saved",
   "toast.nothing":"Nothing to save","toast.pasteFirst":"Paste a key first",
   "wiz.title":"Create your first company","wiz.desc":"Two fields are enough to start; everything else has sensible defaults you can change later in companies/<slug>/company.yaml.",
   "wiz.name":"Company name","wiz.product":"What does it sell?","wiz.productPh":"Handmade scented candles, sold online in France.",
@@ -513,7 +532,13 @@ fr: {
   "settings.title":"Réglages de la console","settings.desc":"Stockés dans ce navigateur uniquement ; rien ne change côté serveur.",
   "settings.language":"Langue de l'interface","settings.theme":"Thème","settings.dark":"Sombre","settings.light":"Clair",
   "toast.approved":"Approuvé","toast.rejected":"Rejeté","toast.taskApproved":"Tâche approuvée","toast.taskRejected":"Tâche rejetée",
-  "toast.runStarted":"Run lancé","toast.runDone":"Run terminé :","toast.saved":"Enregistré","toast.keySaved":"Clé écrite dans .env","toast.tiersSaved":"Tiers enregistrés",
+  "toast.runStarted":"Run lancé","toast.runDone":"Run terminé :",
+  "site.title":"Site de vente","site.desc":"La page single-file que l'agent design construit depuis la config de la société.",
+  "site.none":"Pas encore généré. Générez-le, l'agent design l'entretiendra ensuite.",
+  "site.generate":"Générer le site","site.regenerate":"Régénérer","site.open":"Ouvrir en grand","site.built":"Site généré",
+  "pay.title":"Paiements","pay.desc":"L'argent réellement reçu, lu depuis Stripe.",
+  "pay.total":"Total reçu","pay.none":"Aucun paiement pour l'instant.","pay.mock":"données d'exemple : posez STRIPE_API_KEY (clé lecture restreinte) pour le réel",
+  "pay.error":"Stripe injoignable :","toast.saved":"Enregistré","toast.keySaved":"Clé écrite dans .env","toast.tiersSaved":"Tiers enregistrés",
   "toast.nothing":"Rien à enregistrer","toast.pasteFirst":"Collez d'abord une clé",
   "wiz.title":"Créez votre première société","wiz.desc":"Deux champs suffisent pour démarrer ; tout le reste a des valeurs par défaut modifiables ensuite dans companies/<slug>/company.yaml.",
   "wiz.name":"Nom de la société","wiz.product":"Que vend-elle ?","wiz.productPh":"Bougies parfumées artisanales, vendues en ligne en France.",
@@ -614,9 +639,9 @@ async function boot() {
     sel.value = state.company;
     sel.addEventListener("change", () => {
       if (sel.value === "__new__") { $("#wizard").hidden = false; $("#wizard").scrollIntoView({behavior:"smooth"}); sel.value = state.company; return; }
-      state.company = sel.value; localStorage.setItem("corparius-company", sel.value); refresh(); loadChat();
+      state.company = sel.value; localStorage.setItem("corparius-company", sel.value); refresh(); loadChat(); loadSite();
     });
-    await Promise.all([refresh(), loadProviders(), loadChat()]);
+    await Promise.all([refresh(), loadProviders(), loadChat(), loadSite(), loadPayments()]);
     state.timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
   } catch (e) { connError(e); }
 }
@@ -624,6 +649,40 @@ function connError(e) { const b = $("#conn"); b.hidden = false; b.textContent = 
 function connOk() { $("#conn").hidden = true; }
 
 /* overview + operations */
+async function loadSite() {
+  if (!state.company) return;
+  try {
+    const d = await api(`/api/site?company=${encodeURIComponent(state.company)}`);
+    const url = `/site/${encodeURIComponent(state.company)}/`;
+    $("#site-box").innerHTML = d.built ? `
+      <div class="site-frame"><iframe src="${url}?t=${d.mtime}" title="Sales site preview" loading="lazy"></iframe></div>
+      <div style="display:flex; gap:10px; margin-top:12px">
+        <a href="${url}" target="_blank" rel="noopener"><button>${t("site.open")}</button></a>
+        <button data-gen-site>${t("site.regenerate")}</button>
+      </div>`
+      : `<div class="empty">${t("site.none")}<br><br><button class="primary" data-gen-site>${t("site.generate")}</button></div>`;
+  } catch (e) {}
+}
+async function loadPayments() {
+  try {
+    const d = await api("/api/payments");
+    const cur = d.payments[0]?.currency || "EUR";
+    $("#payments").innerHTML = `
+      <div class="kv"><span>${t("pay.total")}</span><span class="v">${fmt(d.total_paid)} ${esc(cur)}</span></div>
+      ${d.payments.slice(0, 6).map(x => `
+        <div class="kv"><span>${esc(x.description || x.status)}</span>
+        <span class="v">${fmt(x.amount)} ${esc(x.currency)}</span></div>`).join("") || `<div class="empty">${t("pay.none")}</div>`}
+      ${d.source === "mock" ? `<p class="note" style="margin:10px 0 0">${t("pay.mock")}</p>` : ""}
+      ${d.source === "error" ? `<p class="note" style="margin:10px 0 0; color:var(--danger)">${t("pay.error")} ${esc(d.error || "")}</p>` : ""}`;
+  } catch (e) {}
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest("button[data-gen-site]"); if (!b) return;
+  b.disabled = true;
+  try { await api("/api/site", {company: state.company}); toast(t("site.built")); await loadSite(); }
+  catch (err) { toast(err.message, true); }
+  finally { b.disabled = false; }
+});
 async function refresh() {
   if (!state.company) return;
   try {

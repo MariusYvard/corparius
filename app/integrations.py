@@ -30,6 +30,38 @@ def stripe_reconcile(timeout: int = 15) -> str | None:
         return None
 
 
+def stripe_payments(limit: int = 8, timeout: int = 15) -> dict:
+    """Received payments. Live when STRIPE_API_KEY is set (read-only charges
+    list), otherwise a deterministic mock so the console always has something
+    honest to show."""
+    key = os.environ.get("STRIPE_API_KEY", "").strip()
+    if key:
+        try:
+            r = requests.get("https://api.stripe.com/v1/charges",
+                             params={"limit": limit},
+                             auth=(key, ""), timeout=timeout)
+            r.raise_for_status()
+            items = [{
+                "amount": c.get("amount", 0) / 100.0,
+                "currency": (c.get("currency") or "eur").upper(),
+                "status": c.get("status", ""),
+                "paid": bool(c.get("paid")),
+                "description": c.get("description") or c.get("billing_details", {}).get("name") or "",
+                "ts": c.get("created", 0),
+            } for c in r.json().get("data", [])]
+            total = sum(i["amount"] for i in items if i["paid"])
+            return {"source": "stripe", "payments": items, "total_paid": round(total, 2)}
+        except requests.RequestException as exc:
+            return {"source": "error", "payments": [], "total_paid": 0.0, "error": str(exc)}
+    mock = [
+        {"amount": 9.0, "currency": "EUR", "status": "succeeded", "paid": True,
+         "description": "CV optimisation, single", "ts": 0},
+        {"amount": 18.0, "currency": "EUR", "status": "succeeded", "paid": True,
+         "description": "Monthly subscription x2", "ts": 0},
+    ]
+    return {"source": "mock", "payments": mock, "total_paid": 27.0}
+
+
 def send_email(to: str, subject: str, body: str, timeout: int = 15) -> str | None:
     """Send one email over SMTP, gated by the deliverability guard. Returns None
     when SMTP is not configured (so the caller falls back), else "sent",

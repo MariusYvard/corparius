@@ -6,10 +6,15 @@ from app import tools, integrations
 from app.leadsource import Lead
 
 
+def _fake_send(calls):
+    # Outreach sends through send_email_tracked, which also hands back the
+    # Message-ID so a later reply can be tied to the mail that caused it.
+    return lambda to, subject, body: (calls.append(to) or ("sent", f"<{to}>"))
+
+
 def test_sends_to_found_leads(monkeypatch):
     calls = []
-    monkeypatch.setattr(integrations, "send_email",
-                        lambda to, subject, body: (calls.append(to) or "sent"))
+    monkeypatch.setattr(integrations, "send_email_tracked", _fake_send(calls))
     ctx = types.SimpleNamespace(company={"name": "X"},
                                 leads=[Lead(email="a@x.com"), Lead(email="b@x.com")])
     out = tools._send_outreach(ctx, "hello")
@@ -25,8 +30,7 @@ def test_falls_back_without_leads(monkeypatch):
 
 def test_respects_per_run_cap(monkeypatch):
     calls = []
-    monkeypatch.setattr(integrations, "send_email",
-                        lambda to, subject, body: (calls.append(to) or "sent"))
+    monkeypatch.setattr(integrations, "send_email_tracked", _fake_send(calls))
     monkeypatch.setenv("CORP_OUTREACH_MAX_PER_RUN", "1")
     ctx = types.SimpleNamespace(company={"name": "X"},
                                 leads=[Lead(email="a@x.com"), Lead(email="b@x.com")])

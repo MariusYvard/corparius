@@ -37,8 +37,8 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         ["draft_social_post", "schedule_post"]),
     AgentRole.OUTREACH: AgentSpec(
         AgentRole.OUTREACH, 3, Difficulty.EASY,
-        "You run cold outbound to the ICP.",
-        ["find_targets", "send_outreach"]),
+        "You run cold outbound to the ICP, and you follow up on who answered.",
+        ["find_targets", "send_outreach", "scan_replies"]),
     AgentRole.SUPPORT: AgentSpec(
         AgentRole.SUPPORT, 3, Difficulty.EASY,
         "You handle customer support.",

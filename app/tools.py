@@ -7,7 +7,7 @@ from typing import Callable
 import os
 
 from .models import ToolResult
-from . import integrations, sitegen, deploy, leadsource, enrich, signals
+from . import cfg, integrations, mailbox, paths, sitegen, deploy, leadsource, enrich, signals
 
 
 class Tool:
@@ -36,19 +36,53 @@ def _ok(text: str) -> ToolResult:
     return ToolResult(ok=True, output=text)
 
 
+def _fail(text: str) -> ToolResult:
+    return ToolResult(ok=False, output=text)
+
+
+def _channel(ctx) -> str:
+    """The company's first configured channel. icp.channels was written by the
+    example and the wizard but read by nobody, so every post claimed LinkedIn
+    whatever the config said."""
+    channels = (ctx.company.get("icp", {}) or {}).get("channels") or []
+    return str(channels[0]) if channels else "linkedin"
+
+
+def _review_ad_budget(ctx) -> str:
+    """budgets.daily_ad_spend_eur was the other write-only field: the log said
+    '0 EUR/day, within cap' no matter what the operator had budgeted."""
+    cap = (ctx.company.get("budgets", {}) or {}).get("daily_ad_spend_eur", 0)
+    try:
+        cap = int(cap)
+    except (TypeError, ValueError):
+        cap = 0
+    if cap <= 0:
+        return "Ad budget reviewed: no daily cap set, ads stay off"
+    return f"Ad budget reviewed: {cap} EUR/day cap, within cap"
+
+
 def _build_site(ctx, draft: str) -> str:
     company = ctx.company
-    out_dir = os.path.join(ctx.data_path, "sites", company.get("slug", "company"))
-    path = sitegen.build_site(company, out_dir, headline=(draft.strip() or None))
+    out_dir = paths.site_dir(ctx.data_path, company.get("slug", "company"))
+    path = sitegen.build_site(company, str(out_dir), headline=(draft.strip() or None))
     return f"Sales site built at {path}"
 
 
-def _deploy_site(ctx) -> str:
+def _deploy_site(ctx) -> ToolResult:
+    """Returns a ToolResult, not a string: a deploy that published nothing used
+    to be wrapped in _ok() and recorded in the action log as a success."""
     company = ctx.company
-    out_dir = os.path.join(ctx.data_path, "sites", company.get("slug", "company"))
-    if not os.path.exists(os.path.join(out_dir, "index.html")):
-        sitegen.build_site(company, out_dir)
-    return "Site published: " + deploy.deploy_site(out_dir)
+    slug = company.get("slug", "company")
+    out_dir = paths.site_dir(ctx.data_path, slug)
+    if not paths.site_index(ctx.data_path, slug).exists():
+        sitegen.build_site(company, str(out_dir))
+    res = deploy.deploy_result(str(out_dir))
+    if res["ok"]:
+        return _ok(f"Site published: {res['provider']} -> {res['result']}")
+    if res["errors"]:
+        return _fail("Site not published, every provider failed: " + "; ".join(res["errors"]))
+    return _fail("Site not published: no provider is configured. "
+                 + ("Skipped " + "; ".join(res["skipped"]) if res["skipped"] else ""))
 
 
 def _find_targets(ctx) -> str:
@@ -75,20 +109,75 @@ def _scan_signals(ctx) -> str:
 
 def _send_outreach(ctx, draft: str) -> str:
     company = ctx.company
+    store = getattr(ctx, "store", None)
     leads = [lead for lead in getattr(ctx, "leads", []) if lead.email]
     if leads:
-        cap = int(os.environ.get("CORP_OUTREACH_MAX_PER_RUN", "20") or 20)
+        cap = cfg.get_int("CORP_OUTREACH_MAX_PER_RUN", 20)
+        subject = f"{company.get('name', 'corparius')} outreach"
         sent, skipped = [], []
         for lead in leads[:cap]:
-            res = integrations.send_email(
-                lead.email, f"{company.get('name', 'corparius')} outreach", draft)
+            res, message_id = integrations.send_email_tracked(lead.email, subject, draft)
             if res is None:
                 break   # SMTP not configured, fall back below
-            (sent if res == "sent" else skipped).append(lead.email)
+            if res == "sent":
+                sent.append(lead.email)
+                if store is not None:
+                    # Remember who we wrote to, or a reply is just another
+                    # unread message nobody connects to anything.
+                    store.record_outreach(company.get("slug", "company"), lead.email,
+                                          message_id, subject)
+            else:
+                skipped.append(lead.email)
         if sent or skipped:
             return f"Outreach: {len(sent)} sent, {len(skipped)} skipped. {', '.join(sent[:3])}"
     return integrations.send_outreach_email(company, draft) or \
         f"Cold email sent to 5 targets. Opener: {draft[:90]}"
+
+
+def _scan_replies(ctx) -> str:
+    """Match unread mail against the addresses this company wrote to. This is
+    the return leg of prospecting: without it the company emails people and
+    never learns whether anyone answered."""
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "Reply tracking unavailable"
+    slug = ctx.company.get("slug", "company")
+    if not mailbox.configured():
+        return "No mailbox connected, so replies cannot be seen (Settings, Inbox)"
+    pending = store.pending_outreach(slug)
+    if not pending:
+        return "No outreach awaiting a reply"
+    messages = mailbox.fetch(limit=40)
+    if not messages:
+        stats = store.outreach_stats(slug)
+        return (f"Inbox read: nothing new. {stats['replied']}/{stats['sent']} outreach "
+                "answered so far")
+    replied = []
+    for msg in messages:
+        if msg.sender in pending and store.mark_replied(slug, msg.sender, msg.body[:400]):
+            replied.append(msg)
+    if not replied:
+        return f"Inbox read: {len(messages)} unread, none from the {len(pending)} prospects waiting"
+    stats = store.outreach_stats(slug)
+    who = ", ".join(m.sender for m in replied[:3])
+    return (f"{len(replied)} prospect(s) replied: {who}. "
+            f"Reply rate now {stats['replied']}/{stats['sent']}")
+
+
+def _triage_inbox(ctx) -> str:
+    """Read the real inbox when one is connected. The old fixed string claimed
+    '3 support, 1 sales, 0 urgent' for every company, configured or not."""
+    if not mailbox.configured():
+        return "Inbox triaged: no mailbox connected, using sample counts (3 support, 1 sales, 0 urgent)"
+    messages = mailbox.fetch(limit=40)
+    if not messages:
+        return "Inbox read: nothing unread"
+    urgent = [m for m in messages
+              if any(w in (m.subject + " " + m.body[:200]).lower()
+                     for w in ("urgent", "asap", "refund", "remboursement", "cancel", "broken"))]
+    top = messages[0]
+    return (f"Inbox read: {len(messages)} unread, {len(urgent)} look urgent. "
+            f"Top: {top.label()}")
 
 
 ROLE_TOOL = {"outreach": "send_outreach", "social": "draft_social_post",
@@ -107,7 +196,7 @@ def _create_tasks(ctx) -> str:
     open_pairs = {(t["target"], t.get("tool") or "") for t in store.list_tasks(slug)
                   if t["status"] in ("approved", "in_progress")}
     created: list[str] = []
-    wip_limit = int(os.environ.get("CORP_WIP_LIMIT", "4") or 4)
+    wip_limit = cfg.get_int("CORP_WIP_LIMIT", 4)
 
     def queue(title, target, tool, priority):
         if not enabled.get(target) or (target, tool) in open_pairs:
@@ -141,7 +230,7 @@ def _review_proposals(ctx) -> str:
         return "Backlog unavailable"
     slug = ctx.company.get("slug", "company")
     proposals = store.list_tasks(slug, "proposed")
-    cap = int(os.environ.get("CORP_CEO_APPROVE_CAP", "3") or 3)
+    cap = cfg.get_int("CORP_CEO_APPROVE_CAP", 3)
     approved = rejected = modified = 0
     for i, task in enumerate(proposals):
         if i < cap:
@@ -205,22 +294,24 @@ _ALL = [
     Tool("kaizen", "Continuous improvement: find the bottleneck, propose a fix",
          effect=lambda c, d: _ok(_kaizen(c))),
     Tool("draft_social_post", "Draft a post for X or LinkedIn", needs_draft=True,
-         prompt=lambda c: f"Draft one short LinkedIn post for {_name(c)}.",
+         prompt=lambda c: f"Draft one short {_channel(c)} post for {_name(c)}.",
          effect=lambda c, d: _ok(f"Post drafted: {d[:120]}")),
     Tool("schedule_post", "Schedule the drafted post",
-         effect=lambda c, d: _ok("Post scheduled for +2h on linkedin")),
+         effect=lambda c, d: _ok(f"Post scheduled for +2h on {_channel(c)}")),
     Tool("find_targets", "Find ICP-matching prospects",
          effect=lambda c, d: _ok(_find_targets(c))),
     Tool("send_outreach", "Send a cold email sequence", needs_draft=True,
          prompt=lambda c: f"Draft a 2-line cold email opener for {_name(c)}.",
          effect=lambda c, d: _ok(_send_outreach(c, d))),
     Tool("triage_inbox", "Triage the support inbox",
-         effect=lambda c, d: _ok("Inbox triaged: 3 support, 1 sales, 0 urgent")),
+         effect=lambda c, d: _ok(_triage_inbox(c))),
+    Tool("scan_replies", "Check the inbox for prospect replies",
+         effect=lambda c, d: _ok(_scan_replies(c))),
     Tool("draft_support_reply", "Draft a reply to the top ticket", needs_draft=True,
          prompt=lambda c: f"Draft a one-line support reply for a {_name(c)} user.",
          effect=lambda c, d: _ok(f"Reply drafted: {d[:110]}")),
     Tool("review_ad_budget", "Review ad spend and pacing",
-         effect=lambda c, d: _ok("Ad budget reviewed: 0 EUR/day, within cap")),
+         effect=lambda c, d: _ok(_review_ad_budget(c))),
     Tool("adjust_bids", "Write ad variants and adjust bids", needs_draft=True,
          prompt=lambda c: f"Write one ad headline for {_name(c)}.",
          effect=lambda c, d: _ok(f"Bid variant written: {d[:90]}")),
@@ -253,7 +344,7 @@ _ALL = [
          prompt=lambda c: f"Write one punchy sales headline, under 10 words, for {_name(c)}.",
          effect=lambda c, d: _ok(_build_site(c, d))),
     Tool("deploy_site", "Publish the sales site to the configured hosts", hitl=True,
-         effect=lambda c, d: _ok(_deploy_site(c))),
+         effect=lambda c, d: _deploy_site(c)),
 ]
 
 TOOLS: dict[str, Tool] = {t.name: t for t in _ALL}

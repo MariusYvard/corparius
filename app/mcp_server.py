@@ -11,6 +11,7 @@ import os
 
 from .config import settings
 from .store import Store
+from . import paths
 from .cli import _load_company
 from . import sitegen
 from . import deploy as deploy_mod
@@ -66,13 +67,13 @@ def decide_approval(company: str, approval_id: str, approve: bool = True, note: 
 
 def build_site(company: str) -> dict:
     cfg, _ = _open(company)
-    out = os.path.join(settings.data_path, "sites", cfg["slug"])
+    out = str(paths.site_dir(settings.data_path, cfg["slug"]))
     return {"path": sitegen.build_site(cfg, out)}
 
 
 def publish_site(company: str) -> dict:
     cfg, _ = _open(company)
-    out = os.path.join(settings.data_path, "sites", cfg["slug"])
+    out = str(paths.site_dir(settings.data_path, cfg["slug"]))
     if not os.path.exists(os.path.join(out, "index.html")):
         sitegen.build_site(cfg, out)
     return {"result": deploy_mod.deploy_site(out)}

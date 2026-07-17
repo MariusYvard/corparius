@@ -13,11 +13,12 @@ Ollama always ends the chain.
 from __future__ import annotations
 import json
 import logging
-import os
 import subprocess
 from abc import ABC, abstractmethod
 
 import requests
+
+from . import cfg
 
 from .models import LLMResult, Usage, Difficulty
 from .safety import hash_embed
@@ -249,8 +250,8 @@ def _remote_providers() -> dict[str, LLMProvider]:
     """Instantiate every registered provider whose key (and endpoint) is set."""
     remotes: dict[str, LLMProvider] = {}
     for name, spec in OPENAI_COMPAT_PROVIDERS.items():
-        base = os.environ.get(spec.get("base_env", ""), "").strip() or spec["base"]
-        key = os.environ.get(spec["key_env"], "").strip()
+        base = cfg.get(spec.get("base_env", ""), "").strip() or spec["base"]
+        key = cfg.get(spec["key_env"], "").strip()
         if base and (key or spec.get("key_optional")):
             remotes[name] = OpenAICompatProvider(name, base, key)
     return remotes

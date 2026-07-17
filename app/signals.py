@@ -6,7 +6,7 @@ applicable law, and prefer public data.
 from __future__ import annotations
 import os
 
-from . import leadsource
+from . import cfg, leadsource
 
 
 def _match(text: str, keywords: list[str]) -> bool:
@@ -15,7 +15,7 @@ def _match(text: str, keywords: list[str]) -> bool:
 
 
 def _local(keywords: list[str], limit: int) -> list[str]:
-    path = os.environ.get("CORP_SIGNALS_FILE", "")
+    path = cfg.get("CORP_SIGNALS_FILE", "")
     if not path or not os.path.isfile(path):
         return []
     hits: list[str] = []
@@ -29,7 +29,7 @@ def _local(keywords: list[str], limit: int) -> list[str]:
 
 
 def _browser(keywords: list[str], limit: int) -> list[str]:
-    url = os.environ.get("CORP_SIGNALS_URL", "")
+    url = cfg.get("CORP_SIGNALS_URL", "")
     if not url:
         return []
     try:
@@ -50,7 +50,7 @@ _SOURCES = {"local": _local, "browser": _browser}
 
 def find_signals(keywords: list[str], limit: int = 5) -> list[str]:
     """Try each configured source in order, return the first non-empty result."""
-    order = os.environ.get("CORP_SIGNAL_SOURCES", "browser,local")
+    order = cfg.get("CORP_SIGNAL_SOURCES", "browser,local")
     for name in [x.strip() for x in order.split(",") if x.strip()]:
         fn = _SOURCES.get(name)
         if fn is None:

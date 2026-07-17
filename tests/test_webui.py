@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app import webui
+from app import cfg, webui
 from app.config import Settings
 from app.models import ApprovalRequest
 from app.store import Store
@@ -16,10 +16,14 @@ from app.store import Store
 
 @pytest.fixture()
 def server(tmp_path, monkeypatch):
-    settings = Settings()
-    settings.llm_mock = True
-    settings.data_path = str(tmp_path)
+    # Set the environment, not the instance: the console rebuilds Settings per
+    # request (_fresh_settings) and cfg resolves the store path on its own, so
+    # an attribute set here would only hold for this one object.
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    monkeypatch.setenv("CORP_LLM_MOCK", "true")
     monkeypatch.delenv("CORP_UI_TOKEN", raising=False)
+    cfg.invalidate()
+    settings = Settings()
     srv = webui.build_server(settings, host="127.0.0.1", port=0,
                              env_file=tmp_path / ".env")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -76,15 +80,35 @@ def test_providers_never_leak_keys_and_persist_env(server, monkeypatch):
     groq = next(p for p in data["providers"] if p["name"] == "groq")
     assert groq["configured"] and groq["key_set"]
     assert "gsk_secret_value" not in json.dumps(data)
+    # Keys are stored in the settings table, not in .env and not in os.environ:
+    # .env is the layer below, and writing the process environment would make a
+    # console value outrank every later edit. See app/cfg.py.
     status, data = _call(server, "POST", "/api/providers",
                          {"values": {"CEREBRAS_API_KEY": "csk_new"}})
     assert status == 200 and data["ok"]
-    env_file = server.RequestHandlerClass.state.env_file
-    assert "CEREBRAS_API_KEY=csk_new" in env_file.read_text()
-    assert os.environ["CEREBRAS_API_KEY"] == "csk_new"
+    assert server.RequestHandlerClass.state.store().get_setting("CEREBRAS_API_KEY") == "csk_new"
+    assert "CEREBRAS_API_KEY" not in os.environ
+    assert "csk_new" not in json.dumps(data)
+    cerebras = next(p for p in data["providers"] if p["name"] == "cerebras")
+    assert cerebras["configured"] and cerebras["key_set"]
     status, data = _call(server, "POST", "/api/providers",
                          {"values": {"PATH": "evil"}})
     assert status == 500 or data["ok"] is False
+
+
+def test_saved_key_survives_a_restart_and_env_still_wins(server, tmp_path, monkeypatch):
+    """The bug this whole layering exists to fix: a key saved from the page used
+    to live only in os.environ and in a .env nobody read, so it vanished on the
+    next start."""
+    _call(server, "POST", "/api/providers", {"values": {"MISTRAL_API_KEY": "sk_kept"}})
+    assert cfg.get("MISTRAL_API_KEY") == "sk_kept"
+    cfg.invalidate()   # as if the process had just started again
+    assert cfg.get("MISTRAL_API_KEY") == "sk_kept"
+    assert cfg.source("MISTRAL_API_KEY") == "db"
+    # An explicit process variable still outranks the console, and says so.
+    monkeypatch.setenv("MISTRAL_API_KEY", "sk_from_shell")
+    assert cfg.get("MISTRAL_API_KEY") == "sk_from_shell"
+    assert cfg.source("MISTRAL_API_KEY") == "env"
 
 
 def test_token_guards_mutations(server, monkeypatch):
@@ -118,8 +142,10 @@ def test_doctor_endpoint_reports_checks(server):
 
 
 def test_company_wizard_creates_and_lists(server, tmp_path, monkeypatch):
-    import app.webui as webui_mod
-    monkeypatch.setattr(webui_mod, "ROOT", tmp_path)
+    # app/company.py owns where a company lives now, so that the CLI, the console
+    # and the MCP server cannot disagree about it.
+    import app.company as company_mod
+    monkeypatch.setattr(company_mod, "ROOT", tmp_path)
     (tmp_path / "companies").mkdir()
     status, data = _call(server, "POST", "/api/companies",
                          {"name": "Atelier Brumaire", "product": "Handmade candles online",
@@ -128,6 +154,11 @@ def test_company_wizard_creates_and_lists(server, tmp_path, monkeypatch):
     import yaml as yaml_mod
     cfg = yaml_mod.safe_load((tmp_path / "companies" / "atelier-brumaire" / "company.yaml").read_text(encoding="utf-8"))
     assert cfg["agents"]["coder"] is True and cfg["budgets"]["session_tokens"] == 50000
+    # The wizard fills every field through the shared validator, so the editor
+    # never opens a company with pieces missing.
+    assert set(cfg) == {"slug", "name", "one_liner", "offer", "icp", "agents",
+                        "budgets", "hitl_tools"}
+    assert cfg["offer"]["billing"] == "stripe" and cfg["icp"]["channels"] == ["linkedin"]
     status, data = _call(server, "POST", "/api/companies",
                          {"name": "Atelier Brumaire", "product": "dup"})
     assert data["ok"] is False

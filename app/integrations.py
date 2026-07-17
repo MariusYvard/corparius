@@ -4,18 +4,20 @@ its mock effect. Nothing here runs unless the matching environment variables are
 set, so the whole system still works offline out of the box.
 """
 from __future__ import annotations
-import os
 import smtplib
+import socket
+import ssl
 from email.message import EmailMessage
+from email.utils import make_msgid
 
 import requests
 
-from . import deliverability
+from . import cfg, deliverability
 
 
 def stripe_reconcile(timeout: int = 15) -> str | None:
     """Live Stripe balance read. Set STRIPE_API_KEY (a restricted read key)."""
-    key = os.environ.get("STRIPE_API_KEY", "")
+    key = cfg.get("STRIPE_API_KEY", "")
     if not key:
         return None
     try:
@@ -34,7 +36,7 @@ def stripe_payments(limit: int = 8, timeout: int = 15) -> dict:
     """Received payments. Live when STRIPE_API_KEY is set (read-only charges
     list), otherwise a deterministic mock so the console always has something
     honest to show."""
-    key = os.environ.get("STRIPE_API_KEY", "").strip()
+    key = cfg.get("STRIPE_API_KEY", "").strip()
     if key:
         try:
             r = requests.get("https://api.stripe.com/v1/charges",
@@ -62,38 +64,164 @@ def stripe_payments(limit: int = 8, timeout: int = 15) -> dict:
     return {"source": "mock", "payments": mock, "total_paid": 27.0}
 
 
+def smtp_from() -> str:
+    return (cfg.get("CORP_SMTP_FROM") or cfg.get("CORP_SMTP_USER")
+            or "corparius@localhost")
+
+
+def _deliver(to: str, subject: str, body: str, timeout: int) -> str:
+    """One real send. Raises on any failure; callers decide what to do with it.
+    Returns the Message-ID, which is how a later reply is recognised as a reply.
+
+    Port 465 is implicit TLS and 587 is STARTTLS. Sending STARTTLS at 465 fails
+    with an error no operator can read, and 465 is what most providers put in
+    their own documentation, so pick the transport from the port.
+    """
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = smtp_from()
+    msg["To"] = to
+    msg["Message-ID"] = make_msgid(domain=smtp_from().rpartition("@")[2] or None)
+    msg.set_content(body or "")
+    host = cfg.get("CORP_SMTP_HOST", "")
+    port = cfg.get_int("CORP_SMTP_PORT", 587)
+    user = cfg.get("CORP_SMTP_USER", "")
+    password = cfg.get("CORP_SMTP_PASSWORD", "")
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=timeout) as s:
+            if user:
+                s.login(user, password)
+            s.send_message(msg)
+        return msg["Message-ID"]
+    with smtplib.SMTP(host, port, timeout=timeout) as s:
+        if port != 25:
+            s.starttls()
+        if user:
+            s.login(user, password)
+        s.send_message(msg)
+    return msg["Message-ID"]
+
+
 def send_email(to: str, subject: str, body: str, timeout: int = 15) -> str | None:
     """Send one email over SMTP, gated by the deliverability guard. Returns None
     when SMTP is not configured (so the caller falls back), else "sent",
-    "skipped (reason)" or "error"."""
-    host = os.environ.get("CORP_SMTP_HOST", "")
-    if not host or not to:
-        return None
+    "skipped (reason)" or "error".
+
+    Failures are swallowed on purpose: an agent's turn should survive a bad
+    mailbox. Operators pressing Test want the opposite, and get smtp_check().
+    """
+    status, _message_id = send_email_tracked(to, subject, body, timeout)
+    return status
+
+
+def send_email_tracked(to: str, subject: str, body: str,
+                       timeout: int = 15) -> tuple[str | None, str]:
+    """send_email, plus the Message-ID of what went out, so the outreach tool can
+    recognise the reply later. Kept separate so send_email's contract stays the
+    plain None / "sent" / "skipped (...)" / "error" every caller already expects.
+    """
+    if not cfg.get("CORP_SMTP_HOST", "") or not to:
+        return None, ""
     ok, reason = deliverability.can_send(to)
     if not ok:
-        return f"skipped ({reason})"
+        return f"skipped ({reason})", ""
     try:
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = os.environ.get("CORP_SMTP_FROM") or os.environ.get("CORP_SMTP_USER", "corparius@localhost")
-        msg["To"] = to
-        msg.set_content(body or "")
-        with smtplib.SMTP(host, int(os.environ.get("CORP_SMTP_PORT", "587")), timeout=timeout) as s:
-            s.starttls()
-            user = os.environ.get("CORP_SMTP_USER", "")
-            if user:
-                s.login(user, os.environ.get("CORP_SMTP_PASSWORD", ""))
-            s.send_message(msg)
-        deliverability.record_send()
-        return "sent"
+        message_id = _deliver(to, subject, body, timeout)
     except (OSError, smtplib.SMTPException, ValueError):
-        return "error"
+        return "error", ""
+    deliverability.record_send()
+    return "sent", message_id or ""
+
+
+def smtp_diagnosis(exc: Exception) -> str:
+    """Turn an SMTP failure into something an operator can act on. The stdlib
+    messages name the protocol; these name the fix."""
+    port = cfg.get_int("CORP_SMTP_PORT", 587)
+    host = cfg.get("CORP_SMTP_HOST", "")
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        return ("The server refused these credentials. Most providers need an app-specific "
+                "password here, not your account password.")
+    if isinstance(exc, smtplib.SMTPNotSupportedError):
+        return (f"The server at {host}:{port} did not accept the encryption corparius offered. "
+                "Try port 465 (implicit TLS) or 587 (STARTTLS).")
+    if isinstance(exc, smtplib.SMTPRecipientsRefused):
+        return "The server accepted the login but refused the recipient address."
+    if isinstance(exc, smtplib.SMTPSenderRefused):
+        return (f"The server refused '{smtp_from()}' as a sender. It usually has to match "
+                "the account you logged in with.")
+    if isinstance(exc, socket.gaierror):
+        return f"No such host: '{host}'. Check the server name."
+    if isinstance(exc, ConnectionRefusedError):
+        return f"{host} refused a connection on port {port}. Check the port."
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return (f"No answer from {host}:{port} before the timeout. A firewall or the wrong "
+                "port would both look like this.")
+    if isinstance(exc, ssl.SSLError):
+        return (f"TLS handshake failed on port {port}. Port 465 expects implicit TLS, "
+                "587 expects STARTTLS.")
+    return str(exc) or exc.__class__.__name__
+
+
+def smtp_check(to: str = "", timeout: int = 15) -> dict:
+    """Actually connect, and actually send if given an address. The console
+    calls this so a mail setup can be proved before an agent depends on it."""
+    host = cfg.get("CORP_SMTP_HOST", "")
+    if not host:
+        return {"ok": False, "configured": False,
+                "detail": "No SMTP server set, so outreach keeps writing to its mock."}
+    to = (to or cfg.get("CORP_OUTREACH_TEST_TO", "")).strip()
+    port = cfg.get_int("CORP_SMTP_PORT", 587)
+    if not to:
+        return {"ok": False, "configured": True,
+                "detail": "Set a fallback recipient (or type an address) to send a test to."}
+    try:
+        _deliver(to, "corparius test", "This is the test message from the corparius console. "
+                                       "Your mail setup works.", timeout)
+    except (OSError, smtplib.SMTPException, ValueError, ssl.SSLError) as exc:
+        return {"ok": False, "configured": True, "detail": smtp_diagnosis(exc)}
+    return {"ok": True, "configured": True,
+            "detail": f"Sent to {to} from {smtp_from()} via {host}:{port}. Check the inbox."}
+
+
+def stripe_check(timeout: int = 15) -> dict:
+    """Read the Stripe balance and report what the key actually is. Nothing is
+    charged and nothing is created: this only ever reads."""
+    key = cfg.get("STRIPE_API_KEY", "").strip()
+    if not key:
+        return {"ok": False, "configured": False,
+                "detail": "No Stripe key set, so the payments card shows sample data."}
+    live = key.startswith(("sk_live", "rk_live"))
+    try:
+        r = requests.get("https://api.stripe.com/v1/balance",
+                         headers={"Authorization": f"Bearer {key}"}, timeout=timeout)
+    except requests.RequestException as exc:
+        return {"ok": False, "configured": True, "detail": f"Could not reach Stripe: {exc}"}
+    if r.status_code == 401:
+        return {"ok": False, "configured": True,
+                "detail": "Stripe rejected this key. Copy it again from the dashboard; a "
+                          "restricted key with read access to Balance and Charges is enough."}
+    if r.status_code == 403:
+        return {"ok": False, "configured": True,
+                "detail": "This key is valid but lacks permission to read the balance. Grant "
+                          "it read access to Balance and Charges."}
+    if not r.ok:
+        return {"ok": False, "configured": True,
+                "detail": f"Stripe answered {r.status_code}: {r.text[:160]}"}
+    try:
+        avail = (r.json().get("available") or [{}])[0]
+        amount = avail.get("amount", 0) / 100
+        currency = (avail.get("currency", "") or "").upper()
+    except (ValueError, IndexError, AttributeError):
+        return {"ok": False, "configured": True, "detail": "Stripe answered in a shape corparius does not know."}
+    mode = "live" if live else "test"
+    return {"ok": True, "configured": True, "live": live,
+            "detail": f"Connected in {mode} mode. Balance available: {amount:.2f} {currency}."}
 
 
 def send_outreach_email(company: dict, draft: str) -> str | None:
     """Fallback path: send the opener to a single test/notification address
     (CORP_OUTREACH_TEST_TO). Used when no real leads are available."""
-    to = os.environ.get("CORP_OUTREACH_TEST_TO", "")
+    to = cfg.get("CORP_OUTREACH_TEST_TO", "")
     if not to:
         return None
     res = send_email(to, f"{company.get('name', 'corparius')} outreach", draft)

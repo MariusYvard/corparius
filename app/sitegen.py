@@ -8,6 +8,8 @@ from __future__ import annotations
 import html as _html
 import os
 
+from . import cfg
+
 CSS = """
 :root{--bg:#0b0f17;--panel:#121826;--fg:#e6e9ef;--muted:#9aa4b2;--brand:#5b8cff;--brand2:#7b5bff;--line:#1f2937;--radius:14px}
 *{box-sizing:border-box}
@@ -55,7 +57,7 @@ def build_site(company: dict, out_dir: str, headline: str | None = None) -> str:
     price = offer.get("price_eur")
     billing = offer.get("billing", "")
     pains = icp.get("pains", []) or []
-    pay = (offer.get("payment_link") or os.environ.get("CORP_STRIPE_PAYMENT_LINK", "")
+    pay = (offer.get("payment_link") or cfg.get("CORP_STRIPE_PAYMENT_LINK", "")
            or "#pricing")
 
     price_txt = f"{_esc(price)} EUR" if price is not None else "Let's talk"

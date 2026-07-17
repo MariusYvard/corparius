@@ -28,6 +28,16 @@ CREATE TABLE IF NOT EXISTS tasks (
     company TEXT, title TEXT, target TEXT, priority INTEGER,
     status TEXT, created_by TEXT, note TEXT, ts REAL
 );
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY, value TEXT NOT NULL,
+    secret INTEGER NOT NULL DEFAULT 0, updated_at REAL
+);
+CREATE TABLE IF NOT EXISTS outreach (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company TEXT, email TEXT, message_id TEXT, subject TEXT, ts REAL,
+    replied_at REAL, reply_snippet TEXT
+);
+CREATE INDEX IF NOT EXISTS outreach_by_email ON outreach (company, email);
 """
 
 
@@ -39,6 +49,10 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
         self.db.commit()
+        try:  # the settings table holds API keys in the clear; owner only
+            os.chmod(self.path, 0o600)   # effective on POSIX, a no-op on Windows
+        except OSError:
+            pass
         try:   # migrate older DBs that predate the task tool column
             self.db.execute("ALTER TABLE tasks ADD COLUMN tool TEXT")
             self.db.commit()
@@ -110,6 +124,74 @@ class Store:
     def load_state(self, company) -> dict:
         row = self.db.execute("SELECT data FROM state WHERE company=?", (company,)).fetchone()
         return json.loads(row["data"]) if row else {}
+
+    # Settings saved from the console. Global, not per company: they are the
+    # second layer of app/cfg.py, under the real process environment.
+    def all_settings(self) -> dict[str, str]:
+        rows = self.db.execute("SELECT key, value FROM settings").fetchall()
+        return {r["key"]: r["value"] for r in rows}
+
+    def get_setting(self, key) -> str | None:
+        row = self.db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set_setting(self, key, value, secret: bool = False) -> None:
+        self.db.execute(
+            "INSERT OR REPLACE INTO settings (key, value, secret, updated_at) VALUES (?,?,?,?)",
+            (key, value, 1 if secret else 0, time.time()),
+        )
+        self.db.commit()
+
+    def delete_setting(self, key) -> bool:
+        cur = self.db.execute("DELETE FROM settings WHERE key=?", (key,))
+        self.db.commit()
+        return cur.rowcount > 0
+
+    # Outreach we sent, so a reply can be recognised as a reply. Without this
+    # the company emails prospects and never learns whether anyone answered,
+    # which is the one signal it exists to chase.
+    def record_outreach(self, company, email, message_id="", subject="") -> None:
+        self.db.execute(
+            "INSERT INTO outreach (company, email, message_id, subject, ts) VALUES (?,?,?,?,?)",
+            (company, (email or "").strip().lower(), message_id, subject, time.time()),
+        )
+        self.db.commit()
+
+    def pending_outreach(self, company) -> dict[str, dict]:
+        """Addresses we wrote to that have not answered, newest send per address."""
+        rows = self.db.execute(
+            "SELECT email, MAX(ts) ts, subject FROM outreach "
+            "WHERE company=? AND replied_at IS NULL AND email<>'' GROUP BY email",
+            (company,)).fetchall()
+        return {r["email"]: dict(r) for r in rows}
+
+    def mark_replied(self, company, email, snippet="") -> int:
+        cur = self.db.execute(
+            "UPDATE outreach SET replied_at=?, reply_snippet=? "
+            "WHERE company=? AND email=? AND replied_at IS NULL",
+            (time.time(), (snippet or "")[:400], company, (email or "").strip().lower()),
+        )
+        self.db.commit()
+        return cur.rowcount
+
+    def outreach_stats(self, company) -> dict:
+        row = self.db.execute(
+            "SELECT COUNT(*) sent, COUNT(replied_at) replied FROM outreach WHERE company=?",
+            (company,)).fetchone()
+        sent, replied = row["sent"], row["replied"]
+        return {"sent": sent, "replied": replied,
+                "reply_rate": round(replied / sent, 3) if sent else 0.0}
+
+    def purge_company(self, company) -> dict[str, int]:
+        """Drop everything recorded for one company. Only ever called with an
+        explicit confirmation from the operator; the config itself is moved to
+        companies/.trash rather than deleted."""
+        removed = {}
+        for table in ("actions", "token_usage", "approvals", "tasks", "state", "outreach"):
+            cur = self.db.execute(f"DELETE FROM {table} WHERE company=?", (company,))
+            removed[table] = cur.rowcount
+        self.db.commit()
+        return removed
 
     def status(self, company) -> dict:
         actions = self.db.execute(

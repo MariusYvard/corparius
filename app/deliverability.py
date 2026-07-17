@@ -7,9 +7,11 @@ import json
 import os
 import time
 
+from . import cfg
+
 
 def _suppressed(email: str) -> bool:
-    path = os.environ.get("CORP_SUPPRESSION_FILE", "")
+    path = cfg.get("CORP_SUPPRESSION_FILE", "")
     if not path or not os.path.isfile(path):
         return False
     target = email.strip().lower()
@@ -18,7 +20,7 @@ def _suppressed(email: str) -> bool:
 
 
 def _counter_path() -> str:
-    return os.path.join(os.environ.get("CORP_DATA_PATH", "./data"), "outreach_counter.json")
+    return os.path.join(cfg.get("CORP_DATA_PATH", "./data"), "outreach_counter.json")
 
 
 def _today() -> str:
@@ -38,7 +40,7 @@ def can_send(email: str) -> tuple[bool, str]:
     (CORP_OUTREACH_DAILY_CAP; 0 or unset means no cap)."""
     if _suppressed(email):
         return False, "on suppression list"
-    cap = int(os.environ.get("CORP_OUTREACH_DAILY_CAP", "0"))
+    cap = cfg.get_int("CORP_OUTREACH_DAILY_CAP", 0)
     if cap > 0 and _sent_today() >= cap:
         return False, f"daily cap {cap} reached"
     return True, "ok"

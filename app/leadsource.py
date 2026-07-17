@@ -13,6 +13,8 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from . import cfg
+
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
 
@@ -50,7 +52,7 @@ class LocalDatasetSource(LeadSource):
         return True
 
     def find(self, query: str, limit: int) -> list[Lead]:
-        path = os.environ.get("CORP_LEADS_CSV", "")
+        path = cfg.get("CORP_LEADS_CSV", "")
         if not path or not os.path.isfile(path):
             return []
         q = query.lower()
@@ -69,7 +71,7 @@ def render_page_text(url: str, timeout_ms: int = 30000) -> str:
     """Fetch a URL with headless Chromium and return the rendered body text.
     Requires Playwright. Always headless. Shared by lead and signal sources."""
     from playwright.sync_api import sync_playwright
-    ua = os.environ.get("CORP_BROWSER_UA", "Mozilla/5.0 (compatible; corparius/0.1)")
+    ua = cfg.get("CORP_BROWSER_UA", "Mozilla/5.0 (compatible; corparius/0.1)")
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)   # always headless
         try:
@@ -89,7 +91,7 @@ class BrowserSource(LeadSource):
     name = "browser"
 
     def available(self) -> bool:
-        if not os.environ.get("CORP_LEADS_URL"):
+        if not cfg.get("CORP_LEADS_URL"):
             return False
         try:
             import playwright  # noqa: F401
@@ -98,7 +100,10 @@ class BrowserSource(LeadSource):
         return True
 
     def find(self, query: str, limit: int) -> list[Lead]:
-        url = os.environ["CORP_LEADS_URL"].replace("{query}", query)
+        raw = cfg.get("CORP_LEADS_URL")
+        if not raw:
+            raise RuntimeError("CORP_LEADS_URL is not set")
+        url = raw.replace("{query}", query)
         text = render_page_text(url)
         leads: list[Lead] = []
         seen: set[str] = set()
@@ -119,7 +124,7 @@ REGISTRY: dict[str, LeadSource] = {
 
 
 def _order() -> list[str]:
-    raw = os.environ.get("CORP_LEAD_SOURCES", "browser,local")
+    raw = cfg.get("CORP_LEAD_SOURCES", "browser,local")
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 

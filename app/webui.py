@@ -3,10 +3,12 @@ single-file page (webui.html) and a small JSON API over the same Store,
 Runtime and HybridRouter the CLI uses.
 
 Scope and safety: binds to 127.0.0.1 by default. Set CORP_UI_TOKEN to require
-the X-Corp-Token header on every mutating call (useful behind a reverse
-proxy). Provider keys posted from the page are write-only: they are applied to
-the running process and persisted to the .env file, and the API only ever
-reports whether a key is set, never its value.
+the X-Corp-Token header on every mutating call (useful behind a reverse proxy);
+the doctor fails when the console is bound off-localhost without one.
+
+Settings saved from the page go to the store, or to .env for the bootstrap keys
+that must be readable before the store opens; see app/cfg.py for the precedence.
+Secrets are write-only: the API only ever reports whether one is set.
 """
 from __future__ import annotations
 import json
@@ -21,10 +23,13 @@ from urllib.parse import parse_qs, urlparse
 
 import yaml
 
+from . import backup, cfg, deploy, mailbox, paths, settings_spec
+from . import company as company_mod
 from .agents import ROSTER
+from .tools import TOOLS
 from .doctor import run_checks
 from .config import Settings
-from .integrations import stripe_payments
+from .integrations import smtp_check, stripe_check, stripe_payments
 from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter
 from .models import AgentRole, Difficulty
 from .orchestrator import Runtime
@@ -43,7 +48,11 @@ _TIERS = {"CORP_TRIVIAL_MODEL", "CORP_NORMAL_MODEL", "CORP_HARD_MODEL",
 _KEYS = ({spec["key_env"] for spec in OPENAI_COMPAT_PROVIDERS.values()}
          | {spec["base_env"] for spec in OPENAI_COMPAT_PROVIDERS.values() if "base_env" in spec}
          | {"ANTHROPIC_API_KEY"})
-ALLOWED_VARS = _TOGGLES | _TIERS | _KEYS
+# Everything the page may write: the provider panel's vars plus every row of the
+# settings registry. Anything else is refused.
+ALLOWED_VARS = settings_spec.WRITABLE
+# Stored write-only: never returned by the API, only a "configured" boolean.
+_SECRET_VARS = settings_spec.SECRETS
 
 _CHAT_LIMIT = 30  # turns kept per company, in-process only
 
@@ -55,20 +64,18 @@ def _fresh_settings() -> Settings:
 
 
 def _companies() -> list[str]:
-    base = ROOT / "companies"
-    if not base.is_dir():
-        return []
-    return sorted(p.parent.name for p in base.glob("*/company.yaml"))
+    return company_mod.list_slugs()
 
 
 def _load_company(slug: str) -> dict | None:
-    path = ROOT / "companies" / slug / "company.yaml"
-    if not path.is_file() or slug not in _companies():
+    # `slug in _companies()` is the path-traversal guard: only names the glob
+    # actually produced are ever opened.
+    if slug not in _companies():
         return None
-    with open(path, "r", encoding="utf-8") as fh:
-        cfg = yaml.safe_load(fh)
-    cfg.setdefault("slug", slug)
-    return cfg
+    try:
+        return company_mod.load(company_mod.path_for(slug), slug)
+    except (FileNotFoundError, ValueError):
+        return None
 
 
 def _merge_env_file(path: Path, values: dict[str, str]) -> None:
@@ -136,6 +143,8 @@ def _overview(state: UiState, slug: str) -> dict:
         "session_budget": s.session_token_budget,
         "llm_mock": s.llm_mock, "cloud_enabled": s.cloud_enabled,
         "running": bool(run.get("running")), "last_run": run.get("result"),
+        "loop": bool(run.get("loop")),
+        "stopping": bool(run.get("running") and run.get("stop") and run["stop"].is_set()),
     }
 
 
@@ -143,8 +152,8 @@ def _providers_payload() -> dict:
     s = _fresh_settings()
     providers = []
     for name, spec in sorted(OPENAI_COMPAT_PROVIDERS.items()):
-        key = os.environ.get(spec["key_env"], "").strip()
-        base = os.environ.get(spec.get("base_env", ""), "").strip() or spec["base"]
+        key = cfg.get(spec["key_env"], "").strip()
+        base = cfg.get(spec.get("base_env", ""), "").strip() or spec["base"]
         providers.append({
             "name": name, "key_env": spec["key_env"], "base_env": spec.get("base_env"),
             "base": base, "key_optional": bool(spec.get("key_optional")),
@@ -153,7 +162,7 @@ def _providers_payload() -> dict:
         })
     return {
         "ok": True, "providers": providers,
-        "anthropic_key_set": bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()),
+        "anthropic_key_set": bool(cfg.get("ANTHROPIC_API_KEY", "").strip()),
         "claude_code": s.claude_code_enabled,
         "cloud_enabled": s.cloud_enabled, "llm_mock": s.llm_mock,
         "tiers": {"trivial": s.trivial_model, "normal": s.normal_model,
@@ -193,82 +202,265 @@ def _chat(state: UiState, slug: str, message: str) -> dict:
             "provider": res.provider, "history": list(history)}
 
 
-def _start_run(state: UiState, slug: str, ticks: int) -> dict:
-    cfg = _load_company(slug)
-    if cfg is None:
+def _start_run(state: UiState, slug: str, ticks: int, loop: bool = False) -> dict:
+    company = _load_company(slug)
+    if company is None:
         return {"ok": False, "error": f"unknown company '{slug}'"}
+    stop = threading.Event()
     with state.lock:
         if state.runs.get(slug, {}).get("running"):
             return {"ok": False, "error": "a run is already in progress"}
-        state.runs[slug] = {"running": True, "result": None}
+        state.runs[slug] = {"running": True, "result": None, "stop": stop, "loop": loop}
 
     def _worker() -> None:
         try:
             runtime = Runtime(_fresh_settings(), state.store())
-            result = runtime.run(cfg, ticks=ticks)
+            result = runtime.run(company, ticks=ticks, loop=loop, should_stop=stop.is_set)
             state.runs[slug] = {"running": False, "result": result}
         except Exception as exc:  # surface, never swallow
             log.exception("run failed for %s", slug)
             state.runs[slug] = {"running": False, "result": {"error": str(exc)}}
 
     threading.Thread(target=_worker, daemon=True, name=f"corparius-run-{slug}").start()
-    return {"ok": True, "running": True}
+    return {"ok": True, "running": True, "loop": loop}
 
 
-_DEFAULT_AGENTS = {"ceo": True, "social": True, "outreach": True, "support": True,
-                   "ads": False, "finance": True, "strategy": True,
-                   "competitor": True, "design": True, "coder": False}
+def _stop_run(state: UiState, slug: str) -> dict:
+    """Ask the loop to stop. It lands within a tick; the thread is never killed,
+    so the company's clock and the action log stay consistent."""
+    with state.lock:
+        run = state.runs.get(slug) or {}
+        if not run.get("running"):
+            return {"ok": False, "error": "no run in progress"}
+        stop = run.get("stop")
+    if stop is None:
+        return {"ok": False, "error": "this run cannot be stopped"}
+    stop.set()
+    return {"ok": True, "stopping": True}
+
+
+_DEFAULT_AGENTS = company_mod.DEFAULT_AGENTS   # kept: the wizard's checkbox list
 
 
 def _create_company(state: UiState, body: dict) -> dict:
-    name = str(body.get("name", "")).strip()
-    product = str(body.get("product", "")).strip()
-    if not name or not product:
-        return {"ok": False, "error": "name and product are required"}
-    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40]
-    if not slug:
-        return {"ok": False, "error": "the name must contain letters or digits"}
-    path = ROOT / "companies" / slug / "company.yaml"
+    """The wizard. It asks for two fields and fills the rest from the same
+    validator the editor uses, so a company created here and one edited later
+    can never disagree about what a company is."""
+    cfg, errors, warnings = company_mod.validate({
+        "name": body.get("name", ""),
+        "one_liner": body.get("one_liner", ""),
+        "offer": {"product": body.get("product", "")},
+        "icp": {"segment": body.get("segment", "")},
+        "agents": body.get("agents", {}),
+        "budgets": {"session_tokens": body.get("session_tokens", 80000)},
+    })
+    if errors:
+        return {"ok": False, "error": "; ".join(errors)}
+    path = company_mod.path_for(cfg["slug"])
     if path.exists():
-        return {"ok": False, "error": f"company '{slug}' already exists"}
-    agents = dict(_DEFAULT_AGENTS)
-    for role, on in dict(body.get("agents", {})).items():
-        if role in agents:
-            agents[role] = bool(on)
+        return {"ok": False, "error": f"company '{cfg['slug']}' already exists"}
+    company_mod.dump(cfg, path)
+    state.store().save_state(cfg["slug"], {"tick": 0})
+    log.info("company created from the console: %s", cfg["slug"])
+    return {"ok": True, "slug": cfg["slug"], "companies": _companies(),
+            "warnings": warnings}
+
+
+def _company_payload(slug: str) -> dict:
+    cfg = _load_company(slug)
+    if cfg is None:
+        return {"ok": False, "error": f"unknown company '{slug}'"}
+    # A broken file opens in the editor with its problems named, rather than
+    # returning a 404 that strands the operator with nothing to fix it from.
+    _cfg, errors, warnings = company_mod.validate(cfg)
+    return {"ok": True, "company": cfg, "path": str(company_mod.path_for(slug)),
+            "warnings": warnings, "problems": errors, "roles": list(company_mod.ROLES),
+            "channels": list(company_mod.CHANNELS), "billing": list(company_mod.BILLING),
+            "tools": sorted(TOOLS)}
+
+
+def _save_company(state: UiState, slug: str, body: dict) -> dict:
+    if slug not in _companies():
+        return {"ok": False, "error": f"unknown company '{slug}'"}
+    incoming = dict(body or {})
+    incoming["slug"] = slug          # the slug is the directory; renaming is a move, not an edit
+    cfg, errors, warnings = company_mod.validate(incoming)
+    if errors:
+        return {"ok": False, "error": "; ".join(errors)}
+    company_mod.dump(cfg, company_mod.path_for(slug))
+    log.info("company edited from the console: %s", slug)
+    return {**_company_payload(slug), "warnings": warnings, "saved": True}
+
+
+def _delete_company(state: UiState, slug: str, confirm: str, purge: bool) -> dict:
+    if slug not in _companies():
+        return {"ok": False, "error": f"unknown company '{slug}'"}
+    if confirm != slug:
+        return {"ok": False, "error": "type the company slug to confirm"}
     try:
-        budget = max(1000, min(int(body.get("session_tokens", 80000)), 5_000_000))
-    except (TypeError, ValueError):
-        budget = 80000
-    cfg = {
-        "slug": slug, "name": name,
-        "one_liner": str(body.get("one_liner", "")).strip() or product,
-        "offer": {"product": product, "price_eur": 0, "billing": "stripe", "payment_link": ""},
-        "icp": {"segment": str(body.get("segment", "")).strip() or "To be defined",
-                "channels": ["linkedin", "x"], "pains": []},
-        "agents": agents,
-        "budgets": {"session_tokens": budget,
-                    "tokens_per_minute": max(1000, budget // 10),
-                    "daily_ad_spend_eur": 0},
-        "hitl_tools": ["send_financial_transaction", "publish_production_code", "deploy_site"],
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        yaml.safe_dump(cfg, fh, sort_keys=False, allow_unicode=True)
-    state.store().save_state(slug, {"tick": 0})
-    log.info("company created from the console: %s", slug)
-    return {"ok": True, "slug": slug, "companies": _companies()}
+        dest = company_mod.trash(slug)
+    except FileNotFoundError:
+        return {"ok": False, "error": f"unknown company '{slug}'"}
+    if purge:
+        state.store().purge_company(slug)
+    log.info("company moved to trash from the console: %s -> %s", slug, dest)
+    return {"ok": True, "companies": _companies(), "trashed": str(dest),
+            "purged": bool(purge)}
+
+
+def _persist(state: UiState, values: dict[str, str], unset: list[str] | None = None) -> dict:
+    """Write settings saved from the page, each to the layer it belongs to.
+
+    Bootstrap keys (cfg.BOOTSTRAP) go to .env: they must be readable before the
+    store can be opened, so they cannot live in it. Everything else goes to the
+    settings table, which outranks .env and survives a restart.
+
+    Nothing is written to os.environ. That layer belongs to whoever started the
+    process; writing it here would promote a console value above every later
+    edit and make cfg.source() report "env" for a value the console itself set.
+    A key the process environment already defines is reported back as shadowed
+    rather than silently ignored.
+
+    Returns the meta the caller merges into its payload.
+    """
+    unset = unset or []
+    boot = {k: v for k, v in values.items() if k in cfg.BOOTSTRAP}
+    stored = {k: v for k, v in values.items() if k not in cfg.BOOTSTRAP}
+    if boot:
+        _merge_env_file(state.env_file, boot)
+    if stored or unset:
+        store = state.store()
+        for key, value in stored.items():
+            store.set_setting(key, value, secret=key in _SECRET_VARS)
+        for key in unset:
+            store.delete_setting(key)
+        if any(k in cfg.BOOTSTRAP for k in unset):
+            _merge_env_file(state.env_file,
+                            {k: "" for k in unset if k in cfg.BOOTSTRAP})
+    cfg.invalidate()
+    meta: dict = {}
+    shadowed = [k for k in list(values) + unset if os.environ.get(k) is not None]
+    if shadowed:
+        meta["shadowed"] = sorted(shadowed)
+    restart = sorted(k for k in list(values) + unset if k in cfg.BOOTSTRAP)
+    if restart:
+        meta["restart_required"] = restart
+    return meta
 
 
 def _set_env(state: UiState, values: dict) -> dict:
+    """The providers panel: toggles, routing tiers and provider keys."""
     clean: dict[str, str] = {}
     for key, value in values.items():
         if key not in ALLOWED_VARS:
             return {"ok": False, "error": f"variable '{key}' is not settable"}
         clean[key] = str(value).strip()
-    for key, value in clean.items():
-        os.environ[key] = value
-    _merge_env_file(state.env_file, clean)
-    return _providers_payload()
+    meta = _persist(state, clean)
+    return {**_providers_payload(), **meta}
+
+
+def _edit_task(store, body: dict) -> tuple[int, dict]:
+    """Edit fields, decide, or both. The CLI could already retitle and
+    reprioritise a task; the console could only approve or reject one."""
+    try:
+        task_id = int(body.get("id"))
+    except (TypeError, ValueError):
+        return 400, {"ok": False, "error": "a task id is required"}
+    decision = body.get("decision")
+    if decision is not None and decision not in ("approved", "rejected"):
+        return 400, {"ok": False, "error": "decision must be approved or rejected"}
+
+    fields: dict = {}
+    if "title" in body:
+        title = str(body["title"]).strip()
+        if not title:
+            return 400, {"ok": False, "error": "title cannot be empty"}
+        fields["title"] = title
+    if "priority" in body:
+        try:
+            fields["priority"] = max(0, min(int(body["priority"]), 5))
+        except (TypeError, ValueError):
+            return 400, {"ok": False, "error": "priority must be a whole number"}
+    if "target" in body:
+        target = str(body["target"]).strip()
+        if target not in {r.value for r in AgentRole}:
+            return 400, {"ok": False, "error": f"unknown agent '{target}'"}
+        fields["target"] = target
+    if "tool" in body:
+        tool = str(body["tool"]).strip()
+        if tool and tool not in TOOLS:
+            return 400, {"ok": False, "error": f"unknown tool '{tool}'"}
+        fields["tool"] = tool
+    if not fields and decision is None:
+        return 400, {"ok": False, "error": "nothing to change"}
+    if fields:
+        store.update_task(task_id, **fields)
+    if decision:
+        store.set_task_status(task_id, decision, str(body.get("note", "via console")))
+    return 200, {"ok": True, "id": task_id, "changed": sorted(fields)}
+
+
+def _deploy(state: UiState, slug: str) -> tuple[int, dict]:
+    company = _load_company(slug)
+    if company is None:
+        return 404, {"ok": False, "error": f"unknown company '{slug}'"}
+    data_path = _fresh_settings().data_path
+    out_dir = paths.site_dir(data_path, slug)
+    if not paths.site_index(data_path, slug).exists():
+        sitegen.build_site(company, str(out_dir))
+    res = deploy.deploy_result(str(out_dir))
+    # The envelope succeeded; whether anything published is the payload's news.
+    return 200, {"ok": True, "published": res["ok"], "provider": res["provider"],
+                 "result": res["result"], "errors": res["errors"], "skipped": res["skipped"]}
+
+
+def _mail_check(to: str = "") -> dict:
+    """Prove the mail account in one press: send, then read. Reported as two
+    lines because they fail for different reasons and an operator needs to know
+    which half is broken."""
+    send = smtp_check(to)
+    read = mailbox.check()
+    lines = [f"Sending: {send['detail']}", f"Reading: {read['detail']}"]
+    if not send["configured"] and not read["configured"]:
+        return {"ok": False, "detail": "No mail account set yet. Pick a provider above, "
+                                       "give the address and an app password."}
+    return {"ok": bool(send["ok"] and read["ok"]),
+            "send_ok": send["ok"], "read_ok": read["ok"],
+            "detail": "\n".join(lines)}
+
+
+def _settings_payload() -> dict:
+    return {
+        "ok": True,
+        "groups": settings_spec.GROUPS,
+        "fields": [settings_spec.describe(f.key) for f in settings_spec.SPEC],
+        "warning": {"en": settings_spec.WARN_EN, "fr": settings_spec.WARN_FR},
+        "mail_presets": settings_spec.MAIL_PRESETS,
+    }
+
+
+def _set_settings(state: UiState, values: dict, unset: list) -> dict:
+    """Validate against the registry, then persist. An empty value clears the
+    setting rather than storing an empty string, so the layer below shows
+    through again."""
+    clean: dict[str, str] = {}
+    drop: list[str] = [k for k in unset if k in settings_spec.BY_KEY]
+    errors: list[str] = []
+    for key, raw in values.items():
+        spec = settings_spec.BY_KEY.get(key)
+        if spec is None:
+            return {"ok": False, "error": f"unknown setting '{key}'"}
+        value, err = settings_spec.coerce(spec, raw)
+        if err:
+            errors.append(err)
+        elif value is None:
+            drop.append(key)
+        else:
+            clean[key] = value
+    if errors:
+        return {"ok": False, "error": "; ".join(errors)}
+    meta = _persist(state, clean, drop)
+    return {**_settings_payload(), **meta}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -297,7 +489,7 @@ class Handler(BaseHTTPRequestHandler):
             return {}
 
     def _authorized(self) -> bool:
-        token = os.environ.get("CORP_UI_TOKEN", "").strip()
+        token = cfg.get("CORP_UI_TOKEN", "").strip()
         return not token or self.headers.get("X-Corp-Token", "") == token
 
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
@@ -313,13 +505,23 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, _overview(self.state, slug))
             elif url.path == "/api/providers":
                 self._send(200, _providers_payload())
+            elif url.path == "/api/settings":
+                self._send(200, _settings_payload())
+            elif url.path == "/api/company" and slug:
+                result = _company_payload(slug)
+                self._send(200 if result["ok"] else 404, result)
+            elif url.path == "/api/session":
+                # Tells the page whether it must send X-Corp-Token. It never
+                # serves the token itself.
+                self._send(200, {"ok": True,
+                                 "token_required": bool(cfg.get("CORP_UI_TOKEN", "").strip())})
             elif url.path == "/api/site" and slug:
-                site = Path(_fresh_settings().data_path) / "sites" / slug / "index.html"
+                site = paths.site_index(_fresh_settings().data_path, slug)
                 self._send(200, {"ok": True, "built": site.is_file(),
                                  "mtime": site.stat().st_mtime if site.is_file() else None})
             elif url.path.startswith("/site/"):
                 slug2 = url.path.split("/")[2] if len(url.path.split("/")) > 2 else ""
-                site = Path(_fresh_settings().data_path) / "sites" / slug2 / "index.html"
+                site = paths.site_index(_fresh_settings().data_path, slug2)
                 if slug2 in _companies() and site.is_file():
                     self._send(200, site.read_bytes(), "text/html")
                 else:
@@ -338,11 +540,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, {"ok": False, "error": str(exc)})
 
     def do_POST(self) -> None:  # noqa: N802
+        # Read the body before deciding anything, even when we are about to
+        # refuse. Closing the connection on an unread body makes the client see
+        # a reset instead of our 401, and the page needs the 401 to know it
+        # should ask for a token.
+        body = self._json_body()
         if not self._authorized():
             self._send(401, {"ok": False, "error": "missing or wrong X-Corp-Token"})
             return
         url = urlparse(self.path)
-        body = self._json_body()
         slug = str(body.get("company", ""))
         store = self.state.store()
         try:
@@ -358,25 +564,49 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200 if done else 404,
                            {"ok": done, "error": None if done else "approval not found"})
             elif url.path == "/api/tasks":
-                decision = body.get("decision")
-                if decision not in ("approved", "rejected"):
-                    self._send(400, {"ok": False, "error": "decision must be approved or rejected"})
-                    return
-                store.set_task_status(int(body.get("id")), decision, "via console")
-                self._send(200, {"ok": True})
+                self._send(*_edit_task(store, body))
             elif url.path == "/api/site":
-                cfg = _load_company(slug)
-                if cfg is None:
+                company = _load_company(slug)
+                if company is None:
                     self._send(404, {"ok": False, "error": f"unknown company '{slug}'"})
                     return
-                out_dir = Path(_fresh_settings().data_path) / "sites" / slug
-                sitegen.build_site(cfg, str(out_dir))
+                out_dir = paths.site_dir(_fresh_settings().data_path, slug)
+                headline = str(body.get("headline", "")).strip()
+                sitegen.build_site(company, str(out_dir), headline=headline or None)
                 self._send(200, {"ok": True, "built": True})
+            elif url.path == "/api/deploy":
+                self._send(*_deploy(self.state, slug))
+            elif url.path == "/api/backup":
+                path = backup.make_backup(_fresh_settings().data_path)
+                self._send(200, {"ok": True, "name": path.name,
+                                 "size": path.stat().st_size,
+                                 "warning": {"en": backup.WARNING_EN, "fr": backup.WARNING_FR}})
+            elif url.path == "/api/run/stop":
+                self._send(200, _stop_run(self.state, slug))
             elif url.path == "/api/run":
                 ticks = max(1, min(int(body.get("ticks", 6)), 48))
-                self._send(200, _start_run(self.state, slug, ticks))
+                self._send(200, _start_run(self.state, slug, ticks,
+                                           loop=bool(body.get("loop"))))
             elif url.path == "/api/providers":
                 self._send(200, _set_env(self.state, dict(body.get("values", {}))))
+            elif url.path == "/api/settings":
+                result = _set_settings(self.state, dict(body.get("values", {})),
+                                       list(body.get("unset", [])))
+                self._send(200 if result.get("ok") else 400, result)
+            elif url.path == "/api/test/mail":
+                # One button, both directions. A real send and a real read:
+                # setting a mail account and hoping is the friction, and this is
+                # the answer to "did it work?".
+                self._send(200, {"ok": True, "result": _mail_check(str(body.get("to", "")))})
+            elif url.path == "/api/test/payments":
+                self._send(200, {"ok": True, "result": stripe_check()})
+            elif url.path == "/api/company":
+                result = _save_company(self.state, slug, dict(body.get("config", {})))
+                self._send(200 if result.get("ok") else 400, result)
+            elif url.path == "/api/company/delete":
+                result = _delete_company(self.state, slug, str(body.get("confirm", "")),
+                                         bool(body.get("purge_store")))
+                self._send(200 if result.get("ok") else 400, result)
             elif url.path == "/api/chat":
                 message = str(body.get("message", "")).strip()
                 if not message:
@@ -392,7 +622,9 @@ class Handler(BaseHTTPRequestHandler):
 
 def build_server(settings: Settings, host: str | None = None, port: int | None = None,
                  env_file: Path | None = None) -> ThreadingHTTPServer:
-    state = UiState(settings, env_file or ROOT / ".env")
+    path = env_file or ROOT / ".env"
+    cfg.set_dotenv_path(path)   # the console and the resolver must agree on it
+    state = UiState(settings, path)
     handler = type("BoundHandler", (Handler,), {"state": state})
     return ThreadingHTTPServer((host or settings.ui_host, settings.ui_port if port is None else port), handler)
 

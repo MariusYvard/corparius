@@ -78,7 +78,7 @@ so the company does not spend its whole budget in one burst.
 | --- | --- | --- |
 | CEO (orchestrator) | twice a day | Owns the backlog: creates and arbitrates tasks, sets the plan, writes the EOD summary |
 | Social media | every 2h | Drafts and schedules posts for X and LinkedIn |
-| Outreach | every 3h | Finds targets from enriched data, sends cold email |
+| Outreach | every 3h | Finds targets, sends cold email, tracks who replied |
 | Support | every 3h | Triages the inbox, drafts replies |
 | Ads | every 6h | Tracks ad budgets, writes variants, adjusts bids |
 | Finance | every 6h | Reconciles Stripe flows, tracks spend, computes the balance |
@@ -115,18 +115,45 @@ and light themes).
 
 ![corparius operator console](docs/screenshots/console.png)
 
-It gives you, per company: a pulse view (tick, actions, tokens, open work), lean
+It gives you, per company: a pulse view led by what waits on your decision, lean
 flow metrics with the current bottleneck, per-agent spend, the action log, the
 approval queue with inline approve and reject, the CEO-governed backlog as a
-kanban with one-click arbitration of proposals, run control (launch ticks in the
-background), a providers panel to flip mock or cloud mode, edit routing tiers
-and store API keys, and a chat with the CEO agent that answers from live company
-state through your configured routing.
+kanban you can arbitrate and edit in place, run control (a burst of ticks or a
+loop you can stop), the sales site with a headline and a publish button, backups,
+and a chat with the CEO agent that answers from live company state.
 
-The console binds to localhost. Keys posted from the page are write-only (applied
-to the process, persisted to `.env`, never displayed back). Set `CORP_UI_TOKEN`
+Nothing here needs a text editor. The company editor covers every field of the
+company config; Settings covers everything corparius reads, from provider keys to
+the mail account, Stripe, publishing targets, lead sources and the safety
+ceilings. Connecting a mailbox is three answers: pick your provider, give the
+address and an app password, then press Test and watch it send and read for real.
+
+The console binds to localhost. Keys posted from the page are write-only: stored,
+never displayed back, reported only as a `configured` boolean. Set `CORP_UI_TOKEN`
 to require a header on every mutating call if you put it behind a reverse proxy.
 Details in `docs/console.md`.
+
+### Where settings live
+
+Every setting resolves through four layers, first hit wins:
+
+| Layer | Source | Set it from |
+| --- | --- | --- |
+| 1 | the real process environment | your shell, systemd, docker `environment:` |
+| 2 | the settings saved from the console | the console |
+| 3 | `.env` | a text editor |
+| 4 | the default in the code | — |
+
+The console can set everything in layer 2, and it says which layer answers for
+each field: a value pinned by the process environment is shown read-only rather
+than accepting an edit that would do nothing. Bootstrap keys (`CORP_DATA_PATH`,
+`CORP_LOG_LEVEL`, `CORP_UI_HOST`, `CORP_UI_PORT`, `CORP_UI_TOKEN`) have to be
+readable before the database opens, so they live in `.env` and apply on restart.
+
+`.env` is read by corparius itself, not injected into the environment — which is
+why `docker-compose.yml` mounts it instead of using `env_file:`. Keys saved from
+the console are stored in the clear in `data/corparius.sqlite` (as they were in
+`.env` before) and are included in `cli.py backup` zips.
 
 ## LLM routing
 
@@ -188,12 +215,18 @@ point this at real customers.
 
 ```
 app/
+  cfg.py           settings resolver: environment > console > .env > default
   config.py        env-driven settings (dataclass, CORP_ prefix)
+  settings_spec.py the registry of settings the console may write (one row each)
+  company.py       the company config: one loader, one validator, one writer
+  paths.py         where things live on disk
   models.py        typed records: agents, actions, approvals, LLM results
   llm.py           HybridRouter + Ollama, Anthropic, 12 free OpenAI-compatible
                    providers, Claude Code CLI and Mock
   safety.py        TokenBudget, LoopGuard, CircuitBreaker
   tools.py         the business toolbox, with HITL flags
+  mailbox.py       IMAP reading, read-only: support triage and prospect replies
+  backup.py        zip the store and the company configs
   sitegen.py       single-file sales-page generator
   deploy.py        interchangeable deploy providers (local, Netlify, S3, SSH)
   leadsource.py    interchangeable lead sources (local dataset, headless browser)
@@ -210,7 +243,7 @@ app/
   mcp_server.py    optional MCP server (drive corparius from an MCP host)
 companies/example/ a sample company config
 docs/              architecture, safety, compliance, and the RE dossier
-tests/             63 tests: guards, routing, backlog, console, pipeline
+tests/             guards, routing, backlog, console, settings layering, pipeline
 ```
 
 ## Documentation

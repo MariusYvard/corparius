@@ -5,8 +5,7 @@ import json
 import os
 import sys
 
-import yaml
-
+from . import company, paths
 from .config import settings, setup_logging
 from .store import Store
 
@@ -20,13 +19,16 @@ def _company_path(slug_or_path: str) -> str:
 
 
 def _load_company(slug_or_path: str) -> dict:
+    """Thin wrapper over company.load, keeping the CLI's exit-with-a-message
+    ergonomics. The parsing, defaults and validation live in app/company.py so
+    the CLI, the console and the MCP server cannot drift apart."""
     path = _company_path(slug_or_path)
-    if not os.path.isfile(path):
+    try:
+        return company.load(path)
+    except FileNotFoundError:
         sys.exit(f"company config not found: {path}")
-    with open(path, "r", encoding="utf-8") as fh:
-        cfg = yaml.safe_load(fh)
-    cfg.setdefault("slug", os.path.basename(os.path.dirname(path)))
-    return cfg
+    except ValueError as exc:
+        sys.exit(str(exc))
 
 
 def cmd_init(args) -> None:
@@ -61,7 +63,7 @@ def cmd_status(args) -> None:
 def cmd_site(args) -> None:
     from . import sitegen
     cfg = _load_company(args.company)
-    out_dir = os.path.join(settings.data_path, "sites", cfg["slug"])
+    out_dir = str(paths.site_dir(settings.data_path, cfg["slug"]))
     path = sitegen.build_site(cfg, out_dir, headline=args.headline or None)
     print(f"sales site built: {path}")
 
@@ -102,7 +104,7 @@ def cmd_task(args) -> None:
 def cmd_deploy(args) -> None:
     from . import sitegen, deploy
     cfg = _load_company(args.company)
-    out_dir = os.path.join(settings.data_path, "sites", cfg["slug"])
+    out_dir = str(paths.site_dir(settings.data_path, cfg["slug"]))
     if not os.path.exists(os.path.join(out_dir, "index.html")):
         sitegen.build_site(cfg, out_dir)
     print("deployed: " + deploy.deploy_site(out_dir))
@@ -139,21 +141,10 @@ def cmd_doctor(args) -> None:
 
 
 def cmd_backup(args) -> None:
-    import time
-    import zipfile
-    out_dir = args.out or os.path.join(ROOT, "backups")
-    os.makedirs(out_dir, exist_ok=True)
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    path = os.path.join(out_dir, f"corparius-backup-{stamp}.zip")
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for base in (settings.data_path, os.path.join(ROOT, "companies")):
-            if not os.path.isdir(base):
-                continue
-            for root, _dirs, files in os.walk(base):
-                for name in files:
-                    full = os.path.join(root, name)
-                    zf.write(full, os.path.relpath(full, ROOT))
+    from . import backup
+    path = backup.make_backup(settings.data_path, args.out)
     print(f"backup written: {path}")
+    print(backup.WARNING_EN)
 
 
 def cmd_ui(args) -> None:

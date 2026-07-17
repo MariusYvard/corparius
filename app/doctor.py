@@ -10,6 +10,7 @@ from pathlib import Path
 
 import requests
 
+from . import cfg
 from .config import Settings
 from .llm import OPENAI_COMPAT_PROVIDERS, _split
 
@@ -24,9 +25,63 @@ def _check_python() -> tuple:
 
 
 def _check_env_file() -> tuple:
-    if (ROOT / ".env").is_file():
-        return ("ok", ".env", "present")
-    return ("warn", ".env", "missing; run `cp .env.example .env` (start.py does it for you). Environment variables still apply.")
+    path = cfg.dotenv_path()
+    if not path.is_file():
+        return ("warn", ".env",
+                "missing; run `cp .env.example .env` (start.py does it for you). "
+                "Settings saved from the console and real environment variables still apply.")
+    try:
+        count = len(cfg.parse_dotenv(path.read_text(encoding="utf-8")))
+    except OSError as exc:
+        return ("fail", ".env", f"cannot read {path}: {exc}. Fix permissions.")
+    return ("ok", ".env",
+            f"loaded, {count} variables. Lowest precedence: the process environment "
+            "and settings saved from the console both override it.")
+
+
+def _check_settings_source(s: Settings) -> tuple:
+    """Console settings that the process environment overrides. Silently losing
+    an operator's saved value is the one thing this layering must never do."""
+    try:
+        from .store import Store
+        stored = Store(s.data_path).all_settings()
+    except Exception:
+        return ("ok", "settings", "no settings saved from the console yet")
+    if not stored:
+        return ("ok", "settings", "no settings saved from the console yet")
+    shadowed = sorted(k for k in stored if os.environ.get(k) is not None)
+    if shadowed:
+        return ("warn", "settings",
+                f"{len(stored)} saved from the console, but the environment overrides "
+                f"{', '.join(shadowed)}. The console shows these as read-only. "
+                "Unset them in your shell or compose file to edit them from the page.")
+    return ("ok", "settings", f"{len(stored)} saved from the console, all in effect")
+
+
+def _check_exposure(s: Settings) -> tuple:
+    """A console bound off-localhost with no token is an open remote control:
+    it can spend money, publish a site and read every key's status."""
+    local = {"127.0.0.1", "localhost", "::1"}
+    if s.ui_host in local:
+        return ("ok", "exposure", f"console bound to {s.ui_host} (localhost only)")
+    if s.ui_token.strip():
+        return ("ok", "exposure", f"console on {s.ui_host}, token required")
+    return ("fail", "exposure",
+            f"console bound to {s.ui_host} with no CORP_UI_TOKEN. Anyone who can reach "
+            "it can spend money and publish. Set CORP_UI_TOKEN, or bind 127.0.0.1.")
+
+
+def _check_secrets_at_rest(s: Settings) -> tuple:
+    db = Path(s.data_path) / "corparius.sqlite"
+    if not db.is_file():
+        return ("ok", "secrets", "no store yet")
+    note = ("API keys saved from the console are stored in the clear in "
+            f"{db}, and `cli.py backup` includes them in the zip.")
+    if os.name != "nt":
+        mode = db.stat().st_mode & 0o077
+        if mode:
+            return ("warn", "secrets", f"{note} It is readable beyond its owner; run: chmod 600 {db}")
+    return ("ok", "secrets", note)
 
 
 def _check_companies() -> tuple:
@@ -79,8 +134,8 @@ def _check_ollama(s: Settings) -> tuple:
 
 def _check_providers(s: Settings) -> tuple:
     keyed = [n for n, spec in OPENAI_COMPAT_PROVIDERS.items()
-             if os.environ.get(spec["key_env"], "").strip()]
-    anthropic = bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+             if cfg.get(spec["key_env"], "").strip()]
+    anthropic = bool(cfg.get("ANTHROPIC_API_KEY", "").strip())
     if s.llm_mock:
         return ("ok", "providers", "mock mode; keys are not used yet")
     if not s.cloud_enabled:
@@ -112,11 +167,34 @@ def _check_claude_cli(s: Settings) -> tuple:
     return ("fail", "claude cli", "CORP_CLAUDE_CODE=true but the `claude` CLI is not on PATH. Install Claude Code and log in.")
 
 
+def _check_deploy_order() -> tuple:
+    """The local provider is always available, so anything ordered after it is
+    unreachable. Setting NETLIFY_AUTH_TOKEN and expecting a publish is the
+    footgun this catches."""
+    from . import deploy as deploy_mod
+    order = cfg.get_csv("CORP_DEPLOY_PROVIDERS", "local,netlify,s3,ssh")
+    unknown = [n for n in order if n not in deploy_mod.REGISTRY]
+    if unknown:
+        return ("warn", "deploy", f"unknown provider(s) in CORP_DEPLOY_PROVIDERS: {', '.join(unknown)}")
+    if "local" not in order:
+        return ("ok", "deploy", f"order: {', '.join(order)}")
+    after = order[order.index("local") + 1:]
+    reachable = [n for n in after if deploy_mod.REGISTRY[n].available()]
+    if reachable:
+        return ("warn", "deploy",
+                f"'local' is ordered before {', '.join(reachable)} and is always available, "
+                f"so it always wins and {', '.join(reachable)} will never run. "
+                f"Set CORP_DEPLOY_PROVIDERS={','.join(reachable + ['local'])} to publish there.")
+    return ("ok", "deploy", f"order: {', '.join(order)}")
+
+
 def run_checks(settings: Settings | None = None) -> list[dict]:
     s = settings or Settings()
-    checks = [_check_python(), _check_env_file(), _check_mode(s), _check_store(s),
-              _check_companies(), _check_ollama(s), _check_providers(s),
-              _check_network(s), _check_claude_cli(s)]
+    checks = [_check_python(), _check_env_file(), _check_settings_source(s),
+              _check_mode(s), _check_exposure(s), _check_store(s),
+              _check_secrets_at_rest(s), _check_companies(), _check_ollama(s),
+              _check_providers(s), _check_network(s), _check_claude_cli(s),
+              _check_deploy_order()]
     return [{"level": lv, "name": n, "message": m} for lv, n, m in checks]
 
 

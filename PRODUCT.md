@@ -14,7 +14,9 @@ product. The console serves the task; it should disappear into it. Earned famili
 
 ## Tone
 
-Calm, precise, factual. Labels state what things are. No exclamation marks, no praise, no marketing adjectives. Empty states teach the next command instead of apologizing.
+Calm, precise, warm. Labels state what things are. Empty states teach the next command instead of apologizing.
+
+Warmth is wanted, and it is not the same thing as enthusiasm. A finished run may read as finished, an empty queue may read as earned, an error may read as survivable. What stays banned is anything that flatters the operator or performs on their behalf: no exclamation marks, no emoji, no marketing adjectives, no congratulating someone for using software. Say the true thing, and let it be a pleasant thing to read.
 
 ## Anti-references
 

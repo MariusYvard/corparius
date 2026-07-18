@@ -252,7 +252,7 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
             "proposal": proposal, "history": list(history)}
 
 
-def _start_run(state: UiState, slug: str, ticks: int, loop: bool = False) -> dict:
+def _start_run(state: UiState, slug: str, ticks: int, loop: bool = False, lang: str = "en") -> dict:
     company = _load_company(slug)
     if company is None:
         return {"ok": False, "error": f"unknown company '{slug}'"}
@@ -267,9 +267,11 @@ def _start_run(state: UiState, slug: str, ticks: int, loop: bool = False) -> dic
             runtime = Runtime(_fresh_settings(), state.store())
             result = runtime.run(company, ticks=ticks, loop=loop, should_stop=stop.is_set)
             state.runs[slug] = {"running": False, "result": result}
-        except Exception as exc:  # surface, never swallow
+        except Exception:  # surface, never swallow; detail to the log, not the operator
             log.exception("run failed for %s", slug)
-            state.runs[slug] = {"running": False, "result": {"error": str(exc)}}
+            state.runs[slug] = {"running": False, "result": {"error": i18n.pick(lang,
+                "The run stopped on an unexpected error. See the server log for details.",
+                "Le run s'est arrêté sur une erreur inattendue. Voir le journal du serveur.")}}
 
     threading.Thread(target=_worker, daemon=True, name=f"corparius-run-{slug}").start()
     return {"ok": True, "running": True, "loop": loop}
@@ -515,6 +517,14 @@ def _claude_setup(state: UiState) -> dict:
     return {**payload, "check": result, "applied": claudecli.plan()}
 
 
+def _oops(lang: str = "en") -> str:
+    """The message for an unexpected error. The full traceback goes to the server
+    log; the operator gets a sentence, not Python internals."""
+    return i18n.pick(lang,
+        "Something went wrong on the console. The details are in the server log.",
+        "Un problème est survenu dans la console. Les détails sont dans le journal du serveur.")
+
+
 def _mail_check(to: str = "", lang: str = "en") -> dict:
     """Prove the mail account in one press: send, then read. Reported as two
     lines because they fail for different reasons and an operator needs to know
@@ -650,9 +660,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True, "history": history})
             else:
                 self._send(404, {"ok": False, "error": "not found"})
-        except Exception as exc:
+        except Exception:
             log.exception("GET %s failed", self.path)
-            self._send(500, {"ok": False, "error": str(exc)})
+            self._send(500, {"ok": False, "error": _oops(q.get("lang", ""))})
 
     def do_POST(self) -> None:  # noqa: N802
         # Read the body before deciding anything, even when we are about to
@@ -701,7 +711,8 @@ class Handler(BaseHTTPRequestHandler):
             elif url.path == "/api/run":
                 ticks = max(1, min(int(body.get("ticks", 6)), 48))
                 self._send(200, _start_run(self.state, slug, ticks,
-                                           loop=bool(body.get("loop"))))
+                                           loop=bool(body.get("loop")),
+                                           lang=str(body.get("lang", ""))))
             elif url.path == "/api/providers":
                 self._send(200, _set_env(self.state, dict(body.get("values", {}))))
             elif url.path == "/api/settings":
@@ -742,9 +753,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, _chat(self.state, slug, message, str(body.get("lang", ""))))
             else:
                 self._send(404, {"ok": False, "error": "not found"})
-        except Exception as exc:
+        except Exception:
             log.exception("POST %s failed", self.path)
-            self._send(500, {"ok": False, "error": str(exc)})
+            self._send(500, {"ok": False, "error": _oops(str(body.get("lang", "")))})
 
 
 def build_server(settings: Settings, host: str | None = None, port: int | None = None,

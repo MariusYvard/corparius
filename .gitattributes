@@ -1,0 +1,6 @@
+# Shell launchers must keep LF endings: a CRLF shebang fails on macOS and Linux
+# with "bad interpreter", which would break the double-click start for anyone who
+# cloned from a Windows checkout.
+*.sh        text eol=lf
+*.command   text eol=lf
+start.py    text eol=lf

@@ -90,7 +90,20 @@ so the company does not spend its whole budget in one burst.
 ## Quick start
 
 Runs offline out of the box (mock LLM, SQLite). No keys, no models, no accounts.
-One command, either way:
+
+Download the project, then **double-click the launcher for your system**:
+
+| System | Double-click |
+| --- | --- |
+| Windows | `start-windows.bat` |
+| macOS | `start-macos.command` (first time: right-click, Open) |
+| Linux | `start-linux.sh` |
+
+It sets up a virtualenv, installs the dependencies, prepares the example company,
+opens the console in your browser, and tells you plainly if Python is missing.
+The only prerequisite is Python 3.10+.
+
+Prefer a terminal, or Docker:
 
 ```bash
 git clone https://github.com/MariusYvard/corparius.git && cd corparius

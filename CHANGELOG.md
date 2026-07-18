@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — a double-click start, accessible, no raw tracebacks
+
+- **Double-click launchers.** `start-windows.bat`, `start-macos.command` and
+  `start-linux.sh` bootstrap everything without a terminal, and say plainly what
+  to install if Python is missing. `.gitattributes` forces LF on them so a
+  Windows checkout does not ship a CRLF shebang that fails on macOS/Linux.
+  `start.py` now handles a missing `python3-venv` and a failed pip with an
+  instruction instead of a traceback.
+- **Accessibility pass.** Audited across every tab: no unnamed buttons, no images
+  without alt, no duplicate ids, `lang` set, tabs already keyboard-navigable. The
+  four inputs that relied on a placeholder alone (site headline, mail test
+  recipient, local-server preset, delete confirmation) got real `aria-label`s, so
+  a screen reader names them and the label survives typing.
+- **Unexpected errors are a sentence, not a traceback.** The console's 500
+  handlers and the background run worker now show a localized "something went
+  wrong, see the server log" rather than `str(exc)`; the full detail is logged.
+
 ## Unreleased — works on a phone, and a friendlier first launch
 
 - **The console is usable on a phone.** Operations and Providers overflowed a

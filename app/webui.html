@@ -1020,7 +1020,7 @@ async function loadSite() {
     const url = `/site/${encodeURIComponent(state.company)}/`;
     const controls = `
       <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; align-items:center">
-        <input id="site-headline" placeholder="${esc(t("site.headline"))}" autocomplete="off"
+        <input id="site-headline" placeholder="${esc(t("site.headline"))}" aria-label="${esc(t("site.headline"))}" autocomplete="off"
                style="flex:1; min-width:180px">
         <button data-gen-site>${t(d.built ? "site.regenerate" : "site.generate")}</button>
         ${d.built ? `<a href="${url}" target="_blank" rel="noopener"><button>${t("site.open")}</button></a>
@@ -1444,7 +1444,7 @@ $("#run").addEventListener("click", async () => {
   const loop = $("#ticks").value === "loop";
   try {
     await api("/api/run", {company: state.company,
-                           ticks: loop ? 24 : (+$("#ticks").value || 6), loop});
+                           ticks: loop ? 24 : (+$("#ticks").value || 6), loop, lang});
     // A console loop lives in the console process: say so rather than let the
     // operator discover it by restarting.
     toast(loop ? t("toast.loopStarted") : t("toast.runStarted"));
@@ -1549,7 +1549,7 @@ function renderProviders(d) {
     <div class="prow">
       <span><span class="pname">${esc(pr.name)}</span><br><span class="note mono">${esc(pr.name)}:&lt;model&gt;</span></span>
       <span>
-        ${pr.name === "custom" && servers.length ? `<select data-server-preset style="width:100%; margin-bottom:6px">
+        ${pr.name === "custom" && servers.length ? `<select data-server-preset aria-label="${esc(t("prov.localServer"))}" style="width:100%; margin-bottom:6px">
             <option value="">${esc(t("prov.localServer"))}</option>
             ${servers.map(s => `<option value="${esc(s.url)}">${esc(s.label)} — ${esc(s.url)}</option>`).join("")}
           </select>` : ""}
@@ -1763,7 +1763,7 @@ function renderTest(g) {
   const label = g.test === "mail" ? "cfg.testMail" : "cfg.testPayments";
   const api = g.test === "mail" ? "/api/test/mail" : "/api/test/payments";
   const to = g.test === "mail"
-    ? `<input id="test-to" type="email" autocomplete="off" placeholder="${esc(t("cfg.testTo"))}" style="max-width:240px">`
+    ? `<input id="test-to" type="email" autocomplete="off" placeholder="${esc(t("cfg.testTo"))}" aria-label="${esc(t("cfg.testTo"))}" style="max-width:240px">`
     : "";
   return `<div class="stack" style="gap:8px; margin-top:16px; padding-top:14px; border-top:1px solid var(--border)">
     <span style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
@@ -1902,7 +1902,7 @@ function renderCompany(d) {
       <div class="stack" style="gap:8px; padding-top:10px">
         <span class="note" style="font-size:12.5px">${esc(L("deleteHelp").replace("{slug}", c.slug))}</span>
         <span style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
-          <input id="co-confirm" placeholder="${esc(c.slug)}" autocomplete="off" style="max-width:200px">
+          <input id="co-confirm" placeholder="${esc(c.slug)}" aria-label="${esc(t("co.delete"))} — ${esc(c.slug)}" autocomplete="off" style="max-width:200px">
           <label style="display:flex; gap:6px; align-items:center; font-weight:400">
             <input type="checkbox" id="co-purge" style="accent-color:var(--select)">${esc(L("purge"))}</label>
           <button class="quiet-danger" id="co-delete">${esc(L("delete"))}</button>

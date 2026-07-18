@@ -185,3 +185,19 @@ def test_payments_mock_when_no_key(server, monkeypatch):
     status, data = _call(server, "GET", "/api/payments")
     assert status == 200 and data["source"] == "mock"
     assert data["total_paid"] > 0 and len(data["payments"]) >= 1
+
+
+def test_unexpected_error_is_humanized_not_a_traceback(server, monkeypatch):
+    # Force an unexpected failure inside a handler and confirm the operator gets a
+    # sentence, not str(exc) or a traceback. The detail stays in the server log.
+    import app.webui as webui_mod
+    def boom(*a, **k):
+        raise RuntimeError("secret internal detail xyzzy")
+    monkeypatch.setattr(webui_mod, "_overview", boom)
+    status, data = _call(server, "GET", "/api/overview?company=example")
+    assert status == 500 and data["ok"] is False
+    assert "xyzzy" not in data["error"]          # internals do not leak
+    assert "server log" in data["error"]
+    # Localized when the request says so.
+    status, data = _call(server, "GET", "/api/overview?company=example&lang=fr")
+    assert "journal du serveur" in data["error"]

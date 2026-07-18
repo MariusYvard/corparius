@@ -59,12 +59,22 @@ def main() -> int:
         return 1
     if not os.path.isfile(PY):
         step("creating the virtual environment (.venv)")
-        venv.create(VENV, with_pip=True)
+        try:
+            venv.create(VENV, with_pip=True)
+        except Exception as exc:
+            # Debian/Ubuntu often ship Python without venv/ensurepip.
+            step(f"could not create the virtual environment: {exc}")
+            step("on Debian/Ubuntu run: sudo apt install python3-venv, then try again.")
+            return 1
+    if not os.path.isfile(PY):
+        step("the virtual environment is missing its Python; delete the .venv folder and retry.")
+        return 1
     step("installing dependencies (first run can take a minute)")
     r = subprocess.run([PY, "-m", "pip", "install", "-q", "-r",
                         os.path.join(ROOT, "requirements.txt")])
     if r.returncode != 0:
-        step("dependency install failed; check your network and retry")
+        step("dependency install failed. Check your internet connection and run this again; "
+             "if you are behind a proxy, set HTTPS_PROXY first.")
         return r.returncode
     env_file = os.path.join(ROOT, ".env")
     if not os.path.isfile(env_file):

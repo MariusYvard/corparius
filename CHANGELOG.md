@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — works on a phone, and a friendlier first launch
+
+- **The console is usable on a phone.** Operations and Providers overflowed a
+  390px screen because `.stack` was an implicit-`auto` grid: one wide card (the
+  action-log table) stretched the whole column and every sibling with it.
+  Constraining the track to `minmax(0, 1fr)`, plus stacking the provider rows and
+  wrapping the approval card, brings horizontal overflow to zero on all tabs.
+  Desktop is unchanged.
+- **A port already in use is a sentence, not a traceback.** `start.py` and the CLI
+  probe the port before binding (allow_reuse_address makes the bind result
+  unreliable, especially on Windows) and say plainly that another console is
+  likely running, with how to pick a free port. `ui` exits non-zero cleanly.
+
 ## Unreleased — fewer papercuts, and a CEO that can act
 
 - **The CEO chat can do things, not only answer.** When the operator asks to run

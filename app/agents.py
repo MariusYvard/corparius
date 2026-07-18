@@ -6,9 +6,11 @@ difficulty tier (which picks the model) and may pin a task-adapted model, so a
 simple scan runs on gemma4:e4b while the coder gets a dedicated code model.
 """
 from __future__ import annotations
+import json
 import logging
 from dataclasses import dataclass
 
+from . import structured
 from .models import AgentRole, Difficulty
 from .tools import TOOLS
 from .safety import BudgetExceeded, LoopGuard
@@ -136,7 +138,23 @@ class Executor:
             self.store.record_action(company, spec.role.value, tool_name, {}, str(exc), False)
             return None, True
         draft = ""
-        if tool.needs_draft:
+        ctx.structured = None
+        if tool.needs_draft and tool.schema:
+            # Same shape out, whatever model answered. The harness may spend more
+            # than one call (a repair round), but it accounts for every one.
+            result = structured.ask(self.router, _messages(spec, ctx, tool), tool.schema,
+                                     difficulty=spec.difficulty)
+            for used in result.usages:   # a repair round is a real call; bill it
+                ctx.budget.record_usage(used.input_tokens, used.output_tokens)
+                ctx.breaker.record(used.total)
+                self.store.record_usage(company, spec.role.value,
+                                        used.input_tokens, used.output_tokens)
+            ctx.structured = result
+            draft = json.dumps(result.data, ensure_ascii=False)
+            if loop.observe_output(self.router.embed(draft)):
+                log.warning("[%s] loop stop: semantic stutter", spec.role.value)
+                return None, True
+        elif tool.needs_draft:
             res = self.router.generate(_messages(spec, ctx, tool),
                                        difficulty=spec.difficulty, model=spec.model)
             ctx.budget.record_usage(res.usage.input_tokens, res.usage.output_tokens)

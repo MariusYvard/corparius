@@ -4,6 +4,17 @@ Le routeur accepte un modèle sous la forme "cible:nom". La cible "local" désig
 
 Quand un appel distant échoue (rate limit, panne, réseau), le routeur déroule la chaîne CORP_LLM_FALLBACK en ordre, puis termine sur le modèle local CORP_LOCAL_MODEL. Le local reste donc toujours disponible en dernier recours.
 
+## Brancher sans toucher un fichier
+
+Tout se règle depuis l'onglet Providers de la console, sans éditer `.env` :
+
+- **Abonnement Claude** — la carte « Utiliser votre abonnement Claude » teste le CLI `claude`, puis bascule mock/cloud/Claude Code et pointe les tiers sur `claudecode:` en un clic. Pas de clé, pas de crédits ; il suffit d'avoir fait `claude login`.
+- **Fournisseurs gratuits** — chaque ligne a un bouton **Tester** : un vrai appel minimal qui distingue une bonne clé d'une faute de frappe et nomme le correctif, pas le code HTTP.
+- **Ollama** — la carte « Modèles locaux » montre ce qui est installé et tire en arrière-plan les modèles que vos tiers exigent.
+- **Serveur local (LM Studio, Jan, llama.cpp, vLLM, LocalAI)** — un préréglage remplit l'endpoint de la cible `custom:` ; démarrez le serveur, choisissez-le, pointez un tier sur `custom:<modèle>`.
+
+Quel que soit le fournisseur ou le modèle, les sorties destinées aux agents passent par le harness `app/structured.py` : même schéma en entrée, même dict validé en sortie. Un modèle bavard, un fence markdown ou une prose sans JSON donnent tous la même structure, avec un repli déterministe qui garde le tour de l'agent en vie.
+
 ## Registre
 
 Limites relevées en juin et juillet 2026. Elles évoluent, la documentation du provider fait foi.

@@ -1,6 +1,48 @@
 # Changelog
 
-## Unreleased — the console runs the whole thing
+## Unreleased — plug in any LLM, get the same shape out
+
+### Same structure, whatever the model
+
+`app/structured.py` is a provider-agnostic harness: ask ten models to draft a
+post and you get ten shapes (prose, JSON, JSON in a fence, a preamble, a
+refusal); the harness returns one validated dict every time. It works at the
+text level (instruct, extract, validate, repair once, then a deterministic
+fallback) rather than on any provider's native structured-output feature,
+because the 14 free tiers, Anthropic and the Claude CLI each support that
+differently or not at all — relying on it would fragment the very thing this
+unifies. A tool opts in with a `schema`; `draft_social_post` is converted as the
+first. The MockProvider answers structured prompts offline, so structure holds
+with no network. The fallback keeps the agent turn alive when a weak local model
+cannot produce JSON at all.
+
+### Plug in an LLM without a shell
+
+- **Use your Claude subscription in one press.** A card in Providers tests the
+  `claude` CLI, then flips mock off, cloud on, Claude Code on, and points the
+  tiers at `claudecode:`. It was four scattered settings plus hand-edited tier
+  strings that nobody found. **Windows fix:** the CLI npm installs is
+  `claude.cmd`, which subprocess cannot launch by bare name (WinError 2), so
+  `claudecode:` was broken on Windows; every caller now uses the resolved path.
+- **A Test button on every free-tier provider.** One minimal real call, a
+  readable verdict, the fix named instead of the HTTP status. The 14 tiers were
+  wired already; this is how you tell a good key from a typo.
+- **Ollama from the console.** A card shows what is installed and which tier
+  models are missing, and pulls them in the background.
+- **Local server presets.** LM Studio, Jan, Ollama's OpenAI endpoint, llama.cpp,
+  vLLM and LocalAI fill the `custom:` endpoint from a dropdown.
+
+### Design: blue, not yellow
+
+The interface was too warm — ivory text and an amber accent read as a generic AI
+dashboard. It is now one blue instrument: the owner's blue ramp carries
+structure, action and selection; the only non-blue accents are petrol for health
+and red for danger. Ivory and amber are gone. See DESIGN.md.
+
+Also fixed: a `locale`/`stateBadge` scope bug introduced when render() was split,
+which threw on every log render and surfaced as a connection-error banner.
+
+## Earlier unreleased — the console runs the whole thing
 
 The console can now set everything corparius reads. No file needs a text editor.
 

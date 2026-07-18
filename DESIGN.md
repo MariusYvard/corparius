@@ -19,16 +19,21 @@ Accent (amber #D97F30): dark oklch(0.70 0.13 59), light oklch(0.50 0.12 59). On-
 Four named roles. The palette has five colors; using two of them wasted the other three, and
 repeating amber on every button spent its authority. Amber must stay rare to stay loud.
 
+The interface is blue. One hue (~264) carries structure, action and selection; the
+only non-blue accents are petrol for health and red for danger. Amber and sand are
+gone: a warm accent on dark blue is the generic "AI dashboard" look the owner
+rejected, and ivory text pulled the whole surface yellow. The instrument reads cool.
+
 | Role | Color | Carries |
 | --- | --- | --- |
-| **Structure** | blue ramp (~hue 264) | Background, surfaces, borders. Depth, never meaning. |
-| **Selection** | #4C7EFF dark, #0039CC light | Focus rings, the active tab, a toggle that is on, links. What is picked, not what to do. |
-| **Action** | amber | The one primary action in view. If two things are amber, one is wrong. |
-| **Health** | petrol (#215876) | Progress, spend, throughput, anything running as intended. |
-| **Waiting** | sand (#BF9B6F) | The human gate. Anything stopped, waiting on the operator. |
+| **Structure** | blue ramp (~hue 264), deepened chroma | Background, surfaces, borders. Depth. |
+| **Action** | #0039CC-family, white ink | The primary button. A filled deep blue. |
+| **Selection / attention** | #4C7EFF | Focus rings, the active tab, a live toggle, links, and the human gate ("waiting on you"). Bright against the deep structure. |
+| **Health** | petrol / cool teal (~hue 220) | Progress, spend, throughput, running as intended. |
 | **Danger** | functional red | Refusal and loss. Off-palette by necessity. |
+| **Text** | cool near-white (dark) / night blue #102857 (light) | Never ivory. Ivory reads yellow. |
 
-Separating Selection from Action is what buys amber its scarcity: a focus ring, an active tab and a live toggle are all things the interface points at, not things the operator should do next. With those in blue, amber is left on the primary button and nowhere else.
+Action is a filled deep blue and selection is a brighter blue, so they never collide: one is a button, the other an outline or an underline. The human gate leads by size and position (30px, first in the pulse row) as much as by its bright blue, since in an all-blue interface hue alone cannot single it out.
 
 Sand is the console's second voice: PRODUCT.md makes the human gate the point, so what waits
 on you reads sand before you read a word. Petrol is the resting state of a company that works.

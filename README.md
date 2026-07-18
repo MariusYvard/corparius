@@ -226,6 +226,10 @@ app/
   safety.py        TokenBudget, LoopGuard, CircuitBreaker
   tools.py         the business toolbox, with HITL flags
   mailbox.py       IMAP reading, read-only: support triage and prospect replies
+  structured.py    provider-agnostic output harness: same shape, whatever model
+  claudecli.py     one-press Claude subscription setup (claudecode: target)
+  provider_check.py test any provider with one real minimal call
+  ollama_setup.py  Ollama status and background model pulls from the console
   backup.py        zip the store and the company configs
   sitegen.py       single-file sales-page generator
   deploy.py        interchangeable deploy providers (local, Netlify, S3, SSH)

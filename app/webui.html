@@ -11,36 +11,36 @@
    #BF9B6F sand, #D97F30 amber. Amber is the single accent; petrol carries
    healthy states, sand carries waiting states, red stays functional only. */
 :root, [data-theme="dark"] {
-  /* Structure rides the owner's blue ramp (#002FA7 · #263F7F · #4C7EFF, all
-     hue ~264, the hue this console already used at a third of the chroma).
-     Colour carries depth here; the semantic roles stay off-blue so that what
-     waits on you never looks like what is merely running. */
-  --bg: oklch(0.195 0.055 264); --surface: oklch(0.245 0.075 264);
-  --raised: oklch(0.31 0.095 264);
-  --border: oklch(0.385 0.113 265);      /* #263F7F */
-  --border-ui: oklch(0.58 0.13 265);     /* 3:1 on surface and raised */
-  --select: oklch(0.628 0.19 265);       /* #4C7EFF, a hair off the sRGB edge */
-  --select-soft: oklch(0.628 0.19 265 / 0.18);
-  --text: oklch(0.95 0.022 106); --muted: oklch(0.74 0.035 240);
-  --accent: oklch(0.70 0.13 59); --accent-ink: oklch(0.22 0.05 262);
-  --accent-soft: oklch(0.70 0.13 59 / 0.16);
-  --ok: oklch(0.72 0.075 230); --ok-soft: oklch(0.72 0.075 230 / 0.16);
-  --warn: oklch(0.75 0.055 74); --warn-soft: oklch(0.75 0.055 74 / 0.17);
+  /* The owner's blue ramp carries the whole surface (#002FA7 · #263F7F ·
+     #4C7EFF · #0039CC, hue ~264). Action is blue too: a deep #0039CC-family
+     fill. The only non-blue left is petrol for health and red for danger, so
+     the interface reads as one blue instrument, not a warm AI dashboard. */
+  --bg: oklch(0.195 0.065 264); --surface: oklch(0.245 0.085 264);
+  --raised: oklch(0.31 0.105 264);
+  --border: oklch(0.40 0.12 265);
+  --border-ui: oklch(0.60 0.145 265);    /* >=3:1 on surface and raised */
+  --select: oklch(0.635 0.18 264);       /* #4C7EFF, focus and selection */
+  --select-soft: oklch(0.635 0.18 264 / 0.20);
+  --text: oklch(0.965 0.012 255); --muted: oklch(0.72 0.035 255);
+  --accent: oklch(0.50 0.20 262);        /* #0039CC, the primary action */
+  --accent-ink: oklch(0.99 0.004 255); --accent-soft: oklch(0.635 0.18 264 / 0.18);
+  --ok: oklch(0.74 0.09 220); --ok-soft: oklch(0.74 0.09 220 / 0.18);   /* health: cool teal */
+  --warn: oklch(0.635 0.18 264); --warn-soft: oklch(0.635 0.18 264 / 0.20);  /* attention: bright blue */
   --danger: oklch(0.66 0.17 25); --danger-soft: oklch(0.66 0.17 25 / 0.16);
   --shadow: none; color-scheme: dark;
 }
 [data-theme="light"] {
-  /* Ivory keeps the light theme; the blues come back as ink and selection.
-     #263F7F borders the controls, #0039CC selects. */
-  --bg: oklch(0.955 0.022 106); --surface: oklch(0.978 0.014 106);
-  --raised: oklch(0.925 0.026 100);
-  --border: oklch(0.82 0.035 95); --border-ui: oklch(0.385 0.113 265);
-  --select: oklch(0.435 0.21 263); --select-soft: oklch(0.435 0.21 263 / 0.12);
-  --text: oklch(0.283 0.083 264); --muted: oklch(0.45 0.055 250);
-  --accent: oklch(0.50 0.12 59); --accent-ink: oklch(0.97 0.015 106);
-  --accent-soft: oklch(0.50 0.12 59 / 0.13);
-  --ok: oklch(0.427 0.077 238); --ok-soft: oklch(0.427 0.077 238 / 0.14);
-  --warn: oklch(0.50 0.07 74); --warn-soft: oklch(0.50 0.07 74 / 0.16);
+  /* Cool white, not ivory: the yellow is gone from the base too. Blue ink,
+     blue action, blue selection. */
+  --bg: oklch(0.975 0.006 255); --surface: oklch(0.99 0.003 255);
+  --raised: oklch(0.945 0.014 255);
+  --border: oklch(0.86 0.02 255); --border-ui: oklch(0.44 0.11 265);
+  --select: oklch(0.44 0.20 262); --select-soft: oklch(0.44 0.20 262 / 0.12);
+  --text: oklch(0.283 0.083 264); --muted: oklch(0.45 0.05 258);
+  --accent: oklch(0.44 0.20 262); --accent-ink: oklch(0.99 0.004 255);
+  --accent-soft: oklch(0.44 0.20 262 / 0.10);
+  --ok: oklch(0.47 0.10 225); --ok-soft: oklch(0.47 0.10 225 / 0.14);
+  --warn: oklch(0.44 0.20 262); --warn-soft: oklch(0.44 0.20 262 / 0.12);
   --danger: oklch(0.52 0.17 25); --danger-soft: oklch(0.52 0.17 25 / 0.13);
   --shadow: 0 1px 2px oklch(0.28 0.08 264 / 0.08); color-scheme: light;
 }
@@ -63,10 +63,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 .ai { width: 20px; height: 20px; padding: 2px; box-sizing: border-box; border-radius: 5px;
-  background: oklch(0.97 0.012 106); image-rendering: pixelated; vertical-align: -5px; flex: none; }
+  background: oklch(0.97 0.008 255); image-rendering: pixelated; vertical-align: -5px; flex: none; }
 [role="tab"] .ai { width: 18px; height: 18px; vertical-align: -4px; margin-right: 7px; }
 .site-frame { width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--border); border-radius: 10px;
-  background: oklch(0.97 0.012 106); overflow: hidden; }
+  background: oklch(0.97 0.008 255); overflow: hidden; }
 .site-frame iframe { width: 400%; height: 400%; border: 0; transform: scale(0.25); transform-origin: 0 0; pointer-events: none; }
 .mono { font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 13px; }
 a { color: var(--select); }
@@ -401,6 +401,16 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
   </section>
 
   <section id="tab-providers" role="tabpanel" aria-labelledby="t-providers" class="stack" hidden>
+    <div class="card" id="claude-card">
+      <h2 data-i18n="cc.title">Use your Claude subscription</h2>
+      <p class="desc" data-i18n="cc.desc">The simplest way to run on Claude: no API key, no credits, just your Claude Code login. One press sets everything up.</p>
+      <div id="claude-body"></div>
+    </div>
+    <div class="card" id="ollama-card">
+      <h2 data-i18n="oll.title">Local models (Ollama)</h2>
+      <p class="desc" data-i18n="oll.desc">Free, offline, on your machine. corparius sees what is installed and pulls what your tiers need.</p>
+      <div id="ollama-body"></div>
+    </div>
     <div class="card">
       <h2 data-i18n="prov.runtime">Runtime</h2>
       <div class="stack" style="gap:12px" id="toggles"></div>
@@ -553,6 +563,20 @@ en: {
   "prov.runtime":"Runtime","prov.mock":"Mock mode","prov.mockHint":"offline, deterministic, no keys needed",
   "prov.cloud":"Cloud enabled","prov.cloudHint":"master gate for every remote provider",
   "prov.cc":"Claude Code CLI","prov.ccHint":"claudecode: target, subscription auth, no API credits",
+  "cc.title":"Use your Claude subscription","cc.desc":"The simplest way to run on Claude: no API key, no credits, just your Claude Code login. One press sets everything up.",
+  "cc.on":"set up and in use","cc.found":"CLI found","cc.missing":"CLI not installed",
+  "cc.readyNote":"The tiers already route to your subscription.",
+  "cc.use":"Use my Claude subscription","cc.reapply":"Re-apply","cc.test":"Test the CLI",
+  "cc.testing":"Asking the CLI…","cc.applying":"Checking the CLI, then switching over…",
+  "cc.done":"Done. Mock off, cloud on, and the tiers now run on your Claude subscription.",
+  "cc.step1":"Install Claude Code from","cc.step2":"then pick your subscription",
+  "prov.test":"Test","prov.testing":"Testing…",
+  "prov.localServer":"Local server preset…","prov.serverFilled":"Endpoint filled. Save it, then point a tier at custom:<model>.",
+  "oll.title":"Local models (Ollama)","oll.desc":"Free, offline, on your machine. corparius sees what is installed and pulls what your tiers need.",
+  "oll.off":"not running","oll.partial":"models missing","oll.ready":"ready",
+  "oll.missing":"Missing for your tiers:","oll.pull":"Pull the missing models","oll.pulling":"Pulling…",
+  "oll.starting":"Starting the pull…","oll.done":"Models pulled.","oll.allSet":"Every model your tiers need is installed.",
+  "oll.install":"Not detected. Install it from",
   "prov.note":"Changes apply to new calls immediately and are saved to the .env file. Mock mode serves every call from a deterministic offline mock.",
   "prov.tiers":"Routing tiers","prov.saveTiers":"Save tiers","prov.format":"Format: target:model, e.g. groq:llama-3.3-70b-versatile",
   "tier.trivial":"trivial","tier.normal":"normal","tier.hard":"hard","tier.local":"local fallback","tier.chain":"fallback chain",
@@ -666,6 +690,20 @@ fr: {
   "prov.runtime":"Exécution","prov.mock":"Mode mock","prov.mockHint":"hors ligne, déterministe, aucune clé requise",
   "prov.cloud":"Cloud activé","prov.cloudHint":"interrupteur général de tous les providers distants",
   "prov.cc":"CLI Claude Code","prov.ccHint":"cible claudecode:, auth abonnement, zéro crédit API",
+  "cc.title":"Utiliser votre abonnement Claude","cc.desc":"La façon la plus simple de tourner sur Claude : pas de clé API, pas de crédits, juste votre connexion Claude Code. Un bouton configure tout.",
+  "cc.on":"configuré et actif","cc.found":"CLI détecté","cc.missing":"CLI non installé",
+  "cc.readyNote":"Les tiers routent déjà vers votre abonnement.",
+  "cc.use":"Utiliser mon abonnement Claude","cc.reapply":"Réappliquer","cc.test":"Tester le CLI",
+  "cc.testing":"Interrogation du CLI…","cc.applying":"Vérification du CLI, puis bascule…",
+  "cc.done":"C'est fait. Mock coupé, cloud activé, et les tiers tournent sur votre abonnement Claude.",
+  "cc.step1":"Installez Claude Code depuis","cc.step2":"puis choisissez votre abonnement",
+  "prov.test":"Tester","prov.testing":"Test…",
+  "prov.localServer":"Préréglage serveur local…","prov.serverFilled":"Endpoint rempli. Enregistrez, puis pointez un tier sur custom:<modèle>.",
+  "oll.title":"Modèles locaux (Ollama)","oll.desc":"Gratuit, hors ligne, sur votre machine. corparius voit ce qui est installé et tire ce que vos tiers exigent.",
+  "oll.off":"non lancé","oll.partial":"modèles manquants","oll.ready":"prêt",
+  "oll.missing":"Manquants pour vos tiers :","oll.pull":"Tirer les modèles manquants","oll.pulling":"Téléchargement…",
+  "oll.starting":"Démarrage du téléchargement…","oll.done":"Modèles tirés.","oll.allSet":"Tous les modèles dont vos tiers ont besoin sont installés.",
+  "oll.install":"Non détecté. Installez-le depuis",
   "prov.note":"Les changements s'appliquent immédiatement aux nouveaux appels et sont écrits dans .env. Le mode mock sert chaque appel depuis un simulateur hors ligne.",
   "prov.tiers":"Tiers de routage","prov.saveTiers":"Enregistrer les tiers","prov.format":"Format : cible:modèle, ex. groq:llama-3.3-70b-versatile",
   "tier.trivial":"trivial","tier.normal":"normal","tier.hard":"difficile","tier.local":"repli local","tier.chain":"chaîne de repli",
@@ -759,7 +797,8 @@ function applyStatic() {
 }
 
 const state = { company: null, timer: null, chatBusy: false, overview: null,
-                providers: null, settings: null, company_cfg: null, logSeen: null };
+                providers: null, settings: null, company_cfg: null, logSeen: null,
+                ollama: null, ollamaPulling: false, ollamaProgress: "", ollamaTimer: null };
 
 function toast(msg, isError=false) {
   const el = $("#toast div");
@@ -1090,6 +1129,10 @@ function renderLog(d) {
   const now = new Set(d.recent_actions.map(a => `${a.ts}:${a.tool}:${a.agent}`));
   const fresh = prev.size ? new Set([...now].filter(k => !prev.has(k))) : new Set();
   state.logSeen = now;
+  // Local to this function since the render() split: reaching for render()'s
+  // globals here would be an undefined-variable bug the moment the log renders.
+  const locale = lang === "fr" ? "fr-FR" : "en-GB";
+  const stateBadge = a => a.ok ? ["ok", t("badge.ok")] : (/pending human approval/.test(a.output || "") ? ["warn", t("badge.held")] : ["danger", t("badge.fail")]);
   $("#log").innerHTML = `<thead><tr><th>${t("th.time")}</th><th>${t("th.agent")}</th><th>${t("th.tool")}</th><th>${t("th.state")}</th><th>${t("th.output")}</th></tr></thead><tbody>` +
     (d.recent_actions.map(a => `<tr${fresh.has(`${a.ts}:${a.tool}:${a.agent}`) && !reducedMotion() ? ' class="fresh"' : ""}>
       <td class="mono" style="white-space:nowrap">${new Date(a.ts * 1000).toLocaleString(locale)}</td>
@@ -1179,6 +1222,40 @@ document.addEventListener("click", async e => {
   if (b.dataset.lang) { lang = b.dataset.lang; localStorage.setItem("corparius-lang", lang); applyStatic();
     if (state.overview) render(state.overview); if (state.providers) renderProviders(state.providers); loadChat(); return; }
   if (b.dataset.setTheme) return setTheme(b.dataset.setTheme);
+  if (b.id === "ollama-pull") {
+    b.disabled = true; state.ollamaPulling = true;
+    $("#ollama-out").textContent = t("oll.starting");
+    try {
+      await api("/api/ollama/pull", {});
+      // A pull is gigabytes and runs in the background; follow its progress.
+      clearInterval(state.ollamaTimer);
+      state.ollamaTimer = setInterval(async () => {
+        const { result } = await api("/api/ollama");
+        state.ollama = result;
+        const out = $("#ollama-out");
+        if (out) out.textContent = result.detail;
+        if (result.ok || !result.missing.length) {
+          clearInterval(state.ollamaTimer); state.ollamaPulling = false;
+          toast(t("oll.done")); loadOllama();
+        }
+      }, 2500);
+    } catch (err) { state.ollamaPulling = false; toast(err.message, true); b.disabled = false; }
+    return;
+  }
+  if (b.dataset.testProvider) {
+    // The button the free tiers were missing: a real minimal call, so a good key
+    // is told from a typo without launching a company day.
+    const name = b.dataset.testProvider;
+    const out = $(`[data-test-out="${CSS.escape(name)}"]`);
+    b.disabled = true; out.textContent = t("prov.testing"); out.style.color = "var(--muted)";
+    try {
+      const { result } = await api("/api/test/provider", {name});
+      out.textContent = result.detail;
+      out.style.color = result.ok ? "var(--ok)" : "var(--warn)";
+    } catch (err) { out.textContent = err.message; out.style.color = "var(--danger)"; }
+    finally { b.disabled = false; }
+    return;
+  }
   try {
     if (b.dataset.toggle) {
       const next = b.getAttribute("aria-checked") !== "true";
@@ -1205,6 +1282,28 @@ document.addEventListener("click", async e => {
       await api("/api/providers", {values: {ANTHROPIC_API_KEY: v}});
       $("#anthropic-key").value = "";
       toast(t("toast.keySaved")); await loadProviders();
+    } else if (b.id === "claude-test") {
+      const out = $("#claude-out");
+      b.disabled = true; out.textContent = t("cc.testing"); out.style.color = "var(--muted)";
+      try {
+        const { result } = await api("/api/test/claude", {});
+        out.textContent = result.detail;
+        out.style.color = result.ok ? "var(--ok)" : "var(--warn)";
+      } finally { b.disabled = false; }
+    } else if (b.id === "claude-setup") {
+      const out = $("#claude-out");
+      b.disabled = true; out.textContent = t("cc.applying"); out.style.color = "var(--muted)";
+      try {
+        // One call proves the CLI works and then flips the four settings and the
+        // tiers. It refuses to switch if the CLI will not answer. On success the
+        // toast and the re-rendered "in use" badge carry the news; the inline
+        // line is wiped by the re-render, so we only keep it for the failure.
+        const d = await api("/api/claude/setup", {});
+        toast(t("cc.done"));
+        renderProviders(d); refresh();
+      } catch (err) {
+        out.textContent = err.message; out.style.color = "var(--warn)";
+      } finally { b.disabled = false; }
     }
   } catch (err) { toast(err.message, true); }
 });
@@ -1243,7 +1342,59 @@ async function loadProviders() {
   const d = await api("/api/providers");
   state.providers = d; renderProviders(d);
 }
+function renderClaudeCard(d) {
+  // The whole point is that this is one press, so the card leads with the state
+  // and the action, not with configuration.
+  const ready = d.claude_ready;
+  const installed = d.claude_installed;
+  const status = ready
+    ? `<span class="badge ok">${t("cc.on")}</span>`
+    : installed ? `<span class="badge">${t("cc.found")}</span>`
+                : `<span class="badge warn">${t("cc.missing")}</span>`;
+  const steps = installed ? "" :
+    `<ol class="note" style="margin:12px 0 0; padding-left:18px; line-height:1.7">
+       <li>${esc(t("cc.step1"))} <a href="https://www.claude.com/product/claude-code" target="_blank" rel="noopener">claude.com</a></li>
+       <li><code>claude login</code> ${esc(t("cc.step2"))}</li>
+     </ol>`;
+  $("#claude-body").innerHTML = `
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px">${status}
+      ${ready ? `<span class="note">${esc(t("cc.readyNote"))}</span>` : ""}</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+      <button class="primary" id="claude-setup">${t(ready ? "cc.reapply" : "cc.use")}</button>
+      <button id="claude-test">${t("cc.test")}</button>
+    </div>
+    ${steps}
+    <div id="claude-out" class="note" style="font-size:12.5px; margin-top:10px; white-space:pre-line"></div>`;
+}
+
+function renderOllama(s) {
+  const badge = !s.reachable ? `<span class="badge warn">${t("oll.off")}</span>`
+    : s.missing.length ? `<span class="badge">${t("oll.partial")}</span>`
+                       : `<span class="badge ok">${t("oll.ready")}</span>`;
+  const pulling = state.ollamaPulling;
+  const missing = s.missing.length
+    ? `<div style="margin-top:12px">
+         <p class="note" style="font-size:12.5px; margin:0 0 8px">${t("oll.missing")} <span class="mono">${s.missing.map(esc).join(", ")}</span></p>
+         <button class="primary" id="ollama-pull"${pulling ? " disabled" : ""}>${t(pulling ? "oll.pulling" : "oll.pull")}</button>
+       </div>`
+    : (s.reachable ? `<p class="note" style="margin-top:10px">${esc(t("oll.allSet"))}</p>` : "");
+  const install = s.reachable ? "" :
+    `<p class="note" style="margin-top:10px">${esc(t("oll.install"))} <a href="https://ollama.com" target="_blank" rel="noopener">ollama.com</a></p>`;
+  $("#ollama-body").innerHTML = `
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px">${badge}
+      <span class="note" style="font-size:12.5px">${esc(s.detail)}</span></div>
+    ${install}${missing}
+    <div id="ollama-out" class="note" style="font-size:12px; margin-top:8px; white-space:pre-line">${esc(pulling ? (state.ollamaProgress || "") : "")}</div>`;
+}
+
+async function loadOllama() {
+  try { const { result } = await api("/api/ollama"); state.ollama = result; renderOllama(result); }
+  catch (e) { $("#ollama-body").innerHTML = `<span class="badge danger">${esc(e.message)}</span>`; }
+}
+
 function renderProviders(d) {
+  renderClaudeCard(d);
+  if (state.ollama) renderOllama(state.ollama); else loadOllama();
   const sw = (label, key, checked, hint) => `
     <span class="switch"><button role="switch" aria-checked="${checked}" data-toggle="${key}" aria-label="${t(label)}"><i></i></button>
     <span>${t(label)}</span><span class="note">${t(hint)}</span></span>`;
@@ -1261,17 +1412,26 @@ function renderProviders(d) {
   else if (!d.cloud_enabled) { st.hidden = false; st.textContent = t("prov.cloudOff"); }
   else { st.hidden = true; }
   $("#anthropic-state").innerHTML = d.anthropic_key_set ? `<span class="badge ok">${t("badge.keySet")}</span>` : `<span class="badge dim">${t("badge.noKey")}</span>`;
+  const servers = d.server_presets || [];
   $("#providers").innerHTML = d.providers.map(pr => `
     <div class="prow">
       <span><span class="pname">${esc(pr.name)}</span><br><span class="note mono">${esc(pr.name)}:&lt;model&gt;</span></span>
       <span>
+        ${pr.name === "custom" && servers.length ? `<select data-server-preset style="width:100%; margin-bottom:6px">
+            <option value="">${esc(t("prov.localServer"))}</option>
+            ${servers.map(s => `<option value="${esc(s.url)}">${esc(s.label)} — ${esc(s.url)}</option>`).join("")}
+          </select>` : ""}
         ${pr.base_env ? `<input type="text" data-base="${esc(pr.base_env)}" aria-label="${esc(pr.base_env)}" placeholder="${esc(pr.base_env)} (${t("prov.endpoint")})" value="${pr.base && pr.base_env ? esc(pr.base) : ""}" style="width:100%; margin-bottom:6px">` : `<span class="pbase">${esc(pr.base.replace("https://",""))}</span><br>`}
         <span class="pbase">${esc(pr.key_env)}${pr.key_optional ? " · " + t("prov.optional") : ""}</span>
       </span>
       <span class="pkey">
         ${pr.configured ? `<span class="badge ok">${t("badge.active")}</span>` : `<span class="badge dim">${t("badge.off")}</span>`}
         <input type="password" data-key="${esc(pr.key_env)}" placeholder="${t("prov.paste")}" aria-label="${esc(pr.key_env)}">
-        <button data-save-key="${esc(pr.key_env)}">${t("btn.save")}</button>
+        <span style="display:flex; gap:6px">
+          <button data-save-key="${esc(pr.key_env)}">${t("btn.save")}</button>
+          <button data-test-provider="${esc(pr.name)}">${t("prov.test")}</button>
+        </span>
+        <div class="note" data-test-out="${esc(pr.name)}" style="font-size:12px; grid-column:1/-1"></div>
       </span>
     </div>`).join("");
 }
@@ -1467,6 +1627,13 @@ function renderSettings(d) {
   }).join("");
 }
 
+// A local LLM server (LM Studio, Jan, llama.cpp…): pick it, the endpoint fills.
+document.addEventListener("change", ev => {
+  const sel = ev.target.closest("[data-server-preset]");
+  if (!sel || !sel.value) return;
+  const base = sel.closest(".prow")?.querySelector("input[data-base]");
+  if (base) { base.value = sel.value; toast(t("prov.serverFilled")); }
+});
 $("#settings-groups").addEventListener("change", ev => {
   if (!ev.target.closest("[data-preset]")) return;
   const preset = (state.settings.mail_presets || []).find(p => p.id === ev.target.value);

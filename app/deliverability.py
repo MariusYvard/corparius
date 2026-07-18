@@ -7,7 +7,7 @@ import json
 import os
 import time
 
-from . import cfg
+from . import cfg, paths
 
 
 def _suppressed(email: str) -> bool:
@@ -20,7 +20,7 @@ def _suppressed(email: str) -> bool:
 
 
 def _counter_path() -> str:
-    return os.path.join(cfg.get("CORP_DATA_PATH", "./data"), "outreach_counter.json")
+    return os.path.join(cfg.get("CORP_DATA_PATH", paths.default_data_dir()), "outreach_counter.json")
 
 
 def _today() -> str:

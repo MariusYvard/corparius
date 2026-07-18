@@ -16,12 +16,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from . import cfg
+from . import cfg, paths
 
 
 @dataclass
 class Settings:
-    data_path: str = field(default_factory=lambda: cfg.get("CORP_DATA_PATH", "./data"))
+    data_path: str = field(default_factory=lambda: cfg.get("CORP_DATA_PATH", paths.default_data_dir()))
     log_level: str = field(default_factory=lambda: cfg.get("CORP_LOG_LEVEL", "INFO"))
 
     # LLM routing (hybrid: local first, cloud on escalation).

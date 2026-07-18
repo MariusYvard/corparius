@@ -11,7 +11,13 @@ import time
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from . import paths
+
+# The writable home: backups land under it and it anchors the archive paths. In
+# a source checkout this is the repository root (unchanged); frozen, it is the
+# per-OS data directory, so the backup carries the operator's real store and
+# companies rather than anything inside the read-only bundle.
+ROOT = paths.user_home()
 
 WARNING_EN = ("This archive contains data/corparius.sqlite, which holds the API keys "
               "saved from the console in the clear. Treat the file like a password.")

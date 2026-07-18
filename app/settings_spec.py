@@ -189,6 +189,16 @@ SPEC: list[FieldSpec] = [
     _f("CORP_LOG_LEVEL", "access", type="select", default="INFO",
        choices=("DEBUG", "INFO", "WARNING", "ERROR"),
        label_en="Log level", label_fr="Niveau de log"),
+    _f("CORP_UPDATE_CHECK", "access", type="bool", default="false",
+       label_en="Check for updates", label_fr="Vérifier les mises à jour",
+       help_en="Off by default. When on, corparius asks GitHub once at startup whether a "
+               "newer release exists and shows a link. It never downloads anything and "
+               "makes no other network call. This is the only outbound request the "
+               "packaged app makes on its own.",
+       help_fr="Désactivé par défaut. Activé, corparius demande une fois à GitHub au "
+               "démarrage s'il existe une version plus récente et affiche un lien. Il ne "
+               "télécharge jamais rien et ne fait aucun autre appel réseau. C'est la seule "
+               "requête sortante que l'application packagée émet d'elle-même."),
 
     # --- local inference ----------------------------------------------------
     _f("CORP_OLLAMA_URL", "inference", default="http://localhost:11434",

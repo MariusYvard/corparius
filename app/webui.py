@@ -39,8 +39,12 @@ from .store import Store
 
 log = logging.getLogger("corparius.webui")
 
-ROOT = Path(__file__).resolve().parent.parent
-PAGE = Path(__file__).resolve().parent / "webui.html"
+# Writable home (for the .env the console writes); a shipped resource for the
+# single-file console HTML. Both resolve to the repository layout from a source
+# checkout and to the frozen bundle when packaged. Kept as module attributes so
+# the tests can monkeypatch them.
+ROOT = paths.user_home()
+PAGE = paths.page_file()
 
 # Environment variables the page may set. Anything else is refused.
 _TOGGLES = {"CORP_CLOUD_ENABLED", "CORP_LLM_MOCK", "CORP_CLAUDE_CODE"}
@@ -655,6 +659,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True, **stripe_payments()})
             elif url.path == "/api/doctor":
                 self._send(200, {"ok": True, "checks": run_checks(_fresh_settings())})
+            elif url.path == "/api/update":
+                # Off unless CORP_UPDATE_CHECK is on; when off this makes no
+                # network call. See app/update_check.py.
+                from . import update_check
+                self._send(200, {"ok": True, **update_check.check()})
             elif url.path == "/api/chat" and slug:
                 history = list(self.state.chats.get(slug, []))
                 self._send(200, {"ok": True, "history": history})

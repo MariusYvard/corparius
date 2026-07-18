@@ -14,3 +14,7 @@ companies/*/state.json
 
 data-demo/
 backups/
+
+# PyInstaller build output (packaging/corparius.spec)
+/build/
+/dist/

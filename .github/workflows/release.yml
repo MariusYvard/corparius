@@ -1,0 +1,223 @@
+# Release: build and publish the turnkey artifacts on a version tag.
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# Produces (Phase 1): a multi-arch Docker image on GHCR (linux/amd64 + arm64)
+# with SLSA build provenance, tagged :vX.Y.Z and :latest. Phase 3 adds the
+# native binaries and the GitHub Release. The image name is the repository in
+# lower case: ghcr.io/mariusyvard/corparius.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Manual dry-run: builds the image but never pushes (see the `push` guard).
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/mariusyvard/corparius
+
+jobs:
+  # Never ship a release the tests do not pass. Mirrors ci.yml on purpose so a
+  # tag build is self-contained rather than trusting an earlier run.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+
+  # The tag must match app/__init__.py __version__, so the image tag, the
+  # GitHub Release and the code can never disagree about the version.
+  version-guard:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches app/__init__.py
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          code="$(python -c "import app; print(app.__version__)")"
+          echo "tag=$tag  code=$code"
+          if [ "$tag" != "$code" ]; then
+            echo "::error::git tag v$tag does not match app.__version__ ($code). Bump app/__init__.py first."
+            exit 1
+          fi
+
+  docker:
+    needs: [test, version-guard]
+    # version-guard is skipped on workflow_dispatch (no tag); don't block on it.
+    if: always() && needs.test.result == 'success' && (needs.version-guard.result == 'success' || needs.version-guard.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write        # push to GHCR
+      id-token: write        # keyless signing for provenance
+      attestations: write    # actions/attest-build-provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3        # arm64 emulation for the build
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Build and push (multi-arch)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          # Only push on a real tag; workflow_dispatch is a build-only dry run.
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false   # image-level provenance handled by the attest step below
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Attest build provenance (SLSA)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      # Smoke-test the real published image on the amd64 runner: the console must
+      # answer on localhost and report offline mock mode with no keys, no models.
+      - name: Smoke test the image
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          ref="${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
+          docker run -d --name corp-smoke -p 8600:8600 "$ref"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8600/api/companies >/dev/null 2>&1; then ok=1; break; fi
+            sleep 1
+          done
+          test "${ok:-}" = "1" || { echo "console did not come up"; docker logs corp-smoke; exit 1; }
+          curl -fsS http://127.0.0.1:8600/api/companies | grep -q '"example"'
+          curl -fsS http://127.0.0.1:8600/api/doctor   | grep -q 'mock'
+          echo "smoke OK: console up, example company present, mock mode reported"
+          docker rm -f corp-smoke
+
+  # Standalone binaries: one download per OS/arch, no Python, no terminal. Built
+  # unsigned (see docs/install.md for the SmartScreen / Gatekeeper steps). Each
+  # runner builds for its own architecture, smoke-tests the artifact offline,
+  # then uploads it with a SHA-256.
+  native:
+    needs: [test, version-guard]
+    if: always() && needs.test.result == 'success' && (needs.version-guard.result == 'success' || needs.version-guard.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: corparius-windows-x64.exe
+          - os: macos-14          # Apple Silicon
+            asset: corparius-macos-arm64.zip
+          - os: macos-13          # Intel
+            asset: corparius-macos-x64.zip
+          - os: ubuntu-latest
+            asset: corparius-linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies and PyInstaller
+        run: pip install -r requirements.txt pyinstaller
+      - name: Build the binary
+        run: pyinstaller packaging/corparius.spec --noconfirm
+
+      - name: Smoke test the binary (offline mock console)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Windows" ]; then BIN="dist/corparius.exe"; else BIN="dist/corparius"; fi
+          "./$BIN" --no-browser &
+          pid=$!
+          ok=""
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8600/api/companies >/dev/null 2>&1; then ok=1; break; fi
+            sleep 1
+          done
+          if [ "${ok:-}" != "1" ]; then echo "console did not come up"; kill "$pid" 2>/dev/null || true; exit 1; fi
+          curl -fsS http://127.0.0.1:8600/api/companies | grep -q '"example"'
+          curl -fsS http://127.0.0.1:8600/api/doctor    | grep -q 'mock'
+          echo "smoke OK: console up, example company present, mock mode reported"
+          kill "$pid" 2>/dev/null || true
+
+      - name: Package the asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          case "${{ matrix.asset }}" in
+            *.zip) ( cd dist && zip -r -q "../out/${{ matrix.asset }}" corparius.app ) ;;   # macOS .app
+            *.exe) cp "dist/corparius.exe" "out/${{ matrix.asset }}" ;;
+            *)     cp "dist/corparius" "out/${{ matrix.asset }}"; chmod +x "out/${{ matrix.asset }}" ;;
+          esac
+
+      - name: Checksum (portable, via Python)
+        shell: bash
+        run: |
+          cd out
+          python -c "import hashlib,sys; f=sys.argv[1]; print(hashlib.sha256(open(f,'rb').read()).hexdigest()+'  '+f)" "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
+          cat "${{ matrix.asset }}.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/*
+
+  # Publish the GitHub Release with every binary, a consolidated SHA256SUMS and
+  # auto-generated notes. The Docker image is published by the docker job above.
+  github-release:
+    needs: [docker, native]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+      - name: Collect assets and checksums
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find dl -type f -name "corparius-*" ! -name "*.sha256" -exec cp {} release/ \;
+          find dl -type f -name "*.sha256" -exec cat {} \; > release/SHA256SUMS
+          ls -l release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false

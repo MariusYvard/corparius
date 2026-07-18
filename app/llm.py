@@ -13,6 +13,7 @@ Ollama always ends the chain.
 from __future__ import annotations
 import json
 import logging
+import re
 import subprocess
 from abc import ABC, abstractmethod
 
@@ -36,6 +37,34 @@ def _estimate_tokens(text: str) -> int:
 
 def _flatten(messages: list[dict]) -> str:
     return "\n".join(m.get("content", "") for m in messages)
+
+
+# The harness's marker and a hint-line parser, kept here so the mock can answer
+# structured prompts offline without importing app.structured (which imports
+# models, which is fine, but this keeps the mock dependency-free and fast).
+_STRUCT_MARKER = "<<corp-json-schema>>"
+_HINT_LINE = re.compile(r'"([^"]+)":\s*(.+?)(?:,|\s*$)')
+
+
+def _mock_json(prompt: str, model: str) -> str:
+    """Build a valid object for the shape the harness rendered into the prompt.
+    Strings echo the model tag so output stays deterministic and identifiable;
+    lists, numbers and booleans get typed placeholders."""
+    shape = prompt.rsplit("{", 1)[-1]
+    out: dict = {}
+    for key, decl in _HINT_LINE.findall(shape):
+        decl = decl.strip()
+        if decl.startswith("["):
+            out[key] = [f"mock-{key}"]
+        elif decl.startswith("true"):
+            out[key] = True
+        elif decl.startswith("number"):
+            out[key] = 1
+        elif "|" in decl and "(" not in decl:
+            out[key] = decl.split("|")[0].strip()
+        else:
+            out[key] = f"[mock:{model}] {key}"
+    return json.dumps(out or {"result": f"[mock:{model}]"})
 
 
 # Free-tier remote providers, all OpenAI chat-completions compatible.
@@ -103,13 +132,20 @@ class LLMProvider(ABC):
 
 class MockProvider(LLMProvider):
     """Deterministic, offline. Echoes a trimmed view of the prompt so drafted
-    content is stable and the pipeline runs with no dependencies."""
+    content is stable and the pipeline runs with no dependencies.
+
+    When the structured harness is driving (its marker is in the prompt), the
+    mock emits a valid JSON object for the requested shape, so offline mode
+    exercises the real structured path instead of always hitting the fallback.
+    """
 
     name = "mock"
 
     def generate(self, messages: list[dict], model: str, max_tokens: int = 512) -> LLMResult:
         last_user = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
-        text = f"[mock:{model}] {last_user.strip()[:180]}"
+        prompt = _flatten(messages)
+        text = _mock_json(prompt, model) if _STRUCT_MARKER in prompt \
+            else f"[mock:{model}] {last_user.strip()[:180]}"
         usage = Usage(_estimate_tokens(_flatten(messages)), _estimate_tokens(text))
         return LLMResult(text=text, usage=usage, model=model, provider=self.name)
 
@@ -221,9 +257,13 @@ class ClaudeCodeProvider(LLMProvider):
         self.timeout = timeout
 
     def generate(self, messages: list[dict], model: str, max_tokens: int = 512) -> LLMResult:
+        from . import claudecli
         system = "\n".join(m["content"] for m in messages if m.get("role") == "system")
         prompt = _flatten([m for m in messages if m.get("role") != "system"])
-        cmd = ["claude", "-p", prompt, "--output-format", "json"]
+        # The resolved path, not "claude": on Windows the CLI is a .cmd that
+        # subprocess cannot launch by bare name. See claudecli.resolve.
+        exe = claudecli.resolve() or "claude"
+        cmd = [exe, "-p", prompt, "--output-format", "json"]
         if model:
             cmd += ["--model", model]
         if system:

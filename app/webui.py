@@ -23,7 +23,8 @@ from urllib.parse import parse_qs, urlparse
 
 import yaml
 
-from . import backup, cfg, deploy, mailbox, paths, settings_spec
+from . import backup, cfg, claudecli, deploy, mailbox, ollama_setup, paths
+from . import provider_check, settings_spec
 from . import company as company_mod
 from .agents import ROSTER
 from .tools import TOOLS
@@ -100,6 +101,7 @@ class UiState:
         self.env_file = env_file
         self.runs: dict[str, dict] = {}
         self.chats: dict[str, deque] = {}
+        self.pulls: dict = {"running": False}   # Ollama model pull, background
         self.lock = threading.Lock()
 
     def store(self) -> Store:
@@ -164,6 +166,9 @@ def _providers_payload() -> dict:
         "ok": True, "providers": providers,
         "anthropic_key_set": bool(cfg.get("ANTHROPIC_API_KEY", "").strip()),
         "claude_code": s.claude_code_enabled,
+        "claude_installed": claudecli.installed(),
+        "claude_ready": claudecli.already_on(),
+        "server_presets": settings_spec.LLM_SERVER_PRESETS,
         "cloud_enabled": s.cloud_enabled, "llm_mock": s.llm_mock,
         "tiers": {"trivial": s.trivial_model, "normal": s.normal_model,
                   "hard": s.hard_model, "local_fallback": s.local_model,
@@ -414,6 +419,44 @@ def _deploy(state: UiState, slug: str) -> tuple[int, dict]:
                  "result": res["result"], "errors": res["errors"], "skipped": res["skipped"]}
 
 
+def _ollama_pull(state: UiState, models: list) -> dict:
+    """Pull the named models (or every missing one) in the background. A pull is
+    gigabytes, so it runs in a thread and reports progress through /api/ollama,
+    the same shape as a run."""
+    models = [str(m).strip() for m in models if str(m).strip()] or ollama_setup.status()["missing"]
+    if not models:
+        return {"ok": True, "detail": "nothing to pull"}
+    with state.lock:
+        if state.pulls.get("running"):
+            return {"ok": False, "error": "a pull is already in progress"}
+        state.pulls = {"running": True, "progress": "", "done": [], "failed": []}
+
+    def _worker() -> None:
+        for model in models:
+            def note(line):
+                state.pulls["progress"] = line
+            res = ollama_setup.pull(model, on_line=note)
+            (state.pulls["done"] if res["ok"] else state.pulls["failed"]).append(model)
+        state.pulls["running"] = False
+        state.pulls["progress"] = "done"
+
+    threading.Thread(target=_worker, daemon=True, name="corparius-ollama-pull").start()
+    return {"ok": True, "pulling": models}
+
+
+def _claude_setup(state: UiState) -> dict:
+    """One press: prove the CLI works, then flip mock off, cloud on, Claude Code
+    on, and point the tiers at claudecode. The four scattered settings and the
+    hand-edited tier strings were most of the friction."""
+    result = claudecli.check()
+    if not result["ok"]:
+        # Do not switch a company to a provider that will not answer.
+        return {"ok": False, "error": result["detail"], "check": result}
+    _persist(state, claudecli.plan())
+    payload = _providers_payload()
+    return {**payload, "check": result, "applied": claudecli.plan()}
+
+
 def _mail_check(to: str = "") -> dict:
     """Prove the mail account in one press: send, then read. Reported as two
     lines because they fail for different reasons and an operator needs to know
@@ -515,6 +558,13 @@ class Handler(BaseHTTPRequestHandler):
                 # serves the token itself.
                 self._send(200, {"ok": True,
                                  "token_required": bool(cfg.get("CORP_UI_TOKEN", "").strip())})
+            elif url.path == "/api/ollama":
+                result = ollama_setup.status()
+                pulls = self.state.pulls
+                if pulls.get("running"):
+                    result = {**result, "detail": pulls.get("progress") or "pulling...",
+                              "pulling": True}
+                self._send(200, {"ok": True, "result": result})
             elif url.path == "/api/site" and slug:
                 site = paths.site_index(_fresh_settings().data_path, slug)
                 self._send(200, {"ok": True, "built": site.is_file(),
@@ -600,6 +650,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True, "result": _mail_check(str(body.get("to", "")))})
             elif url.path == "/api/test/payments":
                 self._send(200, {"ok": True, "result": stripe_check()})
+            elif url.path == "/api/test/claude":
+                self._send(200, {"ok": True, "result": claudecli.check()})
+            elif url.path == "/api/claude/setup":
+                result = _claude_setup(self.state)
+                self._send(200 if result.get("ok") else 400, result)
+            elif url.path == "/api/test/provider":
+                self._send(200, {"ok": True,
+                                 "result": provider_check.check(str(body.get("name", "")))})
+            elif url.path == "/api/ollama/pull":
+                self._send(200, _ollama_pull(self.state, list(body.get("models", []))))
             elif url.path == "/api/company":
                 result = _save_company(self.state, slug, dict(body.get("config", {})))
                 self._send(200 if result.get("ok") else 400, result)

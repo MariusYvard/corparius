@@ -108,6 +108,30 @@ MAIL_PRESETS: list[dict] = [
                 "de passe vides."},
 ]
 
+# Local OpenAI-compatible servers for the `custom:` target. Each runs on your
+# machine with no key, so "plug in an LLM" is: start the app, pick it here, point
+# a tier at custom:<model>. Ports are the projects' defaults.
+LLM_SERVER_PRESETS: list[dict] = [
+    {"id": "lmstudio", "label": "LM Studio", "url": "http://localhost:1234/v1",
+     "note_en": "Start the local server in LM Studio (Developer tab), then load a model.",
+     "note_fr": "Démarrez le serveur local dans LM Studio (onglet Developer), puis chargez un modèle."},
+    {"id": "jan", "label": "Jan", "url": "http://localhost:1337/v1",
+     "note_en": "Enable the local API server in Jan's settings.",
+     "note_fr": "Activez le serveur d'API local dans les réglages de Jan."},
+    {"id": "ollama-openai", "label": "Ollama (OpenAI endpoint)", "url": "http://localhost:11434/v1",
+     "note_en": "Ollama also speaks the OpenAI dialect here, if you prefer the custom target to the local one.",
+     "note_fr": "Ollama parle aussi le dialecte OpenAI ici, si vous préférez la cible custom à la cible locale."},
+    {"id": "llamacpp", "label": "llama.cpp server", "url": "http://localhost:8080/v1",
+     "note_en": "`llama-server` from llama.cpp exposes this by default.",
+     "note_fr": "`llama-server` de llama.cpp l'expose par défaut."},
+    {"id": "vllm", "label": "vLLM", "url": "http://localhost:8000/v1",
+     "note_en": "vLLM's OpenAI-compatible server default.",
+     "note_fr": "Défaut du serveur compatible OpenAI de vLLM."},
+    {"id": "localai", "label": "LocalAI", "url": "http://localhost:8080/v1",
+     "note_en": "LocalAI's default OpenAI-compatible port.",
+     "note_fr": "Port compatible OpenAI par défaut de LocalAI."},
+]
+
 WARN_EN = ("These keys authorise real-world effects: Stripe reports real money, SMTP "
            "writes to real addresses, publishing puts a site online. They are stored "
            "in the clear in the store and are included in backups.")

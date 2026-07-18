@@ -30,6 +30,7 @@ class RunContext:
     leads: list = field(default_factory=list)
     store: object = None
     role: str = ""
+    structured: object = None   # the last structured.Result, when a tool asked for one
 
 
 def due_roles(tick: int, enabled: dict) -> list[AgentSpec]:

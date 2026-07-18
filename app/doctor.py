@@ -163,8 +163,12 @@ def _check_claude_cli(s: Settings) -> tuple:
     if not s.claude_code_enabled:
         return ("ok", "claude cli", "disabled (CORP_CLAUDE_CODE=false)")
     if shutil.which("claude"):
-        return ("ok", "claude cli", "found on PATH")
-    return ("fail", "claude cli", "CORP_CLAUDE_CODE=true but the `claude` CLI is not on PATH. Install Claude Code and log in.")
+        # Whether it is logged in needs a real call, which the doctor will not
+        # spend a subscription message on; the console's Test button does that.
+        return ("ok", "claude cli", "found on PATH. Test the login from the console (Providers).")
+    return ("fail", "claude cli",
+            "CORP_CLAUDE_CODE=true but the `claude` CLI is not on PATH. Install Claude Code, "
+            "run `claude login`, or turn it off from the console (Providers).")
 
 
 def _check_deploy_order() -> tuple:

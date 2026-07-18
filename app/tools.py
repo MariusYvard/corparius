@@ -13,11 +13,16 @@ from . import cfg, integrations, mailbox, paths, sitegen, deploy, leadsource, en
 class Tool:
     def __init__(self, name: str, description: str, effect: Callable,
                  *, hitl: bool = False, needs_draft: bool = False,
-                 prompt: Callable | None = None):
+                 prompt: Callable | None = None, schema: dict | None = None):
         self.name = name
         self.description = description
         self.hitl = hitl
         self.needs_draft = needs_draft
+        # Opt-in structured output: when a tool declares a schema, the executor
+        # drives the router through app/structured so the effect receives a
+        # validated dict (ctx.structured.data) that is the same shape whatever
+        # model, tier or provider answered. Tools without a schema are unchanged.
+        self.schema = schema
         self._prompt = prompt
         self._effect = effect
 
@@ -46,6 +51,18 @@ def _channel(ctx) -> str:
     whatever the config said."""
     channels = (ctx.company.get("icp", {}) or {}).get("channels") or []
     return str(channels[0]) if channels else "linkedin"
+
+
+def _social_post(ctx) -> str:
+    """Reads the validated draft (same shape whatever model wrote it) instead of
+    slicing raw text. ctx.structured is set by the executor for schema tools."""
+    r = getattr(ctx, "structured", None)
+    data = r.data if r else {}
+    headline = data.get("headline", "").strip() or "post"
+    tags = " ".join(f"#{h.lstrip('#')}" for h in data.get("hashtags", [])[:3])
+    note = " (structure recovered)" if r and r.fell_back else ""
+    tail = f" {tags}" if tags else ""
+    return f"Post drafted for {_channel(ctx)}: {headline[:100]}{tail}{note}"
 
 
 def _review_ad_budget(ctx) -> str:
@@ -295,7 +312,10 @@ _ALL = [
          effect=lambda c, d: _ok(_kaizen(c))),
     Tool("draft_social_post", "Draft a post for X or LinkedIn", needs_draft=True,
          prompt=lambda c: f"Draft one short {_channel(c)} post for {_name(c)}.",
-         effect=lambda c, d: _ok(f"Post drafted: {d[:120]}")),
+         schema={"headline": {"type": "str", "required": True, "max_len": 120},
+                 "body": {"type": "str", "required": True, "max_len": 500},
+                 "hashtags": {"type": "list", "default": []}},
+         effect=lambda c, d: _ok(_social_post(c))),
     Tool("schedule_post", "Schedule the drafted post",
          effect=lambda c, d: _ok(f"Post scheduled for +2h on {_channel(c)}")),
     Tool("find_targets", "Find ICP-matching prospects",

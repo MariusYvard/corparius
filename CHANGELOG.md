@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — starter templates
+
+- **The wizard offers a business to start from.** SaaS, online shop, agency,
+  newsletter — each prefills the ICP, channels, price and the right agents, so a
+  newcomer edits a starting point instead of facing a blank ICP and price. The
+  typed name and product still win over the template's examples. Blank is still
+  an option. Templates live in `app/company.py`, one source for the console.
+
 ## Unreleased — a guided first run
 
 - **A "Getting started" thread on the overview.** A blank powerful tool is now a

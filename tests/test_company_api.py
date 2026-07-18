@@ -32,6 +32,31 @@ def server(tmp_path, monkeypatch):
     srv.shutdown()
 
 
+def test_a_template_prefills_the_new_company(server):
+    # The starter template fills ICP, channels, price and agents so the operator
+    # faces a starting point, not a blank page; the typed name/product still win.
+    status, d = _call(server, "POST", "/api/companies",
+                      {"name": "Helios Tools", "template": "saas", "lang": "en"})
+    assert status == 200 and d["ok"]
+    from app import company as company_mod
+    cfg = company_mod.load(company_mod.path_for(d["slug"]), d["slug"])
+    assert cfg["offer"]["price_eur"] == 29 and cfg["offer"]["billing"] == "stripe"
+    assert cfg["icp"]["channels"] == ["linkedin", "x"]
+    assert cfg["icp"]["pains"] and "product" in cfg["offer"]
+    assert cfg["agents"]["coder"] is True   # the saas template turns the coder on
+    # A typed product overrides the template example.
+    status, d = _call(server, "POST", "/api/companies",
+                      {"name": "Helios Two", "template": "saas", "product": "My own words"})
+    cfg = company_mod.load(company_mod.path_for(d["slug"]), d["slug"])
+    assert cfg["offer"]["product"] == "My own words"
+
+
+def test_templates_are_offered_at_creation(server):
+    status, d = _call(server, "GET", "/api/companies")
+    ids = {tpl["id"] for tpl in d["templates"]}
+    assert {"saas", "ecom", "agency", "newsletter"} <= ids
+
+
 def test_reads_a_company_with_every_field_filled_in(server):
     status, d = _call(server, "GET", "/api/company?company=acme")
     assert status == 200 and d["ok"]

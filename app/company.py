@@ -41,6 +41,54 @@ TOKENS_MIN, TOKENS_MAX = 1000, 5_000_000
 DEFAULT_HITL = ["send_financial_transaction", "publish_production_code", "deploy_site"]
 
 
+# Starter templates. The blank page at creation is real friction: a newcomer
+# knows their business but not what to put for ICP, channels or which agents.
+# A template fills a sensible starting point they then edit. The text fields are
+# examples per language; agents/channels/billing are the structural choices.
+TEMPLATES: list[dict] = [
+    {"id": "saas", "label_en": "SaaS / web app", "label_fr": "SaaS / app web",
+     "product_en": "A self-serve web app on a monthly subscription.",
+     "product_fr": "Une app web en libre-service, sur abonnement mensuel.",
+     "segment_en": "Small teams who feel this pain and have a budget to fix it",
+     "segment_fr": "Petites équipes qui vivent ce problème et ont un budget pour le régler",
+     "pains_en": ["Doing it by hand eats hours every week", "Existing tools are bloated and costly"],
+     "pains_fr": ["Le faire à la main coûte des heures chaque semaine", "Les outils existants sont lourds et chers"],
+     "channels": ["linkedin", "x"], "price_eur": 29, "billing": "stripe",
+     "agents": {"ads": False, "coder": True}},
+    {"id": "ecom", "label_en": "Online shop", "label_fr": "Boutique en ligne",
+     "product_en": "A physical product sold online, one-off purchases.",
+     "product_fr": "Un produit physique vendu en ligne, à l'unité.",
+     "segment_en": "Shoppers who value this over the mass-market option",
+     "segment_fr": "Acheteurs qui préfèrent ceci à l'option grand public",
+     "pains_en": ["Mass-produced versions feel generic", "Slow or unreliable delivery elsewhere"],
+     "pains_fr": ["Les versions industrielles font génériques", "Livraison lente ou peu fiable ailleurs"],
+     "channels": ["instagram", "x"], "price_eur": 45, "billing": "stripe",
+     "agents": {"ads": True, "coder": False}},
+    {"id": "agency", "label_en": "Agency / services", "label_fr": "Agence / services",
+     "product_en": "A done-for-you service billed per project or retainer.",
+     "product_fr": "Un service clé en main, facturé au projet ou au forfait.",
+     "segment_en": "Businesses that need this done but won't hire in-house",
+     "segment_fr": "Entreprises qui en ont besoin sans vouloir recruter en interne",
+     "pains_en": ["No in-house expertise for this", "Past vendors over-promised and under-delivered"],
+     "pains_fr": ["Pas d'expertise en interne", "Prestataires passés qui promettent trop"],
+     "channels": ["linkedin"], "price_eur": None, "billing": "manual",
+     "agents": {"ads": False, "coder": False}},
+    {"id": "newsletter", "label_en": "Newsletter / media", "label_fr": "Newsletter / média",
+     "product_en": "A paid newsletter or content membership.",
+     "product_fr": "Une newsletter payante ou un abonnement à du contenu.",
+     "segment_en": "People who want to stay ahead on this topic",
+     "segment_fr": "Des gens qui veulent garder une longueur d'avance sur ce sujet",
+     "pains_en": ["Too much noise, too little signal elsewhere", "No time to follow it all"],
+     "pains_fr": ["Trop de bruit, trop peu de signal ailleurs", "Pas le temps de tout suivre"],
+     "channels": ["linkedin", "x", "bluesky"], "price_eur": 9, "billing": "stripe",
+     "agents": {"ads": False, "coder": False}},
+]
+
+
+def template(tid: str) -> dict | None:
+    return next((dict(t) for t in TEMPLATES if t["id"] == tid), None)
+
+
 def slugify(name: str) -> str:
     return SLUG_RE.sub("-", name.strip().lower()).strip("-")
 

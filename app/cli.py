@@ -149,7 +149,7 @@ def cmd_backup(args) -> None:
 
 def cmd_ui(args) -> None:
     from .webui import serve
-    serve(settings, host=args.host, port=args.port)
+    raise SystemExit(serve(settings, host=args.host, port=args.port))
 
 
 def cmd_approvals(args) -> None:

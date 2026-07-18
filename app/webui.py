@@ -756,8 +756,33 @@ def build_server(settings: Settings, host: str | None = None, port: int | None =
     return ThreadingHTTPServer((host or settings.ui_host, settings.ui_port if port is None else port), handler)
 
 
-def serve(settings: Settings, host: str | None = None, port: int | None = None) -> None:
-    server = build_server(settings, host, port)
+def _port_in_use(host: str, port: int) -> bool:
+    """Probe before binding. allow_reuse_address lets a second bind quietly
+    succeed on some platforms (Windows especially), so checking the bind result
+    is not reliable; a connection that answers is."""
+    import socket
+    probe = "127.0.0.1" if host in ("", "0.0.0.0") else host
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.4)
+        try:
+            return s.connect_ex((probe, port)) == 0
+        except OSError:
+            return False
+
+
+def serve(settings: Settings, host: str | None = None, port: int | None = None) -> int:
+    want = settings.ui_port if port is None else port
+    host = host or settings.ui_host
+    if _port_in_use(host, want):
+        print(f"corparius: port {want} is already in use. Another console may be "
+              f"running (open http://127.0.0.1:{want}), or pick a free port: "
+              f"python -m app.cli ui --port 8601  (or set CORP_UI_PORT).")
+        return 1
+    try:
+        server = build_server(settings, host, port)
+    except OSError as exc:
+        print(f"corparius: could not start the console on {host}:{want}: {exc}")
+        return 1
     bound = server.socket.getsockname()
     log.info("operator console on http://%s:%d (Ctrl+C to stop)", bound[0], bound[1])
     print(f"corparius console: http://{bound[0]}:{bound[1]}")
@@ -765,3 +790,4 @@ def serve(settings: Settings, host: str | None = None, port: int | None = None) 
         server.serve_forever()
     except KeyboardInterrupt:
         server.shutdown()
+    return 0

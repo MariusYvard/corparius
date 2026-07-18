@@ -23,8 +23,8 @@ from urllib.parse import parse_qs, urlparse
 
 import yaml
 
-from . import backup, cfg, claudecli, deploy, mailbox, ollama_setup, paths
-from . import provider_check, settings_spec
+from . import backup, cfg, claudecli, deploy, i18n, mailbox, ollama_setup, paths
+from . import provider_check, settings_spec, structured
 from . import company as company_mod
 from .agents import ROSTER
 from .tools import TOOLS
@@ -176,7 +176,34 @@ def _providers_payload() -> dict:
     }
 
 
-def _chat(state: UiState, slug: str, message: str) -> dict:
+# What the CEO chat can propose. Each maps to an existing, audited endpoint the
+# operator confirms with a click, so the chat never mutates on its own and money
+# or production still passes the HITL gate on the resulting run. The LLM only
+# routes intent; it opens no new path.
+_CEO_ACTIONS = {
+    "run_day": {"endpoint": "/api/run", "body": {"ticks": 24}, "label_en": "Run a day",
+                "label_fr": "Lancer une journée"},
+    "run_loop": {"endpoint": "/api/run", "body": {"ticks": 24, "loop": True},
+                 "label_en": "Run continuously", "label_fr": "Lancer en continu"},
+    "deploy": {"endpoint": "/api/deploy", "body": {}, "label_en": "Publish the site",
+               "label_fr": "Publier le site"},
+    "build_site": {"endpoint": "/api/site", "body": {}, "label_en": "Build the site",
+                   "label_fr": "Générer le site"},
+    "backup": {"endpoint": "/api/backup", "body": {}, "label_en": "Back up now",
+               "label_fr": "Sauvegarder"},
+    "use_claude": {"endpoint": "/api/claude/setup", "body": {}, "no_company": True,
+                   "label_en": "Use my Claude subscription", "label_fr": "Utiliser mon abonnement Claude"},
+}
+
+_CEO_SCHEMA = {
+    "reply": {"type": "str", "required": True, "max_len": 800},
+    "intent": {"type": "str", "default": "answer",
+               "choices": ["answer"] + list(_CEO_ACTIONS)},
+    "ticks": {"type": "int", "default": 24},
+}
+
+
+def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
     store = state.store()
     st = store.status(slug)
     tick = int(store.load_state(slug).get("tick", 0))
@@ -191,20 +218,38 @@ def _chat(state: UiState, slug: str, message: str) -> dict:
     system = (
         f"{spec.system_prompt} You are chatting with your human operator through "
         f"the corparius console. Be concise and concrete; reference the snapshot "
-        f"when relevant. {snapshot}"
+        f"when relevant. Write 'reply' in {'French' if lang == 'fr' else 'English'}. "
+        f"Set 'intent' to one of {', '.join(_CEO_ACTIONS)} ONLY when the operator is "
+        f"clearly asking to do that thing now; otherwise 'answer'. You never execute; "
+        f"the operator confirms with a button. {snapshot}"
     )
     history = state.chats.setdefault(slug, deque(maxlen=_CHAT_LIMIT))
     messages = ([{"role": "system", "content": system}]
                 + [{"role": m["role"], "content": m["text"]} for m in history]
                 + [{"role": "user", "content": message}])
+    # One structured call classifies intent and writes the reply. The harness
+    # returns the same shape whatever model answered; in mock or on a weak model
+    # it falls back to intent=answer, so the chat degrades to plain conversation.
     router = HybridRouter(_fresh_settings())
-    res = router.generate(messages, difficulty=spec.difficulty, max_tokens=700)
-    store.record_usage(slug, "ceo", res.usage.input_tokens, res.usage.output_tokens)
+    result = structured.ask(router, messages, _CEO_SCHEMA, difficulty=spec.difficulty)
+    for u in result.usages:
+        store.record_usage(slug, "ceo", u.input_tokens, u.output_tokens)
+    reply = result.data.get("reply") or message
+    intent = result.data.get("intent", "answer")
+    proposal = None
+    if intent in _CEO_ACTIONS and not result.fell_back:
+        spec_a = dict(_CEO_ACTIONS[intent])
+        body = dict(spec_a["body"])
+        if intent == "run_day":
+            body["ticks"] = max(1, min(int(result.data.get("ticks", 24)), 48))
+        proposal = {"intent": intent, "endpoint": spec_a["endpoint"], "body": body,
+                    "needs_company": not spec_a.get("no_company"),
+                    "label": i18n.pick(lang, spec_a["label_en"], spec_a["label_fr"])}
+    provider, _, model = result.source.partition(":")   # "mock:haiku" -> mock, haiku
     history.append({"role": "user", "text": message})
-    history.append({"role": "assistant", "text": res.text,
-                    "model": res.model, "provider": res.provider})
-    return {"ok": True, "reply": res.text, "model": res.model,
-            "provider": res.provider, "history": list(history)}
+    history.append({"role": "assistant", "text": reply, "model": model, "provider": provider})
+    return {"ok": True, "reply": reply, "model": model, "provider": provider,
+            "proposal": proposal, "history": list(history)}
 
 
 def _start_run(state: UiState, slug: str, ticks: int, loop: bool = False) -> dict:
@@ -470,16 +515,22 @@ def _claude_setup(state: UiState) -> dict:
     return {**payload, "check": result, "applied": claudecli.plan()}
 
 
-def _mail_check(to: str = "") -> dict:
+def _mail_check(to: str = "", lang: str = "en") -> dict:
     """Prove the mail account in one press: send, then read. Reported as two
     lines because they fail for different reasons and an operator needs to know
     which half is broken."""
-    send = smtp_check(to)
-    read = mailbox.check()
-    lines = [f"Sending: {send['detail']}", f"Reading: {read['detail']}"]
+    send = smtp_check(to, lang=lang)
+    read = mailbox.check(lang=lang)
+    sending = i18n.pick(lang, "Sending", "Envoi")
+    reading = i18n.pick(lang, "Reading", "Lecture")
+    lines = [f"{sending}: {send['detail']}", f"{reading}: {read['detail']}"]
     if not send["configured"] and not read["configured"]:
-        return {"ok": False, "detail": "No mail account set yet. Pick a provider above, "
-                                       "give the address and an app password."}
+        return {"ok": False,
+                "detail": i18n.pick(lang,
+                    "No mail account set yet. Pick a provider above, give the address "
+                    "and an app password.",
+                    "Aucun compte mail réglé. Choisissez un fournisseur ci-dessus, donnez "
+                    "l'adresse et un mot de passe d'application.")}
     return {"ok": bool(send["ok"] and read["ok"]),
             "send_ok": send["ok"], "read_ok": read["ok"],
             "detail": "\n".join(lines)}
@@ -573,7 +624,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"ok": True,
                                  "token_required": bool(cfg.get("CORP_UI_TOKEN", "").strip())})
             elif url.path == "/api/ollama":
-                result = ollama_setup.status()
+                result = ollama_setup.status(lang=q.get("lang", ""))
                 pulls = self.state.pulls
                 if pulls.get("running"):
                     result = {**result, "detail": pulls.get("progress") or "pulling...",
@@ -661,17 +712,19 @@ class Handler(BaseHTTPRequestHandler):
                 # One button, both directions. A real send and a real read:
                 # setting a mail account and hoping is the friction, and this is
                 # the answer to "did it work?".
-                self._send(200, {"ok": True, "result": _mail_check(str(body.get("to", "")))})
+                self._send(200, {"ok": True, "result": _mail_check(str(body.get("to", "")),
+                                                                   str(body.get("lang", "")))})
             elif url.path == "/api/test/payments":
-                self._send(200, {"ok": True, "result": stripe_check()})
+                self._send(200, {"ok": True, "result": stripe_check(lang=str(body.get("lang", "")))})
             elif url.path == "/api/test/claude":
-                self._send(200, {"ok": True, "result": claudecli.check()})
+                self._send(200, {"ok": True, "result": claudecli.check(lang=str(body.get("lang", "")))})
             elif url.path == "/api/claude/setup":
                 result = _claude_setup(self.state)
                 self._send(200 if result.get("ok") else 400, result)
             elif url.path == "/api/test/provider":
                 self._send(200, {"ok": True,
-                                 "result": provider_check.check(str(body.get("name", "")))})
+                                 "result": provider_check.check(str(body.get("name", "")),
+                                                                lang=str(body.get("lang", "")))})
             elif url.path == "/api/ollama/pull":
                 self._send(200, _ollama_pull(self.state, list(body.get("models", []))))
             elif url.path == "/api/company":
@@ -686,7 +739,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not message:
                     self._send(400, {"ok": False, "error": "empty message"})
                     return
-                self._send(200, _chat(self.state, slug, message))
+                self._send(200, _chat(self.state, slug, message, str(body.get("lang", ""))))
             else:
                 self._send(404, {"ok": False, "error": "not found"})
         except Exception as exc:

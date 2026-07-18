@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — fewer papercuts, and a CEO that can act
+
+- **The CEO chat can do things, not only answer.** When the operator asks to run
+  a day, publish the site, back up, or switch to their Claude subscription, the
+  reply comes with a confirm button. One structured call classifies the intent
+  and writes the reply (dogfooding the harness); the button calls the same
+  audited endpoint the UI buttons use, so nothing runs on the model's say-so and
+  money still hits the HITL gate. In mock or on a weak model it degrades to plain
+  conversation. Intent classification is provider-agnostic via the harness.
+- **Diagnosis strings are bilingual.** Testing mail, Claude, a provider or Ollama
+  in a French console now answers in French; the CLI stays English. One
+  `app/i18n.pick(lang, en, fr)` keeps both strings at the call site.
+- **A proactive diagnostics banner.** If the doctor reports a failure on load,
+  the console surfaces it with a link to the fix, instead of leaving it unseen in
+  a tab. Dismissible per session.
+- **`.env.example` slimmed** to the bootstrap keys plus the LLM tiers, with a
+  pointer to the console and docs. The console sets everything else, so the file
+  is no longer a wall to read.
+
 ## Unreleased — starter templates
 
 - **The wizard offers a business to start from.** SaaS, online shop, agency,

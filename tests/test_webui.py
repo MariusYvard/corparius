@@ -124,11 +124,14 @@ def test_token_guards_mutations(server, monkeypatch):
 
 
 def test_ceo_chat_answers_offline_in_mock_mode(server):
+    # The chat now runs through the structured harness (so the CEO can propose
+    # actions), but it must still answer offline in mock mode: a non-empty reply,
+    # the mock provider, history that grows, and no action proposed on its own.
     status, data = _call(server, "POST", "/api/chat",
                          {"company": "example", "message": "What is the plan?"})
     assert status == 200 and data["ok"]
     assert data["provider"] == "mock"
-    assert "What is the plan?" in data["reply"]
+    assert data["reply"] and data["proposal"] is None
     status, data = _call(server, "GET", "/api/chat?company=example")
     assert len(data["history"]) == 2
 

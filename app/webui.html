@@ -314,6 +314,13 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
 </nav>
 <main class="wrap" id="main">
   <div id="conn" class="banner error" hidden role="alert"></div>
+  <div id="doctor-bar" class="banner warn" hidden role="alert">
+    <span id="doctor-bar-text"></span>
+    <span style="display:inline-flex; gap:8px; margin-left:auto">
+      <button id="doctor-bar-open" class="link-quiet" data-i18n="doc.barOpen">See diagnostics</button>
+      <button id="doctor-bar-hide" class="link-quiet" data-i18n="ob.dismiss">Hide</button>
+    </span>
+  </div>
   <div id="token-bar" class="banner warn" hidden role="alert">
     <span data-i18n="token.needed">This console requires an access token.</span>
     <span style="display:inline-flex; gap:8px; margin-left:10px">
@@ -478,6 +485,7 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
   <section id="tab-ceo" role="tabpanel" aria-labelledby="t-ceo" hidden>
     <div class="card chat">
       <div class="chat-log" id="chat-log"></div>
+      <div id="chat-proposal" hidden style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 0"></div>
       <p class="sr-only" id="chat-live" aria-live="polite"></p>
       <p class="desc" id="chat-mock-note" hidden data-i18n="ceo.mockNote">Mock mode is on: the CEO echoes instead of thinking. Turn mock off and configure a provider in the Providers tab to talk to the real one.</p>
       <div class="composer">
@@ -620,6 +628,7 @@ en: {
   "prov.docs":"Limits and signup links",
   "ceo.empty":"Talk to the CEO agent about the plan, the backlog or the numbers. Replies use your configured routing (mock mode answers offline).",
   "ceo.placeholder":"Ask the CEO about the plan, the backlog, the numbers…","ceo.send":"Send",
+  "ceo.proposes":"The CEO can do this now:","ceo.notNow":"Not now","ceo.launched":"Done.",
   "ceo.mockNote":"Mock mode is on: the CEO echoes instead of thinking. Turn mock off and configure a provider in the Providers tab to talk to the real one.",
   "settings.title":"Console settings","settings.desc":"Stored in this browser only; they change nothing on the server.",
   "settings.language":"Interface language","settings.theme":"Theme","settings.dark":"Dark","settings.light":"Light",
@@ -639,6 +648,7 @@ en: {
   "wiz.newOption":"+ New company…",
   "doc.title":"Diagnostics","doc.desc":"Checks Python, the store, Ollama, providers and the network, and says what to fix.",
   "doc.run":"Run diagnostics","footer.support":"Support the project",
+  "doc.barFail":"{n} check(s) need a fix:","doc.barOpen":"See diagnostics",
   "cfg.title":"Configuration","cfg.desc":"Everything corparius reads. Saved here, applied without touching a file. A field the process environment defines is shown read-only.",
   "cfg.save":"Save","cfg.saved":"Saved.","cfg.isSet":"set — type to replace","cfg.notSet":"not set",
   "cfg.env":"from the environment","cfg.envTip":"This value comes from the process environment, which outranks the console. Unset it in your shell or compose file to edit it here.",
@@ -751,6 +761,7 @@ fr: {
   "prov.docs":"Limites et liens d'inscription",
   "ceo.empty":"Parlez à l'agent CEO du plan, du backlog ou des chiffres. Les réponses passent par votre routage configuré (le mode mock répond hors ligne).",
   "ceo.placeholder":"Interrogez le CEO sur le plan, le backlog, les chiffres…","ceo.send":"Envoyer",
+  "ceo.proposes":"Le CEO peut le faire maintenant :","ceo.notNow":"Pas maintenant","ceo.launched":"C'est fait.",
   "ceo.mockNote":"Mode mock actif : le CEO répète au lieu de réfléchir. Désactivez le mock et configurez un provider dans l'onglet Providers pour parler au vrai.",
   "settings.title":"Réglages de la console","settings.desc":"Stockés dans ce navigateur uniquement ; rien ne change côté serveur.",
   "settings.language":"Langue de l'interface","settings.theme":"Thème","settings.dark":"Sombre","settings.light":"Clair",
@@ -811,6 +822,7 @@ fr: {
   "wiz.create":"Créer la société","wiz.hint":"Tourne hors ligne en mode mock par défaut.","wiz.created":"Société créée",
   "wiz.newOption":"+ Nouvelle société…",
   "doc.title":"Diagnostics","doc.desc":"Vérifie Python, le store, Ollama, les providers et le réseau, et dit quoi corriger.",
+  "doc.barFail":"{n} vérification(s) à corriger :","doc.barOpen":"Voir le diagnostic",
   "doc.run":"Lancer le diagnostic","footer.support":"Soutenir le projet",
   "conn.error":"Impossible de joindre le serveur corparius :",
   "footer":"console opérateur corparius · sert sur localhost · l'état est lu depuis le store SQLite local"
@@ -958,10 +970,34 @@ async function boot() {
     await Promise.all([refresh(), loadProviders(), loadChat(), loadSite(), loadPayments(),
                        loadCompany()]);
     state.timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
+    checkDoctor();
   } catch (e) { connError(e); }
 }
 function connError(e) { const b = $("#conn"); b.hidden = false; b.textContent = t("conn.error") + " " + e.message; }
 function connOk() { $("#conn").hidden = true; }
+
+/* A blocking check should find the operator, not wait to be found. On load, if
+   the doctor reports failures, surface them once rather than let them sit unseen
+   in a tab. Dismissible; re-checked each session. */
+async function checkDoctor() {
+  if (sessionStorage.getItem("corparius-doctor-hid") === "1") return;
+  try {
+    const { checks } = await api("/api/doctor");
+    const fails = checks.filter(c => c.level === "fail");
+    if (!fails.length) return;
+    $("#doctor-bar-text").textContent =
+      t("doc.barFail").replace("{n}", fails.length) + " " + fails.map(c => c.name).join(", ");
+    $("#doctor-bar").hidden = false;
+  } catch (e) {}
+}
+$("#doctor-bar-hide").addEventListener("click", () => {
+  sessionStorage.setItem("corparius-doctor-hid", "1"); $("#doctor-bar").hidden = true;
+});
+$("#doctor-bar-open").addEventListener("click", () => {
+  $("#doctor-bar").hidden = true; selectTab($("#t-settings"));
+  $("#run-doctor")?.click();
+  $("#doctor-out")?.scrollIntoView({behavior: "smooth", block: "center"});
+});
 
 /* overview + operations */
 async function loadSite() {
@@ -1313,7 +1349,7 @@ document.addEventListener("click", async e => {
       // A pull is gigabytes and runs in the background; follow its progress.
       clearInterval(state.ollamaTimer);
       state.ollamaTimer = setInterval(async () => {
-        const { result } = await api("/api/ollama");
+        const { result } = await api("/api/ollama?lang=" + lang);
         state.ollama = result;
         const out = $("#ollama-out");
         if (out) out.textContent = result.detail;
@@ -1332,7 +1368,7 @@ document.addEventListener("click", async e => {
     const out = $(`[data-test-out="${CSS.escape(name)}"]`);
     b.disabled = true; out.textContent = t("prov.testing"); out.style.color = "var(--muted)";
     try {
-      const { result } = await api("/api/test/provider", {name});
+      const { result } = await api("/api/test/provider", {name, lang});
       out.textContent = result.detail;
       out.style.color = result.ok ? "var(--ok)" : "var(--warn)";
     } catch (err) { out.textContent = err.message; out.style.color = "var(--danger)"; }
@@ -1369,7 +1405,7 @@ document.addEventListener("click", async e => {
       const out = $("#claude-out");
       b.disabled = true; out.textContent = t("cc.testing"); out.style.color = "var(--muted)";
       try {
-        const { result } = await api("/api/test/claude", {});
+        const { result } = await api("/api/test/claude", {lang});
         out.textContent = result.detail;
         out.style.color = result.ok ? "var(--ok)" : "var(--warn)";
       } finally { b.disabled = false; }
@@ -1471,7 +1507,7 @@ function renderOllama(s) {
 }
 
 async function loadOllama() {
-  try { const { result } = await api("/api/ollama"); state.ollama = result; renderOllama(result); }
+  try { const { result } = await api("/api/ollama?lang=" + lang); state.ollama = result; renderOllama(result); }
   catch (e) { $("#ollama-body").innerHTML = `<span class="badge danger">${esc(e.message)}</span>`; }
 }
 
@@ -1537,13 +1573,36 @@ async function sendChat() {
   try {
     renderChat([...(await api(`/api/chat?company=${encodeURIComponent(state.company)}`)).history, {role: "user", text: msg}]);
     input.value = "";
-    const h = (await api("/api/chat", {company: state.company, message: msg})).history;
-    renderChat(h);
-    const lastMsg = h[h.length - 1];
+    const d = await api("/api/chat", {company: state.company, message: msg, lang});
+    renderChat(d.history);
+    // The CEO may propose an action: show a confirm button under the reply. The
+    // operator clicks; it calls the same audited endpoint the buttons use, so
+    // nothing runs on the model's say-so and money still hits the HITL gate.
+    renderProposal(d.proposal);
+    const lastMsg = d.history[d.history.length - 1];
     if (lastMsg && lastMsg.role === "assistant") $("#chat-live").textContent = t("ceo.newReply") + " " + lastMsg.text;
   }
   catch (e) { toast(e.message, true); }
   finally { state.chatBusy = false; $("#chat-send").disabled = false; input.focus(); }
+}
+function renderProposal(p) {
+  const box = $("#chat-proposal");
+  if (!p) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  box.innerHTML = `<span class="note">${esc(t("ceo.proposes"))}</span>
+    <button class="primary" id="chat-confirm">${esc(p.label)}</button>
+    <button class="link-quiet" id="chat-dismiss">${esc(t("ceo.notNow"))}</button>`;
+  $("#chat-dismiss").addEventListener("click", () => renderProposal(null));
+  $("#chat-confirm").addEventListener("click", async () => {
+    const btn = $("#chat-confirm"); btn.disabled = true;
+    try {
+      const body = {...p.body};
+      if (p.needs_company) body.company = state.company;
+      await api(p.endpoint, body);
+      toast(t("ceo.launched")); renderProposal(null); refresh();
+      if (p.endpoint === "/api/providers" || p.endpoint === "/api/claude/setup") loadProviders();
+    } catch (e) { toast(e.message, true); btn.disabled = false; }
+  });
 }
 $("#chat-send").addEventListener("click", sendChat);
 $("#chat-input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } });
@@ -1893,7 +1952,7 @@ $("#settings-groups").addEventListener("click", async ev => {
     out.textContent = t("cfg.testing");
     out.style.color = "var(--muted)";
     try {
-      const { result } = await api(test.dataset.test, {to: $("#test-to")?.value.trim() || ""});
+      const { result } = await api(test.dataset.test, {to: $("#test-to")?.value.trim() || "", lang});
       out.textContent = result.detail;
       out.style.color = result.ok ? "var(--ok)" : "var(--warn)";
     } catch (e) { out.textContent = e.message; out.style.color = "var(--danger)"; }

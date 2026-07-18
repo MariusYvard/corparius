@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from email.header import decode_header, make_header
 from email.utils import parseaddr
 
-from . import cfg
+from . import cfg, i18n
 
 ADDR_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
@@ -137,39 +137,52 @@ def fetch(limit: int = 20, unseen_only: bool = True, timeout: int = 20) -> list[
                 pass
 
 
-def diagnosis(exc: Exception) -> str:
+def diagnosis(exc: Exception, lang="en") -> str:
     """Name the fix, not the protocol."""
+    p = lambda en, fr: i18n.pick(lang, en, fr)
     host = cfg.get("CORP_IMAP_HOST", "")
     port = cfg.get_int("CORP_IMAP_PORT", 993)
     text = str(exc)
     if isinstance(exc, imaplib.IMAP4.error):
         low = text.lower()
         if "auth" in low or "login" in low or "credentials" in low:
-            return ("The server refused these credentials. Most providers need an "
-                    "app-specific password here, not your account password.")
+            return p("The server refused these credentials. Most providers need an "
+                     "app-specific password here, not your account password.",
+                     "Le serveur a refusé ces identifiants. La plupart des fournisseurs "
+                     "exigent ici un mot de passe d'application, pas celui du compte.")
         if "folder" in low or "nonexistent" in low or "select" in low:
-            return (f"The folder '{cfg.get('CORP_IMAP_FOLDER', 'INBOX')}' does not exist on "
-                    "this account. INBOX is the usual name.")
-        return text or "The IMAP server refused the request."
+            return p(f"The folder '{cfg.get('CORP_IMAP_FOLDER', 'INBOX')}' does not exist on "
+                     "this account. INBOX is the usual name.",
+                     f"Le dossier « {cfg.get('CORP_IMAP_FOLDER', 'INBOX')} » n'existe pas sur "
+                     "ce compte. INBOX est le nom habituel.")
+        return text or p("The IMAP server refused the request.", "Le serveur IMAP a refusé la requête.")
     if isinstance(exc, socket.gaierror):
-        return f"No such host: '{host}'. Check the server name."
+        return p(f"No such host: '{host}'. Check the server name.",
+                 f"Hôte introuvable : « {host} ». Vérifiez le nom du serveur.")
     if isinstance(exc, ConnectionRefusedError):
-        return f"{host} refused a connection on port {port}. Check the port."
+        return p(f"{host} refused a connection on port {port}. Check the port.",
+                 f"{host} a refusé la connexion sur le port {port}. Vérifiez le port.")
     if isinstance(exc, (TimeoutError, socket.timeout)):
-        return (f"No answer from {host}:{port} before the timeout. A firewall or the wrong "
-                "port would both look like this.")
+        return p(f"No answer from {host}:{port} before the timeout. A firewall or the wrong "
+                 "port would both look like this.",
+                 f"Aucune réponse de {host}:{port} avant le délai. Un pare-feu ou un mauvais "
+                 "port donnent tous deux ce résultat.")
     if isinstance(exc, ssl.SSLError):
-        return (f"TLS handshake failed on port {port}. Port 993 expects implicit TLS, "
-                "143 expects STARTTLS.")
+        return p(f"TLS handshake failed on port {port}. Port 993 expects implicit TLS, "
+                 "143 expects STARTTLS.",
+                 f"Échec du handshake TLS sur le port {port}. Le 993 attend un TLS implicite, "
+                 "le 143 attend STARTTLS.")
     return text or exc.__class__.__name__
 
 
-def check(timeout: int = 20) -> dict:
+def check(timeout: int = 20, lang="en") -> dict:
     """Connect, open the folder, count what is unread. Proves a mailbox works
     before an agent is asked to depend on it."""
+    p = lambda en, fr: i18n.pick(lang, en, fr)
     if not configured():
         return {"ok": False, "configured": False,
-                "detail": "No IMAP server set, so inbox triage keeps using its mock."}
+                "detail": p("No IMAP server set, so inbox triage keeps using its mock.",
+                            "Aucun serveur IMAP réglé ; le triage continue avec son mock.")}
     folder = cfg.get("CORP_IMAP_FOLDER", "INBOX") or "INBOX"
     conn = None
     try:
@@ -177,15 +190,18 @@ def check(timeout: int = 20) -> dict:
         typ, _ = conn.select(folder, readonly=True)
         if typ != "OK":
             return {"ok": False, "configured": True,
-                    "detail": f"Connected, but the folder '{folder}' could not be opened."}
+                    "detail": p(f"Connected, but the folder '{folder}' could not be opened.",
+                                f"Connecté, mais le dossier « {folder} » n'a pas pu être ouvert.")}
         typ, data = conn.search(None, "UNSEEN")
         unread = len((data[0] or b"").split()) if typ == "OK" else 0
         host = cfg.get("CORP_IMAP_HOST", "")
         return {"ok": True, "configured": True, "unread": unread,
-                "detail": f"Connected to {host}, folder {folder}: {unread} unread. "
-                          "corparius opens it read-only and never marks anything seen."}
+                "detail": p(f"Connected to {host}, folder {folder}: {unread} unread. "
+                            "corparius opens it read-only and never marks anything seen.",
+                            f"Connecté à {host}, dossier {folder} : {unread} non lu(s). "
+                            "corparius l'ouvre en lecture seule et ne marque jamais rien comme lu.")}
     except (imaplib.IMAP4.error, OSError, ssl.SSLError) as exc:
-        return {"ok": False, "configured": True, "detail": diagnosis(exc)}
+        return {"ok": False, "configured": True, "detail": diagnosis(exc, lang)}
     finally:
         if conn is not None:
             try:

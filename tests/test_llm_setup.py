@@ -105,3 +105,25 @@ def test_server_presets_are_offered(server):
     assert {"lmstudio", "jan", "vllm"} <= ids
     lm = next(p for p in d["server_presets"] if p["id"] == "lmstudio")
     assert lm["url"].startswith("http://localhost:1234")
+
+
+# --- localized diagnosis ---------------------------------------------------
+def test_diagnosis_answers_in_french(server, monkeypatch):
+    from app import provider_check
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    from app import cfg
+    cfg.invalidate()
+    status, d = _call(server, "POST", "/api/test/provider", {"name": "groq", "lang": "fr"})
+    assert "Aucune clé" in d["result"]["detail"]
+    status, d = _call(server, "POST", "/api/test/provider", {"name": "groq", "lang": "en"})
+    assert "No key" in d["result"]["detail"]
+
+
+def test_ollama_status_localized(server, monkeypatch):
+    from app import ollama_setup
+    import requests
+    monkeypatch.setattr(ollama_setup, "wanted_models", lambda s=None: ["gemma"])
+    monkeypatch.setattr(ollama_setup.requests, "get",
+                        lambda *a, **k: (_ for _ in ()).throw(requests.ConnectionError()))
+    status, d = _call(server, "GET", "/api/ollama?lang=fr")
+    assert "injoignable" in d["result"]["detail"]

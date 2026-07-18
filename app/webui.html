@@ -159,6 +159,17 @@ th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600;
   padding: 6px 10px; border-bottom: 1px solid var(--border); }
 td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
 tr:last-child td { border-bottom: 0; }
+/* Getting-started thread. The current step glows blue; done steps go quiet. */
+.ob-step { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; align-items: center;
+  padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.ob-step:last-child { border-bottom: 0; }
+.ob-mark { width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center;
+  font-size: 13px; font-weight: 600; border: 1px solid var(--border-ui); color: var(--muted); }
+.ob-step.done .ob-mark { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.ob-step.now .ob-mark { background: var(--select-soft); border-color: var(--select); color: var(--select); }
+.ob-step.done .ob-text strong { color: var(--muted); font-weight: 400; }
+.link-quiet { background: none; border: 0; color: var(--select); padding: 4px 6px; font: inherit; cursor: pointer; }
+.link-quiet:hover { text-decoration: underline; background: none; }
 .empty { padding: 28px 20px; text-align: center; color: var(--muted); font-size: 14px; }
 .empty .mono { display: inline-block; margin-top: 8px; background: var(--raised);
   padding: 4px 10px; border-radius: 6px; overflow-wrap: anywhere; }
@@ -329,6 +340,14 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
   </div>
 
   <section id="tab-overview" role="tabpanel" aria-labelledby="t-overview" class="stack">
+    <div class="card" id="onboard-card" hidden>
+      <div class="card-head" style="display:flex; justify-content:space-between; gap:12px; align-items:baseline">
+        <h2 style="margin:0" data-i18n="ob.title">Getting started</h2>
+        <button class="link-quiet" id="onboard-dismiss" data-i18n="ob.dismiss">Hide</button>
+      </div>
+      <p class="desc" data-i18n="ob.desc">Three steps to a company working on its own. This card leaves once they are done.</p>
+      <div id="onboard-steps" class="stack" style="gap:2px; margin-top:12px"></div>
+    </div>
     <div class="card">
       <div class="card-head" style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:16px">
         <h2 style="margin:0" data-i18n="pulse.title">Company pulse</h2>
@@ -533,6 +552,10 @@ en: {
   "run.h3":"3 hours","run.h6":"quarter day (6h)","run.h12":"half day (12h)","run.h24":"full day (24h)",
   "run.button":"Run","run.title":"Runs the scheduled agents for the selected simulated time, in the background",
   "nav.overview":"Overview","nav.operations":"Operations","nav.providers":"Providers","nav.settings":"Settings",
+  "ob.title":"Getting started","ob.desc":"Three steps to a company working on its own. This card leaves once they are done.","ob.dismiss":"Hide",
+  "ob.model":"Connect a model","ob.modelHint":"Or stay in mock mode: it runs offline, free, deterministic. Real models live under Providers.","ob.modelCta":"Open Providers",
+  "ob.run":"Run a day","ob.runHint":"Advance the clock a few hours and watch the agents work.","ob.runCta":"Run now",
+  "ob.decide":"Make a decision","ob.decideHint":"Money and production wait for you. Approve or reject the first one.","ob.decideCta":"Open Operations",
   "pulse.title":"Company pulse","pulse.desc":"Where the company stands right now. One tick is one simulated hour.",
   "stat.hour":"simulated hour","stat.hourTip":"the company clock: one tick is one hour",
   "stat.actions":"actions taken","stat.actionsTip":"everything the agents did, logged",
@@ -660,6 +683,10 @@ fr: {
   "run.h3":"3 heures","run.h6":"quart de journée (6 h)","run.h12":"demi-journée (12 h)","run.h24":"journée complète (24 h)",
   "run.button":"Lancer","run.title":"Exécute les agents planifiés pour la durée simulée choisie, en arrière-plan",
   "nav.overview":"Vue d'ensemble","nav.operations":"Opérations","nav.providers":"Providers","nav.settings":"Réglages",
+  "ob.title":"Pour démarrer","ob.desc":"Trois étapes vers une société qui tourne seule. Cette carte disparaît une fois terminées.","ob.dismiss":"Masquer",
+  "ob.model":"Connecter un modèle","ob.modelHint":"Ou restez en mode mock : hors ligne, gratuit, déterministe. Les vrais modèles sont dans Providers.","ob.modelCta":"Ouvrir Providers",
+  "ob.run":"Lancer une journée","ob.runHint":"Avancez l'horloge de quelques heures et regardez les agents travailler.","ob.runCta":"Lancer",
+  "ob.decide":"Prendre une décision","ob.decideHint":"L'argent et la production vous attendent. Approuvez ou rejetez la première.","ob.decideCta":"Ouvrir Opérations",
   "pulse.title":"Pouls de la société","pulse.desc":"Où en est la société. Un tick correspond à une heure simulée.",
   "stat.hour":"heure simulée","stat.hourTip":"l'horloge de la société : un tick = une heure",
   "stat.actions":"actions menées","stat.actionsTip":"tout ce que les agents ont fait, journalisé",
@@ -1004,7 +1031,40 @@ async function refresh() {
   } catch (e) { connError(e); }
 }
 const fmt = n => Number(n).toLocaleString(lang === "fr" ? "fr-FR" : "en-US");
+function renderOnboard(d) {
+  // A guided thread, not a tour: each step reflects real state and ticks itself
+  // off. The card removes itself when the three are done, or if the operator hides
+  // it. A blank powerful tool becomes a path (PRODUCT.md: teach the next step).
+  if (localStorage.getItem("corparius-onboard-done") === "1") { $("#onboard-card").hidden = true; return; }
+  const live = !d.llm_mock;
+  const ranOnce = d.status.actions > 0 || (d.last_run && !d.last_run.error);
+  // Running once means the operator accepted mock or wired a model, so step 1 is
+  // satisfied either way: staying in mock is a real choice, not an unfinished one.
+  const modelDone = live || ranOnce;
+  // Only the operator's own approve/reject counts. The company completing its own
+  // tasks is not the human deciding, so done-tasks must not tick this off.
+  const decidedOnce = localStorage.getItem("corparius-decided") === "1";
+  const steps = [
+    {done: modelDone, key: "model", tab: "providers", lead: !modelDone},
+    {done: ranOnce, key: "run", act: "run", lead: modelDone && !ranOnce},
+    {done: decidedOnce, key: "decide", tab: "operations", lead: ranOnce && !decidedOnce},
+  ];
+  if (steps.every(s => s.done)) { $("#onboard-card").hidden = true; return; }
+  $("#onboard-card").hidden = false;
+  $("#onboard-steps").innerHTML = steps.map((s, i) => {
+    const state = s.done ? "done" : (s.lead ? "now" : "todo");
+    const mark = s.done ? "✓" : (i + 1);
+    const cta = !s.done ? `<button class="link-quiet" data-onboard="${s.act || s.tab}">${t("ob." + s.key + "Cta")}</button>` : "";
+    return `<div class="ob-step ${state}">
+      <span class="ob-mark">${mark}</span>
+      <span class="ob-text"><strong>${esc(t("ob." + s.key))}</strong><br>
+        <span class="note" style="font-size:12.5px">${esc(t("ob." + s.key + "Hint"))}</span></span>
+      <span>${cta}</span></div>`;
+  }).join("");
+}
+
 function render(d) {
+  renderOnboard(d);
   $("#run-badge").innerHTML = d.running
     ? `<span class="badge ok"><span class="dot"></span>${t(d.stopping ? "badge.stopping" : (d.loop ? "badge.looping" : "badge.running"))}</span>`
     : "";
@@ -1191,6 +1251,10 @@ document.addEventListener("click", async e => {
     const row = b.closest(".approval, .kcard");
     try {
       await fn();
+      // The operator has now decided something: the last getting-started step is
+      // met even if the task list churns and loses the "done" evidence later.
+      if (b.dataset.approve || b.dataset.reject || b.dataset.taskApprove || b.dataset.taskReject)
+        localStorage.setItem("corparius-decided", "1");
       // Let the decision leave before the list rebuilds: the operator should see
       // which item they answered, not a queue that silently reshuffles under them.
       if (row && !reducedMotion()) {
@@ -1222,6 +1286,15 @@ document.addEventListener("click", async e => {
   if (b.dataset.lang) { lang = b.dataset.lang; localStorage.setItem("corparius-lang", lang); applyStatic();
     if (state.overview) render(state.overview); if (state.providers) renderProviders(state.providers); loadChat(); return; }
   if (b.dataset.setTheme) return setTheme(b.dataset.setTheme);
+  if (b.id === "onboard-dismiss") {
+    localStorage.setItem("corparius-onboard-done", "1");
+    $("#onboard-card").hidden = true; return;
+  }
+  if (b.dataset.onboard) {
+    const target = b.dataset.onboard;
+    if (target === "run") { $("#run").click(); return; }
+    return selectTab($("#t-" + target));
+  }
   if (b.id === "ollama-pull") {
     b.disabled = true; state.ollamaPulling = true;
     $("#ollama-out").textContent = t("oll.starting");

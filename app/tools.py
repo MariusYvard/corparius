@@ -81,7 +81,13 @@ def _review_ad_budget(ctx) -> str:
 def _build_site(ctx, draft: str) -> str:
     company = ctx.company
     out_dir = paths.site_dir(ctx.data_path, company.get("slug", "company"))
-    path = sitegen.build_site(company, str(out_dir), headline=(draft.strip() or None))
+    # A mock draft is the echoed prompt, not a headline. Offline is the default
+    # first run, so feeding it as the site's H1 makes the product look broken;
+    # fall back to the company's own tagline instead.
+    headline = draft.strip()
+    if not headline or headline.startswith("[mock:"):
+        headline = None
+    path = sitegen.build_site(company, str(out_dir), headline=headline)
     return f"Sales site built at {path}"
 
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — a guided first run
+
+- **A "Getting started" thread on the overview.** A blank powerful tool is now a
+  path: connect a model (or stay in mock), run a day, make a decision. Each step
+  reflects real state and ticks itself off; the card removes itself when the
+  three are done, or when hidden. Not a tour and not a modal (both banned), just
+  an honest status list. Staying in mock counts as step one done, since running
+  offline is a real choice, not an unfinished one; and only the operator's own
+  approve/reject completes the last step, never the company's own task
+  completions.
+- **The offline sales site no longer shows mock gibberish.** In mock mode the
+  draft is the echoed prompt; feeding it as the site's H1 made the product look
+  broken on first use. It now falls back to the company's own tagline.
+
 ## Unreleased — plug in any LLM, get the same shape out
 
 ### Same structure, whatever the model

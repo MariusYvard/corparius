@@ -13,6 +13,37 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
       - name: Run tests
         run: python -m pytest -q
+
+  # Catch a broken PyInstaller spec / frozen-path regression on every PR, before
+  # a release tag depends on it. One cheap Linux build + offline smoke; the full
+  # OS matrix runs in release.yml on a tag.
+  package-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies and PyInstaller
+        run: pip install -r requirements-dev.txt
+      - name: Build the binary
+        run: pyinstaller packaging/corparius.spec --noconfirm
+      - name: Smoke test (offline mock console)
+        run: |
+          set -euo pipefail
+          ./dist/corparius --no-browser &
+          pid=$!
+          ok=""
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8600/api/companies >/dev/null 2>&1; then ok=1; break; fi
+            sleep 1
+          done
+          if [ "${ok:-}" != "1" ]; then echo "console did not come up"; kill "$pid" 2>/dev/null || true; exit 1; fi
+          curl -fsS http://127.0.0.1:8600/api/companies | grep -q '"example"'
+          curl -fsS http://127.0.0.1:8600/api/doctor    | grep -q 'mock'
+          curl -fsS http://127.0.0.1:8600/api/update    | grep -q '"enabled": false'
+          echo "smoke OK: console up, example seeded, mock mode, update-check off by default"
+          kill "$pid" 2>/dev/null || true

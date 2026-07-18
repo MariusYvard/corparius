@@ -1,0 +1,25 @@
+{
+  "version": "0.1.0",
+  "description": "Self-hosted framework for autonomous AI micro-companies",
+  "homepage": "https://github.com/MariusYvard/corparius",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/MariusYvard/corparius/releases/download/v0.1.0/corparius-windows-x64.exe",
+      "hash": "REPLACE_WITH_corparius-windows-x64.exe_SHA256",
+      "bin": [["corparius-windows-x64.exe", "corparius"]]
+    }
+  },
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/MariusYvard/corparius/releases/download/v$version/corparius-windows-x64.exe",
+        "hash": {
+          "url": "https://github.com/MariusYvard/corparius/releases/download/v$version/SHA256SUMS",
+          "regex": "(?<sha256>[a-fA-F0-9]{64})\\s+corparius-windows-x64.exe"
+        }
+      }
+    }
+  }
+}

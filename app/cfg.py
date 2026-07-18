@@ -38,7 +38,7 @@ ROOT = paths.user_home()
 # Keys that must resolve before the store can be opened. Console writes to
 # these go to .env, and they only take effect on restart.
 BOOTSTRAP = ("CORP_DATA_PATH", "CORP_LOG_LEVEL", "CORP_UI_HOST", "CORP_UI_PORT",
-             "CORP_UI_TOKEN")
+             "CORP_UI_TOKEN", "CORP_SECRET_KEY")
 
 _lock = threading.RLock()
 
@@ -130,7 +130,10 @@ def _db_layer() -> dict[str, str]:
             version = _db_conn.execute("PRAGMA data_version").fetchone()[0]
             if version != _db_version:
                 rows = _db_conn.execute("SELECT key, value FROM settings").fetchall()
-                _db_cache = {k: v for k, v in rows}
+                # Values may be encrypted at rest (opt-in, CORP_SECRET_KEY);
+                # decrypt_safe leaves plaintext untouched and never raises.
+                from . import secretbox
+                _db_cache = {k: secretbox.decrypt_safe(v) for k, v in rows}
                 _db_version = version
         except sqlite3.Error:
             # No settings table yet (older database), or the file went away.

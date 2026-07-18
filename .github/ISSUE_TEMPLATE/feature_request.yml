@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like corparius to do?
+    validations:
+      required: true
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Fit with the project
+      description: corparius stays local-first, auditable and dependency-light.
+      options:
+        - label: This keeps the offline mock mode working with no keys and no network
+        - label: This adds no required runtime dependency (or I explain why one is needed)

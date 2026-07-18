@@ -72,15 +72,23 @@ def _check_exposure(s: Settings) -> tuple:
 
 
 def _check_secrets_at_rest(s: Settings) -> tuple:
+    from . import secretbox
     db = Path(s.data_path) / "corparius.sqlite"
     if not db.is_file():
         return ("ok", "secrets", "no store yet")
+    if secretbox.enabled() and not secretbox.available():
+        return ("fail", "secrets", secretbox._INSTALL_HINT)
+    if secretbox.enabled():
+        return ("ok", "secrets",
+                "encrypted at rest (CORP_SECRET_KEY set). Keep the passphrase safe: "
+                "lose it and the stored secrets cannot be recovered.")
     note = ("API keys saved from the console are stored in the clear in "
-            f"{db}, and `cli.py backup` includes them in the zip.")
+            f"{db}, and `cli.py backup` includes them in the zip. Set CORP_SECRET_KEY "
+            "to encrypt them at rest (see docs/securite.md).")
     if os.name != "nt":
         mode = db.stat().st_mode & 0o077
         if mode:
-            return ("warn", "secrets", f"{note} It is readable beyond its owner; run: chmod 600 {db}")
+            return ("warn", "secrets", f"{note} It is also readable beyond its owner; run: chmod 600 {db}")
     return ("ok", "secrets", note)
 
 

@@ -1,0 +1,21 @@
+PackageIdentifier: MariusYvard.corparius
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: Marius Yvard
+PublisherUrl: https://github.com/MariusYvard
+PackageName: corparius
+PackageUrl: https://github.com/MariusYvard/corparius
+License: MIT
+LicenseUrl: https://github.com/MariusYvard/corparius/blob/main/LICENSE
+ShortDescription: Self-hosted framework for autonomous AI micro-companies
+Description: >-
+  corparius runs autonomous AI micro-companies on your own machine. It starts in
+  an offline, deterministic mock mode with no keys, no models and no network, and
+  serves an operator console on 127.0.0.1:8600.
+Tags:
+  - ai
+  - agents
+  - self-hosted
+  - local-first
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

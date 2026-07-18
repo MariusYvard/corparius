@@ -189,6 +189,16 @@ SPEC: list[FieldSpec] = [
     _f("CORP_LOG_LEVEL", "access", type="select", default="INFO",
        choices=("DEBUG", "INFO", "WARNING", "ERROR"),
        label_en="Log level", label_fr="Niveau de log"),
+    _f("CORP_SECRET_KEY", "access", type="password", secret=True,
+       label_en="Encrypt secrets at rest", label_fr="Chiffrer les secrets au repos",
+       help_en="Off by default. A passphrase here encrypts the secret settings (API "
+               "keys, tokens) in the store and in backups, using the 'cryptography' "
+               "package. Applies on restart. Keep it safe: lose it and the encrypted "
+               "secrets cannot be recovered. See docs/securite.md.",
+       help_fr="Désactivé par défaut. Une phrase secrète ici chiffre les réglages "
+               "secrets (clés API, tokens) dans la base et les sauvegardes, via le "
+               "paquet 'cryptography'. Effectif au redémarrage. Gardez-la : la perdre "
+               "rend les secrets chiffrés irrécupérables. Voir docs/securite.md."),
     _f("CORP_UPDATE_CHECK", "access", type="bool", default="false",
        label_en="Check for updates", label_fr="Vérifier les mises à jour",
        help_en="Off by default. When on, corparius asks GitHub once at startup whether a "

@@ -1,0 +1,54 @@
+name: Bug report
+description: Something does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For security-sensitive issues, do not file here —
+        see SECURITY.md.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got.
+      placeholder: Steps to reproduce, then the actual vs expected result.
+    validations:
+      required: true
+  - type: dropdown
+    id: how-run
+    attributes:
+      label: How are you running corparius?
+      options:
+        - Standalone binary (downloaded)
+        - Docker image / compose
+        - From source (python start.py)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release tag, image tag, or `git rev-parse --short HEAD`.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS and architecture
+      placeholder: e.g. Windows 11 x64, macOS 14 arm64, Ubuntu 24.04
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Doctor output (optional)
+      description: Paste `python -m app.cli doctor`, or the Settings tab diagnostics. Redact any secrets.
+      render: text
+  - type: checkboxes
+    id: mock
+    attributes:
+      label: Mode
+      options:
+        - label: The problem reproduces in the default offline mock mode

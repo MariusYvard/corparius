@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS state (
 CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company TEXT, title TEXT, target TEXT, priority INTEGER,
-    status TEXT, created_by TEXT, note TEXT, ts REAL
+    status TEXT, created_by TEXT, note TEXT, ts REAL, tool TEXT
 );
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY, value TEXT NOT NULL,
@@ -39,6 +39,26 @@ CREATE TABLE IF NOT EXISTS outreach (
 );
 CREATE INDEX IF NOT EXISTS outreach_by_email ON outreach (company, email);
 """
+
+# Bump this and add a migration below whenever the schema changes in a way that
+# an existing store must be brought forward through. The version is tracked in
+# the database itself via `PRAGMA user_version`, so an upgrade migrates in place
+# instead of relying on the operator to back up and recreate.
+SCHEMA_VERSION = 1
+
+
+def _migration_1(db: sqlite3.Connection) -> None:
+    """Stores created before the CEO wired tasks to executable tools lack the
+    tasks.tool column. Guarded so it is a no-op on fresh DBs (the column is in
+    SCHEMA) and on re-runs."""
+    try:
+        db.execute("ALTER TABLE tasks ADD COLUMN tool TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
+# version -> callable(db). Applied in order for any version above the DB's own.
+MIGRATIONS = {1: _migration_1}
 
 
 class Store:
@@ -58,11 +78,19 @@ class Store:
             os.chmod(self.path, 0o600)   # effective on POSIX, a no-op on Windows
         except OSError:
             pass
-        try:   # migrate older DBs that predate the task tool column
-            self.db.execute("ALTER TABLE tasks ADD COLUMN tool TEXT")
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Bring the store from its recorded version up to SCHEMA_VERSION, one
+        step at a time, recording progress so an interrupted upgrade resumes."""
+        current = self.db.execute("PRAGMA user_version").fetchone()[0]
+        for version in range(current + 1, SCHEMA_VERSION + 1):
+            MIGRATIONS[version](self.db)
+            self.db.execute(f"PRAGMA user_version = {int(version)}")
             self.db.commit()
-        except sqlite3.OperationalError:
-            pass
+
+    def schema_version(self) -> int:
+        return self.db.execute("PRAGMA user_version").fetchone()[0]
 
     def record_action(self, company, agent, tool, parameters, output, ok) -> None:
         self.db.execute(
@@ -133,14 +161,21 @@ class Store:
     # Settings saved from the console. Global, not per company: they are the
     # second layer of app/cfg.py, under the real process environment.
     def all_settings(self) -> dict[str, str]:
+        from . import secretbox
         rows = self.db.execute("SELECT key, value FROM settings").fetchall()
-        return {r["key"]: r["value"] for r in rows}
+        return {r["key"]: secretbox.decrypt_safe(r["value"]) for r in rows}
 
     def get_setting(self, key) -> str | None:
+        from . import secretbox
         row = self.db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
-        return row["value"] if row else None
+        return secretbox.decrypt_safe(row["value"]) if row else None
 
     def set_setting(self, key, value, secret: bool = False) -> None:
+        # Secret values are encrypted at rest when CORP_SECRET_KEY is set;
+        # encrypt() is a no-op otherwise, so plaintext stays the default.
+        if secret:
+            from . import secretbox
+            value = secretbox.encrypt(value)
         self.db.execute(
             "INSERT OR REPLACE INTO settings (key, value, secret, updated_at) VALUES (?,?,?,?)",
             (key, value, 1 if secret else 0, time.time()),

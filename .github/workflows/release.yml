@@ -32,7 +32,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
 
   # The tag must match app/__init__.py __version__, so the image tag, the
@@ -96,6 +96,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false   # image-level provenance handled by the attest step below
+          sbom: true          # BuildKit attaches an SBOM attestation to the image
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -150,8 +151,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install dependencies and PyInstaller
-        run: pip install -r requirements.txt pyinstaller
+      - name: Install dependencies (pinned, hash-checked) and PyInstaller
+        shell: bash
+        run: |
+          pip install --require-hashes -r requirements.lock
+          # cryptography is bundled so binary users (who have no pip) can turn on
+          # at-rest secret encryption from the console. It stays opt-in at runtime.
+          pip install pyinstaller cryptography
       - name: Build the binary
         run: pyinstaller packaging/corparius.spec --noconfirm
 
@@ -205,6 +211,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dl
@@ -215,6 +222,12 @@ jobs:
           find dl -type f -name "corparius-*" ! -name "*.sha256" -exec cp {} release/ \;
           find dl -type f -name "*.sha256" -exec cat {} \; > release/SHA256SUMS
           ls -l release
+      - name: Generate SBOM (SPDX) for the source and pinned dependencies
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: release/corparius-sbom.spdx.json
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

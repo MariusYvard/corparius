@@ -1,0 +1,11 @@
+# Development and test dependencies. Not needed to run corparius.
+#   pip install -r requirements.txt -r requirements-dev.txt
+-r requirements.txt
+pytest>=8.0
+
+# Builds the standalone binaries (see packaging/corparius.spec).
+pyinstaller>=6.0
+
+# Optional at-rest encryption (runtime-optional), pulled in for dev so its
+# tests actually run in CI. See requirements-secrets.txt.
+cryptography>=42

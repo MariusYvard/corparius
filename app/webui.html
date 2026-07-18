@@ -334,6 +334,14 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <button id="doctor-bar-hide" class="link-quiet" data-i18n="ob.dismiss">Hide</button>
     </span>
   </div>
+  <div id="update-bar" class="banner" hidden role="status">
+    <span id="update-bar-text"></span>
+    <span style="display:inline-flex; gap:8px; margin-left:auto">
+      <a id="update-bar-get" class="link-quiet" target="_blank" rel="noopener noreferrer"
+         data-i18n="up.get">Download</a>
+      <button id="update-bar-hide" class="link-quiet" data-i18n="ob.dismiss">Hide</button>
+    </span>
+  </div>
   <div id="token-bar" class="banner warn" hidden role="alert">
     <span data-i18n="token.needed">This console requires an access token.</span>
     <span style="display:inline-flex; gap:8px; margin-left:10px">
@@ -662,6 +670,7 @@ en: {
   "doc.title":"Diagnostics","doc.desc":"Checks Python, the store, Ollama, providers and the network, and says what to fix.",
   "doc.run":"Run diagnostics","footer.support":"Support the project",
   "doc.barFail":"{n} check(s) need a fix:","doc.barOpen":"See diagnostics",
+  "up.avail":"corparius {v} is available (you run {c}).","up.get":"Download",
   "cfg.title":"Configuration","cfg.desc":"Everything corparius reads. Saved here, applied without touching a file. A field the process environment defines is shown read-only.",
   "cfg.save":"Save","cfg.saved":"Saved.","cfg.isSet":"set — type to replace","cfg.notSet":"not set",
   "cfg.env":"from the environment","cfg.envTip":"This value comes from the process environment, which outranks the console. Unset it in your shell or compose file to edit it here.",
@@ -836,6 +845,7 @@ fr: {
   "wiz.newOption":"+ Nouvelle société…",
   "doc.title":"Diagnostics","doc.desc":"Vérifie Python, le store, Ollama, les providers et le réseau, et dit quoi corriger.",
   "doc.barFail":"{n} vérification(s) à corriger :","doc.barOpen":"Voir le diagnostic",
+  "up.avail":"corparius {v} est disponible (vous utilisez {c}).","up.get":"Télécharger",
   "doc.run":"Lancer le diagnostic","footer.support":"Soutenir le projet",
   "conn.error":"Impossible de joindre le serveur corparius :",
   "footer":"console opérateur corparius · sert sur localhost · l'état est lu depuis le store SQLite local"
@@ -984,6 +994,7 @@ async function boot() {
                        loadCompany()]);
     state.timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
     checkDoctor();
+    checkUpdate();
   } catch (e) { connError(e); }
 }
 function connError(e) { const b = $("#conn"); b.hidden = false; b.textContent = t("conn.error") + " " + e.message; }
@@ -1010,6 +1021,24 @@ $("#doctor-bar-open").addEventListener("click", () => {
   $("#doctor-bar").hidden = true; selectTab($("#t-settings"));
   $("#run-doctor")?.click();
   $("#doctor-out")?.scrollIntoView({behavior: "smooth", block: "center"});
+});
+
+/* Opt-in version check. The server only calls out when CORP_UPDATE_CHECK is on;
+   the page just renders whatever it reports. Dismissible per session, and only
+   ever a link — corparius never downloads on its own. */
+async function checkUpdate() {
+  if (sessionStorage.getItem("corparius-update-hid") === "1") return;
+  try {
+    const r = await api("/api/update");
+    if (!r.enabled || !r.update_available) return;
+    $("#update-bar-text").textContent =
+      t("up.avail").replace("{v}", r.latest).replace("{c}", r.current);
+    $("#update-bar-get").href = r.url;
+    $("#update-bar").hidden = false;
+  } catch (e) {}
+}
+$("#update-bar-hide").addEventListener("click", () => {
+  sessionStorage.setItem("corparius-update-hid", "1"); $("#update-bar").hidden = true;
 });
 
 /* overview + operations */

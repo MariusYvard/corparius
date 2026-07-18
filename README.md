@@ -91,7 +91,23 @@ so the company does not spend its whole budget in one burst.
 
 Runs offline out of the box (mock LLM, SQLite). No keys, no models, no accounts.
 
-Download the project, then **double-click the launcher for your system**:
+**No Python, no terminal, no clone — download one file and open it.** Grab the
+build for your system from the [latest release](https://github.com/MariusYvard/corparius/releases/latest):
+
+| System | Download | Then |
+| --- | --- | --- |
+| Windows x64 | `corparius-windows-x64.exe` | double-click (SmartScreen: More info → Run anyway) |
+| macOS (Apple Silicon) | `corparius-macos-arm64.zip` | unzip, then right-click `corparius.app` → Open |
+| macOS (Intel) | `corparius-macos-x64.zip` | unzip, then right-click `corparius.app` → Open |
+| Linux x64 | `corparius-linux-x64` | `chmod +x corparius-linux-x64 && ./corparius-linux-x64` |
+
+The builds are unsigned, so the OS shows a first-run warning; the steps above get
+past it, and [docs/install.md](docs/install.md) walks through it with the exact
+screens, where your data lives per OS, updating and uninstalling. Your data lives
+in a per-OS folder, so re-downloading a newer build keeps every company and setting.
+
+Prefer to run from source? Download the project, then **double-click the launcher
+for your system** (needs Python 3.10+ installed):
 
 | System | Double-click |
 | --- | --- |
@@ -112,6 +128,13 @@ python start.py        # venv, dependencies, .env, example company, console, bro
 
 ```bash
 docker compose up -d   # operator console on http://127.0.0.1:8600 + local Ollama
+```
+
+Or pull the published image — no checkout, one command (console on
+`http://127.0.0.1:8600`, offline mock mode, bound to localhost):
+
+```bash
+docker run -d -p 127.0.0.1:8600:8600 -v corparius_data:/app/data ghcr.io/mariusyvard/corparius
 ```
 
 The console walks you through creating your first company; `python -m app.cli

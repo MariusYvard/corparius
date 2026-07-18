@@ -27,7 +27,13 @@ import sqlite3
 import threading
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from . import paths
+
+# The writable home. In a source checkout this is the repository root, so the
+# default .env location below is unchanged; frozen, it is a per-OS directory.
+# Kept as a module attribute because tests (and the console teardown) reference
+# `cfg.ROOT / ".env"`.
+ROOT = paths.user_home()
 
 # Keys that must resolve before the store can be opened. Console writes to
 # these go to .env, and they only take effect on restart.
@@ -101,7 +107,7 @@ def _db_layer() -> dict[str, str]:
     Opened read-only so that merely reading configuration never creates the
     data directory (Store() would, at import time)."""
     global _db_conn, _db_conn_path, _db_cache, _db_version
-    data_path = _bootstrap("CORP_DATA_PATH", "./data")
+    data_path = _bootstrap("CORP_DATA_PATH", paths.default_data_dir())
     path = os.path.join(data_path, "corparius.sqlite")
     with _lock:
         if path != _db_conn_path:

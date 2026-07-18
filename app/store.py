@@ -44,6 +44,11 @@ CREATE INDEX IF NOT EXISTS outreach_by_email ON outreach (company, email);
 class Store:
     def __init__(self, data_path: str):
         os.makedirs(data_path, exist_ok=True)
+        try:  # the store holds API keys in the clear; keep the dir owner-only
+            if os.name != "nt":
+                os.chmod(data_path, 0o700)   # effective on POSIX, a no-op on Windows
+        except OSError:
+            pass
         self.path = os.path.join(data_path, "corparius.sqlite")
         self.db = sqlite3.connect(self.path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row

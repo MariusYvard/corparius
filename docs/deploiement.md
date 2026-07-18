@@ -23,6 +23,8 @@ Les clés figurent dans .env.example: CORP_DEPLOY_PROVIDERS, CORP_DEPLOY_LOCAL_D
 
 Deux chemins de démarrage. `python start.py` prépare l'environnement virtuel, les dépendances, le fichier .env, la company d'exemple, puis sert la console et ouvre le navigateur. `docker compose up -d` sert la console sur 127.0.0.1:8600 à côté d'un Ollama local ; le profil `loop` ajoute la boucle de company en arrière-plan (`docker compose --profile loop up -d`) et le profil `extras` ajoute Postgres (pgvector) et n8n. Les ports sont liés à 127.0.0.1 : placez un reverse proxy devant pour exposer la console, avec CORP_UI_TOKEN.
 
+Sans dépôt cloné, l'image publiée démarre en une commande, en mode mock hors-ligne, liée à localhost : `docker run -d -p 127.0.0.1:8600:8600 -v corparius_data:/app/data ghcr.io/mariusyvard/corparius`. Les tags suivent la version (`:vX.Y.Z` et `:latest`) ; l'image est multi-arch (amd64 et arm64) et accompagnée d'une attestation de provenance SLSA. Mise à jour : `docker pull ghcr.io/mariusyvard/corparius` puis recréez le conteneur ; le volume `corparius_data` conserve le store et les réglages.
+
 `python -m app.cli doctor` vérifie l'installation (Python, store, Ollama et ses modèles, clés, réseau) et dit quoi corriger ; le même diagnostic est disponible dans l'onglet Réglages de la console. `python -m app.cli backup` archive le store SQLite et les configurations de companies dans backups/ (horodaté) ; planifiez-le en cron ou tâche planifiée.
 
 Mise à jour : `git pull`, puis `pip install -r requirements.txt` dans le venv (ou `docker compose build --pull` en Docker), puis redémarrez la console. Le schéma SQLite se crée à la demande ; sauvegardez avant toute montée de version.

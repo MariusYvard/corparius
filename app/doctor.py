@@ -10,7 +10,7 @@ from pathlib import Path
 
 import requests
 
-from . import cfg
+from . import cfg, paths
 from .config import Settings
 from .llm import OPENAI_COMPAT_PROVIDERS, _split
 
@@ -85,7 +85,7 @@ def _check_secrets_at_rest(s: Settings) -> tuple:
 
 
 def _check_companies() -> tuple:
-    base = ROOT / "companies"
+    base = paths.companies_dir()
     slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
     if slugs:
         return ("ok", "companies", ", ".join(slugs))

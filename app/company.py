@@ -19,7 +19,13 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
+from . import paths
+
+# The writable home under which `companies/` lives. In a source checkout this is
+# the repository root (unchanged); frozen, it is a per-OS directory that
+# seed_examples() populates from the bundled example on first run. Kept as a
+# module attribute so the tests can monkeypatch it.
+ROOT = paths.user_home()
 
 SLUG_RE = re.compile(r"[^a-z0-9]+")
 
@@ -257,3 +263,18 @@ def trash(slug: str, root: Path | None = None) -> Path:
     dest = dest_dir / f"{slug}-{int(time.time())}"
     os.replace(src, dest)
     return dest
+
+
+def seed_examples(root: Path | None = None) -> list[str]:
+    """Populate a fresh writable companies dir from the bundled example. A no-op
+    from a source checkout (the example already lives there) and on every later
+    run; it matters only on a first frozen launch, whose companies dir is empty.
+    Returns the resulting slug list."""
+    import shutil
+    base = (root or ROOT) / "companies"
+    src = paths.example_company_src()
+    dest = base / src.name
+    if (dest / "company.yaml").is_file() or not (src / "company.yaml").is_file():
+        return list_slugs(root)
+    shutil.copytree(src, dest, dirs_exist_ok=True)
+    return list_slugs(root)

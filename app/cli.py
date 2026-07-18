@@ -15,7 +15,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def _company_path(slug_or_path: str) -> str:
     if os.path.isfile(slug_or_path):
         return slug_or_path
-    return os.path.join(ROOT, "companies", slug_or_path, "company.yaml")
+    # Route through the single company resolver so the CLI, console and MCP
+    # server agree on where companies live (writable home, per-OS when frozen).
+    return str(company.path_for(slug_or_path))
 
 
 def _load_company(slug_or_path: str) -> dict:

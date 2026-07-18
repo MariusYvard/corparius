@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import requests
 
-from . import cfg
+from . import cfg, i18n
 from .config import Settings
 from .llm import _split
 
@@ -28,7 +28,8 @@ def wanted_models(s: Settings | None = None) -> list[str]:
     return sorted(n for n in names if n)
 
 
-def status(timeout: int = 4) -> dict:
+def status(timeout: int = 4, lang="en") -> dict:
+    p = lambda en, fr: i18n.pick(lang, en, fr)
     s = Settings()
     want = wanted_models(s)
     try:
@@ -38,13 +39,18 @@ def status(timeout: int = 4) -> dict:
     except requests.RequestException:
         return {"ok": False, "reachable": False, "url": _base(), "wanted": want,
                 "present": [], "missing": want,
-                "detail": f"Ollama is not reachable at {_base()}. Install it from "
-                          "ollama.com, or point CORP_OLLAMA_URL at your server."}
+                "detail": p(f"Ollama is not reachable at {_base()}. Install it from "
+                            "ollama.com, or point CORP_OLLAMA_URL at your server.",
+                            f"Ollama est injoignable à {_base()}. Installez-le depuis "
+                            "ollama.com, ou pointez CORP_OLLAMA_URL vers votre serveur.")}
     missing = [w for w in want if w not in have and w.split(":")[0] not in have]
     present = [w for w in want if w not in missing]
-    detail = (f"Reachable at {_base()}, {len(have)} model(s) installed."
-              + (f" Missing for your tiers: {', '.join(missing)}." if missing
-                 else " Every model your tiers need is present."))
+    detail = p(f"Reachable at {_base()}, {len(have)} model(s) installed."
+               + (f" Missing for your tiers: {', '.join(missing)}." if missing
+                  else " Every model your tiers need is present."),
+               f"Joignable à {_base()}, {len(have)} modèle(s) installé(s)."
+               + (f" Manquants pour vos tiers : {', '.join(missing)}." if missing
+                  else " Tous les modèles dont vos tiers ont besoin sont présents."))
     return {"ok": not missing, "reachable": True, "url": _base(), "wanted": want,
             "present": present, "missing": missing, "detail": detail}
 

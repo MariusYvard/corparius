@@ -14,7 +14,7 @@ import json
 import shutil
 import subprocess
 
-from . import cfg
+from . import cfg, i18n
 
 # CLI model aliases, so the tiers track the latest release instead of pinning a
 # dated id. Trivial work goes to the cheapest, everyday and hard work to Sonnet.
@@ -56,13 +56,14 @@ def installed() -> bool:
     return bool(resolve())
 
 
-def check(timeout: int = 60) -> dict:
+def check(timeout: int = 60, lang="en") -> dict:
     """Is the CLI installed, logged in and answering? Makes one real minimal
     call, the same bargain as the mail test: a subscription message is spent to
     prove the setup, because nothing cheaper actually proves it."""
+    p = lambda en, fr: i18n.pick(lang, en, fr)
     exe = resolve()
     if not exe:
-        return {"ok": False, "installed": False, "detail": INSTALL_EN}
+        return {"ok": False, "installed": False, "detail": p(INSTALL_EN, INSTALL_FR)}
     try:
         proc = subprocess.run(
             [exe, "-p", "Reply with the single word: ready",
@@ -70,28 +71,35 @@ def check(timeout: int = 60) -> dict:
             capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return {"ok": False, "installed": True,
-                "detail": f"The CLI did not answer within {timeout}s. It may be waiting "
-                          "on a login prompt; run `claude login` in a terminal once."}
+                "detail": p(f"The CLI did not answer within {timeout}s. It may be waiting "
+                            "on a login prompt; run `claude login` in a terminal once.",
+                            f"Le CLI n'a pas répondu en {timeout}s. Il attend peut-être une "
+                            "connexion ; lancez `claude login` une fois dans un terminal.")}
     except OSError as exc:
-        return {"ok": False, "installed": True, "detail": f"Could not run the CLI: {exc}"}
+        return {"ok": False, "installed": True,
+                "detail": p(f"Could not run the CLI: {exc}", f"Impossible de lancer le CLI : {exc}")}
     if proc.returncode != 0:
         err = (proc.stderr or "").strip()
         low = err.lower()
         if any(w in low for w in ("login", "auth", "unauthor", "not logged", "credential")):
             return {"ok": False, "installed": True,
-                    "detail": "The CLI is installed but not logged in. Run `claude login` "
-                              "and choose your subscription, then test again."}
+                    "detail": p("The CLI is installed but not logged in. Run `claude login` "
+                                "and choose your subscription, then test again.",
+                                "Le CLI est installé mais non connecté. Lancez `claude login`, "
+                                "choisissez votre abonnement, puis retestez.")}
         return {"ok": False, "installed": True,
-                "detail": f"The CLI exited {proc.returncode}: {err[:200] or 'no output'}"}
+                "detail": p(f"The CLI exited {proc.returncode}: {err[:200] or 'no output'}",
+                            f"Le CLI s'est arrêté ({proc.returncode}) : {err[:200] or 'aucune sortie'}")}
     try:
         data = json.loads(proc.stdout)
         model = data.get("model") or ""
     except (json.JSONDecodeError, AttributeError):
         model = ""
-    tail = f" Answering as {model}." if model else ""
     return {"ok": True, "installed": True,
-            "detail": "The Claude Code CLI is installed, logged in and answering. "
-                      "No API key or credits needed." + tail}
+            "detail": p("The Claude Code CLI is installed, logged in and answering. "
+                        "No API key or credits needed." + (f" Answering as {model}." if model else ""),
+                        "Le CLI Claude Code est installé, connecté et répond. Aucune clé API "
+                        "ni crédit requis." + (f" Répond en tant que {model}." if model else ""))}
 
 
 def plan() -> dict:

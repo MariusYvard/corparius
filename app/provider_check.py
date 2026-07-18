@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import requests
 
-from . import cfg
+from . import cfg, i18n
 from .llm import OPENAI_COMPAT_PROVIDERS, OpenAICompatProvider
 
 # A cheap, widely-available model per provider for the probe, so the test does
@@ -33,34 +33,47 @@ _PROBE_MODEL = {
 }
 
 
-def _diagnose(status: int, provider: str, body: str) -> str:
+def _diagnose(status: int, provider: str, body: str, lang="en") -> str:
+    p = lambda en, fr: i18n.pick(lang, en, fr)
     if status in (401, 403):
-        return ("The provider rejected this key. Copy it again from your account; a "
-                "fresh key with chat access is enough.")
+        return p("The provider rejected this key. Copy it again from your account; a "
+                 "fresh key with chat access is enough.",
+                 "Le fournisseur a rejeté cette clé. Recopiez-la depuis votre compte ; une "
+                 "clé récente avec accès au chat suffit.")
     if status == 404:
-        return ("Connected and authorised, but the probe model is unknown to this "
-                "account. The key is likely fine; pick a model this provider serves in "
-                "the routing tiers.")
+        return p("Connected and authorised, but the probe model is unknown to this "
+                 "account. The key is likely fine; pick a model this provider serves in "
+                 "the routing tiers.",
+                 "Connecté et autorisé, mais le modèle de test est inconnu de ce compte. "
+                 "La clé est sans doute bonne ; choisissez un modèle servi par ce "
+                 "fournisseur dans les tiers de routage.")
     if status == 429:
-        return "The key works, but you are rate-limited right now. Try again in a moment."
+        return p("The key works, but you are rate-limited right now. Try again in a moment.",
+                 "La clé marche, mais vous êtes limité en débit là. Réessayez dans un moment.")
     if status >= 500:
-        return f"The provider is having trouble ({status}). Not your key; try again later."
-    return f"The provider answered {status}: {body[:160]}"
+        return p(f"The provider is having trouble ({status}). Not your key; try again later.",
+                 f"Le fournisseur a un souci ({status}). Pas votre clé ; réessayez plus tard.")
+    return p(f"The provider answered {status}: {body[:160]}",
+             f"Le fournisseur a répondu {status} : {body[:160]}")
 
 
-def check(name: str, timeout: int = 20) -> dict:
+def check(name: str, timeout: int = 20, lang="en") -> dict:
     """One minimal chat call against a configured provider."""
+    p = lambda en, fr: i18n.pick(lang, en, fr)
     spec = OPENAI_COMPAT_PROVIDERS.get(name)
     if spec is None:
-        return {"ok": False, "configured": False, "detail": f"Unknown provider '{name}'."}
+        return {"ok": False, "configured": False,
+                "detail": p(f"Unknown provider '{name}'.", f"Fournisseur inconnu « {name} ».")}
     base = cfg.get(spec.get("base_env", ""), "").strip() or spec["base"]
     key = cfg.get(spec["key_env"], "").strip()
     if not base:
         return {"ok": False, "configured": False,
-                "detail": f"Set the endpoint ({spec['base_env']}) first."}
+                "detail": p(f"Set the endpoint ({spec['base_env']}) first.",
+                            f"Réglez d'abord l'endpoint ({spec['base_env']}).")}
     if not key and not spec.get("key_optional"):
         return {"ok": False, "configured": False,
-                "detail": f"No key set yet ({spec['key_env']})."}
+                "detail": p(f"No key set yet ({spec['key_env']}).",
+                            f"Aucune clé réglée ({spec['key_env']}).")}
     model = _PROBE_MODEL.get(name) or cfg.get("CORP_NORMAL_MODEL", "").split(":")[-1] or "gpt-4o-mini"
     provider = OpenAICompatProvider(name, base, key, timeout=timeout)
     try:
@@ -71,9 +84,10 @@ def check(name: str, timeout: int = 20) -> dict:
         resp = exc.response
         return {"ok": False, "configured": True,
                 "detail": _diagnose(resp.status_code if resp is not None else 0, name,
-                                    resp.text if resp is not None else str(exc))}
+                                    resp.text if resp is not None else str(exc), lang)}
     except requests.RequestException as exc:
         return {"ok": False, "configured": True,
-                "detail": f"Could not reach {name}: {exc}"}
+                "detail": p(f"Could not reach {name}: {exc}", f"{name} injoignable : {exc}")}
     return {"ok": True, "configured": True,
-            "detail": f"{name} answered as {result.model}. The key works."}
+            "detail": p(f"{name} answered as {result.model}. The key works.",
+                        f"{name} a répondu en tant que {result.model}. La clé marche.")}

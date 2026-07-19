@@ -286,6 +286,24 @@ docs/              architecture, safety, compliance, and the RE dossier
 tests/             guards, routing, backlog, console, settings layering, pipeline
 ```
 
+## Plugins
+
+corparius is extensible through plugins that add LLM/deploy/lead/enrich providers,
+tools, company templates, or tweak an agent — without touching the core. They are
+**off by default** and curated: a plugin is verified when it is in the reviewed
+`plugins/registry.json`, and unverified third-party code loads only behind an
+explicit opt-in. Install a verified plugin from the console (Plugins tab) or the
+CLI:
+
+```bash
+corparius plugin list
+corparius plugin install <name>     # downloads at a pinned ref, verifies the SHA-256
+```
+
+Write one from [`packaging/plugin-template/`](packaging/plugin-template/), then
+propose it by opening a PR that adds it to `plugins/registry.json` — CI validates
+and loads it. Full guide: [`docs/plugins.md`](docs/plugins.md).
+
 ## Documentation
 
 | Doc | Covers |
@@ -301,6 +319,8 @@ tests/             guards, routing, backlog, console, settings layering, pipelin
 | `docs/site.md` `docs/deploiement.md` | sales-site generator and multi-provider publishing |
 | `docs/leads.md` `docs/pipeline.md` | lead research, enrichment, deliverability, signals |
 | `docs/mcp.md` | driving corparius from any MCP host |
+| `docs/plugins.md` | writing, installing and proposing plugins |
+| `docs/install.md` | download/run per OS, data locations, updates |
 | `docs/roadmap-90j.md` | the 90-day build cycle |
 | `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia and Uclic |
 

@@ -1,0 +1,23 @@
+# Makes the plugin pip-installable and discoverable by corparius through the
+# `corparius.plugins` entry-point group (the source/Docker path). For the frozen
+# binaries, the same directory works as a drop-in: copy it into
+# <corparius-data>/plugins/ and corparius reads corparius_plugin.json directly.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "corparius-plugin-example"
+version = "0.1.0"
+description = "Example corparius plugin: a free LLM provider and a deploy provider."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+# No dependency on corparius itself: the plugin is loaded inside a running
+# corparius, which provides app.*. Keep runtime deps minimal and auditable.
+
+[project.entry-points."corparius.plugins"]
+example = "corparius_plugin_example:register"
+
+[tool.setuptools]
+packages = ["corparius_plugin_example"]

@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY app ./app
 COPY companies ./companies
+COPY plugins ./plugins
 
 ENV CORP_DATA_PATH=/app/data
 VOLUME ["/app/data", "/app/companies"]

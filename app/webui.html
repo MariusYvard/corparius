@@ -13,36 +13,40 @@
 :root, [data-theme="dark"] {
   /* The owner's blue ramp carries the whole surface (#002FA7 · #263F7F ·
      #4C7EFF · #0039CC, hue ~264). Action is blue too: a deep #0039CC-family
-     fill. The only non-blue left is petrol for health and red for danger, so
-     the interface reads as one blue instrument, not a warm AI dashboard. */
-  --bg: oklch(0.195 0.065 264); --surface: oklch(0.245 0.085 264);
-  --raised: oklch(0.31 0.105 264);
-  --border: oklch(0.40 0.12 265);
-  --border-ui: oklch(0.60 0.145 265);    /* >=3:1 on surface and raised */
-  --select: oklch(0.635 0.18 264);       /* #4C7EFF, focus and selection */
-  --select-soft: oklch(0.635 0.18 264 / 0.20);
-  --text: oklch(0.965 0.012 255); --muted: oklch(0.72 0.035 255);
-  --accent: oklch(0.50 0.20 262);        /* #0039CC, the primary action */
-  --accent-ink: oklch(0.99 0.004 255); --accent-soft: oklch(0.635 0.18 264 / 0.18);
-  --ok: oklch(0.74 0.09 220); --ok-soft: oklch(0.74 0.09 220 / 0.18);   /* health: cool teal */
-  --warn: oklch(0.635 0.18 264); --warn-soft: oklch(0.635 0.18 264 / 0.20);  /* attention: bright blue */
-  --danger: oklch(0.66 0.17 25); --danger-soft: oklch(0.66 0.17 25 / 0.16);
+     fill. The interface reads as one instrument, not a warm AI dashboard.
+     The dominant hue is a single custom property (--ui-hue) so the operator can
+     re-tint the whole console from Settings while lightness, chroma and contrast
+     stay fixed. Health (teal) and danger (red) keep their own hue on purpose:
+     they carry meaning, not brand. */
+  --ui-hue: 264;
+  --bg: oklch(0.195 0.065 var(--ui-hue)); --surface: oklch(0.245 0.085 var(--ui-hue));
+  --raised: oklch(0.31 0.105 var(--ui-hue));
+  --border: oklch(0.40 0.12 var(--ui-hue));
+  --border-ui: oklch(0.60 0.145 var(--ui-hue));    /* >=3:1 on surface and raised */
+  --select: oklch(0.635 0.18 var(--ui-hue));       /* focus and selection */
+  --select-soft: oklch(0.635 0.18 var(--ui-hue) / 0.20);
+  --text: oklch(0.965 0.012 var(--ui-hue)); --muted: oklch(0.72 0.035 var(--ui-hue));
+  --accent: oklch(0.50 0.20 var(--ui-hue));        /* the primary action */
+  --accent-ink: oklch(0.99 0.004 var(--ui-hue)); --accent-soft: oklch(0.635 0.18 var(--ui-hue) / 0.18);
+  --ok: oklch(0.74 0.09 220); --ok-soft: oklch(0.74 0.09 220 / 0.18);   /* health: cool teal (fixed) */
+  --warn: oklch(0.635 0.18 var(--ui-hue)); --warn-soft: oklch(0.635 0.18 var(--ui-hue) / 0.20);  /* attention */
+  --danger: oklch(0.66 0.17 25); --danger-soft: oklch(0.66 0.17 25 / 0.16);  /* danger: red (fixed) */
   --shadow: none; color-scheme: dark;
 }
 [data-theme="light"] {
-  /* Cool white, not ivory: the yellow is gone from the base too. Blue ink,
-     blue action, blue selection. */
-  --bg: oklch(0.975 0.006 255); --surface: oklch(0.99 0.003 255);
-  --raised: oklch(0.945 0.014 255);
-  --border: oklch(0.86 0.02 255); --border-ui: oklch(0.44 0.11 265);
-  --select: oklch(0.44 0.20 262); --select-soft: oklch(0.44 0.20 262 / 0.12);
-  --text: oklch(0.283 0.083 264); --muted: oklch(0.45 0.05 258);
-  --accent: oklch(0.44 0.20 262); --accent-ink: oklch(0.99 0.004 255);
-  --accent-soft: oklch(0.44 0.20 262 / 0.10);
-  --ok: oklch(0.47 0.10 225); --ok-soft: oklch(0.47 0.10 225 / 0.14);
-  --warn: oklch(0.44 0.20 262); --warn-soft: oklch(0.44 0.20 262 / 0.12);
-  --danger: oklch(0.52 0.17 25); --danger-soft: oklch(0.52 0.17 25 / 0.13);
-  --shadow: 0 1px 2px oklch(0.28 0.08 264 / 0.08); color-scheme: light;
+  /* Cool white base. Ink, action and selection all follow --ui-hue, so a custom
+     accent re-tints light mode the same way it does dark. */
+  --bg: oklch(0.975 0.006 var(--ui-hue)); --surface: oklch(0.99 0.003 var(--ui-hue));
+  --raised: oklch(0.945 0.014 var(--ui-hue));
+  --border: oklch(0.86 0.02 var(--ui-hue)); --border-ui: oklch(0.44 0.11 var(--ui-hue));
+  --select: oklch(0.44 0.20 var(--ui-hue)); --select-soft: oklch(0.44 0.20 var(--ui-hue) / 0.12);
+  --text: oklch(0.283 0.083 var(--ui-hue)); --muted: oklch(0.45 0.05 var(--ui-hue));
+  --accent: oklch(0.44 0.20 var(--ui-hue)); --accent-ink: oklch(0.99 0.004 var(--ui-hue));
+  --accent-soft: oklch(0.44 0.20 var(--ui-hue) / 0.10);
+  --ok: oklch(0.47 0.10 225); --ok-soft: oklch(0.47 0.10 225 / 0.14);   /* fixed */
+  --warn: oklch(0.44 0.20 var(--ui-hue)); --warn-soft: oklch(0.44 0.20 var(--ui-hue) / 0.12);
+  --danger: oklch(0.52 0.17 25); --danger-soft: oklch(0.52 0.17 25 / 0.13);  /* fixed */
+  --shadow: 0 1px 2px oklch(0.28 0.08 var(--ui-hue) / 0.08); color-scheme: light;
 }
 :root {
   /* Motion. One curve, three speeds; see DESIGN.md. Exits run at 75% of entrances. */
@@ -56,6 +60,9 @@
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .skip { position: absolute; left: -9999px; top: 8px; z-index: 10; background: var(--accent); color: var(--accent-ink); padding: 8px 14px; border-radius: 8px; font-weight: 600; }
 .skip:focus-visible { left: 8px; }
+.hue-dot { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border-ui); cursor: pointer; padding: 0; transition: transform var(--t-feedback) var(--ease); }
+.hue-dot:hover { transform: scale(1.12); }
+.hue-dot[aria-pressed="true"] { outline: 2px solid var(--select); outline-offset: 2px; }
 html { height: 100%; }
 body {
   margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
@@ -547,6 +554,12 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
           <button data-set-theme="dark" aria-pressed="false" data-i18n="settings.dark">Dark</button>
           <button data-set-theme="light" aria-pressed="false" data-i18n="settings.light">Light</button>
         </span></div>
+      <div class="kv"><span data-i18n="settings.accent">Accent colour</span>
+        <span style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+          <span id="hue-swatches" style="display:flex; gap:6px"></span>
+          <input id="hue-range" type="range" min="0" max="360" step="1" aria-label="accent hue" style="width:130px">
+          <button id="hue-reset" data-i18n="settings.reset">Reset</button>
+        </span></div>
     </div>
   </section>
 
@@ -675,6 +688,7 @@ en: {
   "ceo.mockNote":"Mock mode is on: the CEO echoes instead of thinking. Turn mock off and configure a provider in the Providers tab to talk to the real one.",
   "settings.title":"Console settings","settings.desc":"Stored in this browser only; they change nothing on the server.",
   "settings.language":"Interface language","settings.theme":"Theme","settings.dark":"Dark","settings.light":"Light",
+  "settings.accent":"Accent colour","settings.reset":"Reset",
   "toast.approved":"Approved","toast.rejected":"Rejected","toast.taskApproved":"Task approved","toast.taskRejected":"Task rejected",
   "toast.runStarted":"Run started","toast.runDone":"Run finished:",
   "site.title":"Sales site","site.desc":"The single-file page the design agent builds from the company config.",
@@ -817,6 +831,7 @@ fr: {
   "ceo.mockNote":"Mode mock actif : le CEO répète au lieu de réfléchir. Désactivez le mock et configurez un provider dans l'onglet Providers pour parler au vrai.",
   "settings.title":"Réglages de la console","settings.desc":"Stockés dans ce navigateur uniquement ; rien ne change côté serveur.",
   "settings.language":"Langue de l'interface","settings.theme":"Thème","settings.dark":"Sombre","settings.light":"Clair",
+  "settings.accent":"Couleur d'accent","settings.reset":"Réinitialiser",
   "cfg.title":"Configuration","cfg.desc":"Tout ce que corparius lit. Réglé ici, appliqué sans toucher un fichier. Un champ défini par l'environnement du processus est affiché en lecture seule.",
   "cfg.save":"Enregistrer","cfg.saved":"Enregistré.","cfg.isSet":"définie — saisissez pour remplacer","cfg.notSet":"non définie",
   "cfg.env":"défini par l'environnement","cfg.envTip":"Cette valeur vient de l'environnement du processus, qui prime sur la console. Retirez-la de votre shell ou de compose pour l'éditer ici.",
@@ -941,6 +956,42 @@ function setTheme(next) {
   applyStatic();
 }
 $("#theme").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+
+/* accent colour: a single hue drives the whole palette (see --ui-hue in the CSS).
+   Client-side and per-device, like the light/dark choice; red and teal stay put. */
+const HUE_KEY = "corparius-hue", HUE_DEFAULT = 264;
+const HUE_PRESETS = [264, 210, 160, 300, 330, 25, 70];   // blue, cyan, green, violet, magenta, red, amber
+const savedHue = localStorage.getItem(HUE_KEY);
+if (savedHue) document.documentElement.style.setProperty("--ui-hue", savedHue);
+function currentHue() { return localStorage.getItem(HUE_KEY) || HUE_DEFAULT; }
+function applyHue(h) {   // h null = reset to the default
+  if (h === null) {
+    localStorage.removeItem(HUE_KEY);
+    document.documentElement.style.removeProperty("--ui-hue");
+    h = HUE_DEFAULT;
+  } else {
+    localStorage.setItem(HUE_KEY, h);
+    document.documentElement.style.setProperty("--ui-hue", h);
+  }
+  const r = $("#hue-range"); if (r) r.value = h;
+  $$("#hue-swatches .hue-dot").forEach(d => d.setAttribute("aria-pressed", String(d.dataset.hue === String(h))));
+}
+function initHue() {
+  const wrap = $("#hue-swatches");
+  if (wrap && !wrap.dataset.built) {
+    wrap.innerHTML = HUE_PRESETS.map(h =>
+      `<button class="hue-dot" data-hue="${h}" title="${h}°" style="background:oklch(0.62 0.19 ${h})"></button>`).join("");
+    wrap.dataset.built = "1";
+  }
+  applyHue(currentHue());
+}
+document.addEventListener("click", (ev) => {
+  const dot = ev.target.closest(".hue-dot[data-hue]");
+  if (dot) applyHue(dot.dataset.hue);
+});
+$("#hue-range")?.addEventListener("input", e => applyHue(e.target.value));
+$("#hue-reset")?.addEventListener("click", () => applyHue(null));
+initHue();
 function syncLangBtn() { const b = $("#lang-toggle"); b.textContent = lang === "fr" ? "EN" : "FR"; b.setAttribute("aria-label", lang === "fr" ? "Switch to English" : "Passer en français"); }
 $("#lang-toggle").addEventListener("click", () => {
   lang = lang === "fr" ? "en" : "fr"; localStorage.setItem("corparius-lang", lang);

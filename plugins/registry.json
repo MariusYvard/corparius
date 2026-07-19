@@ -1,0 +1,5 @@
+{
+  "_comment": "Curated allow-list of verified corparius plugins. To propose one, open a PR that appends an entry here; CI validates the manifest, loads the plugin against the current API version, and checks the sha256. See docs/plugins.md and packaging/plugin-template/.",
+  "api_version": 1,
+  "plugins": []
+}

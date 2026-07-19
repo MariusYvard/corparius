@@ -1,0 +1,9 @@
+{
+  "name": "example",
+  "version": "0.1.0",
+  "api_version": 1,
+  "entrypoint": "corparius_plugin_example:register",
+  "kinds": ["llm", "deploy"],
+  "needs_network": false,
+  "description": "Example plugin: a free LLM provider and a deploy provider. Fork and rename."
+}

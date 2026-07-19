@@ -26,6 +26,7 @@ ROOT = Path(SPECPATH).resolve().parent   # packaging/ -> repository root
 datas = [
     (str(ROOT / "app" / "webui.html"), "app"),
     (str(ROOT / "companies" / "example"), "companies/example"),
+    (str(ROOT / "plugins" / "registry.json"), "plugins"),
     (str(ROOT / ".env.example"), "."),
 ]
 

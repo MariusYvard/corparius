@@ -199,6 +199,30 @@ SPEC: list[FieldSpec] = [
                "secrets (clés API, tokens) dans la base et les sauvegardes, via le "
                "paquet 'cryptography'. Effectif au redémarrage. Gardez-la : la perdre "
                "rend les secrets chiffrés irrécupérables. Voir docs/securite.md."),
+    _f("CORP_PLUGINS_ENABLED", "access", type="bool", default="false",
+       label_en="Enable plugins", label_fr="Activer les plugins",
+       help_en="Off by default. When on, corparius loads installed plugins at startup to "
+               "extend its providers, tools, templates and agents. Applies on restart. "
+               "Only verified plugins (in the curated registry) load unless you allow "
+               "unverified ones below. See docs/plugins.md.",
+       help_fr="Désactivé par défaut. Activé, corparius charge au démarrage les plugins "
+               "installés pour étendre ses providers, outils, gabarits et agents. Effectif "
+               "au redémarrage. Seuls les plugins vérifiés (du registre curaté) se chargent, "
+               "sauf si vous autorisez les non vérifiés ci-dessous. Voir docs/plugins.md."),
+    _f("CORP_PLUGINS", "access",
+       label_en="Enabled plugins", label_fr="Plugins activés",
+       help_en="Comma-separated plugin names to load. Empty loads every installed, "
+               "non-disabled plugin. Managed from the Plugins tab.",
+       help_fr="Noms de plugins à charger, séparés par des virgules. Vide = tous les "
+               "plugins installés et non désactivés. Géré depuis l'onglet Plugins."),
+    _f("CORP_PLUGINS_ALLOW_UNVERIFIED", "access", type="bool", default="false",
+       label_en="Allow unverified plugins", label_fr="Autoriser les plugins non vérifiés",
+       help_en="Off by default. Allows loading and installing plugins that are NOT in the "
+               "curated registry — arbitrary third-party code. Only turn this on for plugins "
+               "you have audited yourself.",
+       help_fr="Désactivé par défaut. Autorise le chargement et l'installation de plugins "
+               "ABSENTS du registre curaté — du code tiers arbitraire. À n'activer que pour "
+               "des plugins que vous avez audités vous-même."),
     _f("CORP_UPDATE_CHECK", "access", type="bool", default="false",
        label_en="Check for updates", label_fr="Vérifier les mises à jour",
        help_en="Off by default. When on, corparius asks GitHub once at startup whether a "

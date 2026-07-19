@@ -92,6 +92,20 @@ def _check_secrets_at_rest(s: Settings) -> tuple:
     return ("ok", "secrets", note)
 
 
+def _check_plugins(s: Settings) -> tuple:
+    if not cfg.get_bool("CORP_PLUGINS_ENABLED"):
+        return ("ok", "plugins", "off (CORP_PLUGINS_ENABLED=false)")
+    from . import plugins
+    st = plugins.status()
+    unverified = [p["name"] for p in st["installed"] if p["loaded"] and not p["verified"]]
+    if unverified:
+        return ("warn", "plugins",
+                f"{len(st['loaded'])} loaded, including UNVERIFIED: {', '.join(unverified)}. "
+                "Unverified plugins run unaudited third-party code.")
+    return ("ok", "plugins",
+            f"on; {len(st['installed'])} installed, {len(st['loaded'])} loaded")
+
+
 def _check_companies() -> tuple:
     base = paths.companies_dir()
     slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
@@ -206,7 +220,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
               _check_mode(s), _check_exposure(s), _check_store(s),
               _check_secrets_at_rest(s), _check_companies(), _check_ollama(s),
               _check_providers(s), _check_network(s), _check_claude_cli(s),
-              _check_deploy_order()]
+              _check_deploy_order(), _check_plugins(s)]
     return [{"level": lv, "name": n, "message": m} for lv, n, m in checks]
 
 

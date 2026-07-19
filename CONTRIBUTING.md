@@ -40,6 +40,14 @@ python start.py                                    # run the console locally
 - You did not add a runtime dependency without discussing it first (open an issue).
 - Docs updated if you changed behavior a user can see.
 
+## Plugins
+
+To extend corparius without changing the core — a new provider, tool, template or
+agent tweak — write a plugin instead of patching the registries. Start from
+`packaging/plugin-template/` and see `docs/plugins.md`. Propose it for one-click
+install by opening a PR that adds it to `plugins/registry.json`; CI validates and
+loads it. Plugins are off by default and curated by design.
+
 ## Reporting bugs and security issues
 
 Open an issue for bugs and feature requests. For anything security-sensitive, do

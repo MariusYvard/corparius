@@ -584,6 +584,29 @@ def _set_settings(state: UiState, values: dict, unset: list) -> dict:
     return {**_settings_payload(), **meta}
 
 
+def _plugins_action(body: dict) -> dict:
+    """Enable/disable/remove an installed plugin, or install a VERIFIED one from
+    the curated registry. Installing an unverified plugin is deliberately not
+    reachable from the console — that path is CLI-only, behind the opt-in."""
+    from . import plugins
+    action = str(body.get("action", ""))
+    name = str(body.get("name", "")).strip()
+    try:
+        if action == "enable":
+            plugins.set_enabled(name, True)
+        elif action == "disable":
+            plugins.set_enabled(name, False)
+        elif action == "remove":
+            plugins.remove(name)
+        elif action == "install":
+            plugins.install_from_registry(name)   # verified only from the console
+        else:
+            return {"ok": False, "error": f"unknown action '{action}'"}
+    except plugins.PluginError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "restart_required": True, **plugins.status()}
+
+
 class Handler(BaseHTTPRequestHandler):
     state: UiState  # injected by build_server
     server_version = "corparius-ui"
@@ -664,6 +687,9 @@ class Handler(BaseHTTPRequestHandler):
                 # network call. See app/update_check.py.
                 from . import update_check
                 self._send(200, {"ok": True, **update_check.check()})
+            elif url.path == "/api/plugins":
+                from . import plugins
+                self._send(200, {"ok": True, **plugins.status()})
             elif url.path == "/api/chat" and slug:
                 history = list(self.state.chats.get(slug, []))
                 self._send(200, {"ok": True, "history": history})
@@ -728,6 +754,9 @@ class Handler(BaseHTTPRequestHandler):
                 result = _set_settings(self.state, dict(body.get("values", {})),
                                        list(body.get("unset", [])))
                 self._send(200 if result.get("ok") else 400, result)
+            elif url.path == "/api/plugins":
+                result = _plugins_action(body)
+                self._send(200 if result.get("ok") else 400, result)
             elif url.path == "/api/test/mail":
                 # One button, both directions. A real send and a real read:
                 # setting a mail account and hoping is the friction, and this is
@@ -791,6 +820,8 @@ def _port_in_use(host: str, port: int) -> bool:
 
 
 def serve(settings: Settings, host: str | None = None, port: int | None = None) -> int:
+    from . import plugins
+    plugins.load()   # no-op unless CORP_PLUGINS_ENABLED; extends the registries
     want = settings.ui_port if port is None else port
     host = host or settings.ui_host
     if _port_in_use(host, want):

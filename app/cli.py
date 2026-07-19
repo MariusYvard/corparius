@@ -174,6 +174,8 @@ def cmd_decide(args, status: str) -> None:
 
 def main(argv=None) -> None:
     setup_logging()
+    from . import plugins
+    plugins.load()   # no-op unless CORP_PLUGINS_ENABLED; extends the registries
     p = argparse.ArgumentParser(prog="corparius",
                                 description="Run autonomous AI micro-companies.")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -234,6 +236,9 @@ def main(argv=None) -> None:
     sp.add_argument("--id", required=True)
     sp.add_argument("--note", default="")
     sp.set_defaults(fn=lambda a: cmd_decide(a, "rejected"))
+
+    from . import plugincli
+    plugincli.add_parser(sub)
 
     args = p.parse_args(argv)
     args.fn(args)

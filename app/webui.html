@@ -323,6 +323,7 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
     <button role="tab" aria-selected="false" aria-controls="tab-providers" id="t-providers"><span data-i18n="nav.providers">Providers</span></button>
     <button role="tab" aria-selected="false" aria-controls="tab-ceo" id="t-ceo"><span>CEO</span></button>
     <button role="tab" aria-selected="false" aria-controls="tab-settings" id="t-settings"><span data-i18n="nav.settings">Settings</span></button>
+    <button role="tab" aria-selected="false" aria-controls="tab-plugins" id="t-plugins"><span data-i18n="nav.plugins">Plugins</span></button>
   </div>
 </nav>
 <main class="wrap" id="main">
@@ -549,6 +550,19 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
     </div>
   </section>
 
+  <section id="tab-plugins" role="tabpanel" aria-labelledby="t-plugins" class="stack" hidden>
+    <div class="card">
+      <h2 data-i18n="pl.title">Plugins</h2>
+      <p class="muted" data-i18n="pl.intro">Plugins extend corparius with extra providers, tools, templates and agents. Verified plugins come from the curated registry and are checked against a SHA-256.</p>
+      <div id="pl-off" class="banner warn" hidden data-i18n="pl.off">Plugins are off. Turn them on in Settings (Enable plugins), then restart.</div>
+      <h3 data-i18n="pl.installed">Installed</h3>
+      <div id="pl-installed" class="stack" style="gap:8px"></div>
+      <h3 style="margin-top:16px" data-i18n="pl.available">Available in the registry</h3>
+      <div id="pl-registry" class="stack" style="gap:8px"></div>
+      <p class="muted" style="margin-top:12px" data-i18n="pl.unverified">Installing an unverified plugin runs unaudited third-party code and is only possible from the command line, behind an explicit opt-in.</p>
+    </div>
+  </section>
+
   <div id="toast" aria-live="polite"><div></div></div>
 </main>
 <footer><div class="wrap"><span data-i18n="footer">corparius operator console · serves on localhost · state is read from the local SQLite store</span> · <a href="https://github.com/sponsors/MariusYvard" target="_blank" rel="noopener" data-i18n="footer.support">Support the project</a></div></footer>
@@ -588,7 +602,15 @@ en: {
   "prov.anthropicKey":"Anthropic API key","ceo.newReply":"CEO replied:",
   "run.h3":"3 hours","run.h6":"quarter day (6h)","run.h12":"half day (12h)","run.h24":"full day (24h)",
   "run.button":"Run","run.title":"Runs the scheduled agents for the selected simulated time, in the background",
-  "nav.overview":"Overview","nav.operations":"Operations","nav.providers":"Providers","nav.settings":"Settings",
+  "nav.overview":"Overview","nav.operations":"Operations","nav.providers":"Providers","nav.settings":"Settings","nav.plugins":"Plugins",
+  "pl.title":"Plugins","pl.intro":"Plugins extend corparius with extra providers, tools, templates and agents. Verified plugins come from the curated registry and are checked against a SHA-256.",
+  "pl.off":"Plugins are off. Turn them on in Settings (Enable plugins), then restart.",
+  "pl.installed":"Installed","pl.available":"Available in the registry",
+  "pl.unverified":"Installing an unverified plugin runs unaudited third-party code and is only possible from the command line, behind an explicit opt-in.",
+  "pl.none":"No plugins installed.","pl.regEmpty":"The registry is empty for now.",
+  "pl.verified":"verified","pl.unverifiedTag":"UNVERIFIED","pl.disabled":"disabled","pl.loaded":"loaded",
+  "pl.enable":"Enable","pl.disable":"Disable","pl.remove":"Remove","pl.install":"Install",
+  "pl.saved":"Done — restart to apply","pl.confirmRemove":"Remove plugin {n}?",
   "ob.title":"Getting started","ob.desc":"Three steps to a company working on its own. This card leaves once they are done.","ob.dismiss":"Hide",
   "ob.model":"Connect a model","ob.modelHint":"Or stay in mock mode: it runs offline, free, deterministic. Real models live under Providers.","ob.modelCta":"Open Providers",
   "ob.run":"Run a day","ob.runHint":"Advance the clock a few hours and watch the agents work.","ob.runCta":"Run now",
@@ -722,7 +744,15 @@ fr: {
   "prov.anthropicKey":"Clé API Anthropic","ceo.newReply":"Réponse du CEO :",
   "run.h3":"3 heures","run.h6":"quart de journée (6 h)","run.h12":"demi-journée (12 h)","run.h24":"journée complète (24 h)",
   "run.button":"Lancer","run.title":"Exécute les agents planifiés pour la durée simulée choisie, en arrière-plan",
-  "nav.overview":"Vue d'ensemble","nav.operations":"Opérations","nav.providers":"Providers","nav.settings":"Réglages",
+  "nav.overview":"Vue d'ensemble","nav.operations":"Opérations","nav.providers":"Providers","nav.settings":"Réglages","nav.plugins":"Plugins",
+  "pl.title":"Plugins","pl.intro":"Les plugins étendent corparius avec des providers, outils, gabarits et agents supplémentaires. Les plugins vérifiés viennent du registre curaté et sont contrôlés par un SHA-256.",
+  "pl.off":"Les plugins sont désactivés. Activez-les dans Réglages (Activer les plugins), puis redémarrez.",
+  "pl.installed":"Installés","pl.available":"Disponibles dans le registre",
+  "pl.unverified":"Installer un plugin non vérifié exécute du code tiers non audité et n'est possible qu'en ligne de commande, derrière un opt-in explicite.",
+  "pl.none":"Aucun plugin installé.","pl.regEmpty":"Le registre est vide pour l'instant.",
+  "pl.verified":"vérifié","pl.unverifiedTag":"NON VÉRIFIÉ","pl.disabled":"désactivé","pl.loaded":"chargé",
+  "pl.enable":"Activer","pl.disable":"Désactiver","pl.remove":"Supprimer","pl.install":"Installer",
+  "pl.saved":"Fait — redémarrez pour appliquer","pl.confirmRemove":"Supprimer le plugin {n} ?",
   "ob.title":"Pour démarrer","ob.desc":"Trois étapes vers une société qui tourne seule. Cette carte disparaît une fois terminées.","ob.dismiss":"Masquer",
   "ob.model":"Connecter un modèle","ob.modelHint":"Ou restez en mode mock : hors ligne, gratuit, déterministe. Les vrais modèles sont dans Providers.","ob.modelCta":"Ouvrir Providers",
   "ob.run":"Lancer une journée","ob.runHint":"Avancez l'horloge de quelques heures et regardez les agents travailler.","ob.runCta":"Lancer",
@@ -991,7 +1021,7 @@ async function boot() {
     if (!companies.includes(state.company)) state.company = companies[0];
     sel.value = state.company;
     await Promise.all([refresh(), loadProviders(), loadChat(), loadSite(), loadPayments(),
-                       loadCompany()]);
+                       loadCompany(), loadPlugins()]);
     state.timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
     checkDoctor();
     checkUpdate();
@@ -1039,6 +1069,44 @@ async function checkUpdate() {
 }
 $("#update-bar-hide").addEventListener("click", () => {
   sessionStorage.setItem("corparius-update-hid", "1"); $("#update-bar").hidden = true;
+});
+
+/* Plugins tab: list installed + registry, enable/disable/remove and one-click
+   install of VERIFIED registry plugins. Unverified install stays CLI-only. */
+async function loadPlugins() {
+  try {
+    const st = await api("/api/plugins");
+    $("#pl-off").hidden = !!st.enabled;
+    const inst = st.installed || [];
+    $("#pl-installed").innerHTML = inst.length ? inst.map(p => {
+      const flags = [p.verified ? t("pl.verified") : t("pl.unverifiedTag")];
+      if (p.disabled) flags.push(t("pl.disabled"));
+      if (p.loaded) flags.push(t("pl.loaded"));
+      const toggle = p.disabled
+        ? `<button data-pl="enable" data-pl-name="${esc(p.name)}">${t("pl.enable")}</button>`
+        : `<button data-pl="disable" data-pl-name="${esc(p.name)}">${t("pl.disable")}</button>`;
+      return `<div class="kv"><span><strong>${esc(p.name)}</strong> <span class="muted">v${esc(p.version)} · ${flags.join(" · ")}</span>${p.description ? `<br><span class="muted">${esc(p.description)}</span>` : ""}</span>
+        <span style="display:flex; gap:8px">${toggle}<button class="danger" data-pl="remove" data-pl-name="${esc(p.name)}">${t("pl.remove")}</button></span></div>`;
+    }).join("") : `<p class="muted">${t("pl.none")}</p>`;
+    const names = new Set(inst.map(p => p.name));
+    const reg = (st.registry || []).filter(e => e.name && !names.has(e.name));
+    $("#pl-registry").innerHTML = reg.length ? reg.map(e =>
+      `<div class="kv"><span><strong>${esc(e.name)}</strong>${e.description ? `<br><span class="muted">${esc(e.description)}</span>` : ""}</span>
+       <button data-pl="install" data-pl-name="${esc(e.name)}">${t("pl.install")}</button></div>`
+    ).join("") : `<p class="muted">${t("pl.regEmpty")}</p>`;
+  } catch (e) {}
+}
+document.addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-pl]");
+  if (!b) return;
+  const action = b.getAttribute("data-pl"), name = b.getAttribute("data-pl-name");
+  if (action === "remove" && !confirm(t("pl.confirmRemove").replace("{n}", name))) return;
+  b.disabled = true;
+  try {
+    await api("/api/plugins", {action, name});
+    toast(t("pl.saved"));
+  } catch (e) { toast(e.message, true); }
+  loadPlugins();
 });
 
 /* overview + operations */

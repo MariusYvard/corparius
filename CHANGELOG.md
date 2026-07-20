@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — the console holds up under load and under a hostile tab
+
+- **Fixed: concurrent writes lost rows.** The console built a new SQLite
+  connection per HTTP request and never closed it, while the run loop wrote from
+  a background thread. Measured on twelve concurrent writers, nine died with
+  `database is locked`. One shared connection now serves the process, guarded by
+  a re-entrant lock, with WAL enabled for the read-only settings layer and the
+  CLI. Sharing it *without* that lock is worse than the original bug — threads
+  land inside each other's transaction and rows vanish with no error — so the
+  lock is load-bearing. Concurrent polls during a run went from 635 to 1940.
+- **Fixed: any web page you visited could drive the console.** Binding localhost
+  never protected against the browser already running on it: a hostile tab could
+  `fetch()` `http://127.0.0.1:8600` and start a run, save provider keys, publish
+  the site or delete a company. Writes now require `Sec-Fetch-Site`/`Origin` to
+  say the request came from the console's own page. **No configuration, no login
+  screen, no CSRF token**, and clients that send neither header (curl, scripts,
+  the MCP server) still work, so offline use is unchanged.
+- **Fixed: DNS rebinding.** `CORP_UI_ALLOWED_HOSTS` (new, environment/`.env`
+  only — never the settings store, which it protects) pins the `Host` names the
+  console answers to. Loopback binds need nothing.
+- **Breaking, if you run behind a reverse proxy:** a bind off-loopback now warns
+  in `doctor` until `CORP_UI_ALLOWED_HOSTS` names your hostname. Requests with an
+  unrecognised `Host` get a 403 that names the variable to set. Loopback and
+  Docker-with-published-ports are unaffected.
+- **`CORP_UI_TOKEN` now covers reads.** It guarded mutations only, so with a
+  token set `/api/settings` and `/api/company` still served company configs,
+  paths and provider status to anyone. With no token set, nothing changes.
+- **Request bodies are capped at 1 MiB**, malformed `Content-Length` is a 400
+  rather than a 500, chunked bodies are refused, and the token comparison is
+  constant-time.
+- **The Docker image runs as a non-root user** and carries a `HEALTHCHECK`.
+- **The console's two 60- and 85-line `if/elif` dispatch chains are one route
+  table.** That duplication was why the token check existed in one of them only;
+  a route is now authenticated unless it opts out, and a test pins the public set
+  so a new exception has to be written down.
+- **CI runs the platforms we ship**: Python 3.10/3.12/3.14 on Linux, 3.12/3.14 on
+  Windows, 3.12 on macOS. Adds `pyproject.toml` (tool configuration only) and
+  tests for the previously untested toolbox, roster, approval gate and backups.
+  171 tests → 243.
+
 ## Unreleased — a double-click start, accessible, no raw tracebacks
 
 - **Double-click launchers.** `start-windows.bat`, `start-macos.command` and

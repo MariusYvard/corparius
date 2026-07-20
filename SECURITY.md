@@ -19,9 +19,35 @@ any public disclosure.
 These are properties of the design, not bugs — but they matter to how you deploy.
 
 - **The console binds `127.0.0.1` by default.** If you expose it (reverse proxy,
-  a non-local `CORP_UI_HOST`), set `CORP_UI_TOKEN` so every mutating call needs
-  the `X-Corp-Token` header. The doctor fails loudly if you bind off-localhost
-  with no token, because anyone who can reach it can spend money and publish.
+  a non-local `CORP_UI_HOST`), set `CORP_UI_TOKEN` so every call needs the
+  `X-Corp-Token` header. The doctor fails loudly if you bind off-localhost with
+  no token, because anyone who can reach it can spend money and publish.
+- **The token covers reads as well as writes.** It used to guard mutations only,
+  on the reasoning that nothing but localhost could reach the port. Setting a
+  token is the operator saying otherwise, and at that point `/api/settings` and
+  `/api/company` returning company configs, filesystem paths and which providers
+  are configured is not a defensible default. With no token set, nothing
+  changes: reads stay open and the first run needs no configuration.
+- **Cross-site requests are refused without any configuration.** Binding
+  localhost does not protect you from the browser you are already running: any
+  page you visit can `fetch()` `http://127.0.0.1:8600`. Writes are refused
+  unless `Sec-Fetch-Site` or `Origin` says the request came from the console's
+  own page. Both headers are on the browser's forbidden list, so a hostile page
+  cannot set them, and a client that sends neither — curl, a script, the MCP
+  server — is allowed through, so nothing offline breaks. This is deliberately
+  not a login screen or a CSRF token: a password in front of your own machine is
+  the thing this console refuses to be.
+- **`CORP_UI_ALLOWED_HOSTS` stops DNS rebinding.** A hostile domain can re-point
+  its own name at `127.0.0.1`, at which point the browser considers the request
+  same-origin and the `Origin` check passes — but the `Host` header still says
+  the attacker's name. On a loopback bind, only loopback names are accepted.
+  Bound off-loopback (Docker, a reverse proxy) any `Host` is accepted by default,
+  because a strict list would break existing deployments on upgrade: **set
+  `CORP_UI_ALLOWED_HOSTS` to the name you serve the console under.** It is read
+  from the environment and `.env` only, never from the settings store, so a
+  successful write to `/api/settings` cannot add a host to it.
+- **Request bodies are capped at 1 MiB** and chunked bodies are refused, so a
+  single request cannot exhaust memory.
 - **Secrets at rest.** API keys saved from the console live in the SQLite store
   (`data/corparius.sqlite`) and are included in backups. By default they are
   stored in the clear. You can turn on at-rest encryption by setting

@@ -17,8 +17,8 @@ deliberately small. These notes keep it that way.
 ```bash
 git clone https://github.com/MariusYvard/corparius.git && cd corparius
 python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -r requirements-dev.txt
-python -m pytest -q                                # ~150 tests, all offline
+pip install -r requirements-test.txt                # add -r requirements-dev.txt to build binaries
+python -m pytest -q                                # ~280 tests, all offline
 python start.py                                    # run the console locally
 ```
 
@@ -33,12 +33,28 @@ python start.py                                    # run the console locally
 - **Paths** go through `app/paths.py` so the source, Docker and frozen-binary
   builds agree on where things live.
 
+- **New console endpoints go in the `ROUTES` table** in `app/webui.py`, not in a
+  branch. A route is authenticated unless it says `public=True`, and the set of
+  public ones is pinned by a test — if you add one, that test tells you.
+
 ## Before you open a pull request
 
-- `python -m pytest -q` is green, and you added tests for new behavior.
+```bash
+python -m pytest -q                                        # green, with tests for new behaviour
+ruff check .
+mypy app/models.py app/paths.py app/settings_spec.py       # the ratchet; widen it if you can
+```
+
 - The offline mock mode still runs with no keys and no network.
 - You did not add a runtime dependency without discussing it first (open an issue).
+  `requests` and `PyYAML` are the whole runtime; test and lint tooling goes in
+  `requirements-test.txt`.
 - Docs updated if you changed behavior a user can see.
+
+`mypy` is scoped to a short list rather than all of `app/` on purpose: the
+annotations were never checked, so a strict pass reports enough at once to get
+switched off. `mypy app/` shows what is left. Retiring a module from that list is
+a welcome change on its own.
 
 ## Plugins
 

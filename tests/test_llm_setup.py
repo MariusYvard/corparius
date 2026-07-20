@@ -109,7 +109,6 @@ def test_server_presets_are_offered(server):
 
 # --- localized diagnosis ---------------------------------------------------
 def test_diagnosis_answers_in_french(server, monkeypatch):
-    from app import provider_check
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     from app import cfg
     cfg.invalidate()

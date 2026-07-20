@@ -2,7 +2,6 @@
 tests exercise a drop-in plugin under a temporary home so nothing touches the
 developer's machine, and restore the global registries afterwards."""
 import json
-import sys
 
 import pytest
 

@@ -3,8 +3,7 @@ effect for a real integration (Stripe, Lemlist, GitHub, Meta Ads, ...) to go
 live. Tools flagged `hitl` never execute until a human approves them.
 """
 from __future__ import annotations
-from typing import Callable
-import os
+from collections.abc import Callable
 
 from .models import ToolResult
 from . import cfg, integrations, mailbox, paths, sitegen, deploy, leadsource, enrich, signals

@@ -33,8 +33,17 @@ class TokenBudget:
 
 
 def cosine(a: list[float], b: list[float]) -> float:
-    """Cosine similarity between two equal-length vectors."""
-    dot = sum(x * y for x, y in zip(a, b))
+    """Cosine similarity between two equal-length vectors.
+
+    Mismatched lengths return 0.0 rather than raising or silently comparing the
+    shorter prefix. This feeds LoopGuard, where 0.0 reads as "not a stutter", so
+    a swapped-in embedding model that changes dimension mid-run lets the agent
+    carry on instead of halting its day on an arithmetic detail. Truncating
+    instead would produce a real-looking number from two unrelated vectors.
+    """
+    if len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
     if na == 0.0 or nb == 0.0:

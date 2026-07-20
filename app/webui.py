@@ -15,16 +15,14 @@ import hmac
 import json
 import logging
 import os
-import re
 import threading
 from collections import deque
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 from urllib.parse import parse_qs, urlparse
 
-import yaml
 
 from . import backup, cfg, claudecli, deploy, i18n, mailbox, ollama_setup, paths
 from . import provider_check, settings_spec, structured
@@ -35,7 +33,7 @@ from .doctor import run_checks
 from .config import Settings
 from .integrations import smtp_check, stripe_check, stripe_payments
 from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter
-from .models import AgentRole, Difficulty
+from .models import AgentRole
 from .orchestrator import Runtime
 from . import sitegen
 from .store import Store

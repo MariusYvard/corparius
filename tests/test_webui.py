@@ -4,14 +4,12 @@ import json
 import os
 import threading
 from http.client import HTTPConnection
-from pathlib import Path
 
 import pytest
 
 from app import cfg, webui
 from app.config import Settings
 from app.models import ApprovalRequest
-from app.store import Store
 
 
 @pytest.fixture()

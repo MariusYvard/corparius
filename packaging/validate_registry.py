@@ -18,7 +18,7 @@ import sys
 # repo root on sys.path so `app` imports whatever the working directory.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import cfg, plugins
+from corparius import cfg, plugins
 
 
 def main() -> int:

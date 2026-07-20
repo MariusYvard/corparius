@@ -33,7 +33,7 @@ def _company_path(slug_or_path: str) -> str:
 
 def _load_company(slug_or_path: str) -> dict:
     """Thin wrapper over company.load, keeping the CLI's exit-with-a-message
-    ergonomics. The parsing, defaults and validation live in app/company.py so
+    ergonomics. The parsing, defaults and validation live in corparius/company.py so
     the CLI, the console and the MCP server cannot drift apart."""
     path = _company_path(slug_or_path)
     try:

@@ -5,9 +5,9 @@ import threading
 
 import pytest
 
-from app import cfg, webui
-from app.config import Settings
-from app.models import LLMResult, Usage
+from corparius import cfg, webui
+from corparius.config import Settings
+from corparius.models import LLMResult, Usage
 
 from .test_webui import _call
 

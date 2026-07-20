@@ -7,7 +7,7 @@ the X-Corp-Token header on every mutating call (useful behind a reverse proxy);
 the doctor fails when the console is bound off-localhost without one.
 
 Settings saved from the page go to the store, or to .env for the bootstrap keys
-that must be readable before the store opens; see app/cfg.py for the precedence.
+that must be readable before the store opens; see corparius/cfg.py for the precedence.
 Secrets are write-only: the API only ever reports whether one is set.
 """
 
@@ -872,7 +872,7 @@ def _route_doctor(ctx):
 
 def _route_update(ctx):
     # Off unless CORP_UPDATE_CHECK is on; when off this makes no network call.
-    # See app/update_check.py.
+    # See corparius/update_check.py.
     from . import update_check
 
     return 200, {"ok": True, **update_check.check()}
@@ -1308,7 +1308,7 @@ def serve(settings: Settings, host: str | None = None, port: int | None = None) 
         print(
             f"corparius: port {want} is already in use. Another console may be "
             f"running (open http://127.0.0.1:{want}), or pick a free port: "
-            f"python -m app.cli ui --port 8601  (or set CORP_UI_PORT)."
+            f"python -m corparius.cli ui --port 8601  (or set CORP_UI_PORT)."
         )
         return 1
     try:

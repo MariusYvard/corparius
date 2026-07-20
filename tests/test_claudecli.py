@@ -7,8 +7,8 @@ import types
 
 import pytest
 
-from app import cfg, claudecli, webui
-from app.config import Settings
+from corparius import cfg, claudecli, webui
+from corparius.config import Settings
 
 from .test_webui import _call
 

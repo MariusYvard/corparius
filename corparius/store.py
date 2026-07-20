@@ -112,7 +112,7 @@ class Store:
     def _configure(self) -> None:
         """Connection pragmas.
 
-        WAL is the one that matters across connections: app/cfg.py opens the
+        WAL is the one that matters across connections: corparius/cfg.py opens the
         store read-only as its settings layer, and the CLI can run while the
         console is up. Under the default rollback journal a writer excludes
         readers outright, and SQLite returns BUSY immediately rather than
@@ -186,7 +186,7 @@ class Store:
         return [r["output"] for r in rows]
 
     # Read helpers for the console overview. These live here rather than as raw
-    # SQL in app/webui.py: with the connection now guarded, a caller reaching
+    # SQL in corparius/webui.py: with the connection now guarded, a caller reaching
     # into store.db directly would be an unsynchronised access to a locked
     # resource, which is exactly the interleaving _locked exists to prevent.
     @_locked
@@ -272,7 +272,7 @@ class Store:
         return json.loads(row["data"]) if row else {}
 
     # Settings saved from the console. Global, not per company: they are the
-    # second layer of app/cfg.py, under the real process environment.
+    # second layer of corparius/cfg.py, under the real process environment.
     @_locked
     def all_settings(self) -> dict[str, str]:
         from . import secretbox

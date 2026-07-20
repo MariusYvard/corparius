@@ -5,7 +5,7 @@ accepts, what the page renders, which fields are secret, which need a restart.
 Adding a setting is one row, not an HTML change.
 
 The keys are the same environment variables corparius has always read, so the
-console is not a second configuration system: it writes layer 2 of app/cfg.py
+console is not a second configuration system: it writes layer 2 of corparius/cfg.py
 (see the precedence table in the README), and anything you export in your shell
 still wins and is shown as read-only rather than quietly overwritten.
 """

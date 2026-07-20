@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from app import cfg, company, llm, plugins, tools
+from corparius import cfg, company, llm, plugins, tools
 
 
 @pytest.fixture
@@ -28,8 +28,8 @@ def clean_registries():
 
 
 _REGISTER = """
-from app.tools import Tool
-from app.models import ToolResult
+from corparius.tools import Tool
+from corparius.models import ToolResult
 
 def register(api):
     api.register_llm_provider("dummyprov", base="http://x/v1", key_env="DUMMY_KEY")

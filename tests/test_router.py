@@ -2,9 +2,9 @@
 
 import requests
 
-from app.config import Settings
-from app.llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, LLMProvider, _split
-from app.models import Difficulty, LLMResult, Usage
+from corparius.config import Settings
+from corparius.llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, LLMProvider, _split
+from corparius.models import Difficulty, LLMResult, Usage
 
 
 def _mock_settings() -> Settings:

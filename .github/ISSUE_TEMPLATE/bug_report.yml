@@ -44,7 +44,7 @@ body:
     id: doctor
     attributes:
       label: Doctor output (optional)
-      description: Paste `python -m app.cli doctor`, or the Settings tab diagnostics. Redact any secrets.
+      description: Paste `python -m corparius.cli doctor`, or the Settings tab diagnostics. Redact any secrets.
       render: text
   - type: checkboxes
     id: mock

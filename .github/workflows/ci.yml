@@ -53,10 +53,10 @@ jobs:
         run: ruff check .
       - name: Format
         run: ruff format --check .
-      # All of app/ at the default level. The next ratchet is strictness
+      # All of corparius/ at the default level. The next ratchet is strictness
       # (disallow_untyped_defs), scoped per-module in pyproject.toml.
       - name: Types
-        run: mypy app/
+        run: mypy corparius/
       - name: Coverage
         run: |
           coverage run -m pytest -q

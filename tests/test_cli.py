@@ -11,9 +11,9 @@ import json
 
 import pytest
 
-from app import cli
-from app.config import Settings
-from app.store import Store
+from corparius import cli
+from corparius.config import Settings
+from corparius.store import Store
 
 COMPANY = """
 slug: t
@@ -162,7 +162,7 @@ def test_deploy_builds_the_site_if_missing(cfg_path, capsys):
 def test_backup_prints_the_plaintext_warning(cfg_path, tmp_path, capsys):
     """The zip carries the console's API keys in the clear, so the CLI has to
     say so every time rather than only in the docs."""
-    from app import backup
+    from corparius import backup
 
     cli.main(["backup", "--out", str(tmp_path / "out")])  # backup is company-wide
     out = capsys.readouterr().out
@@ -178,7 +178,7 @@ def test_approvals_reports_nothing_pending(cfg_path, capsys):
 
 
 def test_approve_and_reject_by_id(cfg_path, capsys):
-    from app.models import ApprovalRequest
+    from corparius.models import ApprovalRequest
 
     store = _store(cfg_path)
     store.add_approval(
@@ -214,7 +214,7 @@ def test_an_unknown_approval_id_is_reported_not_silent(cfg_path, capsys):
 
 
 def test_doctor_exits_with_its_own_status(cfg_path, monkeypatch):
-    monkeypatch.setattr("app.doctor.main", lambda quiet=False: 0)
+    monkeypatch.setattr("corparius.doctor.main", lambda quiet=False: 0)
     with pytest.raises(SystemExit) as exc:
         cli.main(["doctor", "--quiet"])
     assert exc.value.code == 0
@@ -222,7 +222,7 @@ def test_doctor_exits_with_its_own_status(cfg_path, monkeypatch):
 
 def test_ui_hands_its_exit_code_back(monkeypatch):
     """serve() returns 1 when the port is taken; the CLI must not swallow it."""
-    monkeypatch.setattr("app.webui.serve", lambda s, host=None, port=None: 1)
+    monkeypatch.setattr("corparius.webui.serve", lambda s, host=None, port=None: 1)
     with pytest.raises(SystemExit) as exc:
         cli.main(["ui", "--port", "8601"])
     assert exc.value.code == 1

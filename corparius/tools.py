@@ -28,7 +28,7 @@ class Tool:
         self.hitl = hitl
         self.needs_draft = needs_draft
         # Opt-in structured output: when a tool declares a schema, the executor
-        # drives the router through app/structured so the effect receives a
+        # drives the router through corparius/structured so the effect receives a
         # validated dict (ctx.structured.data) that is the same shape whatever
         # model, tier or provider answered. Tools without a schema are unchanged.
         self.schema = schema

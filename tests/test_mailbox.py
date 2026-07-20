@@ -6,8 +6,8 @@ answered, which is the one signal it exists to chase.
 
 import types
 
-from app import cfg, mailbox, tools
-from app.store import Store
+from corparius import cfg, mailbox, tools
+from corparius.store import Store
 
 
 def test_unconfigured_mailbox_is_an_empty_layer_not_a_crash(monkeypatch):
@@ -105,8 +105,8 @@ def test_scan_replies_says_when_no_mailbox_is_connected(tmp_path, monkeypatch):
 
 
 def test_outreach_records_who_it_wrote_to(tmp_path, monkeypatch):
-    from app import integrations
-    from app.leadsource import Lead
+    from corparius import integrations
+    from corparius.leadsource import Lead
 
     store = Store(str(tmp_path))
     monkeypatch.setattr(

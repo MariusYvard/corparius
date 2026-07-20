@@ -2,8 +2,8 @@
 
 import types
 
-from app import tools
-from app.store import Store
+from corparius import tools
+from corparius.store import Store
 
 
 def test_wip_count_and_flow_metrics(tmp_path):

@@ -1,6 +1,6 @@
 """Signal watching matches keywords and falls back cleanly."""
 
-from app import signals
+from corparius import signals
 
 
 def test_local_file_matches_keywords(tmp_path, monkeypatch):

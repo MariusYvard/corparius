@@ -20,7 +20,7 @@ Chaque tâche porte un outil. Quand un agent prend une tâche approuvée, il n'e
 
 ## Consultation
 
-La commande `python -m app.cli tasks --company example` liste les tâches avec leur statut, leur priorité, la cible, l'outil et l'auteur.
+La commande `python -m corparius.cli tasks --company example` liste les tâches avec leur statut, leur priorité, la cible, l'outil et l'auteur.
 
 ## Création pilotée par les données
 

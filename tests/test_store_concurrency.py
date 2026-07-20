@@ -2,9 +2,9 @@
 background thread, so reads and writes genuinely overlap.
 
 Three facts, each measured on this suite rather than assumed, drive the design
-in app/store.py:
+in corparius/store.py:
 
-1. Separate connections per thread (what app/webui.py did: a new Store per HTTP
+1. Separate connections per thread (what corparius/webui.py did: a new Store per HTTP
    request) raise `database is locked` under load. Twelve writers lost nine.
 2. Sharing one connection *without* a lock is worse, not better: threads land
    inside each other's implicit transaction, raising `cannot start a transaction
@@ -18,7 +18,7 @@ once. Python already applies a 5s timeout, and the failure happened anyway.
 
 import threading
 
-from app.store import Store
+from corparius.store import Store
 
 # Twelve writers is what reliably reproduced the lost-row failure before the fix.
 # The overlap test below runs shorter on purpose: flow_metrics re-reads the whole
@@ -97,7 +97,7 @@ def test_reentrant_reads_do_not_deadlock(tmp_path):
 
 
 def test_a_second_connection_sees_committed_rows(tmp_path):
-    """app/cfg.py opens the store read-only as its settings layer, so a
+    """corparius/cfg.py opens the store read-only as its settings layer, so a
     console-saved setting a second connection cannot see would silently do
     nothing. WAL changes when that becomes visible, so it is worth pinning."""
     data = str(tmp_path / "data")

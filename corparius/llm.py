@@ -41,7 +41,7 @@ def _flatten(messages: list[dict]) -> str:
 
 
 # The harness's marker and a hint-line parser, kept here so the mock can answer
-# structured prompts offline without importing app.structured (which imports
+# structured prompts offline without importing corparius.structured (which imports
 # models, which is fine, but this keeps the mock dependency-free and fast).
 _STRUCT_MARKER = "<<corp-json-schema>>"
 _HINT_LINE = re.compile(r'"([^"]+)":\s*(.+?)(?:,|\s*$)')

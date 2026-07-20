@@ -1,8 +1,8 @@
 """The MCP server's logic must work through its plain functions, with no `mcp`
 dependency imported (only build_server needs it)."""
 
-from app import mcp_server
-from app.store import Store
+from corparius import mcp_server
+from corparius.store import Store
 
 
 def test_run_and_status(tmp_path, monkeypatch):

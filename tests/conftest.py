@@ -1,6 +1,6 @@
 """Test isolation for the settings resolver.
 
-app/cfg.py resolves settings from the process environment, then the SQLite
+corparius/cfg.py resolves settings from the process environment, then the SQLite
 settings table, then the .env file. All three are real, machine-local state, so
 without this fixture the suite would read whatever the developer happens to
 have configured: a .env carrying CORP_LLM_MOCK=false would put every test in
@@ -13,7 +13,7 @@ it with monkeypatch.setenv, which lands in layer 1 and outranks all of this.
 
 import pytest
 
-from app import cfg
+from corparius import cfg
 
 
 @pytest.fixture(autouse=True)
@@ -27,7 +27,7 @@ def close_stores(monkeypatch):
     rather than a fixture catches direct `Store(...)` calls too, so no test has
     to remember. close() is idempotent, so a test that closes its own is fine.
     """
-    from app import store as store_mod
+    from corparius import store as store_mod
 
     opened = []
     original_init = store_mod.Store.__init__

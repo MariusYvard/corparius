@@ -17,8 +17,8 @@ from http.client import HTTPConnection
 
 import pytest
 
-from app import cfg, webui
-from app.config import Settings
+from corparius import cfg, webui
+from corparius.config import Settings
 
 
 @pytest.fixture()

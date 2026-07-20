@@ -21,9 +21,9 @@ RELEASES_URL = "https://github.com/MariusYvard/corparius/releases/latest"
 
 
 def current_version() -> str:
-    import app
+    import corparius
 
-    return app.__version__
+    return corparius.__version__
 
 
 def enabled() -> bool:

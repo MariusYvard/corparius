@@ -3,10 +3,10 @@ may only propose."""
 
 import types
 
-from app import tools
-from app.config import Settings
-from app.orchestrator import Runtime
-from app.store import Store
+from corparius import tools
+from corparius.config import Settings
+from corparius.orchestrator import Runtime
+from corparius.store import Store
 
 
 def _settings(tmp) -> Settings:

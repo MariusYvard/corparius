@@ -8,7 +8,7 @@ place that has to keep saying so.
 
 import zipfile
 
-from app import backup
+from corparius import backup
 
 
 def _tree(tmp_path):

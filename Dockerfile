@@ -10,7 +10,7 @@ WORKDIR /app
 COPY requirements.lock .
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
-COPY app ./app
+COPY corparius ./corparius
 COPY companies ./companies
 COPY plugins ./plugins
 
@@ -34,5 +34,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # ports unreachable - but it means the console answers anyone who can route to
 # it. docker-compose.yml publishes to 127.0.0.1 only. If you expose this port
 # yourself, set CORP_UI_TOKEN, and CORP_UI_ALLOWED_HOSTS to the name you serve
-# it under. `python -m app.cli doctor` fails the exposure check if you do not.
-CMD ["python", "-m", "app.cli", "ui", "--host", "0.0.0.0", "--port", "8600"]
+# it under. `python -m corparius.cli doctor` fails the exposure check if you do not.
+CMD ["python", "-m", "corparius.cli", "ui", "--host", "0.0.0.0", "--port", "8600"]

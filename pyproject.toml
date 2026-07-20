@@ -1,0 +1,81 @@
+# Tool configuration only, on purpose.
+#
+# There is no [project] or [build-system] table here, so this file does not make
+# corparius pip-installable. Making it installable means renaming app/ to
+# corparius/: the importable package is currently `app`, and `pip install .`
+# would drop a top-level `app` module into site-packages, where it is close to
+# guaranteed to collide with something else. That rename touches every test, the
+# PyInstaller spec, the four launchers and every doc that says `python -m
+# app.cli`, so it belongs in its own change rather than tangled up with the
+# tooling it would otherwise block.
+
+[tool.pytest.ini_options]
+# tests/ only. A bare `pytest` from the root used to also collect
+# packaging/plugin-template/test_plugin.py, which registers an example provider
+# into llm.OPENAI_COMPAT_PROVIDERS and deploy.REGISTRY - module-level registries
+# every other test shares. It is still run in CI, in its own process, so the
+# template stays validated without leaking state into the suite.
+testpaths = ["tests"]
+# -ra surfaces skips and xfails in the summary: a test that quietly stopped
+# running is worse than one that fails.
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = [
+    # Deprecations become failures: the matrix now spans 3.10 to 3.14, and this
+    # is what turns "removed in the next Python" into a red leg today rather
+    # than a support request after an operator upgrades.
+    "error",
+    # Except unclosed files. Forty-eight tests read with open(...).read() and
+    # leak the handle; each is worth fixing, none is a product bug, and doing it
+    # here would bury the change this config arrived with. Left visible rather
+    # than silenced so the cleanup stays findable.
+    "default::ResourceWarning",
+]
+
+[tool.ruff]
+line-length = 100          # matches the existing hand-wrapped style
+target-version = "py310"   # the oldest interpreter CI builds against
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    # The codebase wraps explanatory comments by hand and several exceed the
+    # limit by a word or two. Reflowing authored prose to satisfy a linter is a
+    # worse trade than the warning.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests reach into private helpers deliberately: _approval_id and Tool._effect
+# are the units under test, not incidental access.
+"tests/*" = ["E402"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+# Deliberately not --strict. The annotations here have never been checked, so a
+# strict pass reports hundreds of errors at once and gets switched off. The
+# per-module list below is the ratchet: clean leaves first, widen over time.
+warn_unused_configs = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["app.models", "app.paths", "app.settings_spec"]
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+ignore_errors = true
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = ["app/mcp_server.py"]   # optional extra, needs the mcp package
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+]

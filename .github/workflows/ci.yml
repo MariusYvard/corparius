@@ -4,16 +4,37 @@ on:
   push:
   pull_request:
 
+# A second push to the same branch makes the first one's result irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # The project ships Windows .bat, macOS .command and Linux .sh launchers and
+  # supports 3.10+, but CI only ever ran 3.12 on Linux. The legs below are an
+  # explicit include rather than a 3x3 product: the combinations that are not
+  # listed add cost without covering anything the listed ones miss.
   test:
-    runs-on: ubuntu-latest
+    name: tests (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false   # one red leg must not hide the state of the others
+      matrix:
+        include:
+          - {os: ubuntu-latest, python: "3.10"}   # the documented floor
+          - {os: ubuntu-latest, python: "3.12"}   # what the Docker image runs
+          - {os: ubuntu-latest, python: "3.14"}   # what development runs
+          - {os: windows-latest, python: "3.12"}  # os.chmod is a no-op, paths differ
+          - {os: windows-latest, python: "3.14"}
+          - {os: macos-latest, python: "3.12"}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
+          cache: pip
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -r requirements-test.txt
       - name: Run tests
         run: python -m pytest -q
 
@@ -27,8 +48,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
       - name: Install dependencies and PyInstaller
         run: pip install -r requirements-dev.txt
+      # Its own process: the example plugin registers into the shared provider
+      # registries, which is why testpaths keeps it out of the main suite.
+      - name: Validate the plugin template
+        run: python -m pytest packaging/plugin-template -q
+        env:
+          PYTHONPATH: .:packaging/plugin-template
       - name: Build the binary
         run: pyinstaller packaging/corparius.spec --noconfirm
       - name: Smoke test (offline mock console)

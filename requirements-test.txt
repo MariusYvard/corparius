@@ -1,0 +1,11 @@
+# Test dependencies, split out from requirements-dev.txt so the test matrix does
+# not drag in PyInstaller. PyInstaller trails new CPython releases by months, so
+# a single missing wheel would take out every leg of the matrix rather than just
+# the packaging job.
+#   pip install -r requirements-test.txt
+-r requirements.txt
+pytest>=8.0
+
+# Optional at-rest encryption (runtime-optional), installed here so its tests
+# actually run rather than skipping quietly. See requirements-secrets.txt.
+cryptography>=42

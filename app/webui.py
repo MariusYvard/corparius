@@ -107,9 +107,33 @@ class UiState:
         self.chats: dict[str, deque] = {}
         self.pulls: dict = {"running": False}   # Ollama model pull, background
         self.lock = threading.Lock()
+        self._store: Store | None = None
 
     def store(self) -> Store:
-        return Store(self.settings.data_path)
+        """One connection for the process, not one per request.
+
+        This used to return Store(...) fresh on every call, so a single
+        /api/overview poll paid for a makedirs, a connect, the whole SCHEMA
+        script, two chmods and a migration check - and never closed the handle.
+        Worse, the resulting per-thread connections contended: twelve concurrent
+        writers lost nine to `database is locked`.
+
+        Store guards its own connection with an RLock, so sharing it is safe;
+        sharing it *without* that lock is not, and was measured losing most of
+        its rows silently. The double-check keeps two first requests from
+        opening two connections.
+        """
+        if self._store is None:
+            with self.lock:
+                if self._store is None:
+                    self._store = Store(self.settings.data_path)
+        return self._store
+
+    def close(self) -> None:
+        with self.lock:
+            if self._store is not None:
+                self._store.close()
+                self._store = None
 
 
 def _overview(state: UiState, slug: str) -> dict:
@@ -118,15 +142,12 @@ def _overview(state: UiState, slug: str) -> dict:
     flow = store.flow_metrics(slug)
     tasks = store.list_tasks(slug)
     tick = int(store.load_state(slug).get("tick", 0))
-    spend = store.db.execute(
-        "SELECT agent, COALESCE(SUM(input_tokens+output_tokens),0) t "
-        "FROM token_usage WHERE company=? GROUP BY agent ORDER BY t DESC", (slug,)).fetchall()
-    actions = store.db.execute(
-        "SELECT agent, tool, ok, ts, substr(output,1,160) output FROM actions "
-        "WHERE company=? ORDER BY id DESC LIMIT 25", (slug,)).fetchall()
-    frozen = store.db.execute(
-        "SELECT COUNT(*) n FROM actions WHERE company=? AND tool='circuit_breaker_freeze'",
-        (slug,)).fetchone()["n"]
+    # Through the Store API rather than store.db: the connection is guarded by a
+    # lock now, so reaching past it from here would be the unsynchronised access
+    # that lock exists to prevent.
+    spend = store.spend_by_agent(slug)
+    actions = store.recent_actions(slug)
+    frozen = store.count_actions_by_tool(slug, "circuit_breaker_freeze")
     approvals = store.list_approvals(slug, "pending")
     for a in approvals:  # parameters are stored as a JSON string
         if isinstance(a.get("parameters"), str):
@@ -143,8 +164,8 @@ def _overview(state: UiState, slug: str) -> dict:
         "ok": True, "company": slug, "tick": tick, "status": st, "flow": flow,
         "tasks": by_status,
         "approvals": approvals,
-        "spend_by_agent": [dict(r) for r in spend],
-        "recent_actions": [dict(r) for r in actions],
+        "spend_by_agent": spend,
+        "recent_actions": actions,
         "freezes": frozen,
         "session_budget": s.session_token_budget,
         "llm_mock": s.llm_mock, "cloud_enabled": s.cloud_enabled,
@@ -892,4 +913,9 @@ def serve(settings: Settings, host: str | None = None, port: int | None = None) 
         server.serve_forever()
     except KeyboardInterrupt:
         server.shutdown()
+    finally:
+        # The connection now outlives the request that opened it, so shutdown is
+        # what releases the file. Windows will not let anything delete or move a
+        # store that is still open.
+        server.RequestHandlerClass.state.close()
     return 0

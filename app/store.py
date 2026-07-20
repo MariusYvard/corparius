@@ -1,8 +1,10 @@
 """SQLite persistence: actions, token usage, approvals, and per-company state."""
 from __future__ import annotations
+import functools
 import json
 import os
 import sqlite3
+import threading
 import time
 
 SCHEMA = """
@@ -61,6 +63,27 @@ def _migration_1(db: sqlite3.Connection) -> None:
 MIGRATIONS = {1: _migration_1}
 
 
+def _locked(method):
+    """Serialise every statement pair against the shared connection.
+
+    One Store is shared by the console's per-request threads and the background
+    run loop. sqlite3 serialises individual C calls, but not the execute/commit
+    pair each method below performs: without this, two threads land inside each
+    other's implicit transaction. Measured on twelve concurrent writers, that
+    raised `cannot start a transaction within a transaction` and silently kept
+    414 of 3200 rows, so the lock is load-bearing, not defensive.
+
+    RLock rather than Lock because these are genuinely re-entrant: status()
+    calls list_approvals() and list_tasks(), flow_metrics() calls both status()
+    and list_tasks(). A plain Lock self-deadlocks on the first status() call.
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
 class Store:
     def __init__(self, data_path: str):
         os.makedirs(data_path, exist_ok=True)
@@ -69,9 +92,11 @@ class Store:
                 os.chmod(data_path, 0o700)   # effective on POSIX, a no-op on Windows
         except OSError:
             pass
+        self._lock = threading.RLock()
         self.path = os.path.join(data_path, "corparius.sqlite")
         self.db = sqlite3.connect(self.path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        self._configure()
         self.db.executescript(SCHEMA)
         self.db.commit()
         try:  # the settings table holds API keys in the clear; owner only
@@ -80,6 +105,32 @@ class Store:
             pass
         self._migrate()
 
+    def _configure(self) -> None:
+        """Connection pragmas.
+
+        WAL is the one that matters across connections: app/cfg.py opens the
+        store read-only as its settings layer, and the CLI can run while the
+        console is up. Under the default rollback journal a writer excludes
+        readers outright, and SQLite returns BUSY immediately rather than
+        invoking the busy handler when two connections try to upgrade a lock at
+        once, so waiting longer does not help. WAL is recorded in the database
+        header, so it is set once and persists.
+
+        It is not available everywhere: some network filesystems refuse the
+        shared-memory sidecar WAL needs. A Docker volume on an odd backend
+        should degrade to the old behaviour rather than refuse to start, so the
+        failure is swallowed deliberately.
+        """
+        try:
+            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("PRAGMA synchronous=NORMAL")   # safe under WAL, one less fsync
+        except sqlite3.Error:
+            pass
+        # Python's sqlite3 already applies a 5s busy timeout via connect(timeout=5.0);
+        # setting it explicitly keeps that from silently changing under us.
+        self.db.execute("PRAGMA busy_timeout=5000")
+
+    @_locked
     def _migrate(self) -> None:
         """Bring the store from its recorded version up to SCHEMA_VERSION, one
         step at a time, recording progress so an interrupted upgrade resumes."""
@@ -89,9 +140,21 @@ class Store:
             self.db.execute(f"PRAGMA user_version = {int(version)}")
             self.db.commit()
 
+    def close(self) -> None:
+        with self._lock:
+            self.db.close()
+
+    def __enter__(self) -> "Store":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    @_locked
     def schema_version(self) -> int:
         return self.db.execute("PRAGMA user_version").fetchone()[0]
 
+    @_locked
     def record_action(self, company, agent, tool, parameters, output, ok) -> None:
         self.db.execute(
             "INSERT INTO actions (company, agent, tool, parameters, output, ok, ts)"
@@ -100,6 +163,7 @@ class Store:
         )
         self.db.commit()
 
+    @_locked
     def record_usage(self, company, agent, input_tokens, output_tokens) -> None:
         self.db.execute(
             "INSERT INTO token_usage (company, agent, input_tokens, output_tokens, ts)"
@@ -108,12 +172,39 @@ class Store:
         )
         self.db.commit()
 
+    @_locked
     def recent_outputs(self, company, tool, limit=3) -> list[str]:
         rows = self.db.execute(
             "SELECT output FROM actions WHERE company=? AND tool=? AND ok=1"
             " ORDER BY ts DESC LIMIT ?", (company, tool, limit)).fetchall()
         return [r["output"] for r in rows]
 
+    # Read helpers for the console overview. These live here rather than as raw
+    # SQL in app/webui.py: with the connection now guarded, a caller reaching
+    # into store.db directly would be an unsynchronised access to a locked
+    # resource, which is exactly the interleaving _locked exists to prevent.
+    @_locked
+    def spend_by_agent(self, company) -> list[dict]:
+        rows = self.db.execute(
+            "SELECT agent, COALESCE(SUM(input_tokens+output_tokens),0) t "
+            "FROM token_usage WHERE company=? GROUP BY agent ORDER BY t DESC",
+            (company,)).fetchall()
+        return [dict(r) for r in rows]
+
+    @_locked
+    def recent_actions(self, company, limit=25) -> list[dict]:
+        rows = self.db.execute(
+            "SELECT agent, tool, ok, ts, substr(output,1,160) output FROM actions "
+            "WHERE company=? ORDER BY id DESC LIMIT ?", (company, limit)).fetchall()
+        return [dict(r) for r in rows]
+
+    @_locked
+    def count_actions_by_tool(self, company, tool) -> int:
+        return self.db.execute(
+            "SELECT COUNT(*) n FROM actions WHERE company=? AND tool=?",
+            (company, tool)).fetchone()["n"]
+
+    @_locked
     def add_approval(self, req) -> None:
         self.db.execute(
             "INSERT OR REPLACE INTO approvals"
@@ -123,6 +214,7 @@ class Store:
         )
         self.db.commit()
 
+    @_locked
     def find_approval(self, company, tool, parameters, status=None):
         q = "SELECT * FROM approvals WHERE company=? AND tool=? AND parameters=?"
         args = [company, tool, json.dumps(parameters)]
@@ -133,6 +225,7 @@ class Store:
         row = self.db.execute(q, args).fetchone()
         return dict(row) if row else None
 
+    @_locked
     def list_approvals(self, company, status="pending"):
         rows = self.db.execute(
             "SELECT * FROM approvals WHERE company=? AND status=? ORDER BY ts",
@@ -140,6 +233,7 @@ class Store:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    @_locked
     def set_approval_status(self, approval_id, status, note="") -> bool:
         cur = self.db.execute(
             "UPDATE approvals SET status=?, note=? WHERE id=?", (status, note, approval_id)
@@ -147,6 +241,7 @@ class Store:
         self.db.commit()
         return cur.rowcount > 0
 
+    @_locked
     def save_state(self, company, data: dict) -> None:
         self.db.execute(
             "INSERT OR REPLACE INTO state (company, data) VALUES (?,?)",
@@ -154,22 +249,26 @@ class Store:
         )
         self.db.commit()
 
+    @_locked
     def load_state(self, company) -> dict:
         row = self.db.execute("SELECT data FROM state WHERE company=?", (company,)).fetchone()
         return json.loads(row["data"]) if row else {}
 
     # Settings saved from the console. Global, not per company: they are the
     # second layer of app/cfg.py, under the real process environment.
+    @_locked
     def all_settings(self) -> dict[str, str]:
         from . import secretbox
         rows = self.db.execute("SELECT key, value FROM settings").fetchall()
         return {r["key"]: secretbox.decrypt_safe(r["value"]) for r in rows}
 
+    @_locked
     def get_setting(self, key) -> str | None:
         from . import secretbox
         row = self.db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
         return secretbox.decrypt_safe(row["value"]) if row else None
 
+    @_locked
     def set_setting(self, key, value, secret: bool = False) -> None:
         # Secret values are encrypted at rest when CORP_SECRET_KEY is set;
         # encrypt() is a no-op otherwise, so plaintext stays the default.
@@ -182,6 +281,7 @@ class Store:
         )
         self.db.commit()
 
+    @_locked
     def delete_setting(self, key) -> bool:
         cur = self.db.execute("DELETE FROM settings WHERE key=?", (key,))
         self.db.commit()
@@ -190,6 +290,7 @@ class Store:
     # Outreach we sent, so a reply can be recognised as a reply. Without this
     # the company emails prospects and never learns whether anyone answered,
     # which is the one signal it exists to chase.
+    @_locked
     def record_outreach(self, company, email, message_id="", subject="") -> None:
         self.db.execute(
             "INSERT INTO outreach (company, email, message_id, subject, ts) VALUES (?,?,?,?,?)",
@@ -197,6 +298,7 @@ class Store:
         )
         self.db.commit()
 
+    @_locked
     def pending_outreach(self, company) -> dict[str, dict]:
         """Addresses we wrote to that have not answered, newest send per address."""
         rows = self.db.execute(
@@ -205,6 +307,7 @@ class Store:
             (company,)).fetchall()
         return {r["email"]: dict(r) for r in rows}
 
+    @_locked
     def mark_replied(self, company, email, snippet="") -> int:
         cur = self.db.execute(
             "UPDATE outreach SET replied_at=?, reply_snippet=? "
@@ -214,6 +317,7 @@ class Store:
         self.db.commit()
         return cur.rowcount
 
+    @_locked
     def outreach_stats(self, company) -> dict:
         row = self.db.execute(
             "SELECT COUNT(*) sent, COUNT(replied_at) replied FROM outreach WHERE company=?",
@@ -222,6 +326,7 @@ class Store:
         return {"sent": sent, "replied": replied,
                 "reply_rate": round(replied / sent, 3) if sent else 0.0}
 
+    @_locked
     def purge_company(self, company) -> dict[str, int]:
         """Drop everything recorded for one company. Only ever called with an
         explicit confirmation from the operator; the config itself is moved to
@@ -233,6 +338,7 @@ class Store:
         self.db.commit()
         return removed
 
+    @_locked
     def status(self, company) -> dict:
         actions = self.db.execute(
             "SELECT COUNT(*) n FROM actions WHERE company=?", (company,)
@@ -252,6 +358,7 @@ class Store:
             "open_tasks": len(self.list_tasks(company, "approved")),
         }
 
+    @_locked
     def add_task(self, company, title, target, priority=2, status="approved",
                  created_by="ceo", note="", tool="") -> int:
         cur = self.db.execute(
@@ -261,6 +368,7 @@ class Store:
         self.db.commit()
         return cur.lastrowid
 
+    @_locked
     def list_tasks(self, company, status=None) -> list[dict]:
         if status:
             rows = self.db.execute(
@@ -272,6 +380,7 @@ class Store:
                 (company,)).fetchall()
         return [dict(r) for r in rows]
 
+    @_locked
     def claim_next_task(self, company, target):
         row = self.db.execute(
             "SELECT * FROM tasks WHERE company=? AND target=? AND status='approved'"
@@ -282,14 +391,17 @@ class Store:
         self.db.commit()
         return dict(row)
 
+    @_locked
     def complete_task(self, task_id, note="") -> None:
         self.db.execute("UPDATE tasks SET status='done', note=? WHERE id=?", (note, task_id))
         self.db.commit()
 
+    @_locked
     def set_task_status(self, task_id, status, note="") -> None:
         self.db.execute("UPDATE tasks SET status=?, note=? WHERE id=?", (status, note, task_id))
         self.db.commit()
 
+    @_locked
     def update_task(self, task_id, **fields) -> None:
         allowed = {"title", "target", "priority", "note", "status", "tool"}
         items = [(k, v) for k, v in fields.items() if k in allowed]
@@ -300,11 +412,13 @@ class Store:
                         [v for _, v in items] + [task_id])
         self.db.commit()
 
+    @_locked
     def wip_count(self, company, target) -> int:
         return self.db.execute(
             "SELECT COUNT(*) n FROM tasks WHERE company=? AND target=?"
             " AND status IN ('approved','in_progress')", (company, target)).fetchone()["n"]
 
+    @_locked
     def flow_metrics(self, company) -> dict:
         rows = self.list_tasks(company)
         done = [t for t in rows if t["status"] == "done"]

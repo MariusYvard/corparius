@@ -79,6 +79,7 @@ def _connect(timeout: int):
     host = cfg.get("CORP_IMAP_HOST", "").strip()
     port = cfg.get_int("CORP_IMAP_PORT", 993)
     # 993 is implicit TLS, 143 is STARTTLS. Same trap as SMTP's 465 and 587.
+    conn: imaplib.IMAP4   # IMAP4_SSL is a subclass; the STARTTLS branch upgrades in place
     if port == 993:
         conn = imaplib.IMAP4_SSL(host, port, timeout=timeout)
     else:

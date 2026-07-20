@@ -40,9 +40,9 @@ python start.py                                    # run the console locally
 ## Before you open a pull request
 
 ```bash
-python -m pytest -q                                        # green, with tests for new behaviour
+python -m pytest -q          # green, with tests for new behaviour
 ruff check .
-mypy app/models.py app/paths.py app/settings_spec.py       # the ratchet; widen it if you can
+mypy app/
 ```
 
 - The offline mock mode still runs with no keys and no network.
@@ -51,9 +51,9 @@ mypy app/models.py app/paths.py app/settings_spec.py       # the ratchet; widen 
   `requirements-test.txt`.
 - Docs updated if you changed behavior a user can see.
 
-`mypy` is scoped to a short list rather than all of `app/` on purpose: the
-annotations were never checked, so a strict pass reports enough at once to get
-switched off. `mypy app/` shows what is left. Retiring a module from that list is
+`mypy app/` is clean at the default level. The remaining ratchet is strictness:
+`disallow_untyped_defs` is on for a few fully-typed leaf modules in
+`pyproject.toml`, and adding a module to that list once it is fully annotated is
 a welcome change on its own.
 
 ## Plugins

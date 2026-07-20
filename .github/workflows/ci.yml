@@ -51,11 +51,10 @@ jobs:
         run: pip install -r requirements-test.txt
       - name: Lint
         run: ruff check .
-      # Scoped to the ratchet list, not all of app/. `mypy app/` still reports
-      # nine annotation gaps; widening this line is how they get retired, one
-      # module at a time. See pyproject.toml.
+      # All of app/ at the default level. The next ratchet is strictness
+      # (disallow_untyped_defs), scoped per-module in pyproject.toml.
       - name: Types
-        run: mypy app/models.py app/paths.py app/settings_spec.py
+        run: mypy app/
       - name: Coverage
         run: |
           coverage run -m pytest -q

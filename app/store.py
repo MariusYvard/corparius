@@ -366,6 +366,7 @@ class Store:
             " VALUES (?,?,?,?,?,?,?,?,?)",
             (company, title, target, priority, status, created_by, note, tool, time.time()))
         self.db.commit()
+        assert cur.lastrowid is not None   # always set after an AUTOINCREMENT insert
         return cur.lastrowid
 
     @_locked
@@ -423,10 +424,10 @@ class Store:
         rows = self.list_tasks(company)
         done = [t for t in rows if t["status"] == "done"]
         wip = [t for t in rows if t["status"] in ("approved", "in_progress")]
-        by_target: dict = {}
+        by_target: dict[str, int] = {}
         for t in wip:
             by_target[t["target"]] = by_target.get(t["target"], 0) + 1
-        bottleneck = max(by_target, key=by_target.get) if by_target else None
+        bottleneck = max(by_target, key=by_target.__getitem__) if by_target else None
         st = self.status(company)
         defects = self.db.execute(
             "SELECT COUNT(*) n FROM actions WHERE company=? AND ok=0", (company,)).fetchone()["n"]

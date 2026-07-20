@@ -216,7 +216,7 @@ def _providers_payload() -> dict:
 # operator confirms with a click, so the chat never mutates on its own and money
 # or production still passes the HITL gate on the resulting run. The LLM only
 # routes intent; it opens no new path.
-_CEO_ACTIONS = {
+_CEO_ACTIONS: dict[str, dict] = {
     "run_day": {"endpoint": "/api/run", "body": {"ticks": 24}, "label_en": "Run a day",
                 "label_fr": "Lancer une journée"},
     "run_loop": {"endpoint": "/api/run", "body": {"ticks": 24, "loop": True},
@@ -464,7 +464,7 @@ def _edit_task(store, body: dict) -> tuple[int, dict]:
     """Edit fields, decide, or both. The CLI could already retitle and
     reprioritise a task; the console could only approve or reject one."""
     try:
-        task_id = int(body.get("id"))
+        task_id = int(body.get("id"))   # type: ignore[arg-type]  # None -> TypeError, caught here
     except (TypeError, ValueError):
         return 400, {"ok": False, "error": "a task id is required"}
     decision = body.get("decision")
@@ -1194,5 +1194,5 @@ def serve(settings: Settings, host: str | None = None, port: int | None = None) 
         # The connection now outlives the request that opened it, so shutdown is
         # what releases the file. Windows will not let anything delete or move a
         # store that is still open.
-        server.RequestHandlerClass.state.close()
+        server.RequestHandlerClass.state.close()  # type: ignore[attr-defined]  # injected in build_server
     return 0

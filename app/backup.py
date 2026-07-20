@@ -5,7 +5,9 @@ saying out loud, because this design created the fact: the store now holds the
 API keys saved from the console, so a backup zip carries them in the clear.
 `describe()` is the sentence the CLI and the console both show.
 """
+
 from __future__ import annotations
+
 import os
 import time
 import zipfile
@@ -19,10 +21,14 @@ from . import paths
 # companies rather than anything inside the read-only bundle.
 ROOT = paths.user_home()
 
-WARNING_EN = ("This archive contains data/corparius.sqlite, which holds the API keys "
-              "saved from the console in the clear. Treat the file like a password.")
-WARNING_FR = ("Cette archive contient data/corparius.sqlite, qui stocke en clair les clés "
-              "API enregistrées depuis la console. Traitez le fichier comme un mot de passe.")
+WARNING_EN = (
+    "This archive contains data/corparius.sqlite, which holds the API keys "
+    "saved from the console in the clear. Treat the file like a password."
+)
+WARNING_FR = (
+    "Cette archive contient data/corparius.sqlite, qui stocke en clair les clés "
+    "API enregistrées depuis la console. Traitez le fichier comme un mot de passe."
+)
 
 
 def make_backup(data_path: str, out_dir: str | None = None, stamp: str | None = None) -> Path:
@@ -36,7 +42,7 @@ def make_backup(data_path: str, out_dir: str | None = None, stamp: str | None = 
                 continue
             for root, _dirs, files in os.walk(base):
                 if ".trash" in Path(root).parts:
-                    continue          # deleted companies are not worth carrying forward
+                    continue  # deleted companies are not worth carrying forward
                 for name in files:
                     full = Path(root) / name
                     try:

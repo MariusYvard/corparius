@@ -15,6 +15,7 @@ The API (app/plugins.py PluginAPI):
   api.register_template(dict)                # a company template (see app.company.TEMPLATES)
   api.customize_agent(role, **overrides)     # tweak an existing agent's spec
 """
+
 from __future__ import annotations
 
 from app.deploy import DeployProvider

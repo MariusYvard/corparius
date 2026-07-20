@@ -6,6 +6,7 @@ The rejection path in particular is untested territory that matters — a reject
 tool must come back as a recoverable error the agent can carry on from, not as a
 silent success or a crash.
 """
+
 from app.hitl import REJECTION_MESSAGE, ApprovalGate, _approval_id
 from app.models import ToolResult
 from app.store import Store

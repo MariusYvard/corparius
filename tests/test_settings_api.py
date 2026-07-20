@@ -1,5 +1,6 @@
 """The settings screen's contract: every field the operator can set, what layer
 answers for it, and never a secret's value on the wire."""
+
 import json
 import threading
 
@@ -17,12 +18,11 @@ def server(tmp_path, monkeypatch):
     monkeypatch.delenv("CORP_UI_TOKEN", raising=False)
     cfg.set_dotenv_path(tmp_path / ".env")
     cfg.invalidate()
-    srv = webui.build_server(Settings(), host="127.0.0.1", port=0,
-                             env_file=tmp_path / ".env")
+    srv = webui.build_server(Settings(), host="127.0.0.1", port=0, env_file=tmp_path / ".env")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()
-    srv.server_close()   # release the listening socket, not just the loop
+    srv.server_close()  # release the listening socket, not just the loop
 
 
 def test_lists_every_registry_field_with_its_source(server):
@@ -54,8 +54,7 @@ def test_a_mail_account_is_three_questions_not_thirteen(server):
 
 
 def test_round_trip_and_clear(server):
-    status, data = _call(server, "POST", "/api/settings",
-                         {"values": {"CORP_WIP_LIMIT": "9"}})
+    status, data = _call(server, "POST", "/api/settings", {"values": {"CORP_WIP_LIMIT": "9"}})
     assert status == 200 and data["ok"]
     wip = next(f for f in data["fields"] if f["key"] == "CORP_WIP_LIMIT")
     assert wip["value"] == "9" and wip["source"] == "db"
@@ -68,8 +67,9 @@ def test_round_trip_and_clear(server):
 
 
 def test_secrets_are_write_only(server):
-    status, data = _call(server, "POST", "/api/settings",
-                         {"values": {"STRIPE_API_KEY": "sk_live_dontleakme"}})
+    status, data = _call(
+        server, "POST", "/api/settings", {"values": {"STRIPE_API_KEY": "sk_live_dontleakme"}}
+    )
     assert status == 200 and data["ok"]
     assert "sk_live_dontleakme" not in json.dumps(data)
     stripe = next(f for f in data["fields"] if f["key"] == "STRIPE_API_KEY")
@@ -79,14 +79,13 @@ def test_secrets_are_write_only(server):
 
 
 def test_types_are_validated(server):
-    status, data = _call(server, "POST", "/api/settings",
-                         {"values": {"CORP_WIP_LIMIT": "not-a-number"}})
+    status, data = _call(
+        server, "POST", "/api/settings", {"values": {"CORP_WIP_LIMIT": "not-a-number"}}
+    )
     assert status == 400 and data["ok"] is False and "whole number" in data["error"]
-    status, data = _call(server, "POST", "/api/settings",
-                         {"values": {"CORP_LOG_LEVEL": "LOUD"}})
+    status, data = _call(server, "POST", "/api/settings", {"values": {"CORP_LOG_LEVEL": "LOUD"}})
     assert status == 400 and data["ok"] is False
-    status, data = _call(server, "POST", "/api/settings",
-                         {"values": {"PATH": "evil"}})
+    status, data = _call(server, "POST", "/api/settings", {"values": {"PATH": "evil"}})
     assert data["ok"] is False
 
 

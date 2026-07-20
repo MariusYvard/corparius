@@ -1,5 +1,7 @@
 """Command line: init / run / status / approvals / approve / reject."""
+
 from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -52,6 +54,7 @@ def cmd_init(args) -> None:
 
 def cmd_run(args) -> None:
     from .orchestrator import Runtime
+
     cfg = _load_company(args.company)
     store = _store()
     result = Runtime(settings, store).run(cfg, ticks=args.ticks, loop=args.loop)
@@ -65,14 +68,17 @@ def cmd_status(args) -> None:
     tick = store.load_state(cfg["slug"]).get("tick", 0)
     print(f"== {cfg.get('name')} ({cfg['slug']}) ==")
     print(f"clock: tick {tick}")
-    print(f"actions: {s['actions']}  tokens: {s['tokens']}  "
-          f"pending approvals: {s['pending_approvals']}")
+    print(
+        f"actions: {s['actions']}  tokens: {s['tokens']}  "
+        f"pending approvals: {s['pending_approvals']}"
+    )
     for agent, n in sorted(s["by_agent"].items()):
         print(f"  {agent:12} {n}")
 
 
 def cmd_site(args) -> None:
     from . import sitegen
+
     cfg = _load_company(args.company)
     out_dir = str(paths.site_dir(settings.data_path, cfg["slug"]))
     path = sitegen.build_site(cfg, out_dir, headline=args.headline or None)
@@ -88,8 +94,10 @@ def cmd_tasks(args) -> None:
         return
     for t in rows:
         tool = t.get("tool") or "-"
-        print(f"#{t['id']:<3} [{t['status']:<11}] p{t['priority']} {t['target']:<9} "
-              f"{t['title']} [{tool}] (by {t['created_by']})")
+        print(
+            f"#{t['id']:<3} [{t['status']:<11}] p{t['priority']} {t['target']:<9} "
+            f"{t['title']} [{tool}] (by {t['created_by']})"
+        )
 
 
 def cmd_task(args) -> None:
@@ -113,7 +121,8 @@ def cmd_task(args) -> None:
 
 
 def cmd_deploy(args) -> None:
-    from . import sitegen, deploy
+    from . import deploy, sitegen
+
     cfg = _load_company(args.company)
     out_dir = str(paths.site_dir(settings.data_path, cfg["slug"]))
     if not os.path.exists(os.path.join(out_dir, "index.html")):
@@ -126,11 +135,15 @@ def cmd_flow(args) -> None:
     store = _store()
     fm = store.flow_metrics(cfg["slug"])
     print(f"== flow: {cfg.get('name')} ==")
-    print(f"throughput(done): {fm['throughput']}   wip: {fm['wip']}   "
-          f"tokens/task: {fm['tokens_per_completed_task']}   "
-          f"bottleneck: {fm['bottleneck'] or 'none'}")
-    print(f"waste: {fm['defects']} defects (failed actions), "
-          f"{fm['waiting']} waiting (pending approvals)")
+    print(
+        f"throughput(done): {fm['throughput']}   wip: {fm['wip']}   "
+        f"tokens/task: {fm['tokens_per_completed_task']}   "
+        f"bottleneck: {fm['bottleneck'] or 'none'}"
+    )
+    print(
+        f"waste: {fm['defects']} defects (failed actions), "
+        f"{fm['waiting']} waiting (pending approvals)"
+    )
     for t, n in sorted(fm["by_target"].items()):
         print(f"  {t:12} {n} open")
 
@@ -148,11 +161,13 @@ def cmd_board(args) -> None:
 
 def cmd_doctor(args) -> None:
     from .doctor import main as doctor_main
+
     sys.exit(doctor_main(quiet=args.quiet))
 
 
 def cmd_backup(args) -> None:
     from . import backup
+
     path = backup.make_backup(settings.data_path, args.out)
     print(f"backup written: {path}")
     print(backup.WARNING_EN)
@@ -160,6 +175,7 @@ def cmd_backup(args) -> None:
 
 def cmd_ui(args) -> None:
     from .webui import serve
+
     raise SystemExit(serve(settings, host=args.host, port=args.port))
 
 
@@ -175,7 +191,7 @@ def cmd_approvals(args) -> None:
 
 
 def cmd_decide(args, status: str) -> None:
-    _load_company(args.company)   # validates --company, exits with a message if wrong
+    _load_company(args.company)  # validates --company, exits with a message if wrong
     store = _store()
     ok = store.set_approval_status(args.id, status, args.note or "")
     print(f"{args.id} -> {status}" if ok else "approval id not found")
@@ -184,9 +200,9 @@ def cmd_decide(args, status: str) -> None:
 def main(argv=None) -> None:
     setup_logging()
     from . import plugins
-    plugins.load()   # no-op unless CORP_PLUGINS_ENABLED; extends the registries
-    p = argparse.ArgumentParser(prog="corparius",
-                                description="Run autonomous AI micro-companies.")
+
+    plugins.load()  # no-op unless CORP_PLUGINS_ENABLED; extends the registries
+    p = argparse.ArgumentParser(prog="corparius", description="Run autonomous AI micro-companies.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def with_company(sp):
@@ -247,6 +263,7 @@ def main(argv=None) -> None:
     sp.set_defaults(fn=lambda a: cmd_decide(a, "rejected"))
 
     from . import plugincli
+
     plugincli.add_parser(sub)
 
     args = p.parse_args(argv)

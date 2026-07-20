@@ -2,7 +2,9 @@
 A rejection is handed back to the agent as a recoverable tool error, exactly as
 an approval webhook (n8n, Slack) would return it.
 """
+
 from __future__ import annotations
+
 import hashlib
 import time
 
@@ -34,8 +36,12 @@ class ApprovalGate:
             return ToolResult(ok=False, output=REJECTION_MESSAGE, denied=True)
         req = ApprovalRequest(
             id=_approval_id(company, tool.name, parameters),
-            company=company, agent=agent, tool=tool.name,
-            parameters=parameters, status="pending", ts=time.time(),
+            company=company,
+            agent=agent,
+            tool=tool.name,
+            parameters=parameters,
+            status="pending",
+            ts=time.time(),
         )
         self.store.add_approval(req)
         return ToolResult(ok=False, output="pending human approval", pending=True)

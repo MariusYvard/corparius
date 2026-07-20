@@ -1,5 +1,6 @@
 """The CEO chat can propose an action, and the operator confirms it. The LLM only
 routes intent to an existing audited endpoint; it never executes on its own."""
+
 import threading
 
 import pytest
@@ -22,14 +23,18 @@ def server(tmp_path, monkeypatch):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()
-    srv.server_close()   # release the listening socket, not just the loop
+    srv.server_close()  # release the listening socket, not just the loop
 
 
 def _model(monkeypatch, reply_json):
     # Force the router to return a scripted JSON so the harness classifies intent.
-    monkeypatch.setattr(webui.HybridRouter, "generate",
-        lambda self, msgs, difficulty=None, model=None, max_tokens=512:
-        LLMResult(text=reply_json, usage=Usage(5, 5), model="m", provider="fake"))
+    monkeypatch.setattr(
+        webui.HybridRouter,
+        "generate",
+        lambda self, msgs, difficulty=None, model=None, max_tokens=512: LLMResult(
+            text=reply_json, usage=Usage(5, 5), model="m", provider="fake"
+        ),
+    )
 
 
 def test_a_run_request_becomes_a_confirmable_proposal(server, monkeypatch):
@@ -51,7 +56,10 @@ def test_plain_question_gets_no_proposal(server, monkeypatch):
 
 
 def test_use_claude_proposal_needs_no_company(server, monkeypatch):
-    _model(monkeypatch, '{"reply": "I can switch you to your Claude subscription.", "intent": "use_claude"}')
+    _model(
+        monkeypatch,
+        '{"reply": "I can switch you to your Claude subscription.", "intent": "use_claude"}',
+    )
     status, d = _call(server, "POST", "/api/chat", {"company": "example", "message": "use claude"})
     assert d["proposal"]["endpoint"] == "/api/claude/setup"
     assert d["proposal"]["needs_company"] is False
@@ -59,6 +67,7 @@ def test_use_claude_proposal_needs_no_company(server, monkeypatch):
 
 def test_reply_is_localized_request(server, monkeypatch):
     _model(monkeypatch, '{"reply": "Bonjour, tout va bien.", "intent": "answer"}')
-    status, d = _call(server, "POST", "/api/chat",
-                      {"company": "example", "message": "salut", "lang": "fr"})
+    status, d = _call(
+        server, "POST", "/api/chat", {"company": "example", "message": "salut", "lang": "fr"}
+    )
     assert d["proposal"] is None and "Bonjour" in d["reply"]

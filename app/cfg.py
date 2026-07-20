@@ -21,7 +21,9 @@ database is — so console writes to them go to .env instead.
 never creates a file: the store is opened read-only and a missing database is
 simply an empty layer.
 """
+
 from __future__ import annotations
+
 import os
 import sqlite3
 import threading
@@ -42,8 +44,15 @@ ROOT = paths.user_home()
 # ordinary setting, a successful cross-site write to /api/settings could add the
 # attacker's own host to the allow-list and disable the defence permanently. A
 # security control must not be writable through the surface it protects.
-BOOTSTRAP = ("CORP_DATA_PATH", "CORP_LOG_LEVEL", "CORP_UI_HOST", "CORP_UI_PORT",
-             "CORP_UI_TOKEN", "CORP_UI_ALLOWED_HOSTS", "CORP_SECRET_KEY")
+BOOTSTRAP = (
+    "CORP_DATA_PATH",
+    "CORP_LOG_LEVEL",
+    "CORP_UI_HOST",
+    "CORP_UI_PORT",
+    "CORP_UI_TOKEN",
+    "CORP_UI_ALLOWED_HOSTS",
+    "CORP_SECRET_KEY",
+)
 
 _lock = threading.RLock()
 
@@ -75,7 +84,7 @@ def parse_dotenv(text: str) -> dict[str, str]:
         key, _, value = line.partition("=")
         key = key.strip()
         if key.startswith("export "):
-            key = key[len("export "):].strip()
+            key = key[len("export ") :].strip()
         if key:
             out[key] = _unquote(value)
     return out
@@ -123,8 +132,9 @@ def _db_layer() -> dict[str, str]:
                 _db_cache = {}
                 return _db_cache
             try:
-                _db_conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True,
-                                           check_same_thread=False)
+                _db_conn = sqlite3.connect(
+                    f"file:{path}?mode=ro", uri=True, check_same_thread=False
+                )
             except sqlite3.Error:
                 _db_cache = {}
                 return _db_cache
@@ -138,6 +148,7 @@ def _db_layer() -> dict[str, str]:
                 # Values may be encrypted at rest (opt-in, CORP_SECRET_KEY);
                 # decrypt_safe leaves plaintext untouched and never raises.
                 from . import secretbox
+
                 _db_cache = {k: secretbox.decrypt_safe(v) for k, v in rows}
                 _db_version = version
         except sqlite3.Error:

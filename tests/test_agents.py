@@ -3,6 +3,7 @@ toolbox until an agent turn hits a KeyError mid-run. Executor._invoke indexes
 TOOLS[tool_name] with no guard, which makes a typo in a playbook a crash for
 that company's day, on the tick the role happens to be due.
 """
+
 from app.agents import ROSTER
 from app.models import AgentRole, Difficulty
 from app.tools import TOOLS
@@ -30,7 +31,7 @@ def test_every_playbook_tool_exists():
 def test_cadences_are_positive_or_on_demand():
     for role, spec in ROSTER.items():
         if spec.cadence_hours is None:
-            continue   # on demand, never scheduled
+            continue  # on demand, never scheduled
         assert spec.cadence_hours > 0, f"{role.value} has a non-positive cadence"
 
 

@@ -25,7 +25,9 @@ a frozen build, the per-OS directory; otherwise the repository root. Because a
 source checkout resolves to the repository root, every default is byte-identical
 to the pre-packaging behavior, and the test suite is unaffected.
 """
+
 from __future__ import annotations
+
 import os
 import sys
 from pathlib import Path

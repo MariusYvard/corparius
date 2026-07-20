@@ -21,15 +21,18 @@ Design:
 CORP_SECRET_KEY is a bootstrap key (app/cfg.BOOTSTRAP): it resolves from the
 environment or .env, never from the store it would need to decrypt.
 """
+
 from __future__ import annotations
 
 PREFIX = "enc:v1:"
 # Fixed application salt; see the module docstring for why this is acceptable.
 _SALT = b"corparius.secretbox.v1"
 
-_INSTALL_HINT = ("CORP_SECRET_KEY is set but the 'cryptography' package is not "
-                 "installed. Run: pip install -r requirements-secrets.txt "
-                 "(or pip install cryptography), or unset CORP_SECRET_KEY.")
+_INSTALL_HINT = (
+    "CORP_SECRET_KEY is set but the 'cryptography' package is not "
+    "installed. Run: pip install -r requirements-secrets.txt "
+    "(or pip install cryptography), or unset CORP_SECRET_KEY."
+)
 
 
 def is_encrypted(value: str) -> bool:
@@ -40,12 +43,14 @@ def _passphrase() -> str:
     # Lazy import: app/cfg imports this module, so importing it at module level
     # would be circular. By call time cfg is loaded.
     from . import cfg
+
     return cfg.get("CORP_SECRET_KEY", "").strip()
 
 
 def available() -> bool:
     try:
         import cryptography  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -59,9 +64,10 @@ def enabled() -> bool:
 def _fernet(passphrase: str):
     import base64
     import hashlib
+
     from cryptography.fernet import Fernet
-    key = hashlib.scrypt(passphrase.encode("utf-8"), salt=_SALT,
-                         n=2 ** 14, r=8, p=1, dklen=32)
+
+    key = hashlib.scrypt(passphrase.encode("utf-8"), salt=_SALT, n=2**14, r=8, p=1, dklen=32)
     return Fernet(base64.urlsafe_b64encode(key))
 
 
@@ -93,8 +99,9 @@ def decrypt(value: str) -> str:
     if not available():
         raise RuntimeError(_INSTALL_HINT)
     from cryptography.fernet import InvalidToken
+
     try:
-        return _fernet(passphrase).decrypt(value[len(PREFIX):].encode("ascii")).decode("utf-8")
+        return _fernet(passphrase).decrypt(value[len(PREFIX) :].encode("ascii")).decode("utf-8")
     except InvalidToken as exc:
         raise RuntimeError("could not decrypt a secret: wrong CORP_SECRET_KEY?") from exc
 

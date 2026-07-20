@@ -3,7 +3,9 @@ file source is always available; a headless browser source can watch a public
 page. Same responsibility as lead research: respect each source's terms and the
 applicable law, and prefer public data.
 """
+
 from __future__ import annotations
+
 import os
 
 from . import cfg, leadsource
@@ -57,7 +59,7 @@ def find_signals(keywords: list[str], limit: int = 5) -> list[str]:
             continue
         try:
             hits = fn(keywords, limit)
-        except Exception:   # a flaky source must not break the chain
+        except Exception:  # a flaky source must not break the chain
             continue
         if hits:
             return hits

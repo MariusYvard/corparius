@@ -1,5 +1,7 @@
 """SQLite persistence: actions, token usage, approvals, and per-company state."""
+
 from __future__ import annotations
+
 import functools
 import json
 import os
@@ -77,10 +79,12 @@ def _locked(method):
     calls list_approvals() and list_tasks(), flow_metrics() calls both status()
     and list_tasks(). A plain Lock self-deadlocks on the first status() call.
     """
+
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         with self._lock:
             return method(self, *args, **kwargs)
+
     return wrapper
 
 
@@ -89,7 +93,7 @@ class Store:
         os.makedirs(data_path, exist_ok=True)
         try:  # the store holds API keys in the clear; keep the dir owner-only
             if os.name != "nt":
-                os.chmod(data_path, 0o700)   # effective on POSIX, a no-op on Windows
+                os.chmod(data_path, 0o700)  # effective on POSIX, a no-op on Windows
         except OSError:
             pass
         self._lock = threading.RLock()
@@ -100,7 +104,7 @@ class Store:
         self.db.executescript(SCHEMA)
         self.db.commit()
         try:  # the settings table holds API keys in the clear; owner only
-            os.chmod(self.path, 0o600)   # effective on POSIX, a no-op on Windows
+            os.chmod(self.path, 0o600)  # effective on POSIX, a no-op on Windows
         except OSError:
             pass
         self._migrate()
@@ -123,7 +127,7 @@ class Store:
         """
         try:
             self.db.execute("PRAGMA journal_mode=WAL")
-            self.db.execute("PRAGMA synchronous=NORMAL")   # safe under WAL, one less fsync
+            self.db.execute("PRAGMA synchronous=NORMAL")  # safe under WAL, one less fsync
         except sqlite3.Error:
             pass
         # Python's sqlite3 already applies a 5s busy timeout via connect(timeout=5.0);
@@ -176,7 +180,9 @@ class Store:
     def recent_outputs(self, company, tool, limit=3) -> list[str]:
         rows = self.db.execute(
             "SELECT output FROM actions WHERE company=? AND tool=? AND ok=1"
-            " ORDER BY ts DESC LIMIT ?", (company, tool, limit)).fetchall()
+            " ORDER BY ts DESC LIMIT ?",
+            (company, tool, limit),
+        ).fetchall()
         return [r["output"] for r in rows]
 
     # Read helpers for the console overview. These live here rather than as raw
@@ -188,29 +194,40 @@ class Store:
         rows = self.db.execute(
             "SELECT agent, COALESCE(SUM(input_tokens+output_tokens),0) t "
             "FROM token_usage WHERE company=? GROUP BY agent ORDER BY t DESC",
-            (company,)).fetchall()
+            (company,),
+        ).fetchall()
         return [dict(r) for r in rows]
 
     @_locked
     def recent_actions(self, company, limit=25) -> list[dict]:
         rows = self.db.execute(
             "SELECT agent, tool, ok, ts, substr(output,1,160) output FROM actions "
-            "WHERE company=? ORDER BY id DESC LIMIT ?", (company, limit)).fetchall()
+            "WHERE company=? ORDER BY id DESC LIMIT ?",
+            (company, limit),
+        ).fetchall()
         return [dict(r) for r in rows]
 
     @_locked
     def count_actions_by_tool(self, company, tool) -> int:
         return self.db.execute(
-            "SELECT COUNT(*) n FROM actions WHERE company=? AND tool=?",
-            (company, tool)).fetchone()["n"]
+            "SELECT COUNT(*) n FROM actions WHERE company=? AND tool=?", (company, tool)
+        ).fetchone()["n"]
 
     @_locked
     def add_approval(self, req) -> None:
         self.db.execute(
             "INSERT OR REPLACE INTO approvals"
             " (id, company, agent, tool, parameters, status, note, ts) VALUES (?,?,?,?,?,?,?,?)",
-            (req.id, req.company, req.agent, req.tool, json.dumps(req.parameters),
-             req.status, req.note, req.ts),
+            (
+                req.id,
+                req.company,
+                req.agent,
+                req.tool,
+                json.dumps(req.parameters),
+                req.status,
+                req.note,
+                req.ts,
+            ),
         )
         self.db.commit()
 
@@ -259,12 +276,14 @@ class Store:
     @_locked
     def all_settings(self) -> dict[str, str]:
         from . import secretbox
+
         rows = self.db.execute("SELECT key, value FROM settings").fetchall()
         return {r["key"]: secretbox.decrypt_safe(r["value"]) for r in rows}
 
     @_locked
     def get_setting(self, key) -> str | None:
         from . import secretbox
+
         row = self.db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
         return secretbox.decrypt_safe(row["value"]) if row else None
 
@@ -274,6 +293,7 @@ class Store:
         # encrypt() is a no-op otherwise, so plaintext stays the default.
         if secret:
             from . import secretbox
+
             value = secretbox.encrypt(value)
         self.db.execute(
             "INSERT OR REPLACE INTO settings (key, value, secret, updated_at) VALUES (?,?,?,?)",
@@ -304,7 +324,8 @@ class Store:
         rows = self.db.execute(
             "SELECT email, MAX(ts) ts, subject FROM outreach "
             "WHERE company=? AND replied_at IS NULL AND email<>'' GROUP BY email",
-            (company,)).fetchall()
+            (company,),
+        ).fetchall()
         return {r["email"]: dict(r) for r in rows}
 
     @_locked
@@ -321,10 +342,14 @@ class Store:
     def outreach_stats(self, company) -> dict:
         row = self.db.execute(
             "SELECT COUNT(*) sent, COUNT(replied_at) replied FROM outreach WHERE company=?",
-            (company,)).fetchone()
+            (company,),
+        ).fetchone()
         sent, replied = row["sent"], row["replied"]
-        return {"sent": sent, "replied": replied,
-                "reply_rate": round(replied / sent, 3) if sent else 0.0}
+        return {
+            "sent": sent,
+            "replied": replied,
+            "reply_rate": round(replied / sent, 3) if sent else 0.0,
+        }
 
     @_locked
     def purge_company(self, company) -> dict[str, int]:
@@ -359,14 +384,24 @@ class Store:
         }
 
     @_locked
-    def add_task(self, company, title, target, priority=2, status="approved",
-                 created_by="ceo", note="", tool="") -> int:
+    def add_task(
+        self,
+        company,
+        title,
+        target,
+        priority=2,
+        status="approved",
+        created_by="ceo",
+        note="",
+        tool="",
+    ) -> int:
         cur = self.db.execute(
             "INSERT INTO tasks (company, title, target, priority, status, created_by, note, tool, ts)"
             " VALUES (?,?,?,?,?,?,?,?,?)",
-            (company, title, target, priority, status, created_by, note, tool, time.time()))
+            (company, title, target, priority, status, created_by, note, tool, time.time()),
+        )
         self.db.commit()
-        assert cur.lastrowid is not None   # always set after an AUTOINCREMENT insert
+        assert cur.lastrowid is not None  # always set after an AUTOINCREMENT insert
         return cur.lastrowid
 
     @_locked
@@ -374,18 +409,21 @@ class Store:
         if status:
             rows = self.db.execute(
                 "SELECT * FROM tasks WHERE company=? AND status=? ORDER BY priority DESC, ts",
-                (company, status)).fetchall()
+                (company, status),
+            ).fetchall()
         else:
             rows = self.db.execute(
-                "SELECT * FROM tasks WHERE company=? ORDER BY status, priority DESC, ts",
-                (company,)).fetchall()
+                "SELECT * FROM tasks WHERE company=? ORDER BY status, priority DESC, ts", (company,)
+            ).fetchall()
         return [dict(r) for r in rows]
 
     @_locked
     def claim_next_task(self, company, target):
         row = self.db.execute(
             "SELECT * FROM tasks WHERE company=? AND target=? AND status='approved'"
-            " ORDER BY priority DESC, ts ASC LIMIT 1", (company, target)).fetchone()
+            " ORDER BY priority DESC, ts ASC LIMIT 1",
+            (company, target),
+        ).fetchone()
         if row is None:
             return None
         self.db.execute("UPDATE tasks SET status='in_progress' WHERE id=?", (row["id"],))
@@ -409,15 +447,16 @@ class Store:
         if not items:
             return
         sets = ", ".join(f"{k}=?" for k, _ in items)
-        self.db.execute(f"UPDATE tasks SET {sets} WHERE id=?",
-                        [v for _, v in items] + [task_id])
+        self.db.execute(f"UPDATE tasks SET {sets} WHERE id=?", [v for _, v in items] + [task_id])
         self.db.commit()
 
     @_locked
     def wip_count(self, company, target) -> int:
         return self.db.execute(
             "SELECT COUNT(*) n FROM tasks WHERE company=? AND target=?"
-            " AND status IN ('approved','in_progress')", (company, target)).fetchone()["n"]
+            " AND status IN ('approved','in_progress')",
+            (company, target),
+        ).fetchone()["n"]
 
     @_locked
     def flow_metrics(self, company) -> dict:
@@ -430,7 +469,14 @@ class Store:
         bottleneck = max(by_target, key=by_target.__getitem__) if by_target else None
         st = self.status(company)
         defects = self.db.execute(
-            "SELECT COUNT(*) n FROM actions WHERE company=? AND ok=0", (company,)).fetchone()["n"]
-        return {"throughput": len(done), "wip": len(wip), "by_target": by_target,
-                "bottleneck": bottleneck, "waiting": st["pending_approvals"], "defects": defects,
-                "tokens_per_completed_task": round(st["tokens"] / len(done)) if done else 0}
+            "SELECT COUNT(*) n FROM actions WHERE company=? AND ok=0", (company,)
+        ).fetchone()["n"]
+        return {
+            "throughput": len(done),
+            "wip": len(wip),
+            "by_target": by_target,
+            "bottleneck": bottleneck,
+            "waiting": st["pending_approvals"],
+            "defects": defects,
+            "tokens_per_completed_task": round(st["tokens"] / len(done)) if done else 0,
+        }

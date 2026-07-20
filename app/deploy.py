@@ -3,7 +3,9 @@ fallback, so a company never depends on a single host. The local provider is
 always available and needs nothing external. The others activate only when
 configured, and any one can be first: set CORP_DEPLOY_PROVIDERS to reorder.
 """
+
 from __future__ import annotations
+
 import os
 import shutil
 import subprocess
@@ -16,12 +18,10 @@ class DeployProvider(ABC):
     name = "base"
 
     @abstractmethod
-    def available(self) -> bool:
-        ...
+    def available(self) -> bool: ...
 
     @abstractmethod
-    def deploy(self, site_dir: str) -> str:
-        ...
+    def deploy(self, site_dir: str) -> str: ...
 
 
 class LocalDirProvider(DeployProvider):
@@ -79,6 +79,7 @@ class S3Provider(DeployProvider):
 
     def deploy(self, site_dir: str) -> str:
         import boto3
+
         bucket = cfg.get("CORP_S3_BUCKET")
         if not bucket:
             raise RuntimeError("CORP_S3_BUCKET is not set")
@@ -110,8 +111,12 @@ class SSHProvider(DeployProvider):
         target = cfg.get("CORP_DEPLOY_SSH_TARGET")
         if not target:
             raise RuntimeError("CORP_DEPLOY_SSH_TARGET is not set")
-        out = subprocess.run(["rsync", "-az", site_dir.rstrip("/\\") + "/", target],
-                             capture_output=True, text=True, timeout=180)
+        out = subprocess.run(
+            ["rsync", "-az", site_dir.rstrip("/\\") + "/", target],
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
         if out.returncode != 0:
             raise RuntimeError(out.stderr.strip() or "rsync failed")
         return f"ssh:{target}"
@@ -146,9 +151,14 @@ def deploy_result(site_dir: str) -> dict:
             skipped.append(f"{name}: not configured")
             continue
         try:
-            return {"ok": True, "provider": name, "result": provider.deploy(site_dir),
-                    "errors": errors, "skipped": skipped}
-        except Exception as exc:   # fall through to the next provider on failure
+            return {
+                "ok": True,
+                "provider": name,
+                "result": provider.deploy(site_dir),
+                "errors": errors,
+                "skipped": skipped,
+            }
+        except Exception as exc:  # fall through to the next provider on failure
             errors.append(f"{name}: {exc}")
     return {"ok": False, "provider": "", "result": "", "errors": errors, "skipped": skipped}
 

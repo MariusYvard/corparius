@@ -5,6 +5,7 @@ to install it and `ollama pull` each model in a terminal, reading the doctor to
 know which. This exposes the status the doctor computes and lets the missing
 models be pulled from the page.
 """
+
 from __future__ import annotations
 
 import requests
@@ -37,22 +38,45 @@ def status(timeout: int = 4, lang="en") -> dict:
         r.raise_for_status()
         have = {m.get("name", "").split(":latest")[0] for m in r.json().get("models", [])}
     except requests.RequestException:
-        return {"ok": False, "reachable": False, "url": _base(), "wanted": want,
-                "present": [], "missing": want,
-                "detail": p(f"Ollama is not reachable at {_base()}. Install it from "
-                            "ollama.com, or point CORP_OLLAMA_URL at your server.",
-                            f"Ollama est injoignable à {_base()}. Installez-le depuis "
-                            "ollama.com, ou pointez CORP_OLLAMA_URL vers votre serveur.")}
+        return {
+            "ok": False,
+            "reachable": False,
+            "url": _base(),
+            "wanted": want,
+            "present": [],
+            "missing": want,
+            "detail": p(
+                f"Ollama is not reachable at {_base()}. Install it from "
+                "ollama.com, or point CORP_OLLAMA_URL at your server.",
+                f"Ollama est injoignable à {_base()}. Installez-le depuis "
+                "ollama.com, ou pointez CORP_OLLAMA_URL vers votre serveur.",
+            ),
+        }
     missing = [w for w in want if w not in have and w.split(":")[0] not in have]
     present = [w for w in want if w not in missing]
-    detail = p(f"Reachable at {_base()}, {len(have)} model(s) installed."
-               + (f" Missing for your tiers: {', '.join(missing)}." if missing
-                  else " Every model your tiers need is present."),
-               f"Joignable à {_base()}, {len(have)} modèle(s) installé(s)."
-               + (f" Manquants pour vos tiers : {', '.join(missing)}." if missing
-                  else " Tous les modèles dont vos tiers ont besoin sont présents."))
-    return {"ok": not missing, "reachable": True, "url": _base(), "wanted": want,
-            "present": present, "missing": missing, "detail": detail}
+    detail = p(
+        f"Reachable at {_base()}, {len(have)} model(s) installed."
+        + (
+            f" Missing for your tiers: {', '.join(missing)}."
+            if missing
+            else " Every model your tiers need is present."
+        ),
+        f"Joignable à {_base()}, {len(have)} modèle(s) installé(s)."
+        + (
+            f" Manquants pour vos tiers : {', '.join(missing)}."
+            if missing
+            else " Tous les modèles dont vos tiers ont besoin sont présents."
+        ),
+    )
+    return {
+        "ok": not missing,
+        "reachable": True,
+        "url": _base(),
+        "wanted": want,
+        "present": present,
+        "missing": missing,
+        "detail": detail,
+    }
 
 
 def pull(model: str, on_line=None, timeout: int = 3600) -> dict:
@@ -62,10 +86,15 @@ def pull(model: str, on_line=None, timeout: int = 3600) -> dict:
     if not model:
         return {"ok": False, "detail": "no model named"}
     try:
-        with requests.post(f"{_base()}/api/pull", json={"name": model, "stream": True},
-                           stream=True, timeout=timeout) as r:
+        with requests.post(
+            f"{_base()}/api/pull",
+            json={"name": model, "stream": True},
+            stream=True,
+            timeout=timeout,
+        ) as r:
             r.raise_for_status()
             import json as _json
+
             last = ""
             for raw in r.iter_lines():
                 if not raw:

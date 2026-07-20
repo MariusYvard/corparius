@@ -6,7 +6,9 @@ candidate leads from a public page you configure.
 Responsibility: you are the operator. Respect each source's terms of use and the
 applicable data-protection law (GDPR). Prefer public data and official APIs.
 """
+
 from __future__ import annotations
+
 import csv
 import os
 import re
@@ -34,12 +36,10 @@ class LeadSource(ABC):
     name = "base"
 
     @abstractmethod
-    def available(self) -> bool:
-        ...
+    def available(self) -> bool: ...
 
     @abstractmethod
-    def find(self, query: str, limit: int) -> list[Lead]:
-        ...
+    def find(self, query: str, limit: int) -> list[Lead]: ...
 
 
 class LocalDatasetSource(LeadSource):
@@ -60,8 +60,15 @@ class LocalDatasetSource(LeadSource):
         with open(path, newline="", encoding="utf-8") as fh:
             for row in csv.DictReader(fh):
                 if not q or q in " ".join(row.values()).lower():
-                    out.append(Lead(row.get("name", ""), row.get("company", ""),
-                                    row.get("title", ""), row.get("email", ""), "local"))
+                    out.append(
+                        Lead(
+                            row.get("name", ""),
+                            row.get("company", ""),
+                            row.get("title", ""),
+                            row.get("email", ""),
+                            "local",
+                        )
+                    )
                 if len(out) >= limit:
                     break
         return out
@@ -71,9 +78,10 @@ def render_page_text(url: str, timeout_ms: int = 30000) -> str:
     """Fetch a URL with headless Chromium and return the rendered body text.
     Requires Playwright. Always headless. Shared by lead and signal sources."""
     from playwright.sync_api import sync_playwright
+
     ua = cfg.get("CORP_BROWSER_UA", "Mozilla/5.0 (compatible; corparius/0.1)")
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)   # always headless
+        browser = pw.chromium.launch(headless=True)  # always headless
         try:
             page = browser.new_context(user_agent=ua).new_page()
             page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
@@ -118,9 +126,7 @@ class BrowserSource(LeadSource):
         return leads
 
 
-REGISTRY: dict[str, LeadSource] = {
-    s.name: s for s in [LocalDatasetSource(), BrowserSource()]
-}
+REGISTRY: dict[str, LeadSource] = {s.name: s for s in [LocalDatasetSource(), BrowserSource()]}
 
 
 def _order() -> list[str]:
@@ -137,7 +143,7 @@ def find_leads(query: str = "", limit: int = 5) -> list[Lead]:
             continue
         try:
             leads = source.find(query, limit)
-        except Exception:   # a flaky source must not break the chain
+        except Exception:  # a flaky source must not break the chain
             continue
         if leads:
             return leads

@@ -3,7 +3,9 @@ when its integration is configured, or None so the calling tool falls back to
 its mock effect. Nothing here runs unless the matching environment variables are
 set, so the whole system still works offline out of the box.
 """
+
 from __future__ import annotations
+
 import smtplib
 import socket
 import ssl
@@ -21,8 +23,11 @@ def stripe_reconcile(timeout: int = 15) -> str | None:
     if not key:
         return None
     try:
-        r = requests.get("https://api.stripe.com/v1/balance",
-                         headers={"Authorization": f"Bearer {key}"}, timeout=timeout)
+        r = requests.get(
+            "https://api.stripe.com/v1/balance",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=timeout,
+        )
         r.raise_for_status()
         avail = (r.json().get("available") or [{}])[0]
         amount = avail.get("amount", 0) / 100
@@ -39,34 +44,53 @@ def stripe_payments(limit: int = 8, timeout: int = 15) -> dict:
     key = cfg.get("STRIPE_API_KEY", "").strip()
     if key:
         try:
-            r = requests.get("https://api.stripe.com/v1/charges",
-                             params={"limit": limit},
-                             auth=(key, ""), timeout=timeout)
+            r = requests.get(
+                "https://api.stripe.com/v1/charges",
+                params={"limit": limit},
+                auth=(key, ""),
+                timeout=timeout,
+            )
             r.raise_for_status()
-            items = [{
-                "amount": c.get("amount", 0) / 100.0,
-                "currency": (c.get("currency") or "eur").upper(),
-                "status": c.get("status", ""),
-                "paid": bool(c.get("paid")),
-                "description": c.get("description") or c.get("billing_details", {}).get("name") or "",
-                "ts": c.get("created", 0),
-            } for c in r.json().get("data", [])]
+            items = [
+                {
+                    "amount": c.get("amount", 0) / 100.0,
+                    "currency": (c.get("currency") or "eur").upper(),
+                    "status": c.get("status", ""),
+                    "paid": bool(c.get("paid")),
+                    "description": c.get("description")
+                    or c.get("billing_details", {}).get("name")
+                    or "",
+                    "ts": c.get("created", 0),
+                }
+                for c in r.json().get("data", [])
+            ]
             total = sum(i["amount"] for i in items if i["paid"])
             return {"source": "stripe", "payments": items, "total_paid": round(total, 2)}
         except requests.RequestException as exc:
             return {"source": "error", "payments": [], "total_paid": 0.0, "error": str(exc)}
     mock = [
-        {"amount": 9.0, "currency": "EUR", "status": "succeeded", "paid": True,
-         "description": "CV optimisation, single", "ts": 0},
-        {"amount": 18.0, "currency": "EUR", "status": "succeeded", "paid": True,
-         "description": "Monthly subscription x2", "ts": 0},
+        {
+            "amount": 9.0,
+            "currency": "EUR",
+            "status": "succeeded",
+            "paid": True,
+            "description": "CV optimisation, single",
+            "ts": 0,
+        },
+        {
+            "amount": 18.0,
+            "currency": "EUR",
+            "status": "succeeded",
+            "paid": True,
+            "description": "Monthly subscription x2",
+            "ts": 0,
+        },
     ]
     return {"source": "mock", "payments": mock, "total_paid": 27.0}
 
 
 def smtp_from() -> str:
-    return (cfg.get("CORP_SMTP_FROM") or cfg.get("CORP_SMTP_USER")
-            or "corparius@localhost")
+    return cfg.get("CORP_SMTP_FROM") or cfg.get("CORP_SMTP_USER") or "corparius@localhost"
 
 
 def _deliver(to: str, subject: str, body: str, timeout: int) -> str:
@@ -114,8 +138,9 @@ def send_email(to: str, subject: str, body: str, timeout: int = 15) -> str | Non
     return status
 
 
-def send_email_tracked(to: str, subject: str, body: str,
-                       timeout: int = 15) -> tuple[str | None, str]:
+def send_email_tracked(
+    to: str, subject: str, body: str, timeout: int = 15
+) -> tuple[str | None, str]:
     """send_email, plus the Message-ID of what went out, so the outreach tool can
     recognise the reply later. Kept separate so send_email's contract stays the
     plain None / "sent" / "skipped (...)" / "error" every caller already expects.
@@ -140,39 +165,55 @@ def smtp_diagnosis(exc: Exception, lang="en") -> str:
     host = cfg.get("CORP_SMTP_HOST", "")
     p = lambda en, fr: i18n.pick(lang, en, fr)
     if isinstance(exc, smtplib.SMTPAuthenticationError):
-        return p("The server refused these credentials. Most providers need an app-specific "
-                 "password here, not your account password.",
-                 "Le serveur a refusé ces identifiants. La plupart des fournisseurs exigent ici "
-                 "un mot de passe d'application, pas celui de votre compte.")
+        return p(
+            "The server refused these credentials. Most providers need an app-specific "
+            "password here, not your account password.",
+            "Le serveur a refusé ces identifiants. La plupart des fournisseurs exigent ici "
+            "un mot de passe d'application, pas celui de votre compte.",
+        )
     if isinstance(exc, smtplib.SMTPNotSupportedError):
-        return p(f"The server at {host}:{port} did not accept the encryption corparius offered. "
-                 "Try port 465 (implicit TLS) or 587 (STARTTLS).",
-                 f"Le serveur {host}:{port} n'a pas accepté le chiffrement proposé. "
-                 "Essayez le port 465 (TLS implicite) ou 587 (STARTTLS).")
+        return p(
+            f"The server at {host}:{port} did not accept the encryption corparius offered. "
+            "Try port 465 (implicit TLS) or 587 (STARTTLS).",
+            f"Le serveur {host}:{port} n'a pas accepté le chiffrement proposé. "
+            "Essayez le port 465 (TLS implicite) ou 587 (STARTTLS).",
+        )
     if isinstance(exc, smtplib.SMTPRecipientsRefused):
-        return p("The server accepted the login but refused the recipient address.",
-                 "Le serveur a accepté la connexion mais refusé l'adresse destinataire.")
+        return p(
+            "The server accepted the login but refused the recipient address.",
+            "Le serveur a accepté la connexion mais refusé l'adresse destinataire.",
+        )
     if isinstance(exc, smtplib.SMTPSenderRefused):
-        return p(f"The server refused '{smtp_from()}' as a sender. It usually has to match "
-                 "the account you logged in with.",
-                 f"Le serveur a refusé « {smtp_from()} » comme expéditeur. Il doit en général "
-                 "correspondre au compte utilisé pour la connexion.")
+        return p(
+            f"The server refused '{smtp_from()}' as a sender. It usually has to match "
+            "the account you logged in with.",
+            f"Le serveur a refusé « {smtp_from()} » comme expéditeur. Il doit en général "
+            "correspondre au compte utilisé pour la connexion.",
+        )
     if isinstance(exc, socket.gaierror):
-        return p(f"No such host: '{host}'. Check the server name.",
-                 f"Hôte introuvable : « {host} ». Vérifiez le nom du serveur.")
+        return p(
+            f"No such host: '{host}'. Check the server name.",
+            f"Hôte introuvable : « {host} ». Vérifiez le nom du serveur.",
+        )
     if isinstance(exc, ConnectionRefusedError):
-        return p(f"{host} refused a connection on port {port}. Check the port.",
-                 f"{host} a refusé la connexion sur le port {port}. Vérifiez le port.")
+        return p(
+            f"{host} refused a connection on port {port}. Check the port.",
+            f"{host} a refusé la connexion sur le port {port}. Vérifiez le port.",
+        )
     if isinstance(exc, (TimeoutError, socket.timeout)):
-        return p(f"No answer from {host}:{port} before the timeout. A firewall or the wrong "
-                 "port would both look like this.",
-                 f"Aucune réponse de {host}:{port} avant le délai. Un pare-feu ou un mauvais "
-                 "port donnent tous deux ce résultat.")
+        return p(
+            f"No answer from {host}:{port} before the timeout. A firewall or the wrong "
+            "port would both look like this.",
+            f"Aucune réponse de {host}:{port} avant le délai. Un pare-feu ou un mauvais "
+            "port donnent tous deux ce résultat.",
+        )
     if isinstance(exc, ssl.SSLError):
-        return p(f"TLS handshake failed on port {port}. Port 465 expects implicit TLS, "
-                 "587 expects STARTTLS.",
-                 f"Échec du handshake TLS sur le port {port}. Le 465 attend un TLS implicite, "
-                 "le 587 attend STARTTLS.")
+        return p(
+            f"TLS handshake failed on port {port}. Port 465 expects implicit TLS, "
+            "587 expects STARTTLS.",
+            f"Échec du handshake TLS sur le port {port}. Le 465 attend un TLS implicite, "
+            "le 587 attend STARTTLS.",
+        )
     return str(exc) or exc.__class__.__name__
 
 
@@ -182,23 +223,42 @@ def smtp_check(to: str = "", timeout: int = 15, lang="en") -> dict:
     p = lambda en, fr: i18n.pick(lang, en, fr)
     host = cfg.get("CORP_SMTP_HOST", "")
     if not host:
-        return {"ok": False, "configured": False,
-                "detail": p("No SMTP server set, so outreach keeps writing to its mock.",
-                            "Aucun serveur SMTP réglé ; l'outreach continue d'écrire dans son mock.")}
+        return {
+            "ok": False,
+            "configured": False,
+            "detail": p(
+                "No SMTP server set, so outreach keeps writing to its mock.",
+                "Aucun serveur SMTP réglé ; l'outreach continue d'écrire dans son mock.",
+            ),
+        }
     to = (to or cfg.get("CORP_OUTREACH_TEST_TO", "")).strip()
     port = cfg.get_int("CORP_SMTP_PORT", 587)
     if not to:
-        return {"ok": False, "configured": True,
-                "detail": p("Set a fallback recipient (or type an address) to send a test to.",
-                            "Réglez un destinataire de repli (ou saisissez une adresse) pour envoyer un test.")}
+        return {
+            "ok": False,
+            "configured": True,
+            "detail": p(
+                "Set a fallback recipient (or type an address) to send a test to.",
+                "Réglez un destinataire de repli (ou saisissez une adresse) pour envoyer un test.",
+            ),
+        }
     try:
-        _deliver(to, "corparius test", "This is the test message from the corparius console. "
-                                       "Your mail setup works.", timeout)
+        _deliver(
+            to,
+            "corparius test",
+            "This is the test message from the corparius console. Your mail setup works.",
+            timeout,
+        )
     except (OSError, smtplib.SMTPException, ValueError, ssl.SSLError) as exc:
         return {"ok": False, "configured": True, "detail": smtp_diagnosis(exc, lang)}
-    return {"ok": True, "configured": True,
-            "detail": p(f"Sent to {to} from {smtp_from()} via {host}:{port}. Check the inbox.",
-                        f"Envoyé à {to} depuis {smtp_from()} via {host}:{port}. Vérifiez la boîte.")}
+    return {
+        "ok": True,
+        "configured": True,
+        "detail": p(
+            f"Sent to {to} from {smtp_from()} via {host}:{port}. Check the inbox.",
+            f"Envoyé à {to} depuis {smtp_from()} via {host}:{port}. Vérifiez la boîte.",
+        ),
+    }
 
 
 def stripe_check(timeout: int = 15, lang="en") -> dict:
@@ -207,44 +267,81 @@ def stripe_check(timeout: int = 15, lang="en") -> dict:
     p = lambda en, fr: i18n.pick(lang, en, fr)
     key = cfg.get("STRIPE_API_KEY", "").strip()
     if not key:
-        return {"ok": False, "configured": False,
-                "detail": p("No Stripe key set, so the payments card shows sample data.",
-                            "Aucune clé Stripe réglée ; la carte Paiements affiche des données d'exemple.")}
+        return {
+            "ok": False,
+            "configured": False,
+            "detail": p(
+                "No Stripe key set, so the payments card shows sample data.",
+                "Aucune clé Stripe réglée ; la carte Paiements affiche des données d'exemple.",
+            ),
+        }
     live = key.startswith(("sk_live", "rk_live"))
     try:
-        r = requests.get("https://api.stripe.com/v1/balance",
-                         headers={"Authorization": f"Bearer {key}"}, timeout=timeout)
+        r = requests.get(
+            "https://api.stripe.com/v1/balance",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=timeout,
+        )
     except requests.RequestException as exc:
-        return {"ok": False, "configured": True,
-                "detail": p(f"Could not reach Stripe: {exc}", f"Stripe injoignable : {exc}")}
+        return {
+            "ok": False,
+            "configured": True,
+            "detail": p(f"Could not reach Stripe: {exc}", f"Stripe injoignable : {exc}"),
+        }
     if r.status_code == 401:
-        return {"ok": False, "configured": True,
-                "detail": p("Stripe rejected this key. Copy it again from the dashboard; a "
-                            "restricted key with read access to Balance and Charges is enough.",
-                            "Stripe a rejeté cette clé. Recopiez-la depuis le tableau de bord ; "
-                            "une clé restreinte en lecture sur Balance et Charges suffit.")}
+        return {
+            "ok": False,
+            "configured": True,
+            "detail": p(
+                "Stripe rejected this key. Copy it again from the dashboard; a "
+                "restricted key with read access to Balance and Charges is enough.",
+                "Stripe a rejeté cette clé. Recopiez-la depuis le tableau de bord ; "
+                "une clé restreinte en lecture sur Balance et Charges suffit.",
+            ),
+        }
     if r.status_code == 403:
-        return {"ok": False, "configured": True,
-                "detail": p("This key is valid but lacks permission to read the balance. Grant "
-                            "it read access to Balance and Charges.",
-                            "Clé valide mais sans droit de lire le solde. Donnez-lui l'accès en "
-                            "lecture à Balance et Charges.")}
+        return {
+            "ok": False,
+            "configured": True,
+            "detail": p(
+                "This key is valid but lacks permission to read the balance. Grant "
+                "it read access to Balance and Charges.",
+                "Clé valide mais sans droit de lire le solde. Donnez-lui l'accès en "
+                "lecture à Balance et Charges.",
+            ),
+        }
     if not r.ok:
-        return {"ok": False, "configured": True,
-                "detail": p(f"Stripe answered {r.status_code}: {r.text[:160]}",
-                            f"Stripe a répondu {r.status_code} : {r.text[:160]}")}
+        return {
+            "ok": False,
+            "configured": True,
+            "detail": p(
+                f"Stripe answered {r.status_code}: {r.text[:160]}",
+                f"Stripe a répondu {r.status_code} : {r.text[:160]}",
+            ),
+        }
     try:
         avail = (r.json().get("available") or [{}])[0]
         amount = avail.get("amount", 0) / 100
         currency = (avail.get("currency", "") or "").upper()
     except (ValueError, IndexError, AttributeError):
-        return {"ok": False, "configured": True,
-                "detail": p("Stripe answered in a shape corparius does not know.",
-                            "Stripe a répondu dans un format que corparius ne connaît pas.")}
+        return {
+            "ok": False,
+            "configured": True,
+            "detail": p(
+                "Stripe answered in a shape corparius does not know.",
+                "Stripe a répondu dans un format que corparius ne connaît pas.",
+            ),
+        }
     mode = "live" if live else "test"
-    return {"ok": True, "configured": True, "live": live,
-            "detail": p(f"Connected in {mode} mode. Balance available: {amount:.2f} {currency}.",
-                        f"Connecté en mode {mode}. Solde disponible : {amount:.2f} {currency}.")}
+    return {
+        "ok": True,
+        "configured": True,
+        "live": live,
+        "detail": p(
+            f"Connected in {mode} mode. Balance available: {amount:.2f} {currency}.",
+            f"Connecté en mode {mode}. Solde disponible : {amount:.2f} {currency}.",
+        ),
+    }
 
 
 def send_outreach_email(company: dict, draft: str) -> str | None:

@@ -31,12 +31,7 @@ line-length = 100          # matches the existing hand-wrapped style
 target-version = "py310"   # the oldest interpreter CI builds against
 
 [tool.ruff.lint]
-# Deliberately not "I" (import sorting). The modules here group their imports by
-# meaning - stdlib, then `from . import ...` siblings, then named symbols - and
-# isort would reflow 52 sites into alphabetical order across the whole codebase.
-# That is a large mechanical diff over a layout that was chosen, to satisfy a
-# rule nobody asked for. Turn it on with a dedicated commit if ever.
-select = ["E", "F", "W", "UP", "B"]
+select = ["E", "F", "W", "I", "UP", "B"]
 ignore = [
     # The codebase wraps explanatory comments by hand and several exceed the
     # limit by a word or two. Reflowing authored prose to satisfy a linter is a

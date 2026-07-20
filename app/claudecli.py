@@ -9,7 +9,9 @@ operators never find it. This module is the one-press path.
 check() mirrors integrations.smtp_check: it proves the thing works rather than
 asking the operator to trust it, by making one real, minimal call.
 """
+
 from __future__ import annotations
+
 import json
 import shutil
 import subprocess
@@ -33,12 +35,16 @@ TOGGLES = {
     "CORP_CLAUDE_CODE": "true",
 }
 
-INSTALL_EN = ("The `claude` CLI is not on this machine's PATH. Install Claude Code "
-              "(claude.com/product/claude-code), then run `claude login` and pick "
-              "your subscription.")
-INSTALL_FR = ("Le CLI `claude` n'est pas sur le PATH de cette machine. Installez "
-              "Claude Code (claude.com/product/claude-code), puis lancez "
-              "`claude login` et choisissez votre abonnement.")
+INSTALL_EN = (
+    "The `claude` CLI is not on this machine's PATH. Install Claude Code "
+    "(claude.com/product/claude-code), then run `claude login` and pick "
+    "your subscription."
+)
+INSTALL_FR = (
+    "Le CLI `claude` n'est pas sur le PATH de cette machine. Installez "
+    "Claude Code (claude.com/product/claude-code), puis lancez "
+    "`claude login` et choisissez votre abonnement."
+)
 
 
 def resolve() -> str | None:
@@ -66,40 +72,65 @@ def check(timeout: int = 60, lang="en") -> dict:
         return {"ok": False, "installed": False, "detail": p(INSTALL_EN, INSTALL_FR)}
     try:
         proc = subprocess.run(
-            [exe, "-p", "Reply with the single word: ready",
-             "--output-format", "json"],
-            capture_output=True, text=True, timeout=timeout)
+            [exe, "-p", "Reply with the single word: ready", "--output-format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
     except subprocess.TimeoutExpired:
-        return {"ok": False, "installed": True,
-                "detail": p(f"The CLI did not answer within {timeout}s. It may be waiting "
-                            "on a login prompt; run `claude login` in a terminal once.",
-                            f"Le CLI n'a pas répondu en {timeout}s. Il attend peut-être une "
-                            "connexion ; lancez `claude login` une fois dans un terminal.")}
+        return {
+            "ok": False,
+            "installed": True,
+            "detail": p(
+                f"The CLI did not answer within {timeout}s. It may be waiting "
+                "on a login prompt; run `claude login` in a terminal once.",
+                f"Le CLI n'a pas répondu en {timeout}s. Il attend peut-être une "
+                "connexion ; lancez `claude login` une fois dans un terminal.",
+            ),
+        }
     except OSError as exc:
-        return {"ok": False, "installed": True,
-                "detail": p(f"Could not run the CLI: {exc}", f"Impossible de lancer le CLI : {exc}")}
+        return {
+            "ok": False,
+            "installed": True,
+            "detail": p(f"Could not run the CLI: {exc}", f"Impossible de lancer le CLI : {exc}"),
+        }
     if proc.returncode != 0:
         err = (proc.stderr or "").strip()
         low = err.lower()
         if any(w in low for w in ("login", "auth", "unauthor", "not logged", "credential")):
-            return {"ok": False, "installed": True,
-                    "detail": p("The CLI is installed but not logged in. Run `claude login` "
-                                "and choose your subscription, then test again.",
-                                "Le CLI est installé mais non connecté. Lancez `claude login`, "
-                                "choisissez votre abonnement, puis retestez.")}
-        return {"ok": False, "installed": True,
-                "detail": p(f"The CLI exited {proc.returncode}: {err[:200] or 'no output'}",
-                            f"Le CLI s'est arrêté ({proc.returncode}) : {err[:200] or 'aucune sortie'}")}
+            return {
+                "ok": False,
+                "installed": True,
+                "detail": p(
+                    "The CLI is installed but not logged in. Run `claude login` "
+                    "and choose your subscription, then test again.",
+                    "Le CLI est installé mais non connecté. Lancez `claude login`, "
+                    "choisissez votre abonnement, puis retestez.",
+                ),
+            }
+        return {
+            "ok": False,
+            "installed": True,
+            "detail": p(
+                f"The CLI exited {proc.returncode}: {err[:200] or 'no output'}",
+                f"Le CLI s'est arrêté ({proc.returncode}) : {err[:200] or 'aucune sortie'}",
+            ),
+        }
     try:
         data = json.loads(proc.stdout)
         model = data.get("model") or ""
     except (json.JSONDecodeError, AttributeError):
         model = ""
-    return {"ok": True, "installed": True,
-            "detail": p("The Claude Code CLI is installed, logged in and answering. "
-                        "No API key or credits needed." + (f" Answering as {model}." if model else ""),
-                        "Le CLI Claude Code est installé, connecté et répond. Aucune clé API "
-                        "ni crédit requis." + (f" Répond en tant que {model}." if model else ""))}
+    return {
+        "ok": True,
+        "installed": True,
+        "detail": p(
+            "The Claude Code CLI is installed, logged in and answering. "
+            "No API key or credits needed." + (f" Answering as {model}." if model else ""),
+            "Le CLI Claude Code est installé, connecté et répond. Aucune clé API "
+            "ni crédit requis." + (f" Répond en tant que {model}." if model else ""),
+        ),
+    }
 
 
 def plan() -> dict:
@@ -108,6 +139,9 @@ def plan() -> dict:
 
 
 def already_on() -> bool:
-    return (cfg.get_bool("CORP_CLAUDE_CODE") and cfg.get_bool("CORP_CLOUD_ENABLED")
-            and not cfg.get_bool("CORP_LLM_MOCK", "true")
-            and any(cfg.get(k, "").startswith("claudecode:") for k in TIERS))
+    return (
+        cfg.get_bool("CORP_CLAUDE_CODE")
+        and cfg.get_bool("CORP_CLOUD_ENABLED")
+        and not cfg.get_bool("CORP_LLM_MOCK", "true")
+        and any(cfg.get(k, "").startswith("claudecode:") for k in TIERS)
+    )

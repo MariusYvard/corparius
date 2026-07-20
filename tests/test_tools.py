@@ -7,6 +7,7 @@ Every tool is driven here through the registry, offline. The mock effects and
 the "return None when unconfigured" contract in app/integrations.py are what
 make that possible without a network or a key.
 """
+
 from app.models import ToolResult
 from app.orchestrator import RunContext
 from app.safety import CircuitBreaker, TokenBudget
@@ -21,7 +22,8 @@ GATED = {"send_financial_transaction", "publish_production_code", "deploy_site"}
 
 def _company() -> dict:
     return {
-        "slug": "t", "name": "T",
+        "slug": "t",
+        "name": "T",
         "offer": {"product": "p"},
         "icp": {"segment": "seg", "channels": ["linkedin"], "pains": ["pain"]},
         "budgets": {"daily_ad_spend_eur": 10},
@@ -31,9 +33,14 @@ def _company() -> dict:
 
 def _ctx(tmp_path) -> RunContext:
     store = Store(str(tmp_path / "data"))
-    return RunContext(company=_company(), tick=0,
-                      budget=TokenBudget(100000), breaker=CircuitBreaker(100000),
-                      data_path=str(tmp_path / "data"), store=store)
+    return RunContext(
+        company=_company(),
+        tick=0,
+        budget=TokenBudget(100000),
+        breaker=CircuitBreaker(100000),
+        data_path=str(tmp_path / "data"),
+        store=store,
+    )
 
 
 def test_registry_is_keyed_by_its_own_names():

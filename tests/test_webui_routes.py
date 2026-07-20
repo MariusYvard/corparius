@@ -6,6 +6,7 @@ nothing failed when it drifted. These tests are what replaces "someone will
 notice": the set of endpoints reachable without a token is written down, and
 changing it fails here.
 """
+
 import pytest
 
 from app import webui
@@ -14,9 +15,9 @@ from app import webui
 # about what the console exposes, so it has to be made here, in a diff a
 # reviewer reads, rather than as a side effect of adding an endpoint.
 PUBLIC = {
-    ("GET", "/"),           # the shipped page; carries no operator data
+    ("GET", "/"),  # the shipped page; carries no operator data
     ("GET", "/api/session"),  # how the page learns a token is required
-    ("GET", "/site/"),      # the generated site, rendered in an iframe
+    ("GET", "/site/"),  # the generated site, rendered in an iframe
 }
 
 
@@ -33,6 +34,7 @@ def test_routes_default_to_authenticated():
     """The inversion that makes the table worth having: `public` defaults to
     False, so forgetting to think about auth yields the safe answer."""
     from dataclasses import fields
+
     default = {f.name: f.default for f in fields(webui.Route)}["public"]
     assert default is False
 
@@ -51,12 +53,15 @@ def test_methods_are_get_or_post():
     assert {r.method for r in _all_routes()} == {"GET", "POST"}
 
 
-@pytest.mark.parametrize("method,path,expected", [
-    ("GET", "/api/site", "_route_site_get"),      # exact wins
-    ("GET", "/site/acme/", "_route_site_serve"),  # prefix only after exact misses
-    ("GET", "/site/", "_route_site_serve"),
-    ("POST", "/api/site", "_route_site_post"),
-])
+@pytest.mark.parametrize(
+    "method,path,expected",
+    [
+        ("GET", "/api/site", "_route_site_get"),  # exact wins
+        ("GET", "/site/acme/", "_route_site_serve"),  # prefix only after exact misses
+        ("GET", "/site/", "_route_site_serve"),
+        ("POST", "/api/site", "_route_site_post"),
+    ],
+)
 def test_exact_routes_are_never_shadowed_by_a_prefix(method, path, expected):
     """/site/ is the only non-exact match in the table. If prefixes were checked
     first, or in the same pass, /api/site would be ambiguous."""
@@ -66,13 +71,16 @@ def test_exact_routes_are_never_shadowed_by_a_prefix(method, path, expected):
 
 def test_unknown_paths_and_methods_do_not_match():
     assert webui._match("GET", "/api/nope") is None
-    assert webui._match("POST", "/") is None          # the page is GET-only
-    assert webui._match("GET", "/api/run") is None    # runs are POST-only
+    assert webui._match("POST", "/") is None  # the page is GET-only
+    assert webui._match("GET", "/api/run") is None  # runs are POST-only
 
 
 def test_mutating_routes_are_exactly_the_post_routes():
     """`mutating` is derived from the method rather than stored. This pins that
     the API really does keep every write behind POST, which is what makes that
     derivation safe."""
-    assert not any(r.method == "GET" for r in _all_routes() if not r.public
-                   and r.path.endswith(("/delete", "/stop", "/pull", "/setup")))
+    assert not any(
+        r.method == "GET"
+        for r in _all_routes()
+        if not r.public and r.path.endswith(("/delete", "/stop", "/pull", "/setup"))
+    )

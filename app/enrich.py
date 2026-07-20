@@ -2,7 +2,9 @@
 heuristic provider is always available and fills obvious gaps offline. Plug an
 API provider in the same registry to go further; the chain keeps a local fallback.
 """
+
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 
 from . import cfg
@@ -13,12 +15,10 @@ class Enricher(ABC):
     name = "base"
 
     @abstractmethod
-    def available(self) -> bool:
-        ...
+    def available(self) -> bool: ...
 
     @abstractmethod
-    def enrich(self, lead: Lead) -> Lead:
-        ...
+    def enrich(self, lead: Lead) -> Lead: ...
 
 
 class LocalHeuristicEnricher(Enricher):
@@ -57,7 +57,7 @@ def enrich(lead: Lead) -> Lead:
             continue
         try:
             lead = provider.enrich(lead)
-        except Exception:   # a provider failure must not drop the lead
+        except Exception:  # a provider failure must not drop the lead
             continue
     return lead
 

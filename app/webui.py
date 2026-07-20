@@ -10,33 +10,45 @@ Settings saved from the page go to the store, or to .env for the bootstrap keys
 that must be readable before the store opens; see app/cfg.py for the precedence.
 Secrets are write-only: the API only ever reports whether one is set.
 """
+
 from __future__ import annotations
+
 import hmac
 import json
 import logging
 import os
 import threading
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from collections.abc import Callable
 from urllib.parse import parse_qs, urlparse
 
-
-from . import backup, cfg, claudecli, deploy, i18n, mailbox, ollama_setup, paths
-from . import provider_check, settings_spec, structured
+from . import (
+    backup,
+    cfg,
+    claudecli,
+    deploy,
+    i18n,
+    mailbox,
+    ollama_setup,
+    paths,
+    provider_check,
+    settings_spec,
+    sitegen,
+    structured,
+)
 from . import company as company_mod
 from .agents import ROSTER
-from .tools import TOOLS
-from .doctor import run_checks
 from .config import Settings
+from .doctor import run_checks
 from .integrations import smtp_check, stripe_check, stripe_payments
 from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter
 from .models import AgentRole
 from .orchestrator import Runtime
-from . import sitegen
 from .store import Store
+from .tools import TOOLS
 
 log = logging.getLogger("corparius.webui")
 
@@ -116,7 +128,7 @@ class UiState:
         self.env_file = env_file
         self.runs: dict[str, dict] = {}
         self.chats: dict[str, deque] = {}
-        self.pulls: dict = {"running": False}   # Ollama model pull, background
+        self.pulls: dict = {"running": False}  # Ollama model pull, background
         self.lock = threading.Lock()
         self._store: Store | None = None
 
@@ -172,15 +184,21 @@ def _overview(state: UiState, slug: str) -> dict:
     for t in tasks:
         by_status.setdefault(t["status"], []).append(t)
     return {
-        "ok": True, "company": slug, "tick": tick, "status": st, "flow": flow,
+        "ok": True,
+        "company": slug,
+        "tick": tick,
+        "status": st,
+        "flow": flow,
         "tasks": by_status,
         "approvals": approvals,
         "spend_by_agent": spend,
         "recent_actions": actions,
         "freezes": frozen,
         "session_budget": s.session_token_budget,
-        "llm_mock": s.llm_mock, "cloud_enabled": s.cloud_enabled,
-        "running": bool(run.get("running")), "last_run": run.get("result"),
+        "llm_mock": s.llm_mock,
+        "cloud_enabled": s.cloud_enabled,
+        "running": bool(run.get("running")),
+        "last_run": run.get("result"),
         "loop": bool(run.get("loop")),
         "stopping": bool(run.get("running") and run.get("stop") and run["stop"].is_set()),
     }
@@ -192,23 +210,34 @@ def _providers_payload() -> dict:
     for name, spec in sorted(OPENAI_COMPAT_PROVIDERS.items()):
         key = cfg.get(spec["key_env"], "").strip()
         base = cfg.get(spec.get("base_env", ""), "").strip() or spec["base"]
-        providers.append({
-            "name": name, "key_env": spec["key_env"], "base_env": spec.get("base_env"),
-            "base": base, "key_optional": bool(spec.get("key_optional")),
-            "configured": bool(key) or (bool(spec.get("key_optional")) and bool(base)),
-            "key_set": bool(key),
-        })
+        providers.append(
+            {
+                "name": name,
+                "key_env": spec["key_env"],
+                "base_env": spec.get("base_env"),
+                "base": base,
+                "key_optional": bool(spec.get("key_optional")),
+                "configured": bool(key) or (bool(spec.get("key_optional")) and bool(base)),
+                "key_set": bool(key),
+            }
+        )
     return {
-        "ok": True, "providers": providers,
+        "ok": True,
+        "providers": providers,
         "anthropic_key_set": bool(cfg.get("ANTHROPIC_API_KEY", "").strip()),
         "claude_code": s.claude_code_enabled,
         "claude_installed": claudecli.installed(),
         "claude_ready": claudecli.already_on(),
         "server_presets": settings_spec.LLM_SERVER_PRESETS,
-        "cloud_enabled": s.cloud_enabled, "llm_mock": s.llm_mock,
-        "tiers": {"trivial": s.trivial_model, "normal": s.normal_model,
-                  "hard": s.hard_model, "local_fallback": s.local_model,
-                  "fallback_chain": ",".join(s.llm_fallback)},
+        "cloud_enabled": s.cloud_enabled,
+        "llm_mock": s.llm_mock,
+        "tiers": {
+            "trivial": s.trivial_model,
+            "normal": s.normal_model,
+            "hard": s.hard_model,
+            "local_fallback": s.local_model,
+            "fallback_chain": ",".join(s.llm_fallback),
+        },
     }
 
 
@@ -217,24 +246,48 @@ def _providers_payload() -> dict:
 # or production still passes the HITL gate on the resulting run. The LLM only
 # routes intent; it opens no new path.
 _CEO_ACTIONS: dict[str, dict] = {
-    "run_day": {"endpoint": "/api/run", "body": {"ticks": 24}, "label_en": "Run a day",
-                "label_fr": "Lancer une journée"},
-    "run_loop": {"endpoint": "/api/run", "body": {"ticks": 24, "loop": True},
-                 "label_en": "Run continuously", "label_fr": "Lancer en continu"},
-    "deploy": {"endpoint": "/api/deploy", "body": {}, "label_en": "Publish the site",
-               "label_fr": "Publier le site"},
-    "build_site": {"endpoint": "/api/site", "body": {}, "label_en": "Build the site",
-                   "label_fr": "Générer le site"},
-    "backup": {"endpoint": "/api/backup", "body": {}, "label_en": "Back up now",
-               "label_fr": "Sauvegarder"},
-    "use_claude": {"endpoint": "/api/claude/setup", "body": {}, "no_company": True,
-                   "label_en": "Use my Claude subscription", "label_fr": "Utiliser mon abonnement Claude"},
+    "run_day": {
+        "endpoint": "/api/run",
+        "body": {"ticks": 24},
+        "label_en": "Run a day",
+        "label_fr": "Lancer une journée",
+    },
+    "run_loop": {
+        "endpoint": "/api/run",
+        "body": {"ticks": 24, "loop": True},
+        "label_en": "Run continuously",
+        "label_fr": "Lancer en continu",
+    },
+    "deploy": {
+        "endpoint": "/api/deploy",
+        "body": {},
+        "label_en": "Publish the site",
+        "label_fr": "Publier le site",
+    },
+    "build_site": {
+        "endpoint": "/api/site",
+        "body": {},
+        "label_en": "Build the site",
+        "label_fr": "Générer le site",
+    },
+    "backup": {
+        "endpoint": "/api/backup",
+        "body": {},
+        "label_en": "Back up now",
+        "label_fr": "Sauvegarder",
+    },
+    "use_claude": {
+        "endpoint": "/api/claude/setup",
+        "body": {},
+        "no_company": True,
+        "label_en": "Use my Claude subscription",
+        "label_fr": "Utiliser mon abonnement Claude",
+    },
 }
 
 _CEO_SCHEMA = {
     "reply": {"type": "str", "required": True, "max_len": 800},
-    "intent": {"type": "str", "default": "answer",
-               "choices": ["answer"] + list(_CEO_ACTIONS)},
+    "intent": {"type": "str", "default": "answer", "choices": ["answer"] + list(_CEO_ACTIONS)},
     "ticks": {"type": "int", "default": 24},
 }
 
@@ -249,7 +302,8 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
         f"Company snapshot: tick {tick}, {st['actions']} actions logged, "
         f"{st['tokens']} tokens spent, {st['pending_approvals']} approvals pending, "
         f"{st['open_tasks']} open tasks. Top open tasks: "
-        + ("; ".join(t["title"] for t in open_tasks) or "none") + "."
+        + ("; ".join(t["title"] for t in open_tasks) or "none")
+        + "."
     )
     system = (
         f"{spec.system_prompt} You are chatting with your human operator through "
@@ -260,9 +314,11 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
         f"the operator confirms with a button. {snapshot}"
     )
     history = state.chats.setdefault(slug, deque(maxlen=_CHAT_LIMIT))
-    messages = ([{"role": "system", "content": system}]
-                + [{"role": m["role"], "content": m["text"]} for m in history]
-                + [{"role": "user", "content": message}])
+    messages = (
+        [{"role": "system", "content": system}]
+        + [{"role": m["role"], "content": m["text"]} for m in history]
+        + [{"role": "user", "content": message}]
+    )
     # One structured call classifies intent and writes the reply. The harness
     # returns the same shape whatever model answered; in mock or on a weak model
     # it falls back to intent=answer, so the chat degrades to plain conversation.
@@ -278,14 +334,24 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
         body = dict(spec_a["body"])
         if intent == "run_day":
             body["ticks"] = max(1, min(int(result.data.get("ticks", 24)), 48))
-        proposal = {"intent": intent, "endpoint": spec_a["endpoint"], "body": body,
-                    "needs_company": not spec_a.get("no_company"),
-                    "label": i18n.pick(lang, spec_a["label_en"], spec_a["label_fr"])}
-    provider, _, model = result.source.partition(":")   # "mock:haiku" -> mock, haiku
+        proposal = {
+            "intent": intent,
+            "endpoint": spec_a["endpoint"],
+            "body": body,
+            "needs_company": not spec_a.get("no_company"),
+            "label": i18n.pick(lang, spec_a["label_en"], spec_a["label_fr"]),
+        }
+    provider, _, model = result.source.partition(":")  # "mock:haiku" -> mock, haiku
     history.append({"role": "user", "text": message})
     history.append({"role": "assistant", "text": reply, "model": model, "provider": provider})
-    return {"ok": True, "reply": reply, "model": model, "provider": provider,
-            "proposal": proposal, "history": list(history)}
+    return {
+        "ok": True,
+        "reply": reply,
+        "model": model,
+        "provider": provider,
+        "proposal": proposal,
+        "history": list(history),
+    }
 
 
 def _start_run(state: UiState, slug: str, ticks: int, loop: bool = False, lang: str = "en") -> dict:
@@ -305,9 +371,16 @@ def _start_run(state: UiState, slug: str, ticks: int, loop: bool = False, lang: 
             state.runs[slug] = {"running": False, "result": result}
         except Exception:  # surface, never swallow; detail to the log, not the operator
             log.exception("run failed for %s", slug)
-            state.runs[slug] = {"running": False, "result": {"error": i18n.pick(lang,
-                "The run stopped on an unexpected error. See the server log for details.",
-                "Le run s'est arrêté sur une erreur inattendue. Voir le journal du serveur.")}}
+            state.runs[slug] = {
+                "running": False,
+                "result": {
+                    "error": i18n.pick(
+                        lang,
+                        "The run stopped on an unexpected error. See the server log for details.",
+                        "Le run s'est arrêté sur une erreur inattendue. Voir le journal du serveur.",
+                    )
+                },
+            }
 
     threading.Thread(target=_worker, daemon=True, name=f"corparius-run-{slug}").start()
     return {"ok": True, "running": True, "loop": loop}
@@ -327,7 +400,7 @@ def _stop_run(state: UiState, slug: str) -> dict:
     return {"ok": True, "stopping": True}
 
 
-_DEFAULT_AGENTS = company_mod.DEFAULT_AGENTS   # kept: the wizard's checkbox list
+_DEFAULT_AGENTS = company_mod.DEFAULT_AGENTS  # kept: the wizard's checkbox list
 
 
 def _create_company(state: UiState, body: dict) -> dict:
@@ -347,14 +420,16 @@ def _create_company(state: UiState, body: dict) -> dict:
         icp["channels"] = tpl.get("channels", [])
         icp["pains"] = tpl.get(f"pains_{lang}", [])
     agents = {**tpl.get("agents", {}), **dict(body.get("agents", {}))}
-    cfg, errors, warnings = company_mod.validate({
-        "name": body.get("name", ""),
-        "one_liner": body.get("one_liner", ""),
-        "offer": offer,
-        "icp": icp,
-        "agents": agents,
-        "budgets": {"session_tokens": body.get("session_tokens", 80000)},
-    })
+    cfg, errors, warnings = company_mod.validate(
+        {
+            "name": body.get("name", ""),
+            "one_liner": body.get("one_liner", ""),
+            "offer": offer,
+            "icp": icp,
+            "agents": agents,
+            "budgets": {"session_tokens": body.get("session_tokens", 80000)},
+        }
+    )
     if errors:
         return {"ok": False, "error": "; ".join(errors)}
     path = company_mod.path_for(cfg["slug"])
@@ -363,8 +438,7 @@ def _create_company(state: UiState, body: dict) -> dict:
     company_mod.dump(cfg, path)
     state.store().save_state(cfg["slug"], {"tick": 0})
     log.info("company created from the console: %s", cfg["slug"])
-    return {"ok": True, "slug": cfg["slug"], "companies": _companies(),
-            "warnings": warnings}
+    return {"ok": True, "slug": cfg["slug"], "companies": _companies(), "warnings": warnings}
 
 
 def _company_payload(slug: str) -> dict:
@@ -374,17 +448,24 @@ def _company_payload(slug: str) -> dict:
     # A broken file opens in the editor with its problems named, rather than
     # returning a 404 that strands the operator with nothing to fix it from.
     _cfg, errors, warnings = company_mod.validate(cfg)
-    return {"ok": True, "company": cfg, "path": str(company_mod.path_for(slug)),
-            "warnings": warnings, "problems": errors, "roles": list(company_mod.ROLES),
-            "channels": list(company_mod.CHANNELS), "billing": list(company_mod.BILLING),
-            "tools": sorted(TOOLS)}
+    return {
+        "ok": True,
+        "company": cfg,
+        "path": str(company_mod.path_for(slug)),
+        "warnings": warnings,
+        "problems": errors,
+        "roles": list(company_mod.ROLES),
+        "channels": list(company_mod.CHANNELS),
+        "billing": list(company_mod.BILLING),
+        "tools": sorted(TOOLS),
+    }
 
 
 def _save_company(state: UiState, slug: str, body: dict) -> dict:
     if slug not in _companies():
         return {"ok": False, "error": f"unknown company '{slug}'"}
     incoming = dict(body or {})
-    incoming["slug"] = slug          # the slug is the directory; renaming is a move, not an edit
+    incoming["slug"] = slug  # the slug is the directory; renaming is a move, not an edit
     cfg, errors, warnings = company_mod.validate(incoming)
     if errors:
         return {"ok": False, "error": "; ".join(errors)}
@@ -405,8 +486,7 @@ def _delete_company(state: UiState, slug: str, confirm: str, purge: bool) -> dic
     if purge:
         state.store().purge_company(slug)
     log.info("company moved to trash from the console: %s -> %s", slug, dest)
-    return {"ok": True, "companies": _companies(), "trashed": str(dest),
-            "purged": bool(purge)}
+    return {"ok": True, "companies": _companies(), "trashed": str(dest), "purged": bool(purge)}
 
 
 def _persist(state: UiState, values: dict[str, str], unset: list[str] | None = None) -> dict:
@@ -436,8 +516,7 @@ def _persist(state: UiState, values: dict[str, str], unset: list[str] | None = N
         for key in unset:
             store.delete_setting(key)
         if any(k in cfg.BOOTSTRAP for k in unset):
-            _merge_env_file(state.env_file,
-                            {k: "" for k in unset if k in cfg.BOOTSTRAP})
+            _merge_env_file(state.env_file, {k: "" for k in unset if k in cfg.BOOTSTRAP})
     cfg.invalidate()
     meta: dict = {}
     shadowed = [k for k in list(values) + unset if os.environ.get(k) is not None]
@@ -464,7 +543,7 @@ def _edit_task(store, body: dict) -> tuple[int, dict]:
     """Edit fields, decide, or both. The CLI could already retitle and
     reprioritise a task; the console could only approve or reject one."""
     try:
-        task_id = int(body.get("id"))   # type: ignore[arg-type]  # None -> TypeError, caught here
+        task_id = int(body.get("id"))  # type: ignore[arg-type]  # None -> TypeError, caught here
     except (TypeError, ValueError):
         return 400, {"ok": False, "error": "a task id is required"}
     decision = body.get("decision")
@@ -511,8 +590,14 @@ def _deploy(state: UiState, slug: str) -> tuple[int, dict]:
         sitegen.build_site(company, str(out_dir))
     res = deploy.deploy_result(str(out_dir))
     # The envelope succeeded; whether anything published is the payload's news.
-    return 200, {"ok": True, "published": res["ok"], "provider": res["provider"],
-                 "result": res["result"], "errors": res["errors"], "skipped": res["skipped"]}
+    return 200, {
+        "ok": True,
+        "published": res["ok"],
+        "provider": res["provider"],
+        "result": res["result"],
+        "errors": res["errors"],
+        "skipped": res["skipped"],
+    }
 
 
 def _ollama_pull(state: UiState, models: list) -> dict:
@@ -529,8 +614,10 @@ def _ollama_pull(state: UiState, models: list) -> dict:
 
     def _worker() -> None:
         for model in models:
+
             def note(line):
                 state.pulls["progress"] = line
+
             res = ollama_setup.pull(model, on_line=note)
             (state.pulls["done"] if res["ok"] else state.pulls["failed"]).append(model)
         state.pulls["running"] = False
@@ -556,9 +643,11 @@ def _claude_setup(state: UiState) -> dict:
 def _oops(lang: str = "en") -> str:
     """The message for an unexpected error. The full traceback goes to the server
     log; the operator gets a sentence, not Python internals."""
-    return i18n.pick(lang,
+    return i18n.pick(
+        lang,
         "Something went wrong on the console. The details are in the server log.",
-        "Un problème est survenu dans la console. Les détails sont dans le journal du serveur.")
+        "Un problème est survenu dans la console. Les détails sont dans le journal du serveur.",
+    )
 
 
 def _mail_check(to: str = "", lang: str = "en") -> dict:
@@ -571,15 +660,22 @@ def _mail_check(to: str = "", lang: str = "en") -> dict:
     reading = i18n.pick(lang, "Reading", "Lecture")
     lines = [f"{sending}: {send['detail']}", f"{reading}: {read['detail']}"]
     if not send["configured"] and not read["configured"]:
-        return {"ok": False,
-                "detail": i18n.pick(lang,
-                    "No mail account set yet. Pick a provider above, give the address "
-                    "and an app password.",
-                    "Aucun compte mail réglé. Choisissez un fournisseur ci-dessus, donnez "
-                    "l'adresse et un mot de passe d'application.")}
-    return {"ok": bool(send["ok"] and read["ok"]),
-            "send_ok": send["ok"], "read_ok": read["ok"],
-            "detail": "\n".join(lines)}
+        return {
+            "ok": False,
+            "detail": i18n.pick(
+                lang,
+                "No mail account set yet. Pick a provider above, give the address "
+                "and an app password.",
+                "Aucun compte mail réglé. Choisissez un fournisseur ci-dessus, donnez "
+                "l'adresse et un mot de passe d'application.",
+            ),
+        }
+    return {
+        "ok": bool(send["ok"] and read["ok"]),
+        "send_ok": send["ok"],
+        "read_ok": read["ok"],
+        "detail": "\n".join(lines),
+    }
 
 
 def _settings_payload() -> dict:
@@ -668,6 +764,7 @@ def _plugins_action(body: dict) -> dict:
     the curated registry. Installing an unverified plugin is deliberately not
     reachable from the console — that path is CLI-only, behind the opt-in."""
     from . import plugins
+
     action = str(body.get("action", ""))
     name = str(body.get("name", "")).strip()
     try:
@@ -678,7 +775,7 @@ def _plugins_action(body: dict) -> dict:
         elif action == "remove":
             plugins.remove(name)
         elif action == "install":
-            plugins.install_from_registry(name)   # verified only from the console
+            plugins.install_from_registry(name)  # verified only from the console
         else:
             return {"ok": False, "error": f"unknown action '{action}'"}
     except plugins.PluginError as exc:
@@ -690,6 +787,7 @@ def _plugins_action(body: dict) -> dict:
 class Ctx:
     """One request, normalised. GET reads its parameters from the query string
     and POST from the JSON body; handlers should not care which."""
+
     state: UiState
     path: str
     query: dict
@@ -704,6 +802,7 @@ class Ctx:
 # --- route handlers -------------------------------------------------------
 # Each returns (status, payload) or (status, payload, content_type). Pulling
 # them out of the if/elif chains makes them callable without an HTTP round trip.
+
 
 def _route_page(ctx):
     return 200, PAGE.read_bytes(), "text/html"
@@ -746,8 +845,11 @@ def _route_ollama_get(ctx):
 
 def _route_site_get(ctx):
     site = paths.site_index(_fresh_settings().data_path, ctx.slug)
-    return 200, {"ok": True, "built": site.is_file(),
-                 "mtime": site.stat().st_mtime if site.is_file() else None}
+    return 200, {
+        "ok": True,
+        "built": site.is_file(),
+        "mtime": site.stat().st_mtime if site.is_file() else None,
+    }
 
 
 def _route_site_serve(ctx):
@@ -772,11 +874,13 @@ def _route_update(ctx):
     # Off unless CORP_UPDATE_CHECK is on; when off this makes no network call.
     # See app/update_check.py.
     from . import update_check
+
     return 200, {"ok": True, **update_check.check()}
 
 
 def _route_plugins_get(ctx):
     from . import plugins
+
     return 200, {"ok": True, **plugins.status()}
 
 
@@ -797,7 +901,8 @@ def _route_approvals_post(ctx):
     if decision not in ("approved", "rejected"):
         return 400, {"ok": False, "error": "decision must be approved or rejected"}
     done = ctx.store().set_approval_status(
-        str(ctx.body.get("id")), decision, str(ctx.body.get("note", "via console")))
+        str(ctx.body.get("id")), decision, str(ctx.body.get("note", "via console"))
+    )
     return (200 if done else 404), {"ok": done, "error": None if done else "approval not found"}
 
 
@@ -821,8 +926,12 @@ def _route_deploy_post(ctx):
 
 def _route_backup_post(ctx):
     path = backup.make_backup(_fresh_settings().data_path)
-    return 200, {"ok": True, "name": path.name, "size": path.stat().st_size,
-                 "warning": {"en": backup.WARNING_EN, "fr": backup.WARNING_FR}}
+    return 200, {
+        "ok": True,
+        "name": path.name,
+        "size": path.stat().st_size,
+        "warning": {"en": backup.WARNING_EN, "fr": backup.WARNING_FR},
+    }
 
 
 def _route_run_stop(ctx):
@@ -831,8 +940,9 @@ def _route_run_stop(ctx):
 
 def _route_run_post(ctx):
     ticks = max(1, min(int(ctx.body.get("ticks", 6)), 48))
-    return 200, _start_run(ctx.state, ctx.slug, ticks,
-                           loop=bool(ctx.body.get("loop")), lang=ctx.lang)
+    return 200, _start_run(
+        ctx.state, ctx.slug, ticks, loop=bool(ctx.body.get("loop")), lang=ctx.lang
+    )
 
 
 def _route_providers_post(ctx):
@@ -840,8 +950,9 @@ def _route_providers_post(ctx):
 
 
 def _route_settings_post(ctx):
-    result = _set_settings(ctx.state, dict(ctx.body.get("values", {})),
-                           list(ctx.body.get("unset", [])))
+    result = _set_settings(
+        ctx.state, dict(ctx.body.get("values", {})), list(ctx.body.get("unset", []))
+    )
     return (200 if result.get("ok") else 400), result
 
 
@@ -874,8 +985,10 @@ def _route_claude_setup(ctx):
 
 
 def _route_test_provider(ctx):
-    return 200, {"ok": True, "result": provider_check.check(str(ctx.body.get("name", "")),
-                                                            lang=ctx.lang)}
+    return 200, {
+        "ok": True,
+        "result": provider_check.check(str(ctx.body.get("name", "")), lang=ctx.lang),
+    }
 
 
 def _route_ollama_pull(ctx):
@@ -888,8 +1001,9 @@ def _route_company_post(ctx):
 
 
 def _route_company_delete(ctx):
-    result = _delete_company(ctx.state, ctx.slug, str(ctx.body.get("confirm", "")),
-                             bool(ctx.body.get("purge_store")))
+    result = _delete_company(
+        ctx.state, ctx.slug, str(ctx.body.get("confirm", "")), bool(ctx.body.get("purge_store"))
+    )
     return (200 if result.get("ok") else 400), result
 
 
@@ -914,11 +1028,12 @@ class Route:
     `mutating` is derived from the method rather than stored: it is exactly
     true for POST in this API, and one fewer field to get wrong.
     """
+
     method: str
     path: str
     handler: Callable
     public: bool = False
-    needs_slug: bool = False   # no company named -> fall through to 404
+    needs_slug: bool = False  # no company named -> fall through to 404
 
 
 # Exact matches, checked first.
@@ -963,9 +1078,7 @@ ROUTES: tuple[Route, ...] = (
 
 # Prefix matches, checked only after every exact route has missed, so /api/site
 # can never be shadowed by a prefix that happens to start the same way.
-PREFIX_ROUTES: tuple[Route, ...] = (
-    Route("GET", "/site/", _route_site_serve, public=True),
-)
+PREFIX_ROUTES: tuple[Route, ...] = (Route("GET", "/site/", _route_site_serve, public=True),)
 
 _EXACT = {(r.method, r.path): r for r in ROUTES}
 assert len(_EXACT) == len(ROUTES), "duplicate (method, path) in ROUTES"
@@ -1029,7 +1142,7 @@ class Handler(BaseHTTPRequestHandler):
     def _authorized(self) -> bool:
         token = cfg.get("CORP_UI_TOKEN", "").strip()
         if not token:
-            return True   # no token configured: the zero-config local default
+            return True  # no token configured: the zero-config local default
         supplied = self.headers.get("X-Corp-Token", "")
         # compare_digest wants two byte strings and raises on non-ASCII str.
         return hmac.compare_digest(token.encode("utf-8"), supplied.encode("utf-8", "replace"))
@@ -1044,8 +1157,9 @@ class Handler(BaseHTTPRequestHandler):
         identity: the request still arrives with Host: evil.com.
         """
         host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
-        allowed = {h.strip().lower() for h in
-                   cfg.get("CORP_UI_ALLOWED_HOSTS", "").split(",") if h.strip()}
+        allowed = {
+            h.strip().lower() for h in cfg.get("CORP_UI_ALLOWED_HOSTS", "").split(",") if h.strip()
+        }
         if allowed:
             return host in allowed
         bind = _fresh_settings().ui_host
@@ -1084,7 +1198,7 @@ class Handler(BaseHTTPRequestHandler):
             return True
         parsed = urlparse(origin)
         if not parsed.netloc:
-            return False   # "null" origin: a sandboxed iframe or a file:// page
+            return False  # "null" origin: a sandboxed iframe or a file:// page
         return parsed.netloc.lower() == (self.headers.get("Host") or "").strip().lower()
 
     def _dispatch(self, method: str) -> None:
@@ -1095,12 +1209,19 @@ class Handler(BaseHTTPRequestHandler):
             # Host first, on every request including GET: it costs nothing and
             # a rebound name should not reach a handler at all.
             if not self._host_allowed():
-                log.warning("refused Host %r (set CORP_UI_ALLOWED_HOSTS to allow it)",
-                            self.headers.get("Host"))
-                self._send(403, {"ok": False, "error":
-                                 "Host not allowed. If you reach this console through a "
-                                 "proxy or another name, list it in CORP_UI_ALLOWED_HOSTS "
-                                 "(comma separated) and restart."})
+                log.warning(
+                    "refused Host %r (set CORP_UI_ALLOWED_HOSTS to allow it)",
+                    self.headers.get("Host"),
+                )
+                self._send(
+                    403,
+                    {
+                        "ok": False,
+                        "error": "Host not allowed. If you reach this console through a "
+                        "proxy or another name, list it in CORP_UI_ALLOWED_HOSTS "
+                        "(comma separated) and restart.",
+                    },
+                )
                 return
             # POST carries its parameters in the body; GET has none to read. The
             # body is read before auth is decided, even when we are about to
@@ -1119,8 +1240,11 @@ class Handler(BaseHTTPRequestHandler):
             # no side effect, and a cross-site reader cannot see the response
             # anyway without CORS, which is never granted.
             if method == "POST" and not self._same_origin():
-                log.warning("refused cross-site POST %s from Origin %r",
-                            url.path, self.headers.get("Origin"))
+                log.warning(
+                    "refused cross-site POST %s from Origin %r",
+                    url.path,
+                    self.headers.get("Origin"),
+                )
                 self._send(403, {"ok": False, "error": "cross-site request refused"})
                 return
             # One check, both verbs, driven by the route's own `public` flag.
@@ -1129,8 +1253,7 @@ class Handler(BaseHTTPRequestHandler):
             if not route.public and not self._authorized():
                 self._send(401, {"ok": False, "error": "missing or wrong X-Corp-Token"})
                 return
-            ctx = Ctx(state=self.state, path=url.path, query=query, body=body,
-                      slug=slug, lang=lang)
+            ctx = Ctx(state=self.state, path=url.path, query=query, body=body, slug=slug, lang=lang)
             self._send(*route.handler(ctx))
         except _RequestRefused as refused:
             self._send(refused.status, {"ok": False, "error": refused.message})
@@ -1145,13 +1268,19 @@ class Handler(BaseHTTPRequestHandler):
         self._dispatch("POST")
 
 
-def build_server(settings: Settings, host: str | None = None, port: int | None = None,
-                 env_file: Path | None = None) -> ThreadingHTTPServer:
+def build_server(
+    settings: Settings,
+    host: str | None = None,
+    port: int | None = None,
+    env_file: Path | None = None,
+) -> ThreadingHTTPServer:
     path = env_file or ROOT / ".env"
-    cfg.set_dotenv_path(path)   # the console and the resolver must agree on it
+    cfg.set_dotenv_path(path)  # the console and the resolver must agree on it
     state = UiState(settings, path)
     handler = type("BoundHandler", (Handler,), {"state": state})
-    return ThreadingHTTPServer((host or settings.ui_host, settings.ui_port if port is None else port), handler)
+    return ThreadingHTTPServer(
+        (host or settings.ui_host, settings.ui_port if port is None else port), handler
+    )
 
 
 def _port_in_use(host: str, port: int) -> bool:
@@ -1159,6 +1288,7 @@ def _port_in_use(host: str, port: int) -> bool:
     succeed on some platforms (Windows especially), so checking the bind result
     is not reliable; a connection that answers is."""
     import socket
+
     probe = "127.0.0.1" if host in ("", "0.0.0.0") else host
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(0.4)
@@ -1170,13 +1300,16 @@ def _port_in_use(host: str, port: int) -> bool:
 
 def serve(settings: Settings, host: str | None = None, port: int | None = None) -> int:
     from . import plugins
-    plugins.load()   # no-op unless CORP_PLUGINS_ENABLED; extends the registries
+
+    plugins.load()  # no-op unless CORP_PLUGINS_ENABLED; extends the registries
     want = settings.ui_port if port is None else port
     host = host or settings.ui_host
     if _port_in_use(host, want):
-        print(f"corparius: port {want} is already in use. Another console may be "
-              f"running (open http://127.0.0.1:{want}), or pick a free port: "
-              f"python -m app.cli ui --port 8601  (or set CORP_UI_PORT).")
+        print(
+            f"corparius: port {want} is already in use. Another console may be "
+            f"running (open http://127.0.0.1:{want}), or pick a free port: "
+            f"python -m app.cli ui --port 8601  (or set CORP_UI_PORT)."
+        )
         return 1
     try:
         server = build_server(settings, host, port)

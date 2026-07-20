@@ -3,18 +3,20 @@
 A tick is one simulated hour. An agent is due when the tick is a multiple of its
 cadence, so the roster is naturally staggered instead of firing all at once.
 """
+
 from __future__ import annotations
+
 import logging
 import time
-
-import requests
 from dataclasses import dataclass, field
 
-from .agents import ROSTER, Executor, AgentSpec
+import requests
+
+from .agents import ROSTER, AgentSpec, Executor
 from .config import Settings
-from .safety import TokenBudget, CircuitBreaker
-from .llm import HybridRouter
 from .hitl import ApprovalGate
+from .llm import HybridRouter
+from .safety import CircuitBreaker, TokenBudget
 
 log = logging.getLogger("corparius.orchestrator")
 
@@ -30,7 +32,7 @@ class RunContext:
     leads: list = field(default_factory=list)
     store: object = None
     role: str = ""
-    structured: object = None   # the last structured.Result, when a tool asked for one
+    structured: object = None  # the last structured.Result, when a tool asked for one
 
 
 def due_roles(tick: int, enabled: dict) -> list[AgentSpec]:
@@ -51,8 +53,7 @@ class Runtime:
         self.store = store
         self.router = HybridRouter(settings)
 
-    def run(self, company: dict, ticks: int = 6, loop: bool = False,
-            should_stop=None) -> dict:
+    def run(self, company: dict, ticks: int = 6, loop: bool = False, should_stop=None) -> dict:
         """should_stop() is polled at every tick and at each day boundary, so a
         loop started from the console can be stopped within one tick instead of
         running until the process dies."""
@@ -76,7 +77,8 @@ class Runtime:
         while True:
             budget = TokenBudget(budgets.get("session_tokens", self.settings.session_token_budget))
             breaker = CircuitBreaker(
-                budgets.get("tokens_per_minute", self.settings.tokens_per_minute_limit))
+                budgets.get("tokens_per_minute", self.settings.tokens_per_minute_limit)
+            )
             done_ticks = 0
             for offset in range(ticks):
                 if should_stop():
@@ -84,9 +86,15 @@ class Runtime:
                     break
                 tick = start + offset
                 done_ticks = offset + 1
-                ctx = RunContext(company=company, tick=tick, budget=budget,
-                                 breaker=breaker, data_path=self.settings.data_path,
-                                 memory=memory, store=self.store)
+                ctx = RunContext(
+                    company=company,
+                    tick=tick,
+                    budget=budget,
+                    breaker=breaker,
+                    data_path=self.settings.data_path,
+                    memory=memory,
+                    store=self.store,
+                )
                 for spec in due_roles(tick, enabled):
                     try:
                         for line in executor.run_turn(slug, spec, ctx):
@@ -94,21 +102,28 @@ class Runtime:
                     except requests.RequestException as exc:
                         # LLM unreachable even after retries: leave a trace the
                         # operator can see and stop cleanly instead of crashing.
-                        log.error("tick %d [%s] LLM unreachable: %s",
-                                  tick, spec.role.value, exc)
+                        log.error("tick %d [%s] LLM unreachable: %s", tick, spec.role.value, exc)
                         self.store.record_action(
-                            slug, "system", "llm_unreachable",
+                            slug,
+                            "system",
+                            "llm_unreachable",
                             {"agent": spec.role.value},
                             f"run stopped: {exc}. Check `python -m app.cli doctor`.",
-                            False)
+                            False,
+                        )
                         frozen = True
                         break
                     # Graceful degradation: a SAFE breaker freezes the whole session.
                     if breaker.mode == CircuitBreaker.SAFE:
                         log.error("tick %d circuit breaker SECURISE: freezing session", tick)
-                        self.store.record_action(slug, "system", "circuit_breaker_freeze",
-                                                 {"mode": breaker.mode},
-                                                 "session frozen, operator alerted", False)
+                        self.store.record_action(
+                            slug,
+                            "system",
+                            "circuit_breaker_freeze",
+                            {"mode": breaker.mode},
+                            "session frozen, operator alerted",
+                            False,
+                        )
                         frozen = True
                         break
                 if frozen:
@@ -134,5 +149,4 @@ class Runtime:
             time.sleep(1)
         # `ran`, not ticks * days: a run stopped mid-day did not play a full day,
         # and reporting that it did would be the console lying about its own work.
-        return {"ticks_run": ran, "next_tick": start, "days": days,
-                "stopped": stopped, **last}
+        return {"ticks_run": ran, "next_tick": start, "days": days, "stopped": stopped, **last}

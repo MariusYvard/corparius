@@ -5,6 +5,7 @@ The warning matters as much as the archive. This design created the fact that a
 backup zip holds the console's API keys in the clear, so `describe()` is the one
 place that has to keep saying so.
 """
+
 import zipfile
 
 from app import backup
@@ -67,8 +68,9 @@ def test_missing_directories_are_skipped_not_fatal(tmp_path, monkeypatch):
 
 def test_the_stamp_names_the_archive(tmp_path, monkeypatch):
     monkeypatch.setattr(backup, "ROOT", tmp_path)
-    path = backup.make_backup(str(_tree(tmp_path)), out_dir=str(tmp_path / "out"),
-                              stamp="20260720-101500")
+    path = backup.make_backup(
+        str(_tree(tmp_path)), out_dir=str(tmp_path / "out"), stamp="20260720-101500"
+    )
     assert path.name == "corparius-backup-20260720-101500.zip"
 
 

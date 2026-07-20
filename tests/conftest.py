@@ -10,6 +10,7 @@ So: point the .env layer at a file that does not exist, point the store layer at
 a throwaway directory, and pin mock mode. Tests that want a different value set
 it with monkeypatch.setenv, which lands in layer 1 and outranks all of this.
 """
+
 import pytest
 
 from app import cfg
@@ -27,6 +28,7 @@ def close_stores(monkeypatch):
     to remember. close() is idempotent, so a test that closes its own is fine.
     """
     from app import store as store_mod
+
     opened = []
     original_init = store_mod.Store.__init__
 
@@ -39,7 +41,7 @@ def close_stores(monkeypatch):
     for store in opened:
         try:
             store.close()
-        except Exception:   # a test may already have closed or corrupted it
+        except Exception:  # a test may already have closed or corrupted it
             pass
 
 

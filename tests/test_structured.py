@@ -5,11 +5,11 @@ real models actually produce — clean JSON, JSON in a fence, prose wrapped arou
 JSON, a preamble, and total garbage — and assert one validated dict comes back
 every time.
 """
+
 import types
 
 from app import structured
-from app.models import LLMResult, Usage, Difficulty
-
+from app.models import Difficulty, LLMResult, Usage
 
 SCHEMA = {
     "headline": {"type": "str", "required": True, "max_len": 20},
@@ -20,6 +20,7 @@ SCHEMA = {
 
 class FakeRouter:
     """Returns a scripted reply per call, so a repair round can be exercised."""
+
     def __init__(self, replies):
         self.replies = list(replies)
         self.calls = 0
@@ -34,20 +35,26 @@ def test_extract_survives_the_shapes_models_actually_return():
     clean = '{"headline": "hi"}'
     assert structured.extract_json(clean) == {"headline": "hi"}
     assert structured.extract_json('```json\n{"headline": "hi"}\n```') == {"headline": "hi"}
-    assert structured.extract_json('Sure! Here you go:\n{"headline": "hi"}\nHope that helps!') == {"headline": "hi"}
+    assert structured.extract_json('Sure! Here you go:\n{"headline": "hi"}\nHope that helps!') == {
+        "headline": "hi"
+    }
     assert structured.extract_json("no json here at all") is None
     assert structured.extract_json("") is None
 
 
 def test_validate_coerces_drops_and_defaults():
-    obj = {"headline": "a very long headline that exceeds the cap", "hashtags": "solo",
-           "score": "7", "extra": "dropped"}
+    obj = {
+        "headline": "a very long headline that exceeds the cap",
+        "hashtags": "solo",
+        "score": "7",
+        "extra": "dropped",
+    }
     clean, errors = structured.validate(obj, SCHEMA)
     assert not errors
     assert len(clean["headline"]) <= 20
-    assert clean["hashtags"] == ["solo"]      # a scalar becomes a one-item list
-    assert clean["score"] == 7                # "7" coerced to int
-    assert "extra" not in clean               # fields outside the schema are dropped
+    assert clean["hashtags"] == ["solo"]  # a scalar becomes a one-item list
+    assert clean["score"] == 7  # "7" coerced to int
+    assert "extra" not in clean  # fields outside the schema are dropped
 
 
 def test_missing_required_is_an_error():
@@ -59,7 +66,7 @@ def test_a_clean_json_reply_passes_first_try():
     r = structured.ask(FakeRouter(['{"headline": "Launch day", "score": 3}']), [], SCHEMA)
     assert r.ok and not r.fell_back and r.attempts == 1
     assert r.data["headline"] == "Launch day" and r.data["score"] == 3
-    assert r.data["hashtags"] == []           # default filled
+    assert r.data["hashtags"] == []  # default filled
 
 
 def test_a_bad_reply_is_repaired_on_the_retry():
@@ -67,7 +74,7 @@ def test_a_bad_reply_is_repaired_on_the_retry():
     r = structured.ask(router, [], SCHEMA, retries=1)
     assert r.ok and not r.fell_back and r.attempts == 2
     assert r.data["headline"] == "Fixed"
-    assert len(r.usages) == 2                 # both calls are billed
+    assert len(r.usages) == 2  # both calls are billed
 
 
 def test_persistent_garbage_falls_back_but_still_returns_the_shape():
@@ -77,7 +84,7 @@ def test_persistent_garbage_falls_back_but_still_returns_the_shape():
     # The agent turn must survive: the shape is intact and the required field is
     # salvaged from the raw reply rather than left blank.
     assert set(r.data) >= {"headline", "hashtags", "score"}
-    assert r.data["headline"]                 # non-empty, salvaged
+    assert r.data["headline"]  # non-empty, salvaged
     assert r.data["hashtags"] == [] and r.data["score"] == 0
 
 
@@ -85,9 +92,12 @@ def test_the_mock_provider_answers_structured_offline():
     # Offline mode must exercise the real structured path, not always fall back:
     # a homelab with no network still gets validated shapes.
     from app.llm import MockProvider
+
     router = types.SimpleNamespace(
-        generate=lambda convo, diff=None, model=None, max_tokens=512:
-            MockProvider().generate(convo, "gemma"))
+        generate=lambda convo, diff=None, model=None, max_tokens=512: MockProvider().generate(
+            convo, "gemma"
+        )
+    )
     r = structured.ask(router, [{"role": "user", "content": "draft a post"}], SCHEMA)
     assert r.ok and not r.fell_back
     assert r.data["headline"] and isinstance(r.data["hashtags"], list)

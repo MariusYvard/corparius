@@ -15,6 +15,7 @@ A longer busy timeout does not help (1): SQLite returns BUSY immediately,
 without calling the busy handler, when two connections try to upgrade a lock at
 once. Python already applies a 5s timeout, and the failure happened anyway.
 """
+
 import threading
 
 from app.store import Store
@@ -35,7 +36,7 @@ def _run(workers):
     def guard(fn, *args):
         try:
             fn(*args)
-        except BaseException as exc:            # noqa: BLE001 - reported, not swallowed
+        except BaseException as exc:  # noqa: BLE001 - reported, not swallowed
             with lock:
                 errors.append(exc)
 
@@ -53,6 +54,7 @@ def test_shared_store_keeps_every_concurrent_write(tmp_path):
     is the failure mode that matters most: no exception reaches the operator,
     the action log simply loses entries."""
     with Store(str(tmp_path / "data")) as store:
+
         def writer(n):
             for i in range(ROUNDS):
                 store.record_action("t", f"agent{n}", "tool", {"i": i}, "out", True)
@@ -66,6 +68,7 @@ def test_shared_store_survives_overlapping_reads_and_writes(tmp_path):
     """A background run recording actions while the console polls
     /api/overview, which reads status and the flow metrics on every tick."""
     with Store(str(tmp_path / "data")) as store:
+
         def writer(n):
             for i in range(OVERLAP_ROUNDS):
                 store.record_usage("t", f"agent{n}", 10, 5)
@@ -76,8 +79,9 @@ def test_shared_store_survives_overlapping_reads_and_writes(tmp_path):
                 store.status("t")
                 store.flow_metrics("t")
 
-        workers = ([(writer, n) for n in range(WRITERS)]
-                   + [(reader,) for _ in range(OVERLAP_READERS)])
+        workers = [(writer, n) for n in range(WRITERS)] + [
+            (reader,) for _ in range(OVERLAP_READERS)
+        ]
         errors = _run(workers)
         assert not errors, f"overlapping reads and writes raised: {errors[:3]}"
         assert store.status("t")["tokens"] == WRITERS * OVERLAP_ROUNDS * 15

@@ -584,6 +584,53 @@ def _set_settings(state: UiState, values: dict, unset: list) -> dict:
     return {**_settings_payload(), **meta}
 
 
+def _theme_file() -> Path:
+    """Where the console's colour choice lives: a small JSON in the data dir,
+    deliberately separate from the settings table (this is per-instance UI state,
+    not app configuration). Persisting it here is what makes the theme follow the
+    operator across browsers and devices on the same instance."""
+    return Path(_fresh_settings().data_path) / "ui_theme.json"
+
+
+def _theme_get() -> dict:
+    try:
+        data = json.loads(_theme_file().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _theme_set(body: dict) -> dict:
+    """Merge validated fields (mode, hue, chroma) into the stored theme. A null or
+    empty value clears a field (back to the code default)."""
+    current = _theme_get()
+    if "mode" in body:
+        mode = body["mode"]
+        if mode in ("dark", "light"):
+            current["mode"] = mode
+        elif mode in (None, ""):
+            current.pop("mode", None)
+    for key, lo, hi in (("hue", 0.0, 360.0), ("chroma", 0.0, 2.0)):
+        if key not in body:
+            continue
+        value = body[key]
+        if value in (None, ""):
+            current.pop(key, None)
+            continue
+        try:
+            if lo <= float(value) <= hi:
+                current[key] = str(value)[:16]
+        except (TypeError, ValueError):
+            pass
+    try:
+        path = _theme_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(current), encoding="utf-8")
+    except OSError:
+        pass
+    return current
+
+
 def _plugins_action(body: dict) -> dict:
     """Enable/disable/remove an installed plugin, or install a VERIFIED one from
     the curated registry. Installing an unverified plugin is deliberately not
@@ -690,6 +737,8 @@ class Handler(BaseHTTPRequestHandler):
             elif url.path == "/api/plugins":
                 from . import plugins
                 self._send(200, {"ok": True, **plugins.status()})
+            elif url.path == "/api/theme":
+                self._send(200, {"ok": True, **_theme_get()})
             elif url.path == "/api/chat" and slug:
                 history = list(self.state.chats.get(slug, []))
                 self._send(200, {"ok": True, "history": history})
@@ -757,6 +806,8 @@ class Handler(BaseHTTPRequestHandler):
             elif url.path == "/api/plugins":
                 result = _plugins_action(body)
                 self._send(200 if result.get("ok") else 400, result)
+            elif url.path == "/api/theme":
+                self._send(200, {"ok": True, **_theme_set(body)})
             elif url.path == "/api/test/mail":
                 # One button, both directions. A real send and a real read:
                 # setting a mail account and hoping is the friction, and this is

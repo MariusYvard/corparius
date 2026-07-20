@@ -17,8 +17,10 @@ import os
 import re
 import threading
 from collections import deque
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
 import yaml
@@ -46,13 +48,6 @@ log = logging.getLogger("corparius.webui")
 ROOT = paths.user_home()
 PAGE = paths.page_file()
 
-# Environment variables the page may set. Anything else is refused.
-_TOGGLES = {"CORP_CLOUD_ENABLED", "CORP_LLM_MOCK", "CORP_CLAUDE_CODE"}
-_TIERS = {"CORP_TRIVIAL_MODEL", "CORP_NORMAL_MODEL", "CORP_HARD_MODEL",
-          "CORP_LLM_FALLBACK", "CORP_LOCAL_MODEL"}
-_KEYS = ({spec["key_env"] for spec in OPENAI_COMPAT_PROVIDERS.values()}
-         | {spec["base_env"] for spec in OPENAI_COMPAT_PROVIDERS.values() if "base_env" in spec}
-         | {"ANTHROPIC_API_KEY"})
 # Everything the page may write: the provider panel's vars plus every row of the
 # settings registry. Anything else is refused.
 ALLOWED_VARS = settings_spec.WRITABLE
@@ -675,6 +670,301 @@ def _plugins_action(body: dict) -> dict:
     return {"ok": True, "restart_required": True, **plugins.status()}
 
 
+@dataclass
+class Ctx:
+    """One request, normalised. GET reads its parameters from the query string
+    and POST from the JSON body; handlers should not care which."""
+    state: UiState
+    path: str
+    query: dict
+    body: dict
+    slug: str
+    lang: str
+
+    def store(self) -> Store:
+        return self.state.store()
+
+
+# --- route handlers -------------------------------------------------------
+# Each returns (status, payload) or (status, payload, content_type). Pulling
+# them out of the if/elif chains makes them callable without an HTTP round trip.
+
+def _route_page(ctx):
+    return 200, PAGE.read_bytes(), "text/html"
+
+
+def _route_companies_get(ctx):
+    return 200, {"ok": True, "companies": _companies(), "templates": company_mod.TEMPLATES}
+
+
+def _route_overview(ctx):
+    return 200, _overview(ctx.state, ctx.slug)
+
+
+def _route_providers_get(ctx):
+    return 200, _providers_payload()
+
+
+def _route_settings_get(ctx):
+    return 200, _settings_payload()
+
+
+def _route_company_get(ctx):
+    result = _company_payload(ctx.slug)
+    return (200 if result["ok"] else 404), result
+
+
+def _route_session(ctx):
+    # Tells the page whether it must send X-Corp-Token. It never serves the
+    # token itself.
+    return 200, {"ok": True, "token_required": bool(cfg.get("CORP_UI_TOKEN", "").strip())}
+
+
+def _route_ollama_get(ctx):
+    result = ollama_setup.status(lang=ctx.lang)
+    pulls = ctx.state.pulls
+    if pulls.get("running"):
+        result = {**result, "detail": pulls.get("progress") or "pulling...", "pulling": True}
+    return 200, {"ok": True, "result": result}
+
+
+def _route_site_get(ctx):
+    site = paths.site_index(_fresh_settings().data_path, ctx.slug)
+    return 200, {"ok": True, "built": site.is_file(),
+                 "mtime": site.stat().st_mtime if site.is_file() else None}
+
+
+def _route_site_serve(ctx):
+    parts = ctx.path.split("/")
+    slug = parts[2] if len(parts) > 2 else ""
+    site = paths.site_index(_fresh_settings().data_path, slug)
+    # `slug in _companies()` is the path-traversal guard, as everywhere else.
+    if slug in _companies() and site.is_file():
+        return 200, site.read_bytes(), "text/html"
+    return 404, {"ok": False, "error": "site not built yet"}
+
+
+def _route_payments_get(ctx):
+    return 200, {"ok": True, **stripe_payments()}
+
+
+def _route_doctor(ctx):
+    return 200, {"ok": True, "checks": run_checks(_fresh_settings())}
+
+
+def _route_update(ctx):
+    # Off unless CORP_UPDATE_CHECK is on; when off this makes no network call.
+    # See app/update_check.py.
+    from . import update_check
+    return 200, {"ok": True, **update_check.check()}
+
+
+def _route_plugins_get(ctx):
+    from . import plugins
+    return 200, {"ok": True, **plugins.status()}
+
+
+def _route_theme_get(ctx):
+    return 200, {"ok": True, **_theme_get()}
+
+
+def _route_chat_get(ctx):
+    return 200, {"ok": True, "history": list(ctx.state.chats.get(ctx.slug, []))}
+
+
+def _route_companies_post(ctx):
+    return 200, _create_company(ctx.state, ctx.body)
+
+
+def _route_approvals_post(ctx):
+    decision = ctx.body.get("decision")
+    if decision not in ("approved", "rejected"):
+        return 400, {"ok": False, "error": "decision must be approved or rejected"}
+    done = ctx.store().set_approval_status(
+        str(ctx.body.get("id")), decision, str(ctx.body.get("note", "via console")))
+    return (200 if done else 404), {"ok": done, "error": None if done else "approval not found"}
+
+
+def _route_tasks_post(ctx):
+    return _edit_task(ctx.store(), ctx.body)
+
+
+def _route_site_post(ctx):
+    company = _load_company(ctx.slug)
+    if company is None:
+        return 404, {"ok": False, "error": f"unknown company '{ctx.slug}'"}
+    out_dir = paths.site_dir(_fresh_settings().data_path, ctx.slug)
+    headline = str(ctx.body.get("headline", "")).strip()
+    sitegen.build_site(company, str(out_dir), headline=headline or None)
+    return 200, {"ok": True, "built": True}
+
+
+def _route_deploy_post(ctx):
+    return _deploy(ctx.state, ctx.slug)
+
+
+def _route_backup_post(ctx):
+    path = backup.make_backup(_fresh_settings().data_path)
+    return 200, {"ok": True, "name": path.name, "size": path.stat().st_size,
+                 "warning": {"en": backup.WARNING_EN, "fr": backup.WARNING_FR}}
+
+
+def _route_run_stop(ctx):
+    return 200, _stop_run(ctx.state, ctx.slug)
+
+
+def _route_run_post(ctx):
+    ticks = max(1, min(int(ctx.body.get("ticks", 6)), 48))
+    return 200, _start_run(ctx.state, ctx.slug, ticks,
+                           loop=bool(ctx.body.get("loop")), lang=ctx.lang)
+
+
+def _route_providers_post(ctx):
+    return 200, _set_env(ctx.state, dict(ctx.body.get("values", {})))
+
+
+def _route_settings_post(ctx):
+    result = _set_settings(ctx.state, dict(ctx.body.get("values", {})),
+                           list(ctx.body.get("unset", [])))
+    return (200 if result.get("ok") else 400), result
+
+
+def _route_plugins_post(ctx):
+    result = _plugins_action(ctx.body)
+    return (200 if result.get("ok") else 400), result
+
+
+def _route_theme_post(ctx):
+    return 200, {"ok": True, **_theme_set(ctx.body)}
+
+
+def _route_test_mail(ctx):
+    # One button, both directions. A real send and a real read: setting a mail
+    # account and hoping is the friction, and this is the answer to "did it work?".
+    return 200, {"ok": True, "result": _mail_check(str(ctx.body.get("to", "")), ctx.lang)}
+
+
+def _route_test_payments(ctx):
+    return 200, {"ok": True, "result": stripe_check(lang=ctx.lang)}
+
+
+def _route_test_claude(ctx):
+    return 200, {"ok": True, "result": claudecli.check(lang=ctx.lang)}
+
+
+def _route_claude_setup(ctx):
+    result = _claude_setup(ctx.state)
+    return (200 if result.get("ok") else 400), result
+
+
+def _route_test_provider(ctx):
+    return 200, {"ok": True, "result": provider_check.check(str(ctx.body.get("name", "")),
+                                                            lang=ctx.lang)}
+
+
+def _route_ollama_pull(ctx):
+    return 200, _ollama_pull(ctx.state, list(ctx.body.get("models", [])))
+
+
+def _route_company_post(ctx):
+    result = _save_company(ctx.state, ctx.slug, dict(ctx.body.get("config", {})))
+    return (200 if result.get("ok") else 400), result
+
+
+def _route_company_delete(ctx):
+    result = _delete_company(ctx.state, ctx.slug, str(ctx.body.get("confirm", "")),
+                             bool(ctx.body.get("purge_store")))
+    return (200 if result.get("ok") else 400), result
+
+
+def _route_chat_post(ctx):
+    message = str(ctx.body.get("message", "")).strip()
+    if not message:
+        return 400, {"ok": False, "error": "empty message"}
+    return 200, _chat(ctx.state, ctx.slug, message, ctx.lang)
+
+
+@dataclass(frozen=True)
+class Route:
+    """One endpoint.
+
+    `public` defaults to False on purpose, and it is the whole point of this
+    table. do_GET and do_POST used to be two independent if/elif chains, and the
+    token check lived in one of them only - so every read endpoint was open,
+    and nothing in the code made that visible. Here the unsafe choice has to be
+    typed out, which makes it greppable and reviewable; adding a route without
+    thinking about auth yields an authenticated one.
+
+    `mutating` is derived from the method rather than stored: it is exactly
+    true for POST in this API, and one fewer field to get wrong.
+    """
+    method: str
+    path: str
+    handler: Callable
+    public: bool = False
+    needs_slug: bool = False   # no company named -> fall through to 404
+
+
+# Exact matches, checked first.
+ROUTES: tuple[Route, ...] = (
+    Route("GET", "/", _route_page, public=True),
+    Route("GET", "/api/session", _route_session, public=True),
+    Route("GET", "/api/companies", _route_companies_get),
+    Route("GET", "/api/overview", _route_overview, needs_slug=True),
+    Route("GET", "/api/providers", _route_providers_get),
+    Route("GET", "/api/settings", _route_settings_get),
+    Route("GET", "/api/company", _route_company_get, needs_slug=True),
+    Route("GET", "/api/ollama", _route_ollama_get),
+    Route("GET", "/api/site", _route_site_get, needs_slug=True),
+    Route("GET", "/api/payments", _route_payments_get),
+    Route("GET", "/api/doctor", _route_doctor),
+    Route("GET", "/api/update", _route_update),
+    Route("GET", "/api/plugins", _route_plugins_get),
+    Route("GET", "/api/theme", _route_theme_get),
+    Route("GET", "/api/chat", _route_chat_get, needs_slug=True),
+    Route("POST", "/api/companies", _route_companies_post),
+    Route("POST", "/api/approvals", _route_approvals_post),
+    Route("POST", "/api/tasks", _route_tasks_post),
+    Route("POST", "/api/site", _route_site_post),
+    Route("POST", "/api/deploy", _route_deploy_post),
+    Route("POST", "/api/backup", _route_backup_post),
+    Route("POST", "/api/run/stop", _route_run_stop),
+    Route("POST", "/api/run", _route_run_post),
+    Route("POST", "/api/providers", _route_providers_post),
+    Route("POST", "/api/settings", _route_settings_post),
+    Route("POST", "/api/plugins", _route_plugins_post),
+    Route("POST", "/api/theme", _route_theme_post),
+    Route("POST", "/api/test/mail", _route_test_mail),
+    Route("POST", "/api/test/payments", _route_test_payments),
+    Route("POST", "/api/test/claude", _route_test_claude),
+    Route("POST", "/api/claude/setup", _route_claude_setup),
+    Route("POST", "/api/test/provider", _route_test_provider),
+    Route("POST", "/api/ollama/pull", _route_ollama_pull),
+    Route("POST", "/api/company", _route_company_post),
+    Route("POST", "/api/company/delete", _route_company_delete),
+    Route("POST", "/api/chat", _route_chat_post),
+)
+
+# Prefix matches, checked only after every exact route has missed, so /api/site
+# can never be shadowed by a prefix that happens to start the same way.
+PREFIX_ROUTES: tuple[Route, ...] = (
+    Route("GET", "/site/", _route_site_serve, public=True),
+)
+
+_EXACT = {(r.method, r.path): r for r in ROUTES}
+assert len(_EXACT) == len(ROUTES), "duplicate (method, path) in ROUTES"
+
+
+def _match(method: str, path: str) -> Route | None:
+    route = _EXACT.get((method, path))
+    if route is not None:
+        return route
+    for candidate in PREFIX_ROUTES:
+        if candidate.method == method and path.startswith(candidate.path):
+            return candidate
+    return None
+
+
 class Handler(BaseHTTPRequestHandler):
     state: UiState  # injected by build_server
     server_version = "corparius-ui"
@@ -704,168 +994,38 @@ class Handler(BaseHTTPRequestHandler):
         token = cfg.get("CORP_UI_TOKEN", "").strip()
         return not token or self.headers.get("X-Corp-Token", "") == token
 
-    def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
+    def _dispatch(self, method: str) -> None:
         url = urlparse(self.path)
-        q = {k: v[0] for k, v in parse_qs(url.query).items()}
-        slug = q.get("company", "")
-        try:
-            if url.path == "/":
-                self._send(200, PAGE.read_bytes(), "text/html")
-            elif url.path == "/api/companies":
-                self._send(200, {"ok": True, "companies": _companies(),
-                                 "templates": company_mod.TEMPLATES})
-            elif url.path == "/api/overview" and slug:
-                self._send(200, _overview(self.state, slug))
-            elif url.path == "/api/providers":
-                self._send(200, _providers_payload())
-            elif url.path == "/api/settings":
-                self._send(200, _settings_payload())
-            elif url.path == "/api/company" and slug:
-                result = _company_payload(slug)
-                self._send(200 if result["ok"] else 404, result)
-            elif url.path == "/api/session":
-                # Tells the page whether it must send X-Corp-Token. It never
-                # serves the token itself.
-                self._send(200, {"ok": True,
-                                 "token_required": bool(cfg.get("CORP_UI_TOKEN", "").strip())})
-            elif url.path == "/api/ollama":
-                result = ollama_setup.status(lang=q.get("lang", ""))
-                pulls = self.state.pulls
-                if pulls.get("running"):
-                    result = {**result, "detail": pulls.get("progress") or "pulling...",
-                              "pulling": True}
-                self._send(200, {"ok": True, "result": result})
-            elif url.path == "/api/site" and slug:
-                site = paths.site_index(_fresh_settings().data_path, slug)
-                self._send(200, {"ok": True, "built": site.is_file(),
-                                 "mtime": site.stat().st_mtime if site.is_file() else None})
-            elif url.path.startswith("/site/"):
-                slug2 = url.path.split("/")[2] if len(url.path.split("/")) > 2 else ""
-                site = paths.site_index(_fresh_settings().data_path, slug2)
-                if slug2 in _companies() and site.is_file():
-                    self._send(200, site.read_bytes(), "text/html")
-                else:
-                    self._send(404, {"ok": False, "error": "site not built yet"})
-            elif url.path == "/api/payments":
-                self._send(200, {"ok": True, **stripe_payments()})
-            elif url.path == "/api/doctor":
-                self._send(200, {"ok": True, "checks": run_checks(_fresh_settings())})
-            elif url.path == "/api/update":
-                # Off unless CORP_UPDATE_CHECK is on; when off this makes no
-                # network call. See app/update_check.py.
-                from . import update_check
-                self._send(200, {"ok": True, **update_check.check()})
-            elif url.path == "/api/plugins":
-                from . import plugins
-                self._send(200, {"ok": True, **plugins.status()})
-            elif url.path == "/api/theme":
-                self._send(200, {"ok": True, **_theme_get()})
-            elif url.path == "/api/chat" and slug:
-                history = list(self.state.chats.get(slug, []))
-                self._send(200, {"ok": True, "history": history})
-            else:
-                self._send(404, {"ok": False, "error": "not found"})
-        except Exception:
-            log.exception("GET %s failed", self.path)
-            self._send(500, {"ok": False, "error": _oops(q.get("lang", ""))})
-
-    def do_POST(self) -> None:  # noqa: N802
-        # Read the body before deciding anything, even when we are about to
-        # refuse. Closing the connection on an unread body makes the client see
+        query = {k: v[0] for k, v in parse_qs(url.query).items()}
+        # POST carries its parameters in the body; GET has none to read. The
+        # body is read before anything is decided, even when we are about to
+        # refuse: closing the connection on an unread body makes the client see
         # a reset instead of our 401, and the page needs the 401 to know it
         # should ask for a token.
-        body = self._json_body()
-        if not self._authorized():
-            self._send(401, {"ok": False, "error": "missing or wrong X-Corp-Token"})
-            return
-        url = urlparse(self.path)
-        slug = str(body.get("company", ""))
-        store = self.state.store()
+        body = self._json_body() if method == "POST" else {}
+        source = body if method == "POST" else query
+        lang = str(source.get("lang", ""))
         try:
-            if url.path == "/api/companies":
-                self._send(200, _create_company(self.state, body))
-            elif url.path == "/api/approvals":
-                decision = body.get("decision")
-                if decision not in ("approved", "rejected"):
-                    self._send(400, {"ok": False, "error": "decision must be approved or rejected"})
-                    return
-                done = store.set_approval_status(
-                    str(body.get("id")), decision, str(body.get("note", "via console")))
-                self._send(200 if done else 404,
-                           {"ok": done, "error": None if done else "approval not found"})
-            elif url.path == "/api/tasks":
-                self._send(*_edit_task(store, body))
-            elif url.path == "/api/site":
-                company = _load_company(slug)
-                if company is None:
-                    self._send(404, {"ok": False, "error": f"unknown company '{slug}'"})
-                    return
-                out_dir = paths.site_dir(_fresh_settings().data_path, slug)
-                headline = str(body.get("headline", "")).strip()
-                sitegen.build_site(company, str(out_dir), headline=headline or None)
-                self._send(200, {"ok": True, "built": True})
-            elif url.path == "/api/deploy":
-                self._send(*_deploy(self.state, slug))
-            elif url.path == "/api/backup":
-                path = backup.make_backup(_fresh_settings().data_path)
-                self._send(200, {"ok": True, "name": path.name,
-                                 "size": path.stat().st_size,
-                                 "warning": {"en": backup.WARNING_EN, "fr": backup.WARNING_FR}})
-            elif url.path == "/api/run/stop":
-                self._send(200, _stop_run(self.state, slug))
-            elif url.path == "/api/run":
-                ticks = max(1, min(int(body.get("ticks", 6)), 48))
-                self._send(200, _start_run(self.state, slug, ticks,
-                                           loop=bool(body.get("loop")),
-                                           lang=str(body.get("lang", ""))))
-            elif url.path == "/api/providers":
-                self._send(200, _set_env(self.state, dict(body.get("values", {}))))
-            elif url.path == "/api/settings":
-                result = _set_settings(self.state, dict(body.get("values", {})),
-                                       list(body.get("unset", [])))
-                self._send(200 if result.get("ok") else 400, result)
-            elif url.path == "/api/plugins":
-                result = _plugins_action(body)
-                self._send(200 if result.get("ok") else 400, result)
-            elif url.path == "/api/theme":
-                self._send(200, {"ok": True, **_theme_set(body)})
-            elif url.path == "/api/test/mail":
-                # One button, both directions. A real send and a real read:
-                # setting a mail account and hoping is the friction, and this is
-                # the answer to "did it work?".
-                self._send(200, {"ok": True, "result": _mail_check(str(body.get("to", "")),
-                                                                   str(body.get("lang", "")))})
-            elif url.path == "/api/test/payments":
-                self._send(200, {"ok": True, "result": stripe_check(lang=str(body.get("lang", "")))})
-            elif url.path == "/api/test/claude":
-                self._send(200, {"ok": True, "result": claudecli.check(lang=str(body.get("lang", "")))})
-            elif url.path == "/api/claude/setup":
-                result = _claude_setup(self.state)
-                self._send(200 if result.get("ok") else 400, result)
-            elif url.path == "/api/test/provider":
-                self._send(200, {"ok": True,
-                                 "result": provider_check.check(str(body.get("name", "")),
-                                                                lang=str(body.get("lang", "")))})
-            elif url.path == "/api/ollama/pull":
-                self._send(200, _ollama_pull(self.state, list(body.get("models", []))))
-            elif url.path == "/api/company":
-                result = _save_company(self.state, slug, dict(body.get("config", {})))
-                self._send(200 if result.get("ok") else 400, result)
-            elif url.path == "/api/company/delete":
-                result = _delete_company(self.state, slug, str(body.get("confirm", "")),
-                                         bool(body.get("purge_store")))
-                self._send(200 if result.get("ok") else 400, result)
-            elif url.path == "/api/chat":
-                message = str(body.get("message", "")).strip()
-                if not message:
-                    self._send(400, {"ok": False, "error": "empty message"})
-                    return
-                self._send(200, _chat(self.state, slug, message, str(body.get("lang", ""))))
-            else:
+            if method == "POST" and not self._authorized():
+                self._send(401, {"ok": False, "error": "missing or wrong X-Corp-Token"})
+                return
+            route = _match(method, url.path)
+            slug = str(source.get("company", ""))
+            if route is None or (route.needs_slug and not slug):
                 self._send(404, {"ok": False, "error": "not found"})
+                return
+            ctx = Ctx(state=self.state, path=url.path, query=query, body=body,
+                      slug=slug, lang=lang)
+            self._send(*route.handler(ctx))
         except Exception:
-            log.exception("POST %s failed", self.path)
-            self._send(500, {"ok": False, "error": _oops(str(body.get("lang", "")))})
+            log.exception("%s %s failed", method, self.path)
+            self._send(500, {"ok": False, "error": _oops(lang)})
+
+    def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
+        self._dispatch("GET")
+
+    def do_POST(self) -> None:  # noqa: N802
+        self._dispatch("POST")
 
 
 def build_server(settings: Settings, host: str | None = None, port: int | None = None,

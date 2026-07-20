@@ -48,6 +48,28 @@ def test_serves_page_and_companies(server):
     assert status == 200 and "example" in data["companies"]
 
 
+def test_theme_persists_across_requests(server):
+    # Empty by default; the page falls back to the code default.
+    status, data = _call(server, "GET", "/api/theme")
+    assert status == 200 and data["ok"] and "hue" not in data
+    # Saving is what makes the theme follow the operator to another browser.
+    status, data = _call(server, "POST", "/api/theme",
+                         {"hue": "160", "chroma": "1.2", "mode": "light"})
+    assert status == 200 and data["hue"] == "160" and data["chroma"] == "1.2" and data["mode"] == "light"
+    status, data = _call(server, "GET", "/api/theme")   # a fresh "device"
+    assert data["hue"] == "160" and data["chroma"] == "1.2" and data["mode"] == "light"
+
+
+def test_theme_validates_and_clears(server):
+    _call(server, "POST", "/api/theme", {"hue": "999", "mode": "purple"})  # out of range / invalid
+    _, data = _call(server, "GET", "/api/theme")
+    assert "hue" not in data and "mode" not in data
+    _call(server, "POST", "/api/theme", {"hue": "200"})
+    _call(server, "POST", "/api/theme", {"hue": None})                     # clear
+    _, data = _call(server, "GET", "/api/theme")
+    assert "hue" not in data
+
+
 def test_overview_reads_store_and_decides_approval(server):
     store = server.RequestHandlerClass.state.store()
     store.add_approval(ApprovalRequest(id="ap1", company="example", agent="finance",

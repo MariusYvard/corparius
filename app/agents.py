@@ -5,15 +5,17 @@ The LLM only drafts content. Routing stays out of the model. Each role carries a
 difficulty tier (which picks the model) and may pin a task-adapted model, so a
 simple scan runs on gemma4:e4b while the coder gets a dedicated code model.
 """
+
 from __future__ import annotations
+
 import json
 import logging
 from dataclasses import dataclass
 
 from . import structured
 from .models import AgentRole, Difficulty
-from .tools import TOOLS
 from .safety import BudgetExceeded, LoopGuard
+from .tools import TOOLS
 
 log = logging.getLogger("corparius.agents")
 
@@ -21,65 +23,96 @@ log = logging.getLogger("corparius.agents")
 @dataclass
 class AgentSpec:
     role: AgentRole
-    cadence_hours: int | None   # None = on demand (not scheduled)
+    cadence_hours: int | None  # None = on demand (not scheduled)
     difficulty: Difficulty
     system_prompt: str
     playbook: list[str]
-    model: str | None = None    # pin a specific local model for this role
+    model: str | None = None  # pin a specific local model for this role
 
 
 ROSTER: dict[AgentRole, AgentSpec] = {
     AgentRole.CEO: AgentSpec(
-        AgentRole.CEO, 12, Difficulty.EASY,
+        AgentRole.CEO,
+        12,
+        Difficulty.EASY,
         "You are the CEO. Own the backlog: create data-driven tasks from what the company observes, arbitrate proposals, keep it solvent.",
-        ["set_daily_plan", "review_proposals", "create_tasks", "write_eod_summary"]),
+        ["set_daily_plan", "review_proposals", "create_tasks", "write_eod_summary"],
+    ),
     AgentRole.SOCIAL: AgentSpec(
-        AgentRole.SOCIAL, 2, Difficulty.TRIVIAL,
+        AgentRole.SOCIAL,
+        2,
+        Difficulty.TRIVIAL,
         "You run social media for the company.",
-        ["draft_social_post", "schedule_post"]),
+        ["draft_social_post", "schedule_post"],
+    ),
     AgentRole.OUTREACH: AgentSpec(
-        AgentRole.OUTREACH, 3, Difficulty.EASY,
+        AgentRole.OUTREACH,
+        3,
+        Difficulty.EASY,
         "You run cold outbound to the ICP, and you follow up on who answered.",
-        ["find_targets", "send_outreach", "scan_replies"]),
+        ["find_targets", "send_outreach", "scan_replies"],
+    ),
     AgentRole.SUPPORT: AgentSpec(
-        AgentRole.SUPPORT, 3, Difficulty.EASY,
+        AgentRole.SUPPORT,
+        3,
+        Difficulty.EASY,
         "You handle customer support.",
-        ["triage_inbox", "draft_support_reply", "propose_task"]),
+        ["triage_inbox", "draft_support_reply", "propose_task"],
+    ),
     AgentRole.ADS: AgentSpec(
-        AgentRole.ADS, 6, Difficulty.TRIVIAL,
+        AgentRole.ADS,
+        6,
+        Difficulty.TRIVIAL,
         "You manage paid acquisition.",
-        ["review_ad_budget", "adjust_bids"]),
+        ["review_ad_budget", "adjust_bids"],
+    ),
     AgentRole.FINANCE: AgentSpec(
-        AgentRole.FINANCE, 6, Difficulty.TRIVIAL,
+        AgentRole.FINANCE,
+        6,
+        Difficulty.TRIVIAL,
         "You keep the books and the cashflow.",
-        ["reconcile_stripe", "send_financial_transaction"]),
+        ["reconcile_stripe", "send_financial_transaction"],
+    ),
     AgentRole.STRATEGY: AgentSpec(
-        AgentRole.STRATEGY, 24, Difficulty.HARD,
+        AgentRole.STRATEGY,
+        24,
+        Difficulty.HARD,
         "You own strategy, pricing, the roadmap and continuous improvement (kaizen).",
-        ["review_kpis", "update_pricing", "kaizen"]),
+        ["review_kpis", "update_pricing", "kaizen"],
+    ),
     AgentRole.COMPETITOR: AgentSpec(
-        AgentRole.COMPETITOR, 24, Difficulty.TRIVIAL,
+        AgentRole.COMPETITOR,
+        24,
+        Difficulty.TRIVIAL,
         "You track the competitive landscape and buying signals.",
-        ["scan_competitors", "scan_signals"]),
+        ["scan_competitors", "scan_signals"],
+    ),
     AgentRole.DESIGN: AgentSpec(
-        AgentRole.DESIGN, 24, Difficulty.EASY,
+        AgentRole.DESIGN,
+        24,
+        Difficulty.EASY,
         "You own visual design, brand consistency and the sales site.",
-        ["draft_design_brief", "produce_mockup", "build_sales_site"]),
+        ["draft_design_brief", "produce_mockup", "build_sales_site"],
+    ),
     AgentRole.CODER: AgentSpec(
-        AgentRole.CODER, None, Difficulty.HARD,
+        AgentRole.CODER,
+        None,
+        Difficulty.HARD,
         "You ship product changes behind human review.",
         ["generate_code", "publish_production_code"],
-        model="local:qwen2.5-coder:14b"),   # task-adapted code model, kept on-prem
+        model="local:qwen2.5-coder:14b",
+    ),  # task-adapted code model, kept on-prem
 }
 
 
 def _messages(spec: AgentSpec, ctx, tool) -> list[dict]:
     offer = ctx.company.get("offer", {})
-    user = (f"Company: {ctx.company.get('name')}. "
-            f"Offer: {offer.get('product', '')}. "
-            f"Task: {tool.draft_prompt(ctx)}")
-    return [{"role": "system", "content": spec.system_prompt},
-            {"role": "user", "content": user}]
+    user = (
+        f"Company: {ctx.company.get('name')}. "
+        f"Offer: {offer.get('product', '')}. "
+        f"Task: {tool.draft_prompt(ctx)}"
+    )
+    return [{"role": "system", "content": spec.system_prompt}, {"role": "user", "content": user}]
 
 
 class Executor:
@@ -93,8 +126,10 @@ class Executor:
         self.settings = settings
 
     def run_turn(self, company: str, spec: AgentSpec, ctx) -> list[str]:
-        loop = LoopGuard(self.settings.loop_similarity_threshold,
-                         max_identical_calls=self.settings.max_identical_tool_calls)
+        loop = LoopGuard(
+            self.settings.loop_similarity_threshold,
+            max_identical_calls=self.settings.max_identical_tool_calls,
+        )
         done: list[str] = []
         ctx.role = spec.role.value
         # Non-CEO agents execute the top approved task for their role by running
@@ -142,25 +177,29 @@ class Executor:
         if tool.needs_draft and tool.schema:
             # Same shape out, whatever model answered. The harness may spend more
             # than one call (a repair round), but it accounts for every one.
-            result = structured.ask(self.router, _messages(spec, ctx, tool), tool.schema,
-                                     difficulty=spec.difficulty)
-            for used in result.usages:   # a repair round is a real call; bill it
+            result = structured.ask(
+                self.router, _messages(spec, ctx, tool), tool.schema, difficulty=spec.difficulty
+            )
+            for used in result.usages:  # a repair round is a real call; bill it
                 ctx.budget.record_usage(used.input_tokens, used.output_tokens)
                 ctx.breaker.record(used.total)
-                self.store.record_usage(company, spec.role.value,
-                                        used.input_tokens, used.output_tokens)
+                self.store.record_usage(
+                    company, spec.role.value, used.input_tokens, used.output_tokens
+                )
             ctx.structured = result
             draft = json.dumps(result.data, ensure_ascii=False)
             if loop.observe_output(self.router.embed(draft)):
                 log.warning("[%s] loop stop: semantic stutter", spec.role.value)
                 return None, True
         elif tool.needs_draft:
-            res = self.router.generate(_messages(spec, ctx, tool),
-                                       difficulty=spec.difficulty, model=spec.model)
+            res = self.router.generate(
+                _messages(spec, ctx, tool), difficulty=spec.difficulty, model=spec.model
+            )
             ctx.budget.record_usage(res.usage.input_tokens, res.usage.output_tokens)
             ctx.breaker.record(res.usage.total)
-            self.store.record_usage(company, spec.role.value,
-                                    res.usage.input_tokens, res.usage.output_tokens)
+            self.store.record_usage(
+                company, spec.role.value, res.usage.input_tokens, res.usage.output_tokens
+            )
             if loop.observe_output(self.router.embed(res.text)):
                 log.warning("[%s] loop stop: semantic stutter", spec.role.value)
                 return None, True
@@ -170,8 +209,9 @@ class Executor:
             log.warning("[%s] loop stop: repeated call to %s", spec.role.value, tool_name)
             return None, True
         result = self.gate.execute(company, spec.role.value, tool, ctx, draft, params)
-        self.store.record_action(company, spec.role.value, tool_name, params,
-                                 result.output, result.ok)
+        self.store.record_action(
+            company, spec.role.value, tool_name, params, result.output, result.ok
+        )
         if result.pending:
             log.info("[%s] paused for human approval on %s", spec.role.value, tool_name)
         return result, False

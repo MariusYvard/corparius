@@ -4,7 +4,9 @@ build step, no external assets). Where NullToHero is a broad design-and-audit
 toolkit, this is the straight-to-the-point path: config in, a sellable page out,
 with a checkout CTA wired to a Stripe payment link.
 """
+
 from __future__ import annotations
+
 import html as _html
 import os
 
@@ -49,31 +51,42 @@ def build_site(company: dict, out_dir: str, headline: str | None = None) -> str:
     name = company.get("name", "Your product")
     offer = company.get("offer", {}) or {}
     icp = company.get("icp", {}) or {}
-    tagline = " ".join((company.get("one_liner") or offer.get("product")
-                        or "The fastest way to get it done.").split())
+    tagline = " ".join(
+        (
+            company.get("one_liner") or offer.get("product") or "The fastest way to get it done."
+        ).split()
+    )
     head = headline or tagline
     product = offer.get("product", "")
     segment = icp.get("segment", "")
     price = offer.get("price_eur")
     billing = offer.get("billing", "")
     pains = icp.get("pains", []) or []
-    pay = (offer.get("payment_link") or cfg.get("CORP_STRIPE_PAYMENT_LINK", "")
-           or "#pricing")
+    pay = offer.get("payment_link") or cfg.get("CORP_STRIPE_PAYMENT_LINK", "") or "#pricing"
 
     price_txt = f"{_esc(price)} EUR" if price is not None else "Let's talk"
     subhead = product or (f"For {segment}." if segment else "Made to sell.")
     pains_html = "".join(f"<li>{_esc(p)}</li>" for p in pains) or "<li>Too much manual work.</li>"
     feats = [
         ("Live in minutes", "One prompt turns into a working offer with checkout."),
-        ("Pay as you go", f"Simple pricing at {price_txt}." if price is not None
-         else "Simple, transparent pricing."),
-        (f"Built for {segment}" if segment else "Built for the job",
-         "Focused on one outcome, done well."),
+        (
+            "Pay as you go",
+            f"Simple pricing at {price_txt}."
+            if price is not None
+            else "Simple, transparent pricing.",
+        ),
+        (
+            f"Built for {segment}" if segment else "Built for the job",
+            "Focused on one outcome, done well.",
+        ),
     ]
-    feat_html = "".join(f'<div class="card"><h3>{_esc(t)}</h3><p>{_esc(d)}</p></div>'
-                        for t, d in feats)
-    incl_html = "".join(f"<li>{_esc(i)}</li>" for i in
-                        [product or "Full access", "Cancel anytime", "Instant onboarding"])
+    feat_html = "".join(
+        f'<div class="card"><h3>{_esc(t)}</h3><p>{_esc(d)}</p></div>' for t, d in feats
+    )
+    incl_html = "".join(
+        f"<li>{_esc(i)}</li>"
+        for i in [product or "Full access", "Cancel anytime", "Instant onboarding"]
+    )
     cta = f'<a class="btn" href="{_esc(pay)}">Get {_esc(name)}</a>'
 
     doc = f"""<!doctype html>

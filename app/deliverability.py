@@ -2,7 +2,9 @@
 doubles as domain warmup, raise it over time). Consulted before every send so
 outreach stays responsible and does not burn a sending domain.
 """
+
 from __future__ import annotations
+
 import json
 import os
 import time
@@ -20,7 +22,9 @@ def _suppressed(email: str) -> bool:
 
 
 def _counter_path() -> str:
-    return os.path.join(cfg.get("CORP_DATA_PATH", paths.default_data_dir()), "outreach_counter.json")
+    return os.path.join(
+        cfg.get("CORP_DATA_PATH", paths.default_data_dir()), "outreach_counter.json"
+    )
 
 
 def _today() -> str:

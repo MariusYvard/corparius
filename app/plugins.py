@@ -25,7 +25,9 @@ Discovery has two sources so every distribution works: Python entry points (the
 and a drop-in directory (`<user_home>/plugins/<name>/` with a corparius_plugin.json
 manifest, for the frozen binaries that have no pip).
 """
+
 from __future__ import annotations
+
 import importlib
 import importlib.metadata
 import json
@@ -54,31 +56,36 @@ class PluginAPI:
 
     api_version = API_VERSION
 
-    def register_llm_provider(self, name: str, base: str = "", key_env: str = "",
-                              **opts) -> None:
+    def register_llm_provider(self, name: str, base: str = "", key_env: str = "", **opts) -> None:
         from . import llm
+
         llm.OPENAI_COMPAT_PROVIDERS[name] = {"base": base, "key_env": key_env, **opts}
 
     def register_deploy_provider(self, provider) -> None:
         from . import deploy
+
         deploy.REGISTRY[provider.name] = provider
 
     def register_lead_source(self, source) -> None:
         from . import leadsource
+
         leadsource.REGISTRY[source.name] = source
 
     def register_enricher(self, enricher) -> None:
         from . import enrich
+
         enrich.REGISTRY[enricher.name] = enricher
 
     def register_tool(self, tool) -> None:
         # Tools inherit the HITL gate and the safety firewall at dispatch, so a
         # plugin tool marked hitl=True still waits for a human like any other.
         from . import tools
+
         tools.TOOLS[tool.name] = tool
 
     def register_template(self, template: dict) -> None:
         from . import company
+
         company.TEMPLATES.append(template)
 
     def customize_agent(self, role, **overrides) -> None:
@@ -87,6 +94,7 @@ class PluginAPI:
         supported in this API version (AgentRole is a fixed enum)."""
         from . import agents
         from .models import AgentRole
+
         key = role if isinstance(role, AgentRole) else AgentRole(str(role))
         spec = agents.ROSTER.get(key)
         if spec is None:
@@ -102,12 +110,12 @@ class PluginManifest:
     name: str
     version: str = "0.0.0"
     api_version: int = 1
-    entrypoint: str = ""            # "module:function"
+    entrypoint: str = ""  # "module:function"
     kinds: list[str] = field(default_factory=list)
     needs_network: bool = False
     description: str = ""
-    source: str = "dropin"         # "dropin" | "entrypoint"
-    path: Path | None = None       # the plugin directory, for drop-in plugins
+    source: str = "dropin"  # "dropin" | "entrypoint"
+    path: Path | None = None  # the plugin directory, for drop-in plugins
     disabled: bool = False
 
     @classmethod
@@ -161,8 +169,11 @@ def _discover_dropin() -> list[PluginManifest]:
         if not manifest.is_file():
             continue
         try:
-            out.append(PluginManifest.from_dict(
-                json.loads(manifest.read_text(encoding="utf-8")), path=child))
+            out.append(
+                PluginManifest.from_dict(
+                    json.loads(manifest.read_text(encoding="utf-8")), path=child
+                )
+            )
         except (OSError, ValueError) as exc:
             log.warning("skipping plugin in %s: %s", child, exc)
     return out
@@ -171,12 +182,15 @@ def _discover_dropin() -> list[PluginManifest]:
 def _discover_entrypoints() -> list[PluginManifest]:
     try:
         eps = importlib.metadata.entry_points(group=ENTRY_POINT_GROUP)
-    except TypeError:   # the group= selection API predates our 3.10 floor, so this is dead
+    except TypeError:  # the group= selection API predates our 3.10 floor, so this is dead
         eps = importlib.metadata.entry_points().get(ENTRY_POINT_GROUP, [])  # type: ignore[arg-type]
     out: list[PluginManifest] = []
     for ep in eps:
-        out.append(PluginManifest(name=ep.name, entrypoint=ep.value,
-                                  api_version=API_VERSION, source="entrypoint"))
+        out.append(
+            PluginManifest(
+                name=ep.name, entrypoint=ep.value, api_version=API_VERSION, source="entrypoint"
+            )
+        )
     return out
 
 
@@ -217,7 +231,7 @@ def load() -> list[str]:
     Returns the names loaded this call. Safe to call more than once."""
     if not cfg.get_bool("CORP_PLUGINS_ENABLED"):
         return []
-    allow = cfg.get_csv("CORP_PLUGINS")            # [] means "every installed one"
+    allow = cfg.get_csv("CORP_PLUGINS")  # [] means "every installed one"
     allow_unverified = cfg.get_bool("CORP_PLUGINS_ALLOW_UNVERIFIED")
     verified = registry_names()
     just_loaded: list[str] = []
@@ -229,23 +243,28 @@ def load() -> list[str]:
         if manifest.disabled:
             continue
         if manifest.name not in verified and not allow_unverified:
-            log.warning("plugin '%s' is not in the verified registry; skipping. "
-                        "Set CORP_PLUGINS_ALLOW_UNVERIFIED=true to load it anyway.",
-                        manifest.name)
+            log.warning(
+                "plugin '%s' is not in the verified registry; skipping. "
+                "Set CORP_PLUGINS_ALLOW_UNVERIFIED=true to load it anyway.",
+                manifest.name,
+            )
             continue
         if manifest.api_version != API_VERSION:
-            log.warning("plugin '%s' targets API v%s, this corparius is v%s; skipping.",
-                        manifest.name, manifest.api_version, API_VERSION)
+            log.warning(
+                "plugin '%s' targets API v%s, this corparius is v%s; skipping.",
+                manifest.name,
+                manifest.api_version,
+                API_VERSION,
+            )
             continue
         try:
             _call_register(manifest)
-        except Exception:   # one bad plugin must never break the app
+        except Exception:  # one bad plugin must never break the app
             log.exception("plugin '%s' failed to load; skipping", manifest.name)
             continue
         _loaded.add(manifest.name)
         just_loaded.append(manifest.name)
-        log.info("loaded plugin '%s' v%s (%s)", manifest.name, manifest.version,
-                 manifest.source)
+        log.info("loaded plugin '%s' v%s (%s)", manifest.name, manifest.version, manifest.source)
     return just_loaded
 
 
@@ -276,12 +295,15 @@ def _download(url: str, timeout: float = 30.0) -> bytes:
     """
     from urllib.parse import urlparse
     from urllib.request import Request, urlopen
+
     scheme = urlparse(url).scheme.lower()
     if scheme != "https":
-        raise PluginError(f"refusing to download over '{scheme or 'no'}' scheme; "
-                          "plugin archives must be https URLs")
+        raise PluginError(
+            f"refusing to download over '{scheme or 'no'}' scheme; "
+            "plugin archives must be https URLs"
+        )
     req = Request(url, headers={"User-Agent": "corparius-plugins"})
-    with urlopen(req, timeout=timeout) as resp:   # noqa: S310 (https enforced above)
+    with urlopen(req, timeout=timeout) as resp:  # noqa: S310 (https enforced above)
         data = resp.read(MAX_ARCHIVE_BYTES + 1)
     if len(data) > MAX_ARCHIVE_BYTES:
         raise PluginError(f"plugin archive is larger than {MAX_ARCHIVE_BYTES // (1024 * 1024)} MB")
@@ -294,6 +316,7 @@ def _safe_extract(data: bytes, dest: Path) -> Path:
     everything in <repo>-<ref>/)."""
     import io
     import tarfile
+
     dest.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
         members = tar.getmembers()
@@ -326,11 +349,13 @@ def _place(extracted_root: Path, name: str) -> Path:
     """Move an extracted plugin into <plugins_dir>/<name>, validating its
     manifest and that the manifest name matches."""
     import shutil
+
     manifest_path = extracted_root / MANIFEST_NAME
     if not manifest_path.is_file():
         raise PluginError(f"plugin archive has no {MANIFEST_NAME}")
     manifest = PluginManifest.from_dict(
-        json.loads(manifest_path.read_text(encoding="utf-8")), path=extracted_root)
+        json.loads(manifest_path.read_text(encoding="utf-8")), path=extracted_root
+    )
     if manifest.name != name:
         raise PluginError(f"manifest name '{manifest.name}' does not match '{name}'")
     target = plugins_dir() / name
@@ -350,6 +375,7 @@ def install_from_registry(name: str) -> Path:
     ref, verify its sha256, then place it. Shared by the CLI and the console."""
     import hashlib
     import tempfile
+
     entry = next((e for e in registry_entries() if e.get("name") == name), None)
     if entry is None:
         raise PluginError(f"'{name}' is not in the verified registry")
@@ -370,9 +396,11 @@ def install_from_url(url: str, name: str) -> Path:
     CORP_PLUGINS_ALLOW_UNVERIFIED is set; the caller is responsible for the
     'unaudited code' warning."""
     import tempfile
+
     if not cfg.get_bool("CORP_PLUGINS_ALLOW_UNVERIFIED"):
-        raise PluginError("installing an unverified plugin requires "
-                          "CORP_PLUGINS_ALLOW_UNVERIFIED=true")
+        raise PluginError(
+            "installing an unverified plugin requires CORP_PLUGINS_ALLOW_UNVERIFIED=true"
+        )
     data = _download(url)
     with tempfile.TemporaryDirectory() as tmp:
         root = _safe_extract(data, Path(tmp))
@@ -381,6 +409,7 @@ def install_from_url(url: str, name: str) -> Path:
 
 def remove(name: str) -> None:
     import shutil
+
     target = plugins_dir() / name
     if not target.is_dir():
         raise PluginError(f"plugin '{name}' is not installed")
@@ -407,12 +436,18 @@ def status() -> dict:
     verified = registry_names()
     installed = []
     for m in discover():
-        installed.append({
-            "name": m.name, "version": m.version, "kinds": m.kinds,
-            "source": m.source, "description": m.description,
-            "verified": m.name in verified, "disabled": m.disabled,
-            "loaded": m.name in _loaded,
-        })
+        installed.append(
+            {
+                "name": m.name,
+                "version": m.version,
+                "kinds": m.kinds,
+                "source": m.source,
+                "description": m.description,
+                "verified": m.name in verified,
+                "disabled": m.disabled,
+                "loaded": m.name in _loaded,
+            }
+        )
     return {
         "enabled": cfg.get_bool("CORP_PLUGINS_ENABLED"),
         "allow_unverified": cfg.get_bool("CORP_PLUGINS_ALLOW_UNVERIFIED"),

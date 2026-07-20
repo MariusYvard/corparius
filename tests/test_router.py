@@ -1,8 +1,9 @@
 """The HybridRouter must run offline in mock mode and pick the right tier model."""
-from app.config import Settings
-from app.llm import (HybridRouter, LLMProvider, OPENAI_COMPAT_PROVIDERS, _split)
+
 import requests
 
+from app.config import Settings
+from app.llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, LLMProvider, _split
 from app.models import Difficulty, LLMResult, Usage
 
 
@@ -28,7 +29,7 @@ def test_mock_router_runs_offline():
 def test_trivial_tier_uses_tiny_local_model():
     r = HybridRouter(_mock_settings())
     res = r.generate([{"role": "user", "content": "x"}], difficulty=Difficulty.TRIVIAL)
-    assert "gemma4:e4b" in res.text   # label carries the resolved model
+    assert "gemma4:e4b" in res.text  # label carries the resolved model
 
 
 def test_hard_tier_uses_top_model():
@@ -39,15 +40,20 @@ def test_hard_tier_uses_top_model():
 
 def test_pinned_model_overrides_tier():
     r = HybridRouter(_mock_settings())
-    res = r.generate([{"role": "user", "content": "x"}],
-                     difficulty=Difficulty.EASY, model="local:qwen2.5-coder:14b")
+    res = r.generate(
+        [{"role": "user", "content": "x"}],
+        difficulty=Difficulty.EASY,
+        model="local:qwen2.5-coder:14b",
+    )
     assert "qwen2.5-coder:14b" in res.text
 
 
 def test_split_reads_free_provider_prefix():
     assert _split("groq:llama-3.3-70b-versatile") == ("groq", "llama-3.3-70b-versatile")
-    assert _split("openrouter:deepseek/deepseek-r1-0528:free") == \
-        ("openrouter", "deepseek/deepseek-r1-0528:free")
+    assert _split("openrouter:deepseek/deepseek-r1-0528:free") == (
+        "openrouter",
+        "deepseek/deepseek-r1-0528:free",
+    )
     assert _split("claudecode:sonnet") == ("claudecode", "sonnet")
     # Unknown prefixes are Ollama tags, not providers.
     assert _split("gemma4:e4b") == ("local", "gemma4:e4b")
@@ -71,8 +77,7 @@ class _Up(LLMProvider):
     name = "up"
 
     def generate(self, messages, model, max_tokens=512):
-        return LLMResult(text=f"up:{model}", usage=Usage(1, 1),
-                         model=model, provider=self.name)
+        return LLMResult(text=f"up:{model}", usage=Usage(1, 1), model=model, provider=self.name)
 
 
 def _live_settings() -> Settings:

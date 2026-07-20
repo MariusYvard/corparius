@@ -12,7 +12,9 @@ That suits the CLI and the MCP server (one command, then exit) and the console
 (which builds a fresh Settings() per request). The long-lived `run --loop`
 process rebuilds it at each day boundary; see orchestrator.Runtime.run.
 """
+
 from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 
@@ -21,12 +23,15 @@ from . import cfg, paths
 
 @dataclass
 class Settings:
-    data_path: str = field(default_factory=lambda: cfg.get("CORP_DATA_PATH", paths.default_data_dir()))
+    data_path: str = field(
+        default_factory=lambda: cfg.get("CORP_DATA_PATH", paths.default_data_dir())
+    )
     log_level: str = field(default_factory=lambda: cfg.get("CORP_LOG_LEVEL", "INFO"))
 
     # LLM routing (hybrid: local first, cloud on escalation).
     ollama_url: str = field(
-        default_factory=lambda: cfg.get("CORP_OLLAMA_URL", "http://localhost:11434"))
+        default_factory=lambda: cfg.get("CORP_OLLAMA_URL", "http://localhost:11434")
+    )
     # Local generations on CPU can take minutes; raise this rather than letting
     # runs die on slow hardware. Seconds.
     ollama_timeout: int = field(default_factory=lambda: cfg.get_int("CORP_OLLAMA_TIMEOUT", 420))
@@ -34,15 +39,21 @@ class Settings:
     # simple tasks run a tiny local model; normal and big tasks use cloud models
     # sized to the task. Change a prefix to keep any tier fully on-prem.
     trivial_model: str = field(
-        default_factory=lambda: cfg.get("CORP_TRIVIAL_MODEL", "local:gemma4:e4b"))
+        default_factory=lambda: cfg.get("CORP_TRIVIAL_MODEL", "local:gemma4:e4b")
+    )
     normal_model: str = field(
-        default_factory=lambda: cfg.get("CORP_NORMAL_MODEL", "cloud:claude-3-5-haiku-20241022"))
+        default_factory=lambda: cfg.get("CORP_NORMAL_MODEL", "cloud:claude-3-5-haiku-20241022")
+    )
     hard_model: str = field(
-        default_factory=lambda: cfg.get("CORP_HARD_MODEL", "cloud:claude-3-5-sonnet-20241022"))
-    embed_model: str = field(default_factory=lambda: cfg.get("CORP_EMBED_MODEL", "nomic-embed-text"))
+        default_factory=lambda: cfg.get("CORP_HARD_MODEL", "cloud:claude-3-5-sonnet-20241022")
+    )
+    embed_model: str = field(
+        default_factory=lambda: cfg.get("CORP_EMBED_MODEL", "nomic-embed-text")
+    )
     # Local model used as the fallback when a cloud tier is unreachable.
     local_model: str = field(
-        default_factory=lambda: cfg.get("CORP_LOCAL_MODEL", "qwen2.5:7b-instruct"))
+        default_factory=lambda: cfg.get("CORP_LOCAL_MODEL", "qwen2.5:7b-instruct")
+    )
     cloud_enabled: bool = field(default_factory=lambda: cfg.get_bool("CORP_CLOUD_ENABLED"))
     anthropic_api_key: str = field(default_factory=lambda: cfg.get("ANTHROPIC_API_KEY", ""))
     # Anthropic through the local Claude Code CLI (subscription auth, no API
@@ -58,13 +69,17 @@ class Settings:
 
     # Safety budgets.
     session_token_budget: int = field(
-        default_factory=lambda: cfg.get_int("CORP_SESSION_TOKEN_BUDGET", 100000))
+        default_factory=lambda: cfg.get_int("CORP_SESSION_TOKEN_BUDGET", 100000)
+    )
     tokens_per_minute_limit: int = field(
-        default_factory=lambda: cfg.get_int("CORP_TOKENS_PER_MINUTE_LIMIT", 10000))
+        default_factory=lambda: cfg.get_int("CORP_TOKENS_PER_MINUTE_LIMIT", 10000)
+    )
     loop_similarity_threshold: float = field(
-        default_factory=lambda: cfg.get_float("CORP_LOOP_SIMILARITY_THRESHOLD", 0.95))
+        default_factory=lambda: cfg.get_float("CORP_LOOP_SIMILARITY_THRESHOLD", 0.95)
+    )
     max_identical_tool_calls: int = field(
-        default_factory=lambda: cfg.get_int("CORP_MAX_IDENTICAL_TOOL_CALLS", 2))
+        default_factory=lambda: cfg.get_int("CORP_MAX_IDENTICAL_TOOL_CALLS", 2)
+    )
 
     # Operator console (app/webui.py). Binds to localhost; set CORP_UI_TOKEN
     # to require the X-Corp-Token header on every mutating call. These are
@@ -77,8 +92,8 @@ class Settings:
     # Human in the loop.
     hitl_tools: list[str] = field(
         default_factory=lambda: cfg.get_csv(
-            "CORP_HITL_TOOLS",
-            "send_financial_transaction,publish_production_code,deploy_site")
+            "CORP_HITL_TOOLS", "send_financial_transaction,publish_production_code,deploy_site"
+        )
     )
 
 

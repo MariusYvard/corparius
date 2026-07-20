@@ -2,7 +2,9 @@
 spend-velocity circuit breaker. These run in front of every agent turn so a
 divergent agent cannot burn the budget or stutter forever.
 """
+
 from __future__ import annotations
+
 import hashlib
 import math
 import time

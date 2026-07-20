@@ -5,6 +5,7 @@ papercut the operator hits right after wiring a provider. `pick` keeps both
 strings side by side at the call site, so the message and its translation never
 drift apart. The CLI passes no lang and gets English.
 """
+
 from __future__ import annotations
 
 

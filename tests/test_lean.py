@@ -1,4 +1,5 @@
 """Lean layer: a pull system with a WIP cap, flow metrics, and a kaizen signal."""
+
 import types
 
 from app import tools
@@ -14,7 +15,7 @@ def test_wip_count_and_flow_metrics(tmp_path):
     fm = store.flow_metrics("c")
     assert fm["throughput"] == 1 and fm["wip"] == 2
     assert fm["bottleneck"] == "outreach"
-    assert "defects" in fm and "waiting" in fm   # the seven-wastes lens
+    assert "defects" in fm and "waiting" in fm  # the seven-wastes lens
 
 
 def test_create_tasks_respects_wip_limit(tmp_path, monkeypatch):
@@ -23,11 +24,12 @@ def test_create_tasks_respects_wip_limit(tmp_path, monkeypatch):
     # An existing open social task (different tool, so dedup does not hide the WIP cap).
     store.add_task("t", "existing", "social", 2, "approved", "ceo", tool="manual")
     ctx = types.SimpleNamespace(
-        company={"slug": "t", "agents": {"social": True, "support": True}}, store=store)
+        company={"slug": "t", "agents": {"social": True, "support": True}}, store=store
+    )
     tools._create_tasks(ctx)
     social = [x for x in store.list_tasks("t") if x["target"] == "social"]
-    assert len(social) == 1                      # WIP cap of 1 blocks a second social task
-    assert any(x["target"] == "support" for x in store.list_tasks("t"))   # support still queued
+    assert len(social) == 1  # WIP cap of 1 blocks a second social task
+    assert any(x["target"] == "support" for x in store.list_tasks("t"))  # support still queued
 
 
 def test_kaizen_flags_the_bottleneck(tmp_path):

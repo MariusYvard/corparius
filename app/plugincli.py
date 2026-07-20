@@ -5,7 +5,9 @@ downloaded at a pinned ref and checked against a sha256. Installing an unverifie
 plugin from an arbitrary URL runs third-party code and is refused unless
 CORP_PLUGINS_ALLOW_UNVERIFIED is set. See docs/plugins.md.
 """
+
 from __future__ import annotations
+
 import sys
 
 from . import cfg, plugins
@@ -36,7 +38,7 @@ def cmd_list(args) -> None:
     if reg:
         print("\navailable in the registry:")
         for e in reg:
-            print(f"  {e.get('name',''):22} {e.get('description','')}")
+            print(f"  {e.get('name', ''):22} {e.get('description', '')}")
         print("\ninstall one with: corparius plugin install <name>")
 
 
@@ -46,21 +48,25 @@ def cmd_info(args) -> None:
     if not entry and not inst:
         _fail(f"unknown plugin '{args.name}'")
     if entry:
-        print(f"registry: {entry.get('name')} — {entry.get('description','')}")
-        print(f"  repo: {entry.get('repo','')}  ref: {entry.get('ref','')}")
+        print(f"registry: {entry.get('name')} — {entry.get('description', '')}")
+        print(f"  repo: {entry.get('repo', '')}  ref: {entry.get('ref', '')}")
         print(f"  kinds: {', '.join(entry.get('kinds', []))}")
     if inst:
-        print(f"installed: v{inst['version']}  "
-              f"{'verified' if inst['verified'] else 'UNVERIFIED'}"
-              f"{', disabled' if inst['disabled'] else ''}"
-              f"{', loaded' if inst['loaded'] else ''}")
+        print(
+            f"installed: v{inst['version']}  "
+            f"{'verified' if inst['verified'] else 'UNVERIFIED'}"
+            f"{', disabled' if inst['disabled'] else ''}"
+            f"{', loaded' if inst['loaded'] else ''}"
+        )
 
 
 def cmd_install(args) -> None:
     try:
         if args.url:
-            print("WARNING: installing an UNVERIFIED plugin runs third-party code you "
-                  "have not audited.")
+            print(
+                "WARNING: installing an UNVERIFIED plugin runs third-party code you "
+                "have not audited."
+            )
             path = plugins.install_from_url(args.url, args.name)
         else:
             path = plugins.install_from_registry(args.name)

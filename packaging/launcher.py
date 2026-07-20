@@ -11,7 +11,9 @@ opens the browser. From the user's point of view it behaves exactly like
     corparius              # first run and every run after
     corparius --no-browser
 """
+
 from __future__ import annotations
+
 import shutil
 import sys
 import webbrowser
@@ -24,6 +26,7 @@ def _log(msg: str) -> None:
 def _prepare_home() -> None:
     from app import company as company_mod
     from app import paths
+
     home = paths.user_home()
     home.mkdir(parents=True, exist_ok=True)
     env = paths.dotenv_file()
@@ -39,10 +42,13 @@ def _prepare_home() -> None:
 def _announce_update() -> None:
     """Only calls out when the operator has turned CORP_UPDATE_CHECK on."""
     from app import update_check
+
     info = update_check.check()
     if info.get("enabled") and info.get("update_available"):
-        _log(f"a newer version is available: {info['latest']} "
-             f"(you run {info['current']}). Download: {info['url']}")
+        _log(
+            f"a newer version is available: {info['latest']} "
+            f"(you run {info['current']}). Download: {info['url']}"
+        )
 
 
 def main() -> int:
@@ -50,6 +56,7 @@ def main() -> int:
     from app.config import Settings
     from app.doctor import main as doctor_main
     from app.webui import serve
+
     _log("running the doctor (see the Settings tab for details any time)")
     doctor_main(quiet=True)
     _announce_update()

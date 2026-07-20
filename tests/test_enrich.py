@@ -1,5 +1,6 @@
 """Enrichment fills gaps offline without overwriting real data."""
-from app.enrich import enrich, LocalHeuristicEnricher
+
+from app.enrich import LocalHeuristicEnricher, enrich
 from app.leadsource import Lead
 
 

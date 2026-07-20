@@ -3,6 +3,7 @@ a source checkout (the default, and what every other test relies on), an
 explicit CORP_HOME override, and a simulated frozen bundle. The point is to
 guarantee that running from source is byte-identical to the pre-packaging
 behavior while a frozen build redirects writable state to a per-OS directory."""
+
 import sys
 from pathlib import Path
 
@@ -13,6 +14,7 @@ REPO_ROOT = Path(paths.__file__).resolve().parent.parent
 
 
 # --- source checkout: everything resolves to the repo layout, unchanged --------
+
 
 def test_source_mode_resolves_to_repo_root():
     assert paths.is_frozen() is False
@@ -37,6 +39,7 @@ def test_page_file_is_readable():
 
 # --- explicit override: CORP_HOME wins over everything -------------------------
 
+
 def test_corp_home_override(monkeypatch, tmp_path):
     home = tmp_path / "corp-home"
     monkeypatch.setenv("CORP_HOME", str(home))
@@ -51,6 +54,7 @@ def test_corp_home_override(monkeypatch, tmp_path):
 
 # --- simulated frozen bundle ---------------------------------------------------
 
+
 def test_frozen_mode(monkeypatch, tmp_path):
     bundle = tmp_path / "bundle"
     monkeypatch.setattr(sys, "frozen", True, raising=False)
@@ -59,7 +63,7 @@ def test_frozen_mode(monkeypatch, tmp_path):
     assert paths.resource_dir() == bundle
     home = paths.user_home()
     assert home != REPO_ROOT
-    assert home.name == "corparius"          # per-OS app-data dir
+    assert home.name == "corparius"  # per-OS app-data dir
     assert paths.default_data_dir() == str(home / "data")
 
 
@@ -70,6 +74,7 @@ def test_frozen_mode_corp_home_still_wins(monkeypatch, tmp_path):
 
 
 # --- first-run seeding of the example company ---------------------------------
+
 
 def test_seed_examples_into_empty_home(tmp_path):
     slugs = company_mod.seed_examples(root=tmp_path)

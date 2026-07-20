@@ -10,7 +10,9 @@ the environment; a missing key simply removes it from the pool. When a remote
 call fails, the router walks the CORP_LLM_FALLBACK chain in order, and local
 Ollama always ends the chain.
 """
+
 from __future__ import annotations
+
 import json
 import logging
 import re
@@ -20,8 +22,7 @@ from abc import ABC, abstractmethod
 import requests
 
 from . import cfg
-
-from .models import LLMResult, Usage, Difficulty
+from .models import Difficulty, LLMResult, Usage
 from .safety import hash_embed
 
 log = logging.getLogger("corparius.llm")
@@ -76,34 +77,32 @@ def _mock_json(prompt: str, model: str) -> str:
 #             vLLM, LM Studio, any OpenAI-compatible gateway).
 # Free-tier limits and signup links are documented in docs/llm-providers.md.
 OPENAI_COMPAT_PROVIDERS: dict[str, dict] = {
-    "groq":        {"base": "https://api.groq.com/openai/v1",
-                    "key_env": "GROQ_API_KEY"},
-    "cerebras":    {"base": "https://api.cerebras.ai/v1",
-                    "key_env": "CEREBRAS_API_KEY"},
-    "openrouter":  {"base": "https://openrouter.ai/api/v1",
-                    "key_env": "OPENROUTER_API_KEY"},
-    "mistral":     {"base": "https://api.mistral.ai/v1",
-                    "key_env": "MISTRAL_API_KEY"},
-    "gemini":      {"base": "https://generativelanguage.googleapis.com/v1beta/openai",
-                    "key_env": "GEMINI_API_KEY"},
-    "nvidia":      {"base": "https://integrate.api.nvidia.com/v1",
-                    "key_env": "NVIDIA_API_KEY"},
-    "github":      {"base": "https://models.github.ai/inference",
-                    "key_env": "GITHUB_TOKEN"},
-    "cohere":      {"base": "https://api.cohere.ai/compatibility/v1",
-                    "key_env": "CO_API_KEY"},
-    "huggingface": {"base": "https://router.huggingface.co/v1",
-                    "key_env": "HF_TOKEN"},
-    "ovh":         {"base": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
-                    "key_env": "OVH_AI_ENDPOINTS_ACCESS_TOKEN", "key_optional": True},
-    "zhipu":       {"base": "https://open.bigmodel.cn/api/paas/v4",
-                    "key_env": "ZHIPU_API_KEY"},
-    "siliconflow": {"base": "https://api.siliconflow.cn/v1",
-                    "key_env": "SILICONFLOW_API_KEY"},
-    "cloudflare":  {"base": "", "base_env": "CF_AI_BASE_URL",
-                    "key_env": "CLOUDFLARE_API_TOKEN"},
-    "custom":      {"base": "", "base_env": "CORP_CUSTOM_LLM_URL",
-                    "key_env": "CORP_CUSTOM_LLM_KEY", "key_optional": True},
+    "groq": {"base": "https://api.groq.com/openai/v1", "key_env": "GROQ_API_KEY"},
+    "cerebras": {"base": "https://api.cerebras.ai/v1", "key_env": "CEREBRAS_API_KEY"},
+    "openrouter": {"base": "https://openrouter.ai/api/v1", "key_env": "OPENROUTER_API_KEY"},
+    "mistral": {"base": "https://api.mistral.ai/v1", "key_env": "MISTRAL_API_KEY"},
+    "gemini": {
+        "base": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "key_env": "GEMINI_API_KEY",
+    },
+    "nvidia": {"base": "https://integrate.api.nvidia.com/v1", "key_env": "NVIDIA_API_KEY"},
+    "github": {"base": "https://models.github.ai/inference", "key_env": "GITHUB_TOKEN"},
+    "cohere": {"base": "https://api.cohere.ai/compatibility/v1", "key_env": "CO_API_KEY"},
+    "huggingface": {"base": "https://router.huggingface.co/v1", "key_env": "HF_TOKEN"},
+    "ovh": {
+        "base": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+        "key_env": "OVH_AI_ENDPOINTS_ACCESS_TOKEN",
+        "key_optional": True,
+    },
+    "zhipu": {"base": "https://open.bigmodel.cn/api/paas/v4", "key_env": "ZHIPU_API_KEY"},
+    "siliconflow": {"base": "https://api.siliconflow.cn/v1", "key_env": "SILICONFLOW_API_KEY"},
+    "cloudflare": {"base": "", "base_env": "CF_AI_BASE_URL", "key_env": "CLOUDFLARE_API_TOKEN"},
+    "custom": {
+        "base": "",
+        "base_env": "CORP_CUSTOM_LLM_URL",
+        "key_env": "CORP_CUSTOM_LLM_KEY",
+        "key_optional": True,
+    },
 }
 
 
@@ -112,8 +111,7 @@ def _split(model_str: str) -> tuple[str, str]:
     "groq:x" -> ("groq", "x") for any registered provider. A bare name or an
     unknown prefix (Ollama tags like "gemma4:e4b") defaults to local."""
     prefix, sep, rest = model_str.partition(":")
-    if sep and (prefix in ("cloud", "local", "claudecode")
-                or prefix in OPENAI_COMPAT_PROVIDERS):
+    if sep and (prefix in ("cloud", "local", "claudecode") or prefix in OPENAI_COMPAT_PROVIDERS):
         return prefix, rest
     return "local", model_str
 
@@ -122,8 +120,7 @@ class LLMProvider(ABC):
     name: str = "base"
 
     @abstractmethod
-    def generate(self, messages: list[dict], model: str, max_tokens: int = 512) -> LLMResult:
-        ...
+    def generate(self, messages: list[dict], model: str, max_tokens: int = 512) -> LLMResult: ...
 
     def embed(self, text: str) -> list[float]:
         # Default: local, dependency-free embedding. Providers may override.
@@ -144,8 +141,11 @@ class MockProvider(LLMProvider):
     def generate(self, messages: list[dict], model: str, max_tokens: int = 512) -> LLMResult:
         last_user = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
         prompt = _flatten(messages)
-        text = _mock_json(prompt, model) if _STRUCT_MARKER in prompt \
+        text = (
+            _mock_json(prompt, model)
+            if _STRUCT_MARKER in prompt
             else f"[mock:{model}] {last_user.strip()[:180]}"
+        )
         usage = Usage(_estimate_tokens(_flatten(messages)), _estimate_tokens(text))
         return LLMResult(text=text, usage=usage, model=model, provider=self.name)
 
@@ -163,8 +163,12 @@ class OllamaProvider(LLMProvider):
     def generate(self, messages: list[dict], model: str, max_tokens: int = 512) -> LLMResult:
         r = requests.post(
             f"{self.base_url}/api/chat",
-            json={"model": model, "messages": messages, "stream": False,
-                  "options": {"num_predict": max_tokens}},
+            json={
+                "model": model,
+                "messages": messages,
+                "stream": False,
+                "options": {"num_predict": max_tokens},
+            },
             timeout=self.timeout,
         )
         r.raise_for_status()
@@ -200,10 +204,14 @@ class AnthropicProvider(LLMProvider):
         turns = [m for m in messages if m.get("role") in ("user", "assistant")]
         r = requests.post(
             "https://api.anthropic.com/v1/messages",
-            headers={"x-api-key": self.api_key, "anthropic-version": "2023-06-01",
-                     "content-type": "application/json"},
-            data=json.dumps({"model": model, "max_tokens": max_tokens,
-                             "system": system, "messages": turns}),
+            headers={
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            data=json.dumps(
+                {"model": model, "max_tokens": max_tokens, "system": system, "messages": turns}
+            ),
             timeout=self.timeout,
         )
         r.raise_for_status()
@@ -258,6 +266,7 @@ class ClaudeCodeProvider(LLMProvider):
 
     def generate(self, messages: list[dict], model: str, max_tokens: int = 512) -> LLMResult:
         from . import claudecli
+
         system = "\n".join(m["content"] for m in messages if m.get("role") == "system")
         prompt = _flatten([m for m in messages if m.get("role") != "system"])
         # The resolved path, not "claude": on Windows the CLI is a .cmd that
@@ -269,21 +278,18 @@ class ClaudeCodeProvider(LLMProvider):
         if system:
             cmd += ["--append-system-prompt", system]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True,
-                                  timeout=self.timeout)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise ProviderError(f"claude CLI unavailable: {exc}") from exc
         if proc.returncode != 0:
-            raise ProviderError(
-                f"claude CLI exited {proc.returncode}: {proc.stderr.strip()[:300]}")
+            raise ProviderError(f"claude CLI exited {proc.returncode}: {proc.stderr.strip()[:300]}")
         try:
             data = json.loads(proc.stdout)
         except json.JSONDecodeError as exc:
             raise ProviderError("claude CLI returned non-JSON output") from exc
         u = data.get("usage") or {}
         usage = Usage(u.get("input_tokens", 0), u.get("output_tokens", 0))
-        return LLMResult(text=data.get("result", ""), usage=usage,
-                         model=model, provider=self.name)
+        return LLMResult(text=data.get("result", ""), usage=usage, model=model, provider=self.name)
 
 
 def _remote_providers() -> dict[str, LLMProvider]:
@@ -311,8 +317,11 @@ class HybridRouter:
             self.cloud: LLMProvider | None = None
             self.remotes: dict[str, LLMProvider] = {}
         else:
-            self.local = OllamaProvider(settings.ollama_url, settings.embed_model,
-                                        timeout=getattr(settings, "ollama_timeout", 420))
+            self.local = OllamaProvider(
+                settings.ollama_url,
+                settings.embed_model,
+                timeout=getattr(settings, "ollama_timeout", 420),
+            )
             self.cloud = (
                 AnthropicProvider(settings.anthropic_api_key)
                 if settings.cloud_enabled and settings.anthropic_api_key
@@ -344,8 +353,13 @@ class HybridRouter:
                 steps.append((t, n))
         return steps
 
-    def generate(self, messages: list[dict], difficulty: Difficulty = Difficulty.EASY,
-                 model: str | None = None, max_tokens: int = 512) -> LLMResult:
+    def generate(
+        self,
+        messages: list[dict],
+        difficulty: Difficulty = Difficulty.EASY,
+        model: str | None = None,
+        max_tokens: int = 512,
+    ) -> LLMResult:
         target, name = _split(model or self._tier_model(difficulty))
         # Mock mode: one deterministic provider; keep the label so you can see
         # which model each agent would have used.
@@ -359,10 +373,13 @@ class HybridRouter:
                 try:
                     return provider.generate(messages, step_name, max_tokens)
                 except (requests.RequestException, ProviderError) as exc:
-                    log.warning("%s call failed (%s), trying next step: %s",
-                                step_target, step_name, exc)
-            log.warning("all remote steps failed or unavailable, "
-                        "falling back to local %s", self.settings.local_model)
+                    log.warning(
+                        "%s call failed (%s), trying next step: %s", step_target, step_name, exc
+                    )
+            log.warning(
+                "all remote steps failed or unavailable, falling back to local %s",
+                self.settings.local_model,
+            )
         # Local target, or every remote step was exhausted. One retry covers
         # Ollama cold starts, where the first call can time out while the
         # model is still loading into memory.

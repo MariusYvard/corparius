@@ -11,7 +11,9 @@ operator editing from the console should get their config back with the bad part
 named, not an error page. Errors say what was refused; warnings say what was
 repaired.
 """
+
 from __future__ import annotations
+
 import os
 import re
 import time
@@ -29,12 +31,31 @@ ROOT = paths.user_home()
 
 SLUG_RE = re.compile(r"[^a-z0-9]+")
 
-ROLES = ("ceo", "social", "outreach", "support", "ads",
-         "finance", "strategy", "competitor", "design", "coder")
+ROLES = (
+    "ceo",
+    "social",
+    "outreach",
+    "support",
+    "ads",
+    "finance",
+    "strategy",
+    "competitor",
+    "design",
+    "coder",
+)
 
-DEFAULT_AGENTS = {"ceo": True, "social": True, "outreach": True, "support": True,
-                  "ads": False, "finance": True, "strategy": True,
-                  "competitor": True, "design": True, "coder": False}
+DEFAULT_AGENTS = {
+    "ceo": True,
+    "social": True,
+    "outreach": True,
+    "support": True,
+    "ads": False,
+    "finance": True,
+    "strategy": True,
+    "competitor": True,
+    "design": True,
+    "coder": False,
+}
 
 # Channels the social agent can schedule to. Kept small on purpose: an unknown
 # channel is a typo, not a feature.
@@ -52,42 +73,81 @@ DEFAULT_HITL = ["send_financial_transaction", "publish_production_code", "deploy
 # A template fills a sensible starting point they then edit. The text fields are
 # examples per language; agents/channels/billing are the structural choices.
 TEMPLATES: list[dict] = [
-    {"id": "saas", "label_en": "SaaS / web app", "label_fr": "SaaS / app web",
-     "product_en": "A self-serve web app on a monthly subscription.",
-     "product_fr": "Une app web en libre-service, sur abonnement mensuel.",
-     "segment_en": "Small teams who feel this pain and have a budget to fix it",
-     "segment_fr": "Petites équipes qui vivent ce problème et ont un budget pour le régler",
-     "pains_en": ["Doing it by hand eats hours every week", "Existing tools are bloated and costly"],
-     "pains_fr": ["Le faire à la main coûte des heures chaque semaine", "Les outils existants sont lourds et chers"],
-     "channels": ["linkedin", "x"], "price_eur": 29, "billing": "stripe",
-     "agents": {"ads": False, "coder": True}},
-    {"id": "ecom", "label_en": "Online shop", "label_fr": "Boutique en ligne",
-     "product_en": "A physical product sold online, one-off purchases.",
-     "product_fr": "Un produit physique vendu en ligne, à l'unité.",
-     "segment_en": "Shoppers who value this over the mass-market option",
-     "segment_fr": "Acheteurs qui préfèrent ceci à l'option grand public",
-     "pains_en": ["Mass-produced versions feel generic", "Slow or unreliable delivery elsewhere"],
-     "pains_fr": ["Les versions industrielles font génériques", "Livraison lente ou peu fiable ailleurs"],
-     "channels": ["instagram", "x"], "price_eur": 45, "billing": "stripe",
-     "agents": {"ads": True, "coder": False}},
-    {"id": "agency", "label_en": "Agency / services", "label_fr": "Agence / services",
-     "product_en": "A done-for-you service billed per project or retainer.",
-     "product_fr": "Un service clé en main, facturé au projet ou au forfait.",
-     "segment_en": "Businesses that need this done but won't hire in-house",
-     "segment_fr": "Entreprises qui en ont besoin sans vouloir recruter en interne",
-     "pains_en": ["No in-house expertise for this", "Past vendors over-promised and under-delivered"],
-     "pains_fr": ["Pas d'expertise en interne", "Prestataires passés qui promettent trop"],
-     "channels": ["linkedin"], "price_eur": None, "billing": "manual",
-     "agents": {"ads": False, "coder": False}},
-    {"id": "newsletter", "label_en": "Newsletter / media", "label_fr": "Newsletter / média",
-     "product_en": "A paid newsletter or content membership.",
-     "product_fr": "Une newsletter payante ou un abonnement à du contenu.",
-     "segment_en": "People who want to stay ahead on this topic",
-     "segment_fr": "Des gens qui veulent garder une longueur d'avance sur ce sujet",
-     "pains_en": ["Too much noise, too little signal elsewhere", "No time to follow it all"],
-     "pains_fr": ["Trop de bruit, trop peu de signal ailleurs", "Pas le temps de tout suivre"],
-     "channels": ["linkedin", "x", "bluesky"], "price_eur": 9, "billing": "stripe",
-     "agents": {"ads": False, "coder": False}},
+    {
+        "id": "saas",
+        "label_en": "SaaS / web app",
+        "label_fr": "SaaS / app web",
+        "product_en": "A self-serve web app on a monthly subscription.",
+        "product_fr": "Une app web en libre-service, sur abonnement mensuel.",
+        "segment_en": "Small teams who feel this pain and have a budget to fix it",
+        "segment_fr": "Petites équipes qui vivent ce problème et ont un budget pour le régler",
+        "pains_en": [
+            "Doing it by hand eats hours every week",
+            "Existing tools are bloated and costly",
+        ],
+        "pains_fr": [
+            "Le faire à la main coûte des heures chaque semaine",
+            "Les outils existants sont lourds et chers",
+        ],
+        "channels": ["linkedin", "x"],
+        "price_eur": 29,
+        "billing": "stripe",
+        "agents": {"ads": False, "coder": True},
+    },
+    {
+        "id": "ecom",
+        "label_en": "Online shop",
+        "label_fr": "Boutique en ligne",
+        "product_en": "A physical product sold online, one-off purchases.",
+        "product_fr": "Un produit physique vendu en ligne, à l'unité.",
+        "segment_en": "Shoppers who value this over the mass-market option",
+        "segment_fr": "Acheteurs qui préfèrent ceci à l'option grand public",
+        "pains_en": [
+            "Mass-produced versions feel generic",
+            "Slow or unreliable delivery elsewhere",
+        ],
+        "pains_fr": [
+            "Les versions industrielles font génériques",
+            "Livraison lente ou peu fiable ailleurs",
+        ],
+        "channels": ["instagram", "x"],
+        "price_eur": 45,
+        "billing": "stripe",
+        "agents": {"ads": True, "coder": False},
+    },
+    {
+        "id": "agency",
+        "label_en": "Agency / services",
+        "label_fr": "Agence / services",
+        "product_en": "A done-for-you service billed per project or retainer.",
+        "product_fr": "Un service clé en main, facturé au projet ou au forfait.",
+        "segment_en": "Businesses that need this done but won't hire in-house",
+        "segment_fr": "Entreprises qui en ont besoin sans vouloir recruter en interne",
+        "pains_en": [
+            "No in-house expertise for this",
+            "Past vendors over-promised and under-delivered",
+        ],
+        "pains_fr": ["Pas d'expertise en interne", "Prestataires passés qui promettent trop"],
+        "channels": ["linkedin"],
+        "price_eur": None,
+        "billing": "manual",
+        "agents": {"ads": False, "coder": False},
+    },
+    {
+        "id": "newsletter",
+        "label_en": "Newsletter / media",
+        "label_fr": "Newsletter / média",
+        "product_en": "A paid newsletter or content membership.",
+        "product_fr": "Une newsletter payante ou un abonnement à du contenu.",
+        "segment_en": "People who want to stay ahead on this topic",
+        "segment_fr": "Des gens qui veulent garder une longueur d'avance sur ce sujet",
+        "pains_en": ["Too much noise, too little signal elsewhere", "No time to follow it all"],
+        "pains_fr": ["Trop de bruit, trop peu de signal ailleurs", "Pas le temps de tout suivre"],
+        "channels": ["linkedin", "x", "bluesky"],
+        "price_eur": 9,
+        "billing": "stripe",
+        "agents": {"ads": False, "coder": False},
+    },
 ]
 
 
@@ -107,8 +167,9 @@ def list_slugs(root: Path | None = None) -> list[str]:
     base = (root or ROOT) / "companies"
     if not base.is_dir():
         return []
-    return sorted(p.parent.name for p in base.glob("*/company.yaml")
-                  if not p.parent.name.startswith("."))
+    return sorted(
+        p.parent.name for p in base.glob("*/company.yaml") if not p.parent.name.startswith(".")
+    )
 
 
 def load(path, slug: str | None = None) -> dict:
@@ -120,7 +181,7 @@ def load(path, slug: str | None = None) -> dict:
     with open(path, encoding="utf-8") as fh:
         raw = yaml.safe_load(fh)
     if raw is None:
-        raw = {}                       # an empty file is an empty company, not a crash
+        raw = {}  # an empty file is an empty company, not a crash
     if not isinstance(raw, dict):
         raise ValueError(f"{path}: expected a mapping, found {type(raw).__name__}")
     raw.setdefault("slug", slug or path.parent.name)
@@ -158,7 +219,7 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
 
     price = offer_in.get("price_eur")
     if price in (None, ""):
-        price = None                   # None is meaningful: the site reads "Let's talk"
+        price = None  # None is meaningful: the site reads "Let's talk"
     else:
         try:
             price = float(price)
@@ -171,7 +232,9 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
 
     billing = str(offer_in.get("billing", "stripe")).strip().lower() or "stripe"
     if billing not in BILLING:
-        warnings.append(f"offer.billing '{billing}' is not one of {', '.join(BILLING)}; kept as free text")
+        warnings.append(
+            f"offer.billing '{billing}' is not one of {', '.join(BILLING)}; kept as free text"
+        )
 
     icp_in = raw.get("icp") or {}
     if not isinstance(icp_in, dict):
@@ -180,8 +243,9 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     channels = [str(c).strip().lower() for c in (icp_in.get("channels") or []) if str(c).strip()]
     unknown = [c for c in channels if c not in CHANNELS]
     if unknown:
-        warnings.append(f"icp.channels: dropped unknown {', '.join(unknown)} "
-                        f"(known: {', '.join(CHANNELS)})")
+        warnings.append(
+            f"icp.channels: dropped unknown {', '.join(unknown)} (known: {', '.join(CHANNELS)})"
+        )
         channels = [c for c in channels if c in CHANNELS]
     if not channels:
         channels = ["linkedin"]
@@ -205,8 +269,9 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     if clamped != session:
         warnings.append(f"budgets.session_tokens clamped to {clamped}")
     session = clamped
-    tpm = _int(budgets_in.get("tokens_per_minute", max(1000, session // 10)),
-               max(1000, session // 10))
+    tpm = _int(
+        budgets_in.get("tokens_per_minute", max(1000, session // 10)), max(1000, session // 10)
+    )
     tpm = max(100, min(tpm, session))
     ads_eur = _int(budgets_in.get("daily_ad_spend_eur", 0), 0)
     if ads_eur < 0:
@@ -215,10 +280,14 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     if ads_eur and not agents["ads"]:
         warnings.append("budgets.daily_ad_spend_eur is set but the ads agent is off")
 
-    from .tools import TOOLS       # local import: tools imports config, config imports cfg
+    from .tools import TOOLS  # local import: tools imports config, config imports cfg
+
     hitl_in = raw.get("hitl_tools")
-    hitl = [str(x).strip() for x in (hitl_in if isinstance(hitl_in, list) else DEFAULT_HITL)
-            if str(x).strip()]
+    hitl = [
+        str(x).strip()
+        for x in (hitl_in if isinstance(hitl_in, list) else DEFAULT_HITL)
+        if str(x).strip()
+    ]
     unknown_tools = [x for x in hitl if x not in TOOLS]
     if unknown_tools:
         warnings.append(f"hitl_tools: {', '.join(unknown_tools)} match no tool and gate nothing")
@@ -227,13 +296,23 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
         "slug": slug,
         "name": name,
         "one_liner": str(raw.get("one_liner", "")).strip() or product,
-        "offer": {"product": product, "price_eur": price, "billing": billing,
-                  "payment_link": str(offer_in.get("payment_link", "")).strip()},
-        "icp": {"segment": str(icp_in.get("segment", "")).strip() or "To be defined",
-                "channels": channels, "pains": pains},
+        "offer": {
+            "product": product,
+            "price_eur": price,
+            "billing": billing,
+            "payment_link": str(offer_in.get("payment_link", "")).strip(),
+        },
+        "icp": {
+            "segment": str(icp_in.get("segment", "")).strip() or "To be defined",
+            "channels": channels,
+            "pains": pains,
+        },
         "agents": agents,
-        "budgets": {"session_tokens": session, "tokens_per_minute": tpm,
-                    "daily_ad_spend_eur": ads_eur},
+        "budgets": {
+            "session_tokens": session,
+            "tokens_per_minute": tpm,
+            "daily_ad_spend_eur": ads_eur,
+        },
         "hitl_tools": hitl,
     }
     return cfg, errors, warnings
@@ -271,6 +350,7 @@ def seed_examples(root: Path | None = None) -> list[str]:
     run; it matters only on a first frozen launch, whose companies dir is empty.
     Returns the resulting slug list."""
     import shutil
+
     base = (root or ROOT) / "companies"
     src = paths.example_company_src()
     dest = base / src.name

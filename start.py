@@ -6,7 +6,9 @@ console and opens it in your browser. Works on Windows, Linux and macOS.
     python start.py            # first run and every run after
     python start.py --no-browser
 """
+
 from __future__ import annotations
+
 import json
 import os
 import shutil
@@ -49,13 +51,17 @@ def mode_line(info: dict) -> str:
         return "mode: mock (offline, deterministic; no network, no keys, no spend)"
     if not info.get("cloud") and not info.get("claude_code"):
         return "mode: live, local only (Ollama serves every tier; no remote spend)"
-    return ("mode: LIVE with remote providers enabled. Real calls, real spend. "
-            "Flip it in the console (Providers) or set CORP_LLM_MOCK=true.")
+    return (
+        "mode: LIVE with remote providers enabled. Real calls, real spend. "
+        "Flip it in the console (Providers) or set CORP_LLM_MOCK=true."
+    )
 
 
 def main() -> int:
     if sys.version_info < (3, 10):
-        step(f"Python 3.10+ required, you run {sys.version.split()[0]}. Install a newer Python first.")
+        step(
+            f"Python 3.10+ required, you run {sys.version.split()[0]}. Install a newer Python first."
+        )
         return 1
     if not os.path.isfile(PY):
         step("creating the virtual environment (.venv)")
@@ -70,11 +76,14 @@ def main() -> int:
         step("the virtual environment is missing its Python; delete the .venv folder and retry.")
         return 1
     step("installing dependencies (first run can take a minute)")
-    r = subprocess.run([PY, "-m", "pip", "install", "-q", "-r",
-                        os.path.join(ROOT, "requirements.txt")])
+    r = subprocess.run(
+        [PY, "-m", "pip", "install", "-q", "-r", os.path.join(ROOT, "requirements.txt")]
+    )
     if r.returncode != 0:
-        step("dependency install failed. Check your internet connection and run this again; "
-             "if you are behind a proxy, set HTTPS_PROXY first.")
+        step(
+            "dependency install failed. Check your internet connection and run this again; "
+            "if you are behind a proxy, set HTTPS_PROXY first."
+        )
         return r.returncode
     env_file = os.path.join(ROOT, ".env")
     if not os.path.isfile(env_file):
@@ -82,8 +91,9 @@ def main() -> int:
         step("created .env from .env.example (offline mock mode by default)")
     example = os.path.join(ROOT, "companies", "example", "company.yaml")
     if os.path.isfile(example):
-        subprocess.run([PY, "-m", "app.cli", "init", "--company", example],
-                       cwd=ROOT, capture_output=True)
+        subprocess.run(
+            [PY, "-m", "app.cli", "init", "--company", example], cwd=ROOT, capture_output=True
+        )
     step("running the doctor (python -m app.cli doctor for details any time)")
     subprocess.run([PY, "-m", "app.cli", "doctor", "--quiet"], cwd=ROOT)
     info = resolved()

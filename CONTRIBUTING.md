@@ -26,7 +26,8 @@ python start.py                                    # run the console locally
 
 - **Code, comments and commit messages in English.** UI strings are bilingual
   FR/EN through `app/i18n.py` and the `data-i18n` attributes in `app/webui.html`.
-- **Style matches the surrounding code.** Comments explain *why*, not *what*.
+- **`ruff format` decides layout; comments explain *why*, not *what*.** Run it
+  before committing (`ruff format .`) — CI checks it.
 - **Settings** are one row in `app/settings_spec.py`, not an HTML change; they
   resolve through the four layers in `app/cfg.py` (env > console/SQLite > `.env` >
   default).
@@ -42,6 +43,7 @@ python start.py                                    # run the console locally
 ```bash
 python -m pytest -q          # green, with tests for new behaviour
 ruff check .
+ruff format --check .
 mypy app/
 ```
 

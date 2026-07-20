@@ -1,6 +1,7 @@
 """The settings resolver. What matters here is the order of the layers and the
 fact that it is reportable: a value the operator cannot change from the console
 must be visible as such, never silently ignored."""
+
 import pytest
 
 from app import cfg
@@ -21,6 +22,7 @@ def layers(tmp_path, monkeypatch):
 
 def test_dotenv_is_read_but_never_leaks_into_os_environ(layers, monkeypatch):
     import os
+
     monkeypatch.delenv("CORP_TRIVIAL_MODEL", raising=False)
     assert cfg.get("CORP_TRIVIAL_MODEL") == "local:from-dotenv"
     # The whole layering depends on this: if .env landed in os.environ it would
@@ -96,7 +98,11 @@ def test_parse_dotenv_tolerates_real_files():
         "URL=https://example.com/a?b=c\n"
     )
     assert parsed == {
-        "PLAIN": "value", "SPACED": "spaced value", "QUOTED": "quoted",
-        "SINGLE": "single", "EXPORTED": "exported", "EMPTY": "",
+        "PLAIN": "value",
+        "SPACED": "spaced value",
+        "QUOTED": "quoted",
+        "SINGLE": "single",
+        "EXPORTED": "exported",
+        "EMPTY": "",
         "URL": "https://example.com/a?b=c",
     }

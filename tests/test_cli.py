@@ -6,6 +6,7 @@ frozen binary. cli.settings is a module-level singleton captured at import, so
 it is patched rather than the environment: setting CORP_DATA_PATH after import
 would not move it.
 """
+
 import json
 
 import pytest
@@ -43,6 +44,7 @@ def _store(cfg_path):
 
 # --- config resolution ----------------------------------------------------
 
+
 def test_a_missing_company_exits_with_a_message(capsys):
     with pytest.raises(SystemExit) as exc:
         cli.main(["status", "--company", "definitely-not-a-company"])
@@ -61,6 +63,7 @@ def test_malformed_yaml_exits_with_a_message(tmp_path, monkeypatch):
 
 
 # --- commands -------------------------------------------------------------
+
 
 def test_init_seeds_the_clock(cfg_path, capsys):
     cli.main(["init", "--company", cfg_path])
@@ -94,8 +97,20 @@ def test_tasks_says_so_when_empty(cfg_path, capsys):
 
 def test_task_edit_and_approve(cfg_path, capsys):
     task_id = _store(cfg_path).add_task("t", "a task", "social", status="proposed")
-    cli.main(["task", "--company", cfg_path, "--id", str(task_id),
-              "--title", "renamed", "--priority", "3", "--approve"])
+    cli.main(
+        [
+            "task",
+            "--company",
+            cfg_path,
+            "--id",
+            str(task_id),
+            "--title",
+            "renamed",
+            "--priority",
+            "3",
+            "--approve",
+        ]
+    )
     assert f"task {task_id} updated" in capsys.readouterr().out
     row = _store(cfg_path).list_tasks("t")[0]
     assert row["title"] == "renamed" and row["priority"] == 3
@@ -134,8 +149,9 @@ def test_site_builds(cfg_path, capsys):
     cli.main(["site", "--company", cfg_path, "--headline", "Hire faster"])
     out = capsys.readouterr().out
     assert "sales site built" in out
-    assert "Hire faster" in (__import__("pathlib").Path(out.split(": ", 1)[1].strip())
-                             .read_text(encoding="utf-8"))
+    assert "Hire faster" in (
+        __import__("pathlib").Path(out.split(": ", 1)[1].strip()).read_text(encoding="utf-8")
+    )
 
 
 def test_deploy_builds_the_site_if_missing(cfg_path, capsys):
@@ -147,12 +163,14 @@ def test_backup_prints_the_plaintext_warning(cfg_path, tmp_path, capsys):
     """The zip carries the console's API keys in the clear, so the CLI has to
     say so every time rather than only in the docs."""
     from app import backup
-    cli.main(["backup", "--out", str(tmp_path / "out")])   # backup is company-wide
+
+    cli.main(["backup", "--out", str(tmp_path / "out")])  # backup is company-wide
     out = capsys.readouterr().out
     assert "backup written" in out and backup.WARNING_EN in out
 
 
 # --- approvals ------------------------------------------------------------
+
 
 def test_approvals_reports_nothing_pending(cfg_path, capsys):
     cli.main(["approvals", "--company", cfg_path])
@@ -161,17 +179,27 @@ def test_approvals_reports_nothing_pending(cfg_path, capsys):
 
 def test_approve_and_reject_by_id(cfg_path, capsys):
     from app.models import ApprovalRequest
+
     store = _store(cfg_path)
-    store.add_approval(ApprovalRequest(id="pay-1", company="t", agent="finance",
-                                       tool="send_financial_transaction",
-                                       parameters={"amount": 12}, ts=1.0))
+    store.add_approval(
+        ApprovalRequest(
+            id="pay-1",
+            company="t",
+            agent="finance",
+            tool="send_financial_transaction",
+            parameters={"amount": 12},
+            ts=1.0,
+        )
+    )
     cli.main(["approvals", "--company", cfg_path])
     assert "pay-1" in capsys.readouterr().out
 
     cli.main(["approve", "--company", cfg_path, "--id", "pay-1", "--note", "fine"])
     assert "pay-1 -> approved" in capsys.readouterr().out
-    assert _store(cfg_path).find_approval("t", "send_financial_transaction",
-                                          {"amount": 12})["status"] == "approved"
+    assert (
+        _store(cfg_path).find_approval("t", "send_financial_transaction", {"amount": 12})["status"]
+        == "approved"
+    )
 
     cli.main(["reject", "--company", cfg_path, "--id", "pay-1"])
     assert "pay-1 -> rejected" in capsys.readouterr().out
@@ -183,6 +211,7 @@ def test_an_unknown_approval_id_is_reported_not_silent(cfg_path, capsys):
 
 
 # --- commands that exit ---------------------------------------------------
+
 
 def test_doctor_exits_with_its_own_status(cfg_path, monkeypatch):
     monkeypatch.setattr("app.doctor.main", lambda quiet=False: 0)

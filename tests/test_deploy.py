@@ -1,5 +1,6 @@
 """Deployment must never depend on one host: the chain falls back to a local,
 self-hosted target that is always available."""
+
 from app import deploy
 from app.deploy import LocalDirProvider
 
@@ -26,5 +27,5 @@ def test_reports_when_no_provider_is_available(tmp_path, monkeypatch):
     site.mkdir()
     for var in ("NETLIFY_AUTH_TOKEN", "CORP_S3_BUCKET", "CORP_DEPLOY_SSH_TARGET"):
         monkeypatch.delenv(var, raising=False)
-    monkeypatch.setenv("CORP_DEPLOY_PROVIDERS", "netlify,s3,ssh")   # local removed
+    monkeypatch.setenv("CORP_DEPLOY_PROVIDERS", "netlify,s3,ssh")  # local removed
     assert "no provider available" in deploy.deploy_site(str(site))

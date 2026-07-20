@@ -20,7 +20,9 @@ The schema is a small dict, no jsonschema dependency (stdlib only, project ethos
      "hashtags": {"type": "list", "default": []},
      "tone":     {"type": "str", "choices": ["plain", "bold"], "default": "plain"}}
 """
+
 from __future__ import annotations
+
 import json
 import re
 from dataclasses import dataclass, field
@@ -31,9 +33,9 @@ _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S | re.I)
 @dataclass
 class Result:
     data: dict
-    ok: bool                     # a model produced valid structure (not the fallback)
+    ok: bool  # a model produced valid structure (not the fallback)
     attempts: int
-    source: str = ""             # "provider:model" that answered, for the log
+    source: str = ""  # "provider:model" that answered, for the log
     raw: str = ""
     errors: list[str] = field(default_factory=list)
     fell_back: bool = False
@@ -52,7 +54,7 @@ def extract_json(text: str) -> dict | None:
     if fenced:
         candidates.append(fenced.group(1).strip())
     candidates.append(text.strip())
-    depth = start = 0            # also try the first balanced {...} run
+    depth = start = 0  # also try the first balanced {...} run
     for i, ch in enumerate(text):
         if ch == "{":
             if depth == 0:
@@ -61,7 +63,7 @@ def extract_json(text: str) -> dict | None:
         elif ch == "}" and depth:
             depth -= 1
             if depth == 0:
-                candidates.append(text[start:i + 1])
+                candidates.append(text[start : i + 1])
                 break
     for c in candidates:
         try:
@@ -78,10 +80,16 @@ def _coerce_one(key: str, spec: dict, value):
     if value is None:
         raise ValueError(f"{key}: missing")
     if want == "str":
-        out = value if isinstance(value, str) else json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+        out = (
+            value
+            if isinstance(value, str)
+            else json.dumps(value)
+            if isinstance(value, (dict, list))
+            else str(value)
+        )
         out = out.strip()
         if "max_len" in spec:
-            out = out[:spec["max_len"]].rstrip()
+            out = out[: spec["max_len"]].rstrip()
         if spec.get("choices") and out not in spec["choices"]:
             raise ValueError(f"{key}: '{out}' not one of {spec['choices']}")
         if not out and spec.get("required"):
@@ -159,16 +167,26 @@ MARKER = "<<corp-json-schema>>"
 
 
 def instruction(schema: dict) -> str:
-    return (f"{MARKER}\nReturn only a JSON object matching this shape, with no prose, "
-            f"no explanation and no markdown fence:\n{render_hint(schema)}")
+    return (
+        f"{MARKER}\nReturn only a JSON object matching this shape, with no prose, "
+        f"no explanation and no markdown fence:\n{render_hint(schema)}"
+    )
 
 
-def ask(router, messages: list[dict], schema: dict, difficulty=None,
-        *, retries: int = 1, fallback: dict | None = None) -> Result:
+def ask(
+    router,
+    messages: list[dict],
+    schema: dict,
+    difficulty=None,
+    *,
+    retries: int = 1,
+    fallback: dict | None = None,
+) -> Result:
     """Drive the router until the reply validates, then stop. On exhaustion,
     return the fallback (or the schema defaults) so the caller always gets the
     agreed shape and the agent turn never dies on a malformed reply."""
     from .models import Difficulty
+
     difficulty = difficulty or Difficulty.EASY
     convo = list(messages)
     convo.append({"role": "user", "content": instruction(schema)})
@@ -182,23 +200,36 @@ def ask(router, messages: list[dict], schema: dict, difficulty=None,
         if obj is not None:
             clean, errors = validate(obj, schema)
             if not errors:
-                return Result(clean, ok=True, attempts=attempt, source=source,
-                              raw=res.text, usages=usages)
+                return Result(
+                    clean, ok=True, attempts=attempt, source=source, raw=res.text, usages=usages
+                )
             last_errors = errors
         else:
             last_errors = ["no JSON object in the reply"]
         # Correct and try again with the same tier.
         convo.append({"role": "assistant", "content": res.text[:500]})
-        convo.append({"role": "user",
-                      "content": f"That did not match. {', '.join(last_errors)}. "
-                                 f"Return only the JSON:\n{render_hint(schema)}"})
+        convo.append(
+            {
+                "role": "user",
+                "content": f"That did not match. {', '.join(last_errors)}. "
+                f"Return only the JSON:\n{render_hint(schema)}",
+            }
+        )
     data = dict(fallback) if fallback else defaults(schema)
     # Salvage whatever a required string needs from the raw reply, so the fallback
     # is not blank when a model gave prose instead of JSON.
     for key, spec in schema.items():
         if spec.get("required") and not data.get(key) and spec.get("type", "str") == "str":
             snippet = re.sub(r"\s+", " ", last_raw).strip()
-            data[key] = snippet[:spec.get("max_len", 120)] or key
+            data[key] = snippet[: spec.get("max_len", 120)] or key
     clean, _ = validate(data, schema)
-    return Result(clean, ok=False, attempts=retries + 1, source=source,
-                  raw=last_raw, errors=last_errors, fell_back=True, usages=usages)
+    return Result(
+        clean,
+        ok=False,
+        attempts=retries + 1,
+        source=source,
+        raw=last_raw,
+        errors=last_errors,
+        fell_back=True,
+        usages=usages,
+    )

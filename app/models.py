@@ -1,5 +1,7 @@
 """Typed records shared across the runtime."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -22,6 +24,7 @@ class Difficulty(str, Enum):
     """Routing tier for the HybridRouter. TRIVIAL runs a tiny local model
     (gemma4:e4b), EASY the default local model, HARD a task-adapted model that
     escalates to the cloud when enabled."""
+
     TRIVIAL = "trivial"
     EASY = "easy"
     HARD = "hard"
@@ -49,8 +52,8 @@ class LLMResult:
 class ToolResult:
     ok: bool
     output: str
-    denied: bool = False    # rejected by a human approver
-    pending: bool = False   # waiting on a human approver
+    denied: bool = False  # rejected by a human approver
+    pending: bool = False  # waiting on a human approver
 
 
 @dataclass
@@ -60,6 +63,6 @@ class ApprovalRequest:
     agent: str
     tool: str
     parameters: dict[str, Any]
-    status: str = "pending"   # pending | approved | rejected
+    status: str = "pending"  # pending | approved | rejected
     note: str = ""
     ts: float = 0.0

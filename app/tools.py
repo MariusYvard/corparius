@@ -2,17 +2,27 @@
 effect for a real integration (Stripe, Lemlist, GitHub, Meta Ads, ...) to go
 live. Tools flagged `hitl` never execute until a human approves them.
 """
+
 from __future__ import annotations
+
 from collections.abc import Callable
 
+from . import cfg, deploy, enrich, integrations, leadsource, mailbox, paths, signals, sitegen
 from .models import ToolResult
-from . import cfg, integrations, mailbox, paths, sitegen, deploy, leadsource, enrich, signals
 
 
 class Tool:
-    def __init__(self, name: str, description: str, effect: Callable,
-                 *, hitl: bool = False, needs_draft: bool = False,
-                 prompt: Callable | None = None, schema: dict | None = None):
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        effect: Callable,
+        *,
+        hitl: bool = False,
+        needs_draft: bool = False,
+        prompt: Callable | None = None,
+        schema: dict | None = None,
+    ):
         self.name = name
         self.description = description
         self.hitl = hitl
@@ -103,8 +113,10 @@ def _deploy_site(ctx) -> ToolResult:
         return _ok(f"Site published: {res['provider']} -> {res['result']}")
     if res["errors"]:
         return _fail("Site not published, every provider failed: " + "; ".join(res["errors"]))
-    return _fail("Site not published: no provider is configured. "
-                 + ("Skipped " + "; ".join(res["skipped"]) if res["skipped"] else ""))
+    return _fail(
+        "Site not published: no provider is configured. "
+        + ("Skipped " + "; ".join(res["skipped"]) if res["skipped"] else "")
+    )
 
 
 def _find_targets(ctx) -> str:
@@ -115,7 +127,8 @@ def _find_targets(ctx) -> str:
     ctx.leads = leads
     if leads:
         return f"Found {len(leads)} leads via {leads[0].source}: " + ", ".join(
-            lead.label() for lead in leads[:5])
+            lead.label() for lead in leads[:5]
+        )
     return "Found 5 ICP-matching targets from enriched data (mock)"
 
 
@@ -140,20 +153,23 @@ def _send_outreach(ctx, draft: str) -> str:
         for lead in leads[:cap]:
             res, message_id = integrations.send_email_tracked(lead.email, subject, draft)
             if res is None:
-                break   # SMTP not configured, fall back below
+                break  # SMTP not configured, fall back below
             if res == "sent":
                 sent.append(lead.email)
                 if store is not None:
                     # Remember who we wrote to, or a reply is just another
                     # unread message nobody connects to anything.
-                    store.record_outreach(company.get("slug", "company"), lead.email,
-                                          message_id, subject)
+                    store.record_outreach(
+                        company.get("slug", "company"), lead.email, message_id, subject
+                    )
             else:
                 skipped.append(lead.email)
         if sent or skipped:
             return f"Outreach: {len(sent)} sent, {len(skipped)} skipped. {', '.join(sent[:3])}"
-    return integrations.send_outreach_email(company, draft) or \
-        f"Cold email sent to 5 targets. Opener: {draft[:90]}"
+    return (
+        integrations.send_outreach_email(company, draft)
+        or f"Cold email sent to 5 targets. Opener: {draft[:90]}"
+    )
 
 
 def _scan_replies(ctx) -> str:
@@ -172,8 +188,9 @@ def _scan_replies(ctx) -> str:
     messages = mailbox.fetch(limit=40)
     if not messages:
         stats = store.outreach_stats(slug)
-        return (f"Inbox read: nothing new. {stats['replied']}/{stats['sent']} outreach "
-                "answered so far")
+        return (
+            f"Inbox read: nothing new. {stats['replied']}/{stats['sent']} outreach answered so far"
+        )
     replied = []
     for msg in messages:
         if msg.sender in pending and store.mark_replied(slug, msg.sender, msg.body[:400]):
@@ -182,8 +199,10 @@ def _scan_replies(ctx) -> str:
         return f"Inbox read: {len(messages)} unread, none from the {len(pending)} prospects waiting"
     stats = store.outreach_stats(slug)
     who = ", ".join(m.sender for m in replied[:3])
-    return (f"{len(replied)} prospect(s) replied: {who}. "
-            f"Reply rate now {stats['replied']}/{stats['sent']}")
+    return (
+        f"{len(replied)} prospect(s) replied: {who}. "
+        f"Reply rate now {stats['replied']}/{stats['sent']}"
+    )
 
 
 def _triage_inbox(ctx) -> str:
@@ -194,16 +213,24 @@ def _triage_inbox(ctx) -> str:
     messages = mailbox.fetch(limit=40)
     if not messages:
         return "Inbox read: nothing unread"
-    urgent = [m for m in messages
-              if any(w in (m.subject + " " + m.body[:200]).lower()
-                     for w in ("urgent", "asap", "refund", "remboursement", "cancel", "broken"))]
+    urgent = [
+        m
+        for m in messages
+        if any(
+            w in (m.subject + " " + m.body[:200]).lower()
+            for w in ("urgent", "asap", "refund", "remboursement", "cancel", "broken")
+        )
+    ]
     top = messages[0]
-    return (f"Inbox read: {len(messages)} unread, {len(urgent)} look urgent. "
-            f"Top: {top.label()}")
+    return f"Inbox read: {len(messages)} unread, {len(urgent)} look urgent. Top: {top.label()}"
 
 
-ROLE_TOOL = {"outreach": "send_outreach", "social": "draft_social_post",
-             "support": "draft_support_reply", "design": "build_sales_site"}
+ROLE_TOOL = {
+    "outreach": "send_outreach",
+    "social": "draft_social_post",
+    "support": "draft_support_reply",
+    "design": "build_sales_site",
+}
 
 
 def _create_tasks(ctx) -> str:
@@ -215,8 +242,11 @@ def _create_tasks(ctx) -> str:
         return "Backlog unavailable"
     slug = ctx.company.get("slug", "company")
     enabled = ctx.company.get("agents", {}) or {}
-    open_pairs = {(t["target"], t.get("tool") or "") for t in store.list_tasks(slug)
-                  if t["status"] in ("approved", "in_progress")}
+    open_pairs = {
+        (t["target"], t.get("tool") or "")
+        for t in store.list_tasks(slug)
+        if t["status"] in ("approved", "in_progress")
+    }
     created: list[str] = []
     wip_limit = cfg.get_int("CORP_WIP_LIMIT", 4)
 
@@ -224,7 +254,7 @@ def _create_tasks(ctx) -> str:
         if not enabled.get(target) or (target, tool) in open_pairs:
             return
         if store.wip_count(slug, target) >= wip_limit:
-            return   # pull system: do not overproduce past the WIP limit
+            return  # pull system: do not overproduce past the WIP limit
         store.add_task(slug, title, target, priority, "approved", "ceo", tool=tool)
         open_pairs.add((target, tool))
         created.append(target)
@@ -256,11 +286,11 @@ def _review_proposals(ctx) -> str:
     approved = rejected = modified = 0
     for i, task in enumerate(proposals):
         if i < cap:
-            fields: dict[str, object] = {}   # priority is int, tool is str
+            fields: dict[str, object] = {}  # priority is int, tool is str
             if task["priority"] < 2:
-                fields["priority"] = 2   # CEO re-prioritises the suggestion
+                fields["priority"] = 2  # CEO re-prioritises the suggestion
             if not task.get("tool") and task["target"] in ROLE_TOOL:
-                fields["tool"] = ROLE_TOOL[task["target"]]   # make it executable
+                fields["tool"] = ROLE_TOOL[task["target"]]  # make it executable
             if fields:
                 store.update_task(task["id"], **fields)
                 modified += 1
@@ -278,8 +308,7 @@ def _propose_task(ctx) -> str:
         return "Backlog unavailable"
     slug = ctx.company.get("slug", "company")
     role = getattr(ctx, "role", "agent")
-    store.add_task(slug, f"Idea from {role}", role, priority=1,
-                   status="proposed", created_by=role)
+    store.add_task(slug, f"Idea from {role}", role, priority=1, status="proposed", created_by=role)
     return f"{role} proposed a task to the CEO"
 
 
@@ -291,85 +320,183 @@ def _kaizen(ctx) -> str:
     fm = store.flow_metrics(slug)
     bottleneck = fm.get("bottleneck")
     if bottleneck and fm["by_target"].get(bottleneck, 0) >= 2:
-        store.add_task(slug, f"Kaizen: unblock {bottleneck} ({fm['by_target'][bottleneck]} open)",
-                       bottleneck, priority=2, status="proposed", created_by="strategy",
-                       tool=ROLE_TOOL.get(bottleneck, ""))
+        store.add_task(
+            slug,
+            f"Kaizen: unblock {bottleneck} ({fm['by_target'][bottleneck]} open)",
+            bottleneck,
+            priority=2,
+            status="proposed",
+            created_by="strategy",
+            tool=ROLE_TOOL.get(bottleneck, ""),
+        )
         return f"Kaizen: bottleneck {bottleneck}, proposed an improvement to the CEO"
-    return (f"Kaizen: flow healthy (throughput {fm['throughput']}, wip {fm['wip']}, "
-            f"{fm['tokens_per_completed_task']} tokens/task)")
+    return (
+        f"Kaizen: flow healthy (throughput {fm['throughput']}, wip {fm['wip']}, "
+        f"{fm['tokens_per_completed_task']} tokens/task)"
+    )
 
 
 _ALL = [
-    Tool("set_daily_plan", "Set the day's 1-3 priorities", needs_draft=True,
-         prompt=lambda c: (f"Yesterday: {c.memory[0] if getattr(c, 'memory', None) else 'no prior summary'}. "
-                           f"In one sentence, set today's top priority for {_name(c)}."),
-         effect=lambda c, d: _ok(f"Daily plan set: {d[:140]}")),
-    Tool("write_eod_summary", "Summarise the day", needs_draft=True,
-         prompt=lambda c: f"In one sentence, summarise the day for {_name(c)}.",
-         effect=lambda c, d: _ok(f"EOD summary: {d[:140]}")),
-    Tool("create_tasks", "CEO adds tasks to the backlog",
-         effect=lambda c, d: _ok(_create_tasks(c))),
-    Tool("review_proposals", "CEO validates or refuses proposed tasks",
-         effect=lambda c, d: _ok(_review_proposals(c))),
-    Tool("propose_task", "Suggest a task to the CEO for review",
-         effect=lambda c, d: _ok(_propose_task(c))),
-    Tool("kaizen", "Continuous improvement: find the bottleneck, propose a fix",
-         effect=lambda c, d: _ok(_kaizen(c))),
-    Tool("draft_social_post", "Draft a post for X or LinkedIn", needs_draft=True,
-         prompt=lambda c: f"Draft one short {_channel(c)} post for {_name(c)}.",
-         schema={"headline": {"type": "str", "required": True, "max_len": 120},
-                 "body": {"type": "str", "required": True, "max_len": 500},
-                 "hashtags": {"type": "list", "default": []}},
-         effect=lambda c, d: _ok(_social_post(c))),
-    Tool("schedule_post", "Schedule the drafted post",
-         effect=lambda c, d: _ok(f"Post scheduled for +2h on {_channel(c)}")),
-    Tool("find_targets", "Find ICP-matching prospects",
-         effect=lambda c, d: _ok(_find_targets(c))),
-    Tool("send_outreach", "Send a cold email sequence", needs_draft=True,
-         prompt=lambda c: f"Draft a 2-line cold email opener for {_name(c)}.",
-         effect=lambda c, d: _ok(_send_outreach(c, d))),
-    Tool("triage_inbox", "Triage the support inbox",
-         effect=lambda c, d: _ok(_triage_inbox(c))),
-    Tool("scan_replies", "Check the inbox for prospect replies",
-         effect=lambda c, d: _ok(_scan_replies(c))),
-    Tool("draft_support_reply", "Draft a reply to the top ticket", needs_draft=True,
-         prompt=lambda c: f"Draft a one-line support reply for a {_name(c)} user.",
-         effect=lambda c, d: _ok(f"Reply drafted: {d[:110]}")),
-    Tool("review_ad_budget", "Review ad spend and pacing",
-         effect=lambda c, d: _ok(_review_ad_budget(c))),
-    Tool("adjust_bids", "Write ad variants and adjust bids", needs_draft=True,
-         prompt=lambda c: f"Write one ad headline for {_name(c)}.",
-         effect=lambda c, d: _ok(f"Bid variant written: {d[:90]}")),
-    Tool("reconcile_stripe", "Reconcile Stripe cashflow",
-         effect=lambda c, d: _ok(integrations.stripe_reconcile()
-                                 or "Stripe reconciled: MRR 27 EUR, 3 active subs (mock)")),
-    Tool("send_financial_transaction", "Pay an invoice / move money", hitl=True,
-         effect=lambda c, d: _ok("Paid infrastructure invoice 12 EUR (mock)")),
-    Tool("review_kpis", "Review KPIs against targets",
-         effect=lambda c, d: _ok("KPIs reviewed: signups flat, conversion 2.1%")),
-    Tool("update_pricing", "Draft a pricing adjustment", needs_draft=True,
-         prompt=lambda c: f"Suggest one pricing tweak for {_name(c)} in a sentence.",
-         effect=lambda c, d: _ok(f"Pricing note: {d[:120]}")),
-    Tool("scan_competitors", "Scan and summarise competitors", needs_draft=True,
-         prompt=lambda c: f"Name one competitor risk for {_name(c)} in a sentence.",
-         effect=lambda c, d: _ok(f"Competitor scan: {d[:120]}")),
-    Tool("scan_signals", "Watch configured sources for buying signals",
-         effect=lambda c, d: _ok(_scan_signals(c))),
-    Tool("generate_code", "Draft a feature or fix", needs_draft=True,
-         prompt=lambda c: f"Describe a small feature for {_name(c)} in one sentence.",
-         effect=lambda c, d: _ok(f"Feature branch drafted: {d[:110]}")),
-    Tool("publish_production_code", "Merge a PR to production", hitl=True,
-         effect=lambda c, d: _ok("Merged PR #42 to production (mock)")),
-    Tool("draft_design_brief", "Draft a visual direction or brief", needs_draft=True,
-         prompt=lambda c: f"Describe a visual direction for {_name(c)} in one sentence.",
-         effect=lambda c, d: _ok(f"Design brief drafted: {d[:120]}")),
-    Tool("produce_mockup", "Produce a landing or ad mockup",
-         effect=lambda c, d: _ok("Mockup produced: landing hero and one ad variant (mock)")),
-    Tool("build_sales_site", "Generate the sales landing page", needs_draft=True,
-         prompt=lambda c: f"Write one punchy sales headline, under 10 words, for {_name(c)}.",
-         effect=lambda c, d: _ok(_build_site(c, d))),
-    Tool("deploy_site", "Publish the sales site to the configured hosts", hitl=True,
-         effect=lambda c, d: _deploy_site(c)),
+    Tool(
+        "set_daily_plan",
+        "Set the day's 1-3 priorities",
+        needs_draft=True,
+        prompt=lambda c: (
+            f"Yesterday: {c.memory[0] if getattr(c, 'memory', None) else 'no prior summary'}. "
+            f"In one sentence, set today's top priority for {_name(c)}."
+        ),
+        effect=lambda c, d: _ok(f"Daily plan set: {d[:140]}"),
+    ),
+    Tool(
+        "write_eod_summary",
+        "Summarise the day",
+        needs_draft=True,
+        prompt=lambda c: f"In one sentence, summarise the day for {_name(c)}.",
+        effect=lambda c, d: _ok(f"EOD summary: {d[:140]}"),
+    ),
+    Tool(
+        "create_tasks", "CEO adds tasks to the backlog", effect=lambda c, d: _ok(_create_tasks(c))
+    ),
+    Tool(
+        "review_proposals",
+        "CEO validates or refuses proposed tasks",
+        effect=lambda c, d: _ok(_review_proposals(c)),
+    ),
+    Tool(
+        "propose_task",
+        "Suggest a task to the CEO for review",
+        effect=lambda c, d: _ok(_propose_task(c)),
+    ),
+    Tool(
+        "kaizen",
+        "Continuous improvement: find the bottleneck, propose a fix",
+        effect=lambda c, d: _ok(_kaizen(c)),
+    ),
+    Tool(
+        "draft_social_post",
+        "Draft a post for X or LinkedIn",
+        needs_draft=True,
+        prompt=lambda c: f"Draft one short {_channel(c)} post for {_name(c)}.",
+        schema={
+            "headline": {"type": "str", "required": True, "max_len": 120},
+            "body": {"type": "str", "required": True, "max_len": 500},
+            "hashtags": {"type": "list", "default": []},
+        },
+        effect=lambda c, d: _ok(_social_post(c)),
+    ),
+    Tool(
+        "schedule_post",
+        "Schedule the drafted post",
+        effect=lambda c, d: _ok(f"Post scheduled for +2h on {_channel(c)}"),
+    ),
+    Tool("find_targets", "Find ICP-matching prospects", effect=lambda c, d: _ok(_find_targets(c))),
+    Tool(
+        "send_outreach",
+        "Send a cold email sequence",
+        needs_draft=True,
+        prompt=lambda c: f"Draft a 2-line cold email opener for {_name(c)}.",
+        effect=lambda c, d: _ok(_send_outreach(c, d)),
+    ),
+    Tool("triage_inbox", "Triage the support inbox", effect=lambda c, d: _ok(_triage_inbox(c))),
+    Tool(
+        "scan_replies",
+        "Check the inbox for prospect replies",
+        effect=lambda c, d: _ok(_scan_replies(c)),
+    ),
+    Tool(
+        "draft_support_reply",
+        "Draft a reply to the top ticket",
+        needs_draft=True,
+        prompt=lambda c: f"Draft a one-line support reply for a {_name(c)} user.",
+        effect=lambda c, d: _ok(f"Reply drafted: {d[:110]}"),
+    ),
+    Tool(
+        "review_ad_budget",
+        "Review ad spend and pacing",
+        effect=lambda c, d: _ok(_review_ad_budget(c)),
+    ),
+    Tool(
+        "adjust_bids",
+        "Write ad variants and adjust bids",
+        needs_draft=True,
+        prompt=lambda c: f"Write one ad headline for {_name(c)}.",
+        effect=lambda c, d: _ok(f"Bid variant written: {d[:90]}"),
+    ),
+    Tool(
+        "reconcile_stripe",
+        "Reconcile Stripe cashflow",
+        effect=lambda c, d: _ok(
+            integrations.stripe_reconcile() or "Stripe reconciled: MRR 27 EUR, 3 active subs (mock)"
+        ),
+    ),
+    Tool(
+        "send_financial_transaction",
+        "Pay an invoice / move money",
+        hitl=True,
+        effect=lambda c, d: _ok("Paid infrastructure invoice 12 EUR (mock)"),
+    ),
+    Tool(
+        "review_kpis",
+        "Review KPIs against targets",
+        effect=lambda c, d: _ok("KPIs reviewed: signups flat, conversion 2.1%"),
+    ),
+    Tool(
+        "update_pricing",
+        "Draft a pricing adjustment",
+        needs_draft=True,
+        prompt=lambda c: f"Suggest one pricing tweak for {_name(c)} in a sentence.",
+        effect=lambda c, d: _ok(f"Pricing note: {d[:120]}"),
+    ),
+    Tool(
+        "scan_competitors",
+        "Scan and summarise competitors",
+        needs_draft=True,
+        prompt=lambda c: f"Name one competitor risk for {_name(c)} in a sentence.",
+        effect=lambda c, d: _ok(f"Competitor scan: {d[:120]}"),
+    ),
+    Tool(
+        "scan_signals",
+        "Watch configured sources for buying signals",
+        effect=lambda c, d: _ok(_scan_signals(c)),
+    ),
+    Tool(
+        "generate_code",
+        "Draft a feature or fix",
+        needs_draft=True,
+        prompt=lambda c: f"Describe a small feature for {_name(c)} in one sentence.",
+        effect=lambda c, d: _ok(f"Feature branch drafted: {d[:110]}"),
+    ),
+    Tool(
+        "publish_production_code",
+        "Merge a PR to production",
+        hitl=True,
+        effect=lambda c, d: _ok("Merged PR #42 to production (mock)"),
+    ),
+    Tool(
+        "draft_design_brief",
+        "Draft a visual direction or brief",
+        needs_draft=True,
+        prompt=lambda c: f"Describe a visual direction for {_name(c)} in one sentence.",
+        effect=lambda c, d: _ok(f"Design brief drafted: {d[:120]}"),
+    ),
+    Tool(
+        "produce_mockup",
+        "Produce a landing or ad mockup",
+        effect=lambda c, d: _ok("Mockup produced: landing hero and one ad variant (mock)"),
+    ),
+    Tool(
+        "build_sales_site",
+        "Generate the sales landing page",
+        needs_draft=True,
+        prompt=lambda c: f"Write one punchy sales headline, under 10 words, for {_name(c)}.",
+        effect=lambda c, d: _ok(_build_site(c, d)),
+    ),
+    Tool(
+        "deploy_site",
+        "Publish the sales site to the configured hosts",
+        hitl=True,
+        effect=lambda c, d: _deploy_site(c),
+    ),
 ]
 
 TOOLS: dict[str, Tool] = {t.name: t for t in _ALL}

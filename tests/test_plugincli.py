@@ -6,6 +6,7 @@ failing quietly.
 Everything runs under a temporary CORP_HOME, so no plugin is ever written to the
 developer's real plugin directory.
 """
+
 import json
 
 import pytest
@@ -26,11 +27,19 @@ def _install(home, name="acme-plugin", disabled=False):
     d = home / "plugins" / name
     d.mkdir(parents=True, exist_ok=True)
     (d / "acme_mod.py").write_text("def register(api):\n    pass\n", encoding="utf-8")
-    (d / "corparius_plugin.json").write_text(json.dumps({
-        "name": name, "version": "0.1.0", "api_version": 1,
-        "entrypoint": "acme_mod:register", "kinds": ["tool"],
-        "description": "an example",
-    }), encoding="utf-8")
+    (d / "corparius_plugin.json").write_text(
+        json.dumps(
+            {
+                "name": name,
+                "version": "0.1.0",
+                "api_version": 1,
+                "entrypoint": "acme_mod:register",
+                "kinds": ["tool"],
+                "description": "an example",
+            }
+        ),
+        encoding="utf-8",
+    )
     if disabled:
         (d / ".disabled").write_text("", encoding="utf-8")
     return d
@@ -122,12 +131,15 @@ def test_unverified_url_install_is_refused_without_the_optin(home, capsys):
     assert "UNVERIFIED" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("url", [
-    "file:///etc/passwd",       # urlopen honours this and reads a local file
-    "http://example.invalid/x.tar.gz",
-    "ftp://example.invalid/x.tar.gz",
-    "/tmp/x.tar.gz",            # no scheme at all
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "file:///etc/passwd",  # urlopen honours this and reads a local file
+        "http://example.invalid/x.tar.gz",
+        "ftp://example.invalid/x.tar.gz",
+        "/tmp/x.tar.gz",  # no scheme at all
+    ],
+)
 def test_download_refuses_anything_but_https(home, monkeypatch, url):
     """urlopen happily opens file:// and ftp://, so without a scheme check
     `plugin install --url file:///etc/passwd` reads a local file and hands it to
@@ -142,6 +154,7 @@ def test_download_refuses_an_oversized_archive(home, monkeypatch):
     """The read happens before the sha256 check, so a wrong or hostile URL could
     otherwise stream until the process dies and never reach the verification
     that would have rejected it."""
+
     class _Resp:
         def read(self, n=-1):
             return b"x" * n if n and n > 0 else b"x" * (plugins.MAX_ARCHIVE_BYTES + 1)

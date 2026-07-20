@@ -1,4 +1,5 @@
 """Integrations must stay dormant until configured, so the system runs offline."""
+
 from app import integrations
 
 

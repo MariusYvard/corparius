@@ -6,15 +6,16 @@ Install and run:
     pip install -r requirements-mcp.txt
     python -m app.mcp_server        # stdio transport
 """
+
 from __future__ import annotations
+
 import os
 
+from . import deploy as deploy_mod
+from . import paths, sitegen
+from .cli import _load_company
 from .config import settings
 from .store import Store
-from . import paths
-from .cli import _load_company
-from . import sitegen
-from . import deploy as deploy_mod
 
 
 def _open(company: str):
@@ -24,6 +25,7 @@ def _open(company: str):
 
 def run_company(company: str, ticks: int = 6) -> dict:
     from .orchestrator import Runtime
+
     cfg, store = _open(company)
     return Runtime(settings, store).run(cfg, ticks=ticks, loop=False)
 
@@ -39,11 +41,15 @@ def list_backlog(company: str) -> list:
     return store.list_tasks(cfg["slug"])
 
 
-def decide_task(company: str, task_id: int, action: str = "",
-                title=None, target=None, tool=None, priority=None) -> dict:
+def decide_task(
+    company: str, task_id: int, action: str = "", title=None, target=None, tool=None, priority=None
+) -> dict:
     _, store = _open(company)
-    fields = {k: v for k, v in (("title", title), ("target", target),
-                                ("tool", tool), ("priority", priority)) if v is not None}
+    fields = {
+        k: v
+        for k, v in (("title", title), ("target", target), ("tool", tool), ("priority", priority))
+        if v is not None
+    }
     if fields:
         store.update_task(task_id, **fields)
     if action == "approve":
@@ -61,8 +67,11 @@ def list_pending_approvals(company: str) -> list:
 def decide_approval(company: str, approval_id: str, approve: bool = True, note: str = "") -> dict:
     _, store = _open(company)
     status = "approved" if approve else "rejected"
-    return {"approval": approval_id, "status": status,
-            "found": store.set_approval_status(approval_id, status, note)}
+    return {
+        "approval": approval_id,
+        "status": status,
+        "found": store.set_approval_status(approval_id, status, note),
+    }
 
 
 def build_site(company: str) -> dict:
@@ -82,6 +91,7 @@ def publish_site(company: str) -> dict:
 def build_server():
     """Wrap the functions above as MCP tools. Requires the `mcp` package."""
     from mcp.server.fastmcp import FastMCP
+
     server = FastMCP("corparius")
 
     @server.tool()
@@ -100,11 +110,19 @@ def build_server():
         return list_backlog(company)
 
     @server.tool()
-    def task(company: str, id: int, action: str = "", title: str = "",
-             target: str = "", tool: str = "", priority: int = 0) -> dict:
+    def task(
+        company: str,
+        id: int,
+        action: str = "",
+        title: str = "",
+        target: str = "",
+        tool: str = "",
+        priority: int = 0,
+    ) -> dict:
         """Modify and/or decide a task (CEO authority). action is approve, reject or empty."""
-        return decide_task(company, id, action, title or None, target or None,
-                           tool or None, priority or None)
+        return decide_task(
+            company, id, action, title or None, target or None, tool or None, priority or None
+        )
 
     @server.tool()
     def approvals(company: str) -> list:

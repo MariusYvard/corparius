@@ -1,4 +1,6 @@
 """The sales site must be self-contained and carry the real offer and CTA."""
+from pathlib import Path
+
 from app import sitegen
 
 
@@ -14,7 +16,7 @@ def _company() -> dict:
 def test_build_site_is_self_contained_and_on_offer(tmp_path):
     path = sitegen.build_site(_company(), str(tmp_path))
     assert path.endswith("index.html")
-    html = open(path, encoding="utf-8").read()
+    html = Path(path).read_text(encoding="utf-8")
     assert "<!doctype html>" in html.lower()
     assert "CVBoost" in html
     assert "9 EUR" in html
@@ -25,4 +27,4 @@ def test_build_site_is_self_contained_and_on_offer(tmp_path):
 
 def test_headline_override(tmp_path):
     path = sitegen.build_site(_company(), str(tmp_path), headline="Beat the bots")
-    assert "Beat the bots" in open(path, encoding="utf-8").read()
+    assert "Beat the bots" in Path(path).read_text(encoding="utf-8")

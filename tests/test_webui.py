@@ -27,6 +27,7 @@ def server(tmp_path, monkeypatch):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()
+    srv.server_close()   # release the listening socket, not just the loop
 
 
 def _call(srv, method, path, body=None, headers=None):

@@ -16,6 +16,34 @@ from app import cfg
 
 
 @pytest.fixture(autouse=True)
+def close_stores(monkeypatch):
+    """Close every Store a test opens, wherever it opened it.
+
+    A Store now holds its sqlite connection for its whole life instead of one
+    per call, so a test that constructs one and drops it leaks the handle. On
+    Windows that is not cosmetic: the file stays locked and tmp_path cleanup
+    fails, which is the same lifetime issue the console had. Tracking the class
+    rather than a fixture catches direct `Store(...)` calls too, so no test has
+    to remember. close() is idempotent, so a test that closes its own is fine.
+    """
+    from app import store as store_mod
+    opened = []
+    original_init = store_mod.Store.__init__
+
+    def tracking_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        opened.append(self)
+
+    monkeypatch.setattr(store_mod.Store, "__init__", tracking_init)
+    yield
+    for store in opened:
+        try:
+            store.close()
+        except Exception:   # a test may already have closed or corrupted it
+            pass
+
+
+@pytest.fixture(autouse=True)
 def hermetic_settings(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_LLM_MOCK", "true")
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))

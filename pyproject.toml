@@ -19,17 +19,12 @@ testpaths = ["tests"]
 # -ra surfaces skips and xfails in the summary: a test that quietly stopped
 # running is worse than one that fails.
 addopts = "-ra --strict-markers --strict-config"
-filterwarnings = [
-    # Deprecations become failures: the matrix now spans 3.10 to 3.14, and this
-    # is what turns "removed in the next Python" into a red leg today rather
-    # than a support request after an operator upgrades.
-    "error",
-    # Except unclosed files. Forty-eight tests read with open(...).read() and
-    # leak the handle; each is worth fixing, none is a product bug, and doing it
-    # here would bury the change this config arrived with. Left visible rather
-    # than silenced so the cleanup stays findable.
-    "default::ResourceWarning",
-]
+# Every warning is a failure, ResourceWarning included. The matrix spans 3.10 to
+# 3.14, so this turns "removed in the next Python" into a red leg today; and the
+# close_stores fixture in conftest.py plus Path.read_text in the site tests mean
+# a leaked sqlite handle or file now fails here rather than only breaking
+# tmp_path cleanup on Windows.
+filterwarnings = ["error"]
 
 [tool.ruff]
 line-length = 100          # matches the existing hand-wrapped style

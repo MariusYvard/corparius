@@ -4,15 +4,15 @@ bodies directly before: coverage came incidentally through a full run, so a tool
 could break in a way no test named.
 
 Every tool is driven here through the registry, offline. The mock effects and
-the "return None when unconfigured" contract in app/integrations.py are what
+the "return None when unconfigured" contract in corparius/integrations.py are what
 make that possible without a network or a key.
 """
 
-from app.models import ToolResult
-from app.orchestrator import RunContext
-from app.safety import CircuitBreaker, TokenBudget
-from app.store import Store
-from app.tools import TOOLS
+from corparius.models import ToolResult
+from corparius.orchestrator import RunContext
+from corparius.safety import CircuitBreaker, TokenBudget
+from corparius.store import Store
+from corparius.tools import TOOLS
 
 # The tools the operator must approve by hand. This list is a claim about the
 # product, not an implementation detail: if a tool moves money or touches

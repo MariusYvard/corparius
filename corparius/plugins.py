@@ -9,7 +9,7 @@ loader mutates the existing registries in place, so no core registry is restruct
 Safety, in line with the project's ethos (local-first, auditable, no telemetry):
 
   * Off by default. Nothing loads unless CORP_PLUGINS_ENABLED is true. The loader
-    is never called at `import app`; only the real entry points (the CLI, the
+    is never called at `import corparius`; only the real entry points (the CLI, the
     console, the frozen launcher) call load(), so the test suite and plain imports
     stay plugin-free and deterministic.
   * Curated by default. A plugin is "verified" when its name is in the in-repo
@@ -141,7 +141,7 @@ class PluginManifest:
 
 
 def plugins_dir() -> Path:
-    """Writable drop-in directory (per-OS home; see app/paths.py)."""
+    """Writable drop-in directory (per-OS home; see corparius/paths.py)."""
     return paths.user_home() / "plugins"
 
 

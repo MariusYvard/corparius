@@ -18,7 +18,7 @@ Design:
     file or a backup, where the passphrase (kept in .env / the environment, not
     in the store) is the secret that matters.
 
-CORP_SECRET_KEY is a bootstrap key (app/cfg.BOOTSTRAP): it resolves from the
+CORP_SECRET_KEY is a bootstrap key (corparius/cfg.BOOTSTRAP): it resolves from the
 environment or .env, never from the store it would need to decrypt.
 """
 
@@ -40,7 +40,7 @@ def is_encrypted(value: str) -> bool:
 
 
 def _passphrase() -> str:
-    # Lazy import: app/cfg imports this module, so importing it at module level
+    # Lazy import: corparius/cfg imports this module, so importing it at module level
     # would be circular. By call time cfg is loaded.
     from . import cfg
 

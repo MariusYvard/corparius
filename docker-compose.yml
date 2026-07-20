@@ -6,11 +6,11 @@ services:
   console:
     build: .
     container_name: corparius-console
-    command: ["python", "-m", "app.cli", "ui", "--host", "0.0.0.0", "--port", "8600"]
+    command: ["python", "-m", "corparius.cli", "ui", "--host", "0.0.0.0", "--port", "8600"]
     # No env_file here on purpose. `env_file` injects every line of .env into the
     # real process environment, which is the highest-precedence layer, so it
     # would outrank everything saved from the console and leave the settings
-    # screen read-only. The .env mount below is read directly by app/cfg.py as
+    # screen read-only. The .env mount below is read directly by corparius/cfg.py as
     # the lower layer instead. Entries under `environment:` still win, and the
     # console labels them as set by the environment.
     environment:
@@ -19,7 +19,7 @@ services:
       - "127.0.0.1:8600:8600"   # localhost only; put a reverse proxy in front to expose it
     volumes:
       - ./companies:/app/companies
-      - ./.env:/app/.env          # read as the lowest layer; see app/cfg.py
+      - ./.env:/app/.env          # read as the lowest layer; see corparius/cfg.py
       - corparius_data:/app/data
     depends_on:
       - ollama
@@ -29,12 +29,12 @@ services:
     build: .
     container_name: corparius-loop
     profiles: ["loop"]
-    command: ["python", "-m", "app.cli", "run", "--company", "example", "--loop"]
+    command: ["python", "-m", "corparius.cli", "run", "--company", "example", "--loop"]
     environment:
       CORP_OLLAMA_URL: http://ollama:11434
     volumes:
       - ./companies:/app/companies
-      - ./.env:/app/.env          # same layering as the console; see app/cfg.py
+      - ./.env:/app/.env          # same layering as the console; see corparius/cfg.py
       - corparius_data:/app/data
     depends_on:
       - ollama

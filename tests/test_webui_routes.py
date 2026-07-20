@@ -9,7 +9,7 @@ changing it fails here.
 
 import pytest
 
-from app import webui
+from corparius import webui
 
 # Every route that answers without a token. Adding to this list is a decision
 # about what the console exposes, so it has to be made here, in a diff a

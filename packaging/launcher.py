@@ -3,7 +3,7 @@
 
 Unlike start.py it does not create a virtualenv or install anything: the
 dependencies are baked into the binary. It prepares the writable home (a per-OS
-application-data folder, resolved by app/paths.py), seeds .env and the example
+application-data folder, resolved by corparius/paths.py), seeds .env and the example
 company on first run, runs the doctor, then serves the operator console and
 opens the browser. From the user's point of view it behaves exactly like
 `python start.py`:
@@ -24,8 +24,8 @@ def _log(msg: str) -> None:
 
 
 def _prepare_home() -> None:
-    from app import company as company_mod
-    from app import paths
+    from corparius import company as company_mod
+    from corparius import paths
 
     home = paths.user_home()
     home.mkdir(parents=True, exist_ok=True)
@@ -41,7 +41,7 @@ def _prepare_home() -> None:
 
 def _announce_update() -> None:
     """Only calls out when the operator has turned CORP_UPDATE_CHECK on."""
-    from app import update_check
+    from corparius import update_check
 
     info = update_check.check()
     if info.get("enabled") and info.get("update_available"):
@@ -53,9 +53,9 @@ def _announce_update() -> None:
 
 def main() -> int:
     _prepare_home()
-    from app.config import Settings
-    from app.doctor import main as doctor_main
-    from app.webui import serve
+    from corparius.config import Settings
+    from corparius.doctor import main as doctor_main
+    from corparius.webui import serve
 
     _log("running the doctor (see the Settings tab for details any time)")
     doctor_main(quiet=True)

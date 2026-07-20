@@ -1,8 +1,8 @@
 """Deployment must never depend on one host: the chain falls back to a local,
 self-hosted target that is always available."""
 
-from app import deploy
-from app.deploy import LocalDirProvider
+from corparius import deploy
+from corparius.deploy import LocalDirProvider
 
 
 def test_local_provider_is_always_available():

@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.safety import (
+from corparius.safety import (
     BudgetExceeded,
     CircuitBreaker,
     LoopGuard,

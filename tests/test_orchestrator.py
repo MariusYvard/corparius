@@ -1,10 +1,10 @@
 """A simulated day must run every enabled agent, record its work, and hold the
 money-moving tool at the human gate until it is approved."""
 
-from app.config import Settings
-from app.models import AgentRole
-from app.orchestrator import Runtime, due_roles
-from app.store import Store
+from corparius.config import Settings
+from corparius.models import AgentRole
+from corparius.orchestrator import Runtime, due_roles
+from corparius.store import Store
 
 
 def _cfg() -> dict:
@@ -86,7 +86,7 @@ def test_dead_llm_stops_the_run_cleanly(tmp_path, monkeypatch):
     run instead of crashing without a trace."""
     import requests as _requests
 
-    from app.orchestrator import Runtime
+    from corparius.orchestrator import Runtime
 
     s = _settings(tmp_path)
     s.llm_mock = False

@@ -1,7 +1,7 @@
 """Lead research must fall back cleanly and never depend on one source."""
 
-from app import leadsource
-from app.leadsource import LocalDatasetSource
+from corparius import leadsource
+from corparius.leadsource import LocalDatasetSource
 
 
 def test_local_source_is_always_available():

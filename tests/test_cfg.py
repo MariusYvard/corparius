@@ -4,9 +4,9 @@ must be visible as such, never silently ignored."""
 
 import pytest
 
-from app import cfg
-from app.config import Settings
-from app.store import Store
+from corparius import cfg
+from corparius.config import Settings
+from corparius.store import Store
 
 
 @pytest.fixture()
@@ -79,7 +79,7 @@ def test_missing_store_and_missing_dotenv_are_just_empty_layers(tmp_path, monkey
     cfg.set_dotenv_path(tmp_path / "absent.env")
     cfg.invalidate()
     assert cfg.get("CORP_HARD_MODEL", "fallback") == "fallback"
-    # Reading configuration must not create the data directory: app.config
+    # Reading configuration must not create the data directory: corparius.config
     # builds a Settings() at import time.
     assert not (tmp_path / "nothing-here").exists()
 

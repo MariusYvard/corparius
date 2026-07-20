@@ -8,10 +8,10 @@ import threading
 import pytest
 import yaml
 
-from app import cfg, webui
-from app import company as company_mod
-from app.config import Settings
-from app.store import Store
+from corparius import cfg, webui
+from corparius import company as company_mod
+from corparius.config import Settings
+from corparius.store import Store
 
 from .test_webui import _call
 
@@ -43,7 +43,7 @@ def test_a_template_prefills_the_new_company(server):
         server, "POST", "/api/companies", {"name": "Helios Tools", "template": "saas", "lang": "en"}
     )
     assert status == 200 and d["ok"]
-    from app import company as company_mod
+    from corparius import company as company_mod
 
     cfg = company_mod.load(company_mod.path_for(d["slug"]), d["slug"])
     assert cfg["offer"]["price_eur"] == 29 and cfg["offer"]["billing"] == "stripe"
@@ -210,7 +210,7 @@ def test_site_takes_a_headline_and_deploy_says_what_happened(server, monkeypatch
         server, "POST", "/api/site", {"company": "acme", "headline": "Widgets that survive Monday"}
     )
     assert status == 200 and d["ok"]
-    from app import paths
+    from corparius import paths
 
     html = paths.site_index(server.RequestHandlerClass.state.settings.data_path, "acme").read_text(
         encoding="utf-8"

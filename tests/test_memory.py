@@ -1,10 +1,10 @@
 """Company memory: yesterday's summary survives into the next run, and a loop
 that runs for days actually reads the summaries it writes."""
 
-from app import orchestrator
-from app.config import Settings
-from app.orchestrator import Runtime
-from app.store import Store
+from corparius import orchestrator
+from corparius.config import Settings
+from corparius.orchestrator import Runtime
+from corparius.store import Store
 
 
 def _settings(tmp) -> Settings:

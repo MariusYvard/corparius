@@ -3,7 +3,7 @@ the project's rule is no unconsented network call in the shipped product."""
 
 import pytest
 
-from app import update_check
+from corparius import update_check
 
 
 def _boom(*a, **k):

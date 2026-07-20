@@ -5,7 +5,7 @@ Source of truth for how corparius is packaged and distributed.
 ## Standalone binaries
 
 - `launcher.py` — the entry point of the frozen build (prepares the per-OS home,
-  seeds the example company, serves the console). See `app/paths.py`.
+  seeds the example company, serves the console). See `corparius/paths.py`.
 - `corparius.spec` — the PyInstaller spec. Build locally with:
 
   ```bash

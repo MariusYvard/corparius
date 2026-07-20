@@ -1,4 +1,4 @@
-"""Runtime configuration. Every field resolves through app/cfg.py, which reads
+"""Runtime configuration. Every field resolves through corparius/cfg.py, which reads
 the process environment first, then the settings saved from the console, then
 the .env file, then the default written here.
 
@@ -62,7 +62,7 @@ class Settings:
     # Fallback chain: remote steps tried in order when a remote call fails,
     # e.g. "groq:llama-3.3-70b-versatile,cerebras:gpt-oss-120b". Local
     # (CORP_LOCAL_MODEL) always ends the chain. Free-provider API keys are
-    # resolved by app/llm.py through the same layers (one variable per
+    # resolved by corparius/llm.py through the same layers (one variable per
     # provider, see OPENAI_COMPAT_PROVIDERS and .env.example).
     llm_fallback: list[str] = field(default_factory=lambda: cfg.get_csv("CORP_LLM_FALLBACK"))
     llm_mock: bool = field(default_factory=lambda: cfg.get_bool("CORP_LLM_MOCK", "true"))
@@ -81,7 +81,7 @@ class Settings:
         default_factory=lambda: cfg.get_int("CORP_MAX_IDENTICAL_TOOL_CALLS", 2)
     )
 
-    # Operator console (app/webui.py). Binds to localhost; set CORP_UI_TOKEN
+    # Operator console (corparius/webui.py). Binds to localhost; set CORP_UI_TOKEN
     # to require the X-Corp-Token header on every mutating call. These are
     # bootstrap keys (cfg.BOOTSTRAP): the console writes them to .env, and they
     # only take effect on restart.

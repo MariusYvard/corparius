@@ -16,7 +16,7 @@ En présence de CORP_SMTP_HOST et CORP_OUTREACH_TEST_TO, l'outil send_outreach e
 
 ## Ajouter une intégration
 
-Le motif tient en une fonction dans app/integrations.py qui renvoie une chaîne de résultat si la configuration existe, sinon None. L'effet de l'outil s'écrit alors "résultat réel sinon repli mock". Ce motif s'applique tel quel à Lemlist, HubSpot, Pipedrive, Meta Ads ou à la création d'une Pull Request GitHub. Les actions sensibles restent soumises à la validation humaine, quel que soit le backend.
+Le motif tient en une fonction dans corparius/integrations.py qui renvoie une chaîne de résultat si la configuration existe, sinon None. L'effet de l'outil s'écrit alors "résultat réel sinon repli mock". Ce motif s'applique tel quel à Lemlist, HubSpot, Pipedrive, Meta Ads ou à la création d'une Pull Request GitHub. Les actions sensibles restent soumises à la validation humaine, quel que soit le backend.
 
 ## Sources
 

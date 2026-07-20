@@ -108,7 +108,7 @@ class Runtime:
                             "system",
                             "llm_unreachable",
                             {"agent": spec.role.value},
-                            f"run stopped: {exc}. Check `python -m app.cli doctor`.",
+                            f"run stopped: {exc}. Check `python -m corparius.cli doctor`.",
                             False,
                         )
                         frozen = True

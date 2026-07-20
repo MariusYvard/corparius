@@ -1,13 +1,8 @@
-# Tool configuration only, on purpose.
-#
-# There is no [project] or [build-system] table here, so this file does not make
-# corparius pip-installable. Making it installable means renaming app/ to
-# corparius/: the importable package is currently `app`, and `pip install .`
-# would drop a top-level `app` module into site-packages, where it is close to
-# guaranteed to collide with something else. That rename touches every test, the
-# PyInstaller spec, the four launchers and every doc that says `python -m
-# app.cli`, so it belongs in its own change rather than tangled up with the
-# tooling it would otherwise block.
+# Tool configuration. The package is `corparius` (renamed from `app`, so a
+# `pip install .` would no longer drop a colliding top-level `app` into
+# site-packages). [project]/[build-system] are still absent - making it a
+# published, versioned distribution is a separate decision from making it
+# importable under its own name, which is what the rename bought.
 
 [tool.pytest.ini_options]
 # tests/ only. A bare `pytest` from the root used to also collect
@@ -64,18 +59,17 @@ warn_unused_configs = true
 warn_redundant_casts = true
 no_implicit_optional = true
 
-# All of app/ now passes mypy at the default level (CI runs `mypy app/`); the
-# nine annotation gaps that used to live in llm, mailbox, plugins, store, tools
-# and webui are fixed. The next ratchet is strictness: these leaf modules also
-# require every def to be annotated. Add a module here once it is fully typed.
+# All of corparius/ passes mypy at the default level (CI runs `mypy corparius/`).
+# The next ratchet is strictness: these leaf modules also require every def to be
+# annotated. Add a module here once it is fully typed.
 [[tool.mypy.overrides]]
-module = ["app.models", "app.paths", "app.settings_spec"]
+module = ["corparius.models", "corparius.paths", "corparius.settings_spec"]
 disallow_untyped_defs = true
 
 [tool.coverage.run]
-source = ["app"]
+source = ["corparius"]
 branch = true
-omit = ["app/mcp_server.py"]   # optional extra, needs the mcp package
+omit = ["corparius/mcp_server.py"]   # optional extra, needs the mcp package
 
 [tool.coverage.report]
 exclude_also = [

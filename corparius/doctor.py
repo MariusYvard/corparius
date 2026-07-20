@@ -336,7 +336,7 @@ def main(quiet: bool = False) -> int:
     if not quiet:
         print(
             {
-                "ok": "\nAll green. Run the console: python -m app.cli ui",
+                "ok": "\nAll green. Run the console: python -m corparius.cli ui",
                 "warn": "\nUsable with warnings; the messages above say what to improve.",
                 "fail": "\nSomething blocking needs a fix; see the FAIL lines above.",
             }[worst]

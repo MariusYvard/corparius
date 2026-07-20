@@ -32,7 +32,7 @@ import os
 import sys
 from pathlib import Path
 
-# The repository root when running from source (app/paths.py -> app -> root).
+# The repository root when running from source (corparius/paths.py -> corparius -> root).
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -88,18 +88,18 @@ def companies_dir() -> Path:
 
 
 def dotenv_file() -> Path:
-    """The .env the console writes and app/cfg.py reads as its lowest layer."""
+    """The .env the console writes and corparius/cfg.py reads as its lowest layer."""
     return user_home() / ".env"
 
 
 def page_file() -> Path:
     """The single-file operator console HTML (a shipped resource)."""
-    return resource_dir() / "app" / "webui.html"
+    return resource_dir() / "corparius" / "webui.html"
 
 
 def example_company_src() -> Path:
     """The bundled example company, copied into a fresh writable companies dir
-    on first run (see app/company.seed_examples)."""
+    on first run (see corparius/company.seed_examples)."""
     return resource_dir() / "companies" / "example"
 
 

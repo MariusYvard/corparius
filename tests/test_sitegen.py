@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from app import sitegen
+from corparius import sitegen
 
 
 def _company() -> dict:

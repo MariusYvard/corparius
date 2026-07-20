@@ -1,7 +1,7 @@
 """The doctor must diagnose without crashing in every mode and say what to do."""
 
-from app.config import Settings
-from app.doctor import run_checks
+from corparius.config import Settings
+from corparius.doctor import run_checks
 
 
 def _s(tmp_path, **kw):

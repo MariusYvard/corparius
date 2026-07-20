@@ -1,12 +1,12 @@
 # Console opérateur
 
-La console web (app/webui.py, app/webui.html) sert une page unique sur http://127.0.0.1:8600 via la bibliothèque standard, sans dépendance ni étape de build. Elle lit le même store SQLite que le CLI et pilote le même Runtime.
+La console web (corparius/webui.py, corparius/webui.html) sert une page unique sur http://127.0.0.1:8600 via la bibliothèque standard, sans dépendance ni étape de build. Elle lit le même store SQLite que le CLI et pilote le même Runtime.
 
 ## Lancement
 
 ```bash
-python -m app.cli ui                # 127.0.0.1:8600
-python -m app.cli ui --port 9000    # port choisi
+python -m corparius.cli ui                # 127.0.0.1:8600
+python -m corparius.cli ui --port 9000    # port choisi
 CORP_UI_HOST et CORP_UI_PORT font la même chose depuis .env
 ```
 
@@ -18,7 +18,7 @@ Overview donne le pouls de la company. « En attente de vous » mène la ligne e
 
 La console écrit tout ce que corparius lit. L'éditeur de société couvre chaque champ de `company.yaml` (offre, prix, lien de paiement, ICP, canaux, agents, budgets, outils sous approbation) ; enregistrer réécrit le fichier depuis ces champs, donc les commentaires ajoutés à la main ne survivent pas. La suppression exige de taper le slug et déplace la config dans `companies/.trash/` : rien n'est détruit. Un fichier cassé s'ouvre quand même, avec ses problèmes nommés, plutôt que de renvoyer une erreur qui laisserait l'opérateur sans moyen de le réparer.
 
-L'onglet Réglages couvre le reste, groupe par groupe, piloté par le registre `app/settings_spec.py` : ajouter un réglage est une ligne, pas une modification du HTML. Chaque champ affiche la couche qui lui répond et se met en lecture seule quand l'environnement du processus le fixe (voir la table de précédence du README) — un réglage n'est jamais ignoré en silence.
+L'onglet Réglages couvre le reste, groupe par groupe, piloté par le registre `corparius/settings_spec.py` : ajouter un réglage est une ligne, pas une modification du HTML. Chaque champ affiche la couche qui lui répond et se met en lecture seule quand l'environnement du processus le fixe (voir la table de précédence du README) — un réglage n'est jamais ignoré en silence.
 
 ## Compte mail
 
@@ -32,7 +32,7 @@ Le logo corparius (organigramme pixel-art, un carré CEO au-dessus de trois agen
 
 ## Première utilisation et diagnostics
 
-Sans company existante, la console affiche un formulaire de création (nom et offre suffisent ; agents et budget ont des valeurs par défaut). L'option "+ Nouvelle société" du sélecteur rouvre ce formulaire ensuite. L'onglet Réglages embarque le diagnostic (équivalent de `python -m app.cli doctor`) : chaque vérification indique son niveau et l'action corrective.
+Sans company existante, la console affiche un formulaire de création (nom et offre suffisent ; agents et budget ont des valeurs par défaut). L'option "+ Nouvelle société" du sélecteur rouvre ce formulaire ensuite. L'onglet Réglages embarque le diagnostic (équivalent de `python -m corparius.cli doctor`) : chaque vérification indique son niveau et l'action corrective.
 
 ## Site et paiements
 

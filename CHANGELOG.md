@@ -81,7 +81,7 @@
   conversation. Intent classification is provider-agnostic via the harness.
 - **Diagnosis strings are bilingual.** Testing mail, Claude, a provider or Ollama
   in a French console now answers in French; the CLI stays English. One
-  `app/i18n.pick(lang, en, fr)` keeps both strings at the call site.
+  `corparius/i18n.pick(lang, en, fr)` keeps both strings at the call site.
 - **A proactive diagnostics banner.** If the doctor reports a failure on load,
   the console surfaces it with a link to the fix, instead of leaving it unseen in
   a tab. Dismissible per session.
@@ -95,7 +95,7 @@
   newsletter — each prefills the ICP, channels, price and the right agents, so a
   newcomer edits a starting point instead of facing a blank ICP and price. The
   typed name and product still win over the template's examples. Blank is still
-  an option. Templates live in `app/company.py`, one source for the console.
+  an option. Templates live in `corparius/company.py`, one source for the console.
 
 ## Unreleased — a guided first run
 
@@ -115,7 +115,7 @@
 
 ### Same structure, whatever the model
 
-`app/structured.py` is a provider-agnostic harness: ask ten models to draft a
+`corparius/structured.py` is a provider-agnostic harness: ask ten models to draft a
 post and you get ten shapes (prose, JSON, JSON in a fence, a preamble, a
 refusal); the harness returns one validated dict every time. It works at the
 text level (instruct, extract, validate, repair once, then a deterministic
@@ -183,7 +183,7 @@ now. See `tests/test_cfg.py` for the layering the suite asserts instead.
 
 ### Settings
 
-- `app/cfg.py`: one resolver, four layers, highest wins — process environment,
+- `corparius/cfg.py`: one resolver, four layers, highest wins — process environment,
   then settings saved from the console, then `.env`, then the default in the
   code. `.env` is deliberately not loaded into `os.environ`: that would outrank
   the console and silently ignore what the operator just saved.
@@ -191,7 +191,7 @@ now. See `tests/test_cfg.py` for the layering the suite asserts instead.
   at class-definition time, so a second instance handed back the values the
   process started with and every console edit looked inert. `_fresh_settings()`
   now does what its docstring always claimed.
-- A settings screen driven by `app/settings_spec.py`: adding a setting is one
+- A settings screen driven by `corparius/settings_spec.py`: adding a setting is one
   row, not an HTML change. Each field shows which layer answers for it and goes
   read-only when the process environment pins it. Nothing is ignored in silence.
 - Secrets are write-only and stored in the clear in `data/corparius.sqlite`, as
@@ -203,7 +203,7 @@ now. See `tests/test_cfg.py` for the layering the suite asserts instead.
 
 ### Company
 
-- `app/company.py`: one loader, one validator, one atomic writer, shared by the
+- `corparius/company.py`: one loader, one validator, one atomic writer, shared by the
   CLI, the console and the MCP server. An empty `company.yaml` raised
   `AttributeError` from inside `setdefault(None)`; it now opens for repair with
   its problems named.
@@ -225,7 +225,7 @@ now. See `tests/test_cfg.py` for the layering the suite asserts instead.
   implicit TLS — and 465 is what Gmail, Fastmail and Infomaniak document. It
   failed with an error no operator could read.
 - Diagnostics name the fix, not the protocol.
-- `app/mailbox.py`: IMAP reading, read-only. corparius never marks a message
+- `corparius/mailbox.py`: IMAP reading, read-only. corparius never marks a message
   seen, moves it or deletes it. `triage_inbox` returned a fixed "3 support,
   1 sales, 0 urgent" for every company, configured or not; it reads now.
 - New `scan_replies` tool and an `outreach` table: the company knows which

@@ -4,8 +4,8 @@ the store and the resolver transparently."""
 
 import pytest
 
-from app import cfg, secretbox
-from app.store import Store
+from corparius import cfg, secretbox
+from corparius.store import Store
 
 crypto = pytest.importorskip("cryptography")
 

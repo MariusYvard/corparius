@@ -7,8 +7,8 @@ behavior while a frozen build redirects writable state to a per-OS directory."""
 import sys
 from pathlib import Path
 
-from app import company as company_mod
-from app import paths
+from corparius import company as company_mod
+from corparius import paths
 
 REPO_ROOT = Path(paths.__file__).resolve().parent.parent
 
@@ -22,7 +22,7 @@ def test_source_mode_resolves_to_repo_root():
     assert paths.resource_dir() == REPO_ROOT
     assert paths.companies_dir() == REPO_ROOT / "companies"
     assert paths.dotenv_file() == REPO_ROOT / ".env"
-    assert paths.page_file() == REPO_ROOT / "app" / "webui.html"
+    assert paths.page_file() == REPO_ROOT / "corparius" / "webui.html"
     assert paths.example_company_src() == REPO_ROOT / "companies" / "example"
 
 

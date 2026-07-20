@@ -8,9 +8,9 @@ from http.client import HTTPConnection
 
 import pytest
 
-from app import cfg, webui
-from app.config import Settings
-from app.models import ApprovalRequest
+from corparius import cfg, webui
+from corparius.config import Settings
+from corparius.models import ApprovalRequest
 
 
 @pytest.fixture()
@@ -124,7 +124,7 @@ def test_providers_never_leak_keys_and_persist_env(server, monkeypatch):
     assert "gsk_secret_value" not in json.dumps(data)
     # Keys are stored in the settings table, not in .env and not in os.environ:
     # .env is the layer below, and writing the process environment would make a
-    # console value outrank every later edit. See app/cfg.py.
+    # console value outrank every later edit. See corparius/cfg.py.
     status, data = _call(
         server, "POST", "/api/providers", {"values": {"CEREBRAS_API_KEY": "csk_new"}}
     )
@@ -211,9 +211,9 @@ def test_doctor_endpoint_reports_checks(server):
 
 
 def test_company_wizard_creates_and_lists(server, tmp_path, monkeypatch):
-    # app/company.py owns where a company lives now, so that the CLI, the console
+    # corparius/company.py owns where a company lives now, so that the CLI, the console
     # and the MCP server cannot disagree about it.
-    import app.company as company_mod
+    import corparius.company as company_mod
 
     monkeypatch.setattr(company_mod, "ROOT", tmp_path)
     (tmp_path / "companies").mkdir()
@@ -277,7 +277,7 @@ def test_payments_mock_when_no_key(server, monkeypatch):
 def test_unexpected_error_is_humanized_not_a_traceback(server, monkeypatch):
     # Force an unexpected failure inside a handler and confirm the operator gets a
     # sentence, not str(exc) or a traceback. The detail stays in the server log.
-    import app.webui as webui_mod
+    import corparius.webui as webui_mod
 
     def boom(*a, **k):
         raise RuntimeError("secret internal detail xyzzy")

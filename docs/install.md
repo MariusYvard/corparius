@@ -113,7 +113,7 @@ fichier comme un mot de passe. Le doctor le rappelle et vérifie les permissions
 Supprimez le binaire (ou `corparius.app`). Pour tout effacer, supprimez aussi le
 dossier de données de votre système (voir le tableau ci-dessus) — il contient vos
 sociétés et vos clés, donc ne le faites qu'à dessein. Sauvegardez d'abord si un
-doute subsiste (console → Sauvegardes, ou `python -m app.cli backup` depuis les
+doute subsiste (console → Sauvegardes, ou `python -m corparius.cli backup` depuis les
 sources).
 
 ## Le port est déjà pris

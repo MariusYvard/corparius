@@ -4,7 +4,7 @@ testable without the optional `mcp` dependency; the FastMCP wrapper is thin.
 
 Install and run:
     pip install -r requirements-mcp.txt
-    python -m app.mcp_server        # stdio transport
+    python -m corparius.mcp_server        # stdio transport
 """
 
 from __future__ import annotations

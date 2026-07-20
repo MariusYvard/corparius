@@ -3,9 +3,9 @@ executor (it receives a RunContext, not a raw company dict)."""
 
 import os
 
-from app.config import Settings
-from app.orchestrator import Runtime
-from app.store import Store
+from corparius.config import Settings
+from corparius.orchestrator import Runtime
+from corparius.store import Store
 
 
 def _settings(tmp) -> Settings:

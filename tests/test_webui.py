@@ -133,16 +133,34 @@ def test_saved_key_survives_a_restart_and_env_still_wins(server, tmp_path, monke
     assert cfg.source("MISTRAL_API_KEY") == "env"
 
 
-def test_token_guards_mutations(server, monkeypatch):
+def test_token_guards_reads_and_mutations(server, monkeypatch):
+    """Reads used to stay open even with a token set. That was defensible while
+    nothing but localhost could reach the port, but setting a token is the
+    operator declaring the console reachable by someone they do not trust - and
+    at that point /api/overview and /api/settings leaking company data, saved
+    provider names and filesystem paths is not a defensible default."""
     monkeypatch.setenv("CORP_UI_TOKEN", "s3cret")
     status, data = _call(server, "POST", "/api/tasks", {"id": 1, "decision": "approved"})
     assert status == 401
     status, _ = _call(server, "GET", "/api/overview?company=example")
-    assert status == 200  # reads stay open on localhost
+    assert status == 401
+    status, _ = _call(server, "GET", "/api/overview?company=example",
+                      headers={"X-Corp-Token": "s3cret"})
+    assert status == 200
     status, data = _call(server, "POST", "/api/chat",
                          {"company": "example", "message": "hi"},
                          headers={"X-Corp-Token": "s3cret"})
     assert status == 200 and data["ok"]
+
+
+def test_reads_stay_open_when_no_token_is_configured(server):
+    """The zero-config first run is untouched: with no CORP_UI_TOKEN there is
+    no prompt, no login screen, and nothing to configure before the console
+    works. The conftest fixture clears the variable, so this is that case."""
+    status, _ = _call(server, "GET", "/api/overview?company=example")
+    assert status == 200
+    status, _ = _call(server, "POST", "/api/chat", {"company": "example", "message": "hi"})
+    assert status == 200
 
 
 def test_ceo_chat_answers_offline_in_mock_mode(server):

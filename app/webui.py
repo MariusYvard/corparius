@@ -11,6 +11,7 @@ that must be readable before the store opens; see app/cfg.py for the precedence.
 Secrets are write-only: the API only ever reports whether one is set.
 """
 from __future__ import annotations
+import hmac
 import json
 import logging
 import os
@@ -55,6 +56,23 @@ ALLOWED_VARS = settings_spec.WRITABLE
 _SECRET_VARS = settings_spec.SECRETS
 
 _CHAT_LIMIT = 30  # turns kept per company, in-process only
+
+# The largest body the console accepts. The biggest legitimate one is a company
+# YAML or a settings batch, orders of magnitude under this.
+MAX_BODY = 1 << 20
+
+_LOOPBACK = {"127.0.0.1", "localhost", "::1", "0.0.0.0", ""}
+
+
+class _RequestRefused(Exception):
+    """Refuse a request before any handler sees it, with the status to send.
+    Raised from body parsing, where returning a value would mean having already
+    read the body we are refusing to read."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+        self.message = message
 
 
 def _fresh_settings() -> Settings:
@@ -982,7 +1000,27 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _json_body(self) -> dict:
-        length = int(self.headers.get("Content-Length") or 0)
+        # Chunked bodies are not decoded by http.server, so Content-Length is
+        # absent and the ceiling below would be trivially bypassable. The page
+        # never sends chunked; refusing is safer than reading an unbounded body.
+        if "chunked" in self.headers.get("Transfer-Encoding", "").lower():
+            raise _RequestRefused(411, "chunked bodies are not accepted")
+        raw = self.headers.get("Content-Length") or "0"
+        try:
+            length = int(raw)
+        except ValueError:
+            # Attacker-controlled: int() used to raise inside the handler and
+            # surface as a 500 rather than a 400.
+            raise _RequestRefused(400, "malformed Content-Length") from None
+        if length < 0:
+            raise _RequestRefused(400, "malformed Content-Length")
+        if length > MAX_BODY:
+            # Refused without reading, which deliberately breaks the
+            # read-before-refuse rule documented in _dispatch. That rule exists
+            # so the page reliably sees a 401; it does not need to hold for a
+            # client announcing four gigabytes, and honouring it there is the
+            # denial of service. Do not "fix" this back.
+            raise _RequestRefused(413, f"body larger than {MAX_BODY} bytes")
         if not length:
             return {}
         try:
@@ -992,31 +1030,112 @@ class Handler(BaseHTTPRequestHandler):
 
     def _authorized(self) -> bool:
         token = cfg.get("CORP_UI_TOKEN", "").strip()
-        return not token or self.headers.get("X-Corp-Token", "") == token
+        if not token:
+            return True   # no token configured: the zero-config local default
+        supplied = self.headers.get("X-Corp-Token", "")
+        # compare_digest wants two byte strings and raises on non-ASCII str.
+        return hmac.compare_digest(token.encode("utf-8"), supplied.encode("utf-8", "replace"))
+
+    def _host_allowed(self) -> bool:
+        """Reject a request whose Host is not one this console answers to.
+
+        This is the DNS-rebinding defence, and it is a different check from the
+        Origin one below. If evil.com rebinds its A record to 127.0.0.1, the
+        browser treats the request as same-origin and sends a matching Origin,
+        so the Origin check passes. What does not match is the console's own
+        identity: the request still arrives with Host: evil.com.
+        """
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+        allowed = {h.strip().lower() for h in
+                   cfg.get("CORP_UI_ALLOWED_HOSTS", "").split(",") if h.strip()}
+        if allowed:
+            return host in allowed
+        bind = _fresh_settings().ui_host
+        if bind not in _LOOPBACK:
+            # Bound off-loopback means Docker or a reverse proxy, where the
+            # operator's real hostname is unknown to us. A strict default would
+            # break every existing deployment on upgrade, so permit and let
+            # CORP_UI_ALLOWED_HOSTS narrow it. doctor already fails this case
+            # when no token is set.
+            return True
+        return host in _LOOPBACK or not host
+
+    def _same_origin(self) -> bool:
+        """Reject a cross-site write.
+
+        Three tiers, in order. Both headers are on the browser's forbidden list,
+        so a page on evil.com cannot set or spoof either one.
+
+        1. Sec-Fetch-Site, which current browsers always send. `none` is a
+           bookmark or the address bar; `same-origin` is our own page.
+        2. Origin, compared against the Host we were reached on.
+        3. Neither present: not a browser. Allowed - this is what keeps curl,
+           the CI smoke job, the test suite's HTTPConnection and the MCP server
+           working with no configuration. The token check still applies to them
+           independently.
+
+        Tier 1 is also what blocks a plain <form> POST from a malicious page -
+        the classic no-JS CSRF - without a CSRF token, a cookie, or a login
+        screen, which the console deliberately refuses to be.
+        """
+        site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if site:
+            return site in ("same-origin", "none")
+        origin = (self.headers.get("Origin") or "").strip()
+        if not origin:
+            return True
+        parsed = urlparse(origin)
+        if not parsed.netloc:
+            return False   # "null" origin: a sandboxed iframe or a file:// page
+        return parsed.netloc.lower() == (self.headers.get("Host") or "").strip().lower()
 
     def _dispatch(self, method: str) -> None:
         url = urlparse(self.path)
         query = {k: v[0] for k, v in parse_qs(url.query).items()}
-        # POST carries its parameters in the body; GET has none to read. The
-        # body is read before anything is decided, even when we are about to
-        # refuse: closing the connection on an unread body makes the client see
-        # a reset instead of our 401, and the page needs the 401 to know it
-        # should ask for a token.
-        body = self._json_body() if method == "POST" else {}
-        source = body if method == "POST" else query
-        lang = str(source.get("lang", ""))
+        lang = ""
         try:
-            if method == "POST" and not self._authorized():
-                self._send(401, {"ok": False, "error": "missing or wrong X-Corp-Token"})
+            # Host first, on every request including GET: it costs nothing and
+            # a rebound name should not reach a handler at all.
+            if not self._host_allowed():
+                log.warning("refused Host %r (set CORP_UI_ALLOWED_HOSTS to allow it)",
+                            self.headers.get("Host"))
+                self._send(403, {"ok": False, "error":
+                                 "Host not allowed. If you reach this console through a "
+                                 "proxy or another name, list it in CORP_UI_ALLOWED_HOSTS "
+                                 "(comma separated) and restart."})
                 return
+            # POST carries its parameters in the body; GET has none to read. The
+            # body is read before auth is decided, even when we are about to
+            # refuse: closing the connection on an unread body makes the client
+            # see a reset instead of our 401, and the page needs the 401 to know
+            # it should ask for a token.
+            body = self._json_body() if method == "POST" else {}
+            source = body if method == "POST" else query
+            lang = str(source.get("lang", ""))
             route = _match(method, url.path)
             slug = str(source.get("company", ""))
             if route is None or (route.needs_slug and not slug):
                 self._send(404, {"ok": False, "error": "not found"})
                 return
+            # Writes must come from our own page. Reads are exempt: they carry
+            # no side effect, and a cross-site reader cannot see the response
+            # anyway without CORS, which is never granted.
+            if method == "POST" and not self._same_origin():
+                log.warning("refused cross-site POST %s from Origin %r",
+                            url.path, self.headers.get("Origin"))
+                self._send(403, {"ok": False, "error": "cross-site request refused"})
+                return
+            # One check, both verbs, driven by the route's own `public` flag.
+            # This used to run in do_POST only, which left every read endpoint
+            # open even when the operator had configured a token.
+            if not route.public and not self._authorized():
+                self._send(401, {"ok": False, "error": "missing or wrong X-Corp-Token"})
+                return
             ctx = Ctx(state=self.state, path=url.path, query=query, body=body,
                       slug=slug, lang=lang)
             self._send(*route.handler(ctx))
+        except _RequestRefused as refused:
+            self._send(refused.status, {"ok": False, "error": refused.message})
         except Exception:
             log.exception("%s %s failed", method, self.path)
             self._send(500, {"ok": False, "error": _oops(lang)})

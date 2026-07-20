@@ -61,11 +61,22 @@ def _check_settings_source(s: Settings) -> tuple:
 def _check_exposure(s: Settings) -> tuple:
     """A console bound off-localhost with no token is an open remote control:
     it can spend money, publish a site and read every key's status."""
+    from . import cfg
     local = {"127.0.0.1", "localhost", "::1"}
+    allowed = [h.strip() for h in cfg.get("CORP_UI_ALLOWED_HOSTS", "").split(",") if h.strip()]
+    hosts = f", Host limited to {', '.join(allowed)}" if allowed else ""
     if s.ui_host in local:
-        return ("ok", "exposure", f"console bound to {s.ui_host} (localhost only)")
+        return ("ok", "exposure", f"console bound to {s.ui_host} (localhost only){hosts}")
     if s.ui_token.strip():
-        return ("ok", "exposure", f"console on {s.ui_host}, token required")
+        # Off-loopback with a token is authenticated, but the Host allow-list is
+        # what stops a rebound DNS name from reaching it, and off-loopback is
+        # exactly where that is not inferable.
+        if not allowed:
+            return ("warn", "exposure",
+                    f"console on {s.ui_host}, token required, but CORP_UI_ALLOWED_HOSTS "
+                    "is unset so any Host header is accepted. Set it to the name you "
+                    "serve the console under.")
+        return ("ok", "exposure", f"console on {s.ui_host}, token required{hosts}")
     return ("fail", "exposure",
             f"console bound to {s.ui_host} with no CORP_UI_TOKEN. Anyone who can reach "
             "it can spend money and publish. Set CORP_UI_TOKEN, or bind 127.0.0.1.")

@@ -37,8 +37,13 @@ ROOT = paths.user_home()
 
 # Keys that must resolve before the store can be opened. Console writes to
 # these go to .env, and they only take effect on restart.
+# CORP_UI_ALLOWED_HOSTS belongs here, not in the settings registry: BOOTSTRAP
+# keys resolve from the environment and .env only, never from the store. As an
+# ordinary setting, a successful cross-site write to /api/settings could add the
+# attacker's own host to the allow-list and disable the defence permanently. A
+# security control must not be writable through the surface it protects.
 BOOTSTRAP = ("CORP_DATA_PATH", "CORP_LOG_LEVEL", "CORP_UI_HOST", "CORP_UI_PORT",
-             "CORP_UI_TOKEN", "CORP_SECRET_KEY")
+             "CORP_UI_TOKEN", "CORP_UI_ALLOWED_HOSTS", "CORP_SECRET_KEY")
 
 _lock = threading.RLock()
 

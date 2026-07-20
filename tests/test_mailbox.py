@@ -5,7 +5,6 @@ answered, which is the one signal it exists to chase.
 """
 import types
 
-import pytest
 
 from app import cfg, mailbox, tools
 from app.store import Store

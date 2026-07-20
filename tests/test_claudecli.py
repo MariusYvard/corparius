@@ -1,7 +1,6 @@
 """One-press Claude subscription setup: prove the CLI works, then flip the four
 settings and point the tiers at it. The scattered toggles and hand-edited tier
 strings were most of why nobody found this path."""
-import json
 import threading
 import types
 

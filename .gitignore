@@ -18,3 +18,7 @@ backups/
 # PyInstaller build output (packaging/corparius.spec)
 /build/
 /dist/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/

@@ -11,6 +11,7 @@ still wins and is shown as read-only rather than quietly overwritten.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Any
 
 from . import cfg
 from .llm import OPENAI_COMPAT_PROVIDERS
@@ -164,7 +165,7 @@ class FieldSpec:
         return self.key in cfg.BOOTSTRAP
 
 
-def _f(key, group, **kw) -> FieldSpec:
+def _f(key: str, group: str, **kw: Any) -> FieldSpec:
     return FieldSpec(key=key, group=group, **kw)
 
 
@@ -440,7 +441,7 @@ SECRETS: set[str] = ({f.key for f in SPEC if f.secret}
                      | {"ANTHROPIC_API_KEY"})
 
 
-def coerce(spec: FieldSpec, raw) -> tuple[str | None, str]:
+def coerce(spec: FieldSpec, raw: Any) -> tuple[str | None, str]:
     """Validate one value against its spec. Returns (clean, error); clean is None
     when the operator is clearing the field."""
     value = str(raw).strip()

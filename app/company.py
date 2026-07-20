@@ -117,7 +117,7 @@ def load(path, slug: str | None = None) -> dict:
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(str(path))
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         raw = yaml.safe_load(fh)
     if raw is None:
         raw = {}                       # an empty file is an empty company, not a crash

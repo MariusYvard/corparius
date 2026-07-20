@@ -111,7 +111,7 @@ class PluginManifest:
     disabled: bool = False
 
     @classmethod
-    def from_dict(cls, d: dict, path: Path | None = None) -> "PluginManifest":
+    def from_dict(cls, d: dict, path: Path | None = None) -> PluginManifest:
         name = str(d.get("name", "")).strip()
         if not name:
             raise ValueError("plugin manifest missing 'name'")
@@ -257,11 +257,35 @@ class PluginError(RuntimeError):
     """A user-facing install/enable error the CLI and console report verbatim."""
 
 
+# A plugin is source, not a dataset. The largest thing in the curated registry
+# is a few hundred kilobytes; this is a ceiling, not a target.
+MAX_ARCHIVE_BYTES = 32 * 1024 * 1024
+
+
 def _download(url: str, timeout: float = 30.0) -> bytes:
+    """Fetch an archive over https only, up to a fixed ceiling.
+
+    The scheme check is not ceremony: urlopen honours file://, so without it
+    `plugin install --url file:///etc/passwd` reads a local file and feeds it to
+    the extractor. ftp:// is equally accepted by urlopen and equally unintended.
+    The registry only ever produces https URLs, so nothing legitimate is lost.
+
+    The ceiling matters because the read happens before the sha256 check: a
+    hostile or wrong URL could otherwise stream until the process dies, and the
+    verification that would have rejected it never gets to run.
+    """
+    from urllib.parse import urlparse
     from urllib.request import Request, urlopen
+    scheme = urlparse(url).scheme.lower()
+    if scheme != "https":
+        raise PluginError(f"refusing to download over '{scheme or 'no'}' scheme; "
+                          "plugin archives must be https URLs")
     req = Request(url, headers={"User-Agent": "corparius-plugins"})
-    with urlopen(req, timeout=timeout) as resp:   # noqa: S310 (registry-pinned URL)
-        return resp.read()
+    with urlopen(req, timeout=timeout) as resp:   # noqa: S310 (https enforced above)
+        data = resp.read(MAX_ARCHIVE_BYTES + 1)
+    if len(data) > MAX_ARCHIVE_BYTES:
+        raise PluginError(f"plugin archive is larger than {MAX_ARCHIVE_BYTES // (1024 * 1024)} MB")
+    return data
 
 
 def _safe_extract(data: bytes, dest: Path) -> Path:
@@ -281,9 +305,18 @@ def _safe_extract(data: bytes, dest: Path) -> Path:
             if m.issym() or m.islnk():
                 raise PluginError(f"links are not allowed in a plugin archive: {m.name}")
         try:
-            tar.extractall(dest, filter="data")     # Python 3.12+
+            tar.extractall(dest, filter="data")
         except TypeError:
-            tar.extractall(dest)                     # older Python; guarded above
+            # `filter=` was backported to 3.10.12 and 3.11.4 as a security fix,
+            # so on any supported release this branch is unreachable. If it ever
+            # is reached, the interpreter is old enough that extracting without
+            # the filter is the last thing we should do: refuse instead. Tested
+            # by monkeypatching extractall, which exercises it on every version
+            # rather than hoping CI runs the right one.
+            raise PluginError(
+                "this Python is too old to extract a plugin archive safely "
+                "(tarfile has no data filter); upgrade to 3.10.12+ or 3.11.4+"
+            ) from None
     if len(roots) != 1:
         raise PluginError("archive must contain a single top-level directory")
     return dest / roots.pop()

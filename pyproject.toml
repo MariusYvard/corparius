@@ -36,18 +36,33 @@ line-length = 100          # matches the existing hand-wrapped style
 target-version = "py310"   # the oldest interpreter CI builds against
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B"]
+# Deliberately not "I" (import sorting). The modules here group their imports by
+# meaning - stdlib, then `from . import ...` siblings, then named symbols - and
+# isort would reflow 52 sites into alphabetical order across the whole codebase.
+# That is a large mechanical diff over a layout that was chosen, to satisfy a
+# rule nobody asked for. Turn it on with a dedicated commit if ever.
+select = ["E", "F", "W", "UP", "B"]
 ignore = [
     # The codebase wraps explanatory comments by hand and several exceed the
     # limit by a word or two. Reflowing authored prose to satisfy a linter is a
     # worse trade than the warning.
     "E501",
+    # `p = lambda en, fr: i18n.pick(lang, en, fr)` is the localisation idiom in
+    # nine modules. A def would be three lines to say the same thing, and the
+    # point of the alias is that it stays visually out of the way.
+    "E731",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests reach into private helpers deliberately: _approval_id and Tool._effect
-# are the units under test, not incidental access.
-"tests/*" = ["E402"]
+# start.py is the bootstrap: it runs under whatever Python the operator has,
+# which is the entire reason it checks for 3.10 first. ruff evaluates that
+# check against target-version and calls it dead code - true for the package,
+# false for the one file that has to run before the package does.
+"start.py" = ["UP036"]
+# Paired clear/update on one line, so the restore of each registry reads as the
+# single operation it is. Splitting them would obscure the pairing.
+"tests/test_plugins.py" = ["E702"]
+"tests/test_llm_setup.py" = ["E701"]
 
 [tool.mypy]
 python_version = "3.10"
@@ -59,13 +74,16 @@ warn_unused_configs = true
 warn_redundant_casts = true
 no_implicit_optional = true
 
+# The ratchet. CI runs mypy over exactly these modules (see ci.yml), so the gate
+# is green today and widening it is a deliberate act rather than a bulk cleanup
+# nobody has time for. `mypy app/` reports 9 more findings across llm, mailbox,
+# plugins, store, tools and webui - all annotation gaps rather than defects
+# (int(body.get("id")) inside a try/except TypeError, cur.lastrowid typed
+# int | None) - which is why they are worth fixing one module at a time instead
+# of silencing in bulk.
 [[tool.mypy.overrides]]
 module = ["app.models", "app.paths", "app.settings_spec"]
 disallow_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = ["tests.*"]
-ignore_errors = true
 
 [tool.coverage.run]
 source = ["app"]

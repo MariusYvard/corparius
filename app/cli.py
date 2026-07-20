@@ -166,7 +166,7 @@ def cmd_approvals(args) -> None:
 
 
 def cmd_decide(args, status: str) -> None:
-    cfg = _load_company(args.company)
+    _load_company(args.company)   # validates --company, exits with a message if wrong
     store = Store(settings.data_path)
     ok = store.set_approval_status(args.id, status, args.note or "")
     print(f"{args.id} -> {status}" if ok else "approval id not found")

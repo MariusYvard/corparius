@@ -38,6 +38,29 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
+  quality:
+    name: lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements-test.txt
+      - name: Lint
+        run: ruff check .
+      # Scoped to the ratchet list, not all of app/. `mypy app/` still reports
+      # nine annotation gaps; widening this line is how they get retired, one
+      # module at a time. See pyproject.toml.
+      - name: Types
+        run: mypy app/models.py app/paths.py app/settings_spec.py
+      - name: Coverage
+        run: |
+          coverage run -m pytest -q
+          coverage report --fail-under=72
+
   # Catch a broken PyInstaller spec / frozen-path regression on every PR, before
   # a release tag depends on it. One cheap Linux build + offline smoke; the full
   # OS matrix runs in release.yml on a tag.

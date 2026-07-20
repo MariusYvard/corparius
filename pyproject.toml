@@ -69,13 +69,10 @@ warn_unused_configs = true
 warn_redundant_casts = true
 no_implicit_optional = true
 
-# The ratchet. CI runs mypy over exactly these modules (see ci.yml), so the gate
-# is green today and widening it is a deliberate act rather than a bulk cleanup
-# nobody has time for. `mypy app/` reports 9 more findings across llm, mailbox,
-# plugins, store, tools and webui - all annotation gaps rather than defects
-# (int(body.get("id")) inside a try/except TypeError, cur.lastrowid typed
-# int | None) - which is why they are worth fixing one module at a time instead
-# of silencing in bulk.
+# All of app/ now passes mypy at the default level (CI runs `mypy app/`); the
+# nine annotation gaps that used to live in llm, mailbox, plugins, store, tools
+# and webui are fixed. The next ratchet is strictness: these leaf modules also
+# require every def to be annotated. Add a module here once it is fully typed.
 [[tool.mypy.overrides]]
 module = ["app.models", "app.paths", "app.settings_spec"]
 disallow_untyped_defs = true

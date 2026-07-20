@@ -171,8 +171,8 @@ def _discover_dropin() -> list[PluginManifest]:
 def _discover_entrypoints() -> list[PluginManifest]:
     try:
         eps = importlib.metadata.entry_points(group=ENTRY_POINT_GROUP)
-    except TypeError:   # Python < 3.12 selection API
-        eps = importlib.metadata.entry_points().get(ENTRY_POINT_GROUP, [])
+    except TypeError:   # the group= selection API predates our 3.10 floor, so this is dead
+        eps = importlib.metadata.entry_points().get(ENTRY_POINT_GROUP, [])  # type: ignore[arg-type]
     out: list[PluginManifest] = []
     for ep in eps:
         out.append(PluginManifest(name=ep.name, entrypoint=ep.value,

@@ -83,7 +83,7 @@ def _build_site(ctx, draft: str) -> str:
     # A mock draft is the echoed prompt, not a headline. Offline is the default
     # first run, so feeding it as the site's H1 makes the product look broken;
     # fall back to the company's own tagline instead.
-    headline = draft.strip()
+    headline: str | None = draft.strip()
     if not headline or headline.startswith("[mock:"):
         headline = None
     path = sitegen.build_site(company, str(out_dir), headline=headline)
@@ -256,7 +256,7 @@ def _review_proposals(ctx) -> str:
     approved = rejected = modified = 0
     for i, task in enumerate(proposals):
         if i < cap:
-            fields = {}
+            fields: dict[str, object] = {}   # priority is int, tool is str
             if task["priority"] < 2:
                 fields["priority"] = 2   # CEO re-prioritises the suggestion
             if not task.get("tool") and task["target"] in ROLE_TOOL:

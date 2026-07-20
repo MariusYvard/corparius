@@ -12,6 +12,15 @@ from .store import Store
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _store() -> Store:
+    """One construction point for the nine commands that open the store. Each CLI
+    command is a short-lived, single-threaded process that exits right after, so
+    unlike the console (see UiState.store) there is no connection to share or
+    close - but keeping the construction in one place means a future argument or
+    a pragma lands in exactly one spot."""
+    return Store(settings.data_path)
+
+
 def _company_path(slug_or_path: str) -> str:
     if os.path.isfile(slug_or_path):
         return slug_or_path
@@ -35,7 +44,7 @@ def _load_company(slug_or_path: str) -> dict:
 
 def cmd_init(args) -> None:
     cfg = _load_company(args.company)
-    store = Store(settings.data_path)
+    store = _store()
     store.save_state(cfg["slug"], {"tick": 0})
     on = [k for k, v in cfg.get("agents", {}).items() if v]
     print(f"initialised {cfg.get('name')} ({cfg['slug']}). agents on: {on}")
@@ -44,14 +53,14 @@ def cmd_init(args) -> None:
 def cmd_run(args) -> None:
     from .orchestrator import Runtime
     cfg = _load_company(args.company)
-    store = Store(settings.data_path)
+    store = _store()
     result = Runtime(settings, store).run(cfg, ticks=args.ticks, loop=args.loop)
     print(json.dumps(result, indent=2))
 
 
 def cmd_status(args) -> None:
     cfg = _load_company(args.company)
-    store = Store(settings.data_path)
+    store = _store()
     s = store.status(cfg["slug"])
     tick = store.load_state(cfg["slug"]).get("tick", 0)
     print(f"== {cfg.get('name')} ({cfg['slug']}) ==")
@@ -72,7 +81,7 @@ def cmd_site(args) -> None:
 
 def cmd_tasks(args) -> None:
     cfg = _load_company(args.company)
-    store = Store(settings.data_path)
+    store = _store()
     rows = store.list_tasks(cfg["slug"])
     if not rows:
         print("no tasks")
@@ -84,7 +93,7 @@ def cmd_tasks(args) -> None:
 
 
 def cmd_task(args) -> None:
-    store = Store(settings.data_path)
+    store = _store()
     fields = {}
     if args.title is not None:
         fields["title"] = args.title
@@ -114,7 +123,7 @@ def cmd_deploy(args) -> None:
 
 def cmd_flow(args) -> None:
     cfg = _load_company(args.company)
-    store = Store(settings.data_path)
+    store = _store()
     fm = store.flow_metrics(cfg["slug"])
     print(f"== flow: {cfg.get('name')} ==")
     print(f"throughput(done): {fm['throughput']}   wip: {fm['wip']}   "
@@ -128,7 +137,7 @@ def cmd_flow(args) -> None:
 
 def cmd_board(args) -> None:
     cfg = _load_company(args.company)
-    store = Store(settings.data_path)
+    store = _store()
     rows = store.list_tasks(cfg["slug"])
     print(f"== board: {cfg.get('name')} ==")
     for col in ("proposed", "approved", "in_progress", "done", "rejected"):
@@ -156,7 +165,7 @@ def cmd_ui(args) -> None:
 
 def cmd_approvals(args) -> None:
     cfg = _load_company(args.company)
-    store = Store(settings.data_path)
+    store = _store()
     rows = store.list_approvals(cfg["slug"], "pending")
     if not rows:
         print("no pending approvals")
@@ -167,7 +176,7 @@ def cmd_approvals(args) -> None:
 
 def cmd_decide(args, status: str) -> None:
     _load_company(args.company)   # validates --company, exits with a message if wrong
-    store = Store(settings.data_path)
+    store = _store()
     ok = store.set_approval_status(args.id, status, args.note or "")
     print(f"{args.id} -> {status}" if ok else "approval id not found")
 

@@ -1,8 +1,9 @@
-"""Path resolution across the three run modes the packaging work introduces:
-a source checkout (the default, and what every other test relies on), an
-explicit CORP_HOME override, and a simulated frozen bundle. The point is to
+"""Path resolution across the run modes packaging introduces: a source checkout
+(the default, and what every other test relies on), an explicit CORP_HOME
+override, a simulated frozen bundle, and a pip-installed wheel. The point is to
 guarantee that running from source is byte-identical to the pre-packaging
-behavior while a frozen build redirects writable state to a per-OS directory."""
+behavior while a frozen build or an install redirects writable state to a per-OS
+directory and finds its resources inside the package."""
 
 import sys
 from pathlib import Path
@@ -71,6 +72,43 @@ def test_frozen_mode_corp_home_still_wins(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setenv("CORP_HOME", str(tmp_path / "explicit"))
     assert paths.user_home() == tmp_path / "explicit"
+
+
+# --- simulated pip install: no sibling resources, state off site-packages ------
+
+
+def test_installed_mode_writes_state_off_site_packages(monkeypatch):
+    """A wheel has no pyproject.toml beside the package, so user_home must not
+    resolve to site-packages (where _REPO_ROOT points once installed); it falls
+    to the per-OS directory, exactly as a frozen build does."""
+    monkeypatch.setattr(paths, "_is_source_checkout", lambda: False)
+    monkeypatch.delenv("CORP_HOME", raising=False)
+    home = paths.user_home()
+    assert home != REPO_ROOT
+    assert home.name == "corparius"
+    assert paths.default_data_dir() == str(home / "data")
+
+
+def test_installed_mode_finds_resources_inside_the_package(monkeypatch, tmp_path):
+    """When the repo-root resource is absent (an install has no sibling
+    companies/ or plugins/), _resource falls back to the package's _data dir,
+    where the wheel force-includes them."""
+    # Point resource_dir at an empty tree so the primary location misses.
+    monkeypatch.setattr(paths, "resource_dir", lambda: tmp_path)
+    monkeypatch.setattr(paths, "_PACKAGE_DIR", tmp_path / "pkg")
+    data = tmp_path / "pkg" / "_data" / "plugins"
+    data.mkdir(parents=True)
+    (data / "registry.json").write_text("{}", encoding="utf-8")
+    assert paths.plugin_registry_file() == tmp_path / "pkg" / "_data" / "plugins" / "registry.json"
+
+
+def test_resource_prefers_the_primary_location(monkeypatch, tmp_path):
+    """When the repo-root/_MEIPASS copy exists (source or frozen), it wins and
+    the _data fallback is never consulted."""
+    monkeypatch.setattr(paths, "resource_dir", lambda: tmp_path)
+    (tmp_path / "plugins").mkdir()
+    (tmp_path / "plugins" / "registry.json").write_text("{}", encoding="utf-8")
+    assert paths.plugin_registry_file() == tmp_path / "plugins" / "registry.json"
 
 
 # --- first-run seeding of the example company ---------------------------------

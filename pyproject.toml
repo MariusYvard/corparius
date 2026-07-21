@@ -1,8 +1,73 @@
-# Tool configuration. The package is `corparius` (renamed from `app`, so a
-# `pip install .` would no longer drop a colliding top-level `app` into
-# site-packages). [project]/[build-system] are still absent - making it a
-# published, versioned distribution is a separate decision from making it
-# importable under its own name, which is what the rename bought.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "corparius"
+dynamic = ["version"]                # read from corparius/__init__.py below
+description = "A self-hosted framework for autonomous AI micro-companies."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Marius Yvard" }]
+keywords = ["ai", "agents", "automation", "self-hosted", "local-first", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Office/Business",
+]
+# The whole runtime, on purpose: everything else is stdlib. The optionals below
+# stay optional so mock mode installs with two wheels and no compiler.
+dependencies = [
+    "requests>=2.31",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+secrets = ["cryptography>=42"]       # at-rest encryption, opt-in; see docs/securite.md
+mcp = ["mcp>=1.0"]                    # the optional MCP server
+
+[project.scripts]
+corparius = "corparius.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/MariusYvard/corparius"
+Source = "https://github.com/MariusYvard/corparius"
+Issues = "https://github.com/MariusYvard/corparius/issues"
+Changelog = "https://github.com/MariusYvard/corparius/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "corparius/__init__.py"       # single source of truth, same file release.yml guards
+
+[tool.hatch.build.targets.wheel]
+packages = ["corparius"]
+# webui.html sits inside the package and ships as-is; page_file() finds it at
+# corparius/webui.html in every mode.
+artifacts = ["corparius/webui.html"]
+
+# A wheel has no sibling companies/ or plugins/ in site-packages, so the two
+# read-only resources that live outside the package at build time ride along
+# inside it under _data/. paths._resource() looks here when the repo-root
+# location is absent, i.e. only when installed.
+[tool.hatch.build.targets.wheel.force-include]
+"companies/example" = "corparius/_data/companies/example"
+"plugins/registry.json" = "corparius/_data/plugins/registry.json"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/corparius",
+    "/companies/example",
+    "/plugins/registry.json",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/docs",
+]
 
 [tool.pytest.ini_options]
 # tests/ only. A bare `pytest` from the root used to also collect

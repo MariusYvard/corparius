@@ -99,3 +99,37 @@ jobs:
           curl -fsS http://127.0.0.1:8600/api/update    | grep -q '"enabled": false'
           echo "smoke OK: console up, example seeded, mock mode, update-check off by default"
           kill "$pid" 2>/dev/null || true
+
+  # Build the wheel, install it into a clean environment, and run it from a
+  # neutral directory so nothing shadows the installed package. This guards the
+  # installed-mode resource resolution (webui.html, the example company and the
+  # plugin registry ride inside the wheel; state must land off site-packages).
+  wheel-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build the wheel
+        run: pip install build && python -m build --wheel
+      - name: Install into a clean venv and run
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet dist/*.whl
+          cd /tmp   # neutral cwd: the checkout's corparius/ must not shadow the install
+          export CORP_HOME=/tmp/corp-home CORP_LLM_MOCK=true
+          /tmp/venv/bin/python - <<'PY'
+          from corparius import paths, __file__ as f
+          assert "site-packages" in f, f
+          assert not paths._is_source_checkout()
+          assert paths.page_file().is_file()
+          assert (paths.example_company_src() / "company.yaml").is_file()
+          assert paths.plugin_registry_file().is_file()
+          assert "site-packages" not in str(paths.user_home())
+          print("installed-mode resources OK")
+          PY
+          /tmp/venv/bin/corparius run --company example --ticks 4 | grep -q '"ticks_run": 4'
+          echo "wheel smoke OK: installed package runs a day offline"

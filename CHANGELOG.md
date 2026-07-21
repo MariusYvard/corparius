@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — installable, formatted, and renamed to its own name
+
+- **`pip install corparius`.** The package is now a proper distribution:
+  `pyproject.toml` carries `[build-system]` (hatchling) and `[project]` metadata,
+  and installing it puts a `corparius` command on PATH. Runtime deps stay the two
+  the project has always had, `requests` and `PyYAML`; encryption and the MCP
+  server remain optional extras (`corparius[secrets]`, `corparius[mcp]`).
+- **The package is `corparius`, renamed from `app`.** `app` was generic enough
+  that a `pip install` would have dropped a colliding top-level module into
+  site-packages, which is why it was never installable. Running from source is
+  unchanged (`python -m corparius.cli`, or the launchers).
+- **Resources and state resolve correctly whether run from source, frozen, or
+  installed.** A wheel has no sibling `companies/` or `plugins/` in
+  site-packages, so the console HTML, the example company and the plugin registry
+  ride inside it and are found there; the operator's store, `.env` and companies
+  go to a per-OS directory, never into site-packages. A CI job builds the wheel,
+  installs it clean and runs a day offline to keep that true.
+- **`ruff format` and import sorting** are adopted across the tree and checked in
+  CI, and `mypy corparius/` is clean at the default level.
+
 ## Unreleased — the console holds up under load and under a hostile tab
 
 - **Fixed: concurrent writes lost rows.** The console built a new SQLite

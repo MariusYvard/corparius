@@ -1,14 +1,14 @@
 """One-press Claude subscription setup: prove the CLI works, then flip the four
 settings and point the tiers at it. The scattered toggles and hand-edited tier
 strings were most of why nobody found this path."""
-import json
+
 import threading
 import types
 
 import pytest
 
-from app import cfg, claudecli, webui
-from app.config import Settings
+from corparius import cfg, claudecli, webui
+from corparius.config import Settings
 
 from .test_webui import _call
 
@@ -23,11 +23,13 @@ def server(tmp_path, monkeypatch):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()
+    srv.server_close()  # release the listening socket, not just the loop
 
 
 def _fake_run(returncode=0, stdout='{"result": "ready", "model": "claude-sonnet"}', stderr=""):
     return lambda *a, **k: types.SimpleNamespace(
-        returncode=returncode, stdout=stdout, stderr=stderr)
+        returncode=returncode, stdout=stdout, stderr=stderr
+    )
 
 
 def test_check_reports_installed_logged_in(monkeypatch):
@@ -45,8 +47,11 @@ def test_check_says_install_when_missing(monkeypatch):
 
 def test_check_distinguishes_not_logged_in(monkeypatch):
     monkeypatch.setattr(claudecli.shutil, "which", lambda _: "/usr/bin/claude")
-    monkeypatch.setattr(claudecli.subprocess, "run",
-                        _fake_run(returncode=1, stderr="Error: not logged in. Run claude login."))
+    monkeypatch.setattr(
+        claudecli.subprocess,
+        "run",
+        _fake_run(returncode=1, stderr="Error: not logged in. Run claude login."),
+    )
     r = claudecli.check()
     assert r["ok"] is False and r["installed"] is True
     assert "not logged in" in r["detail"] and "claude login" in r["detail"]
@@ -83,7 +88,7 @@ def test_setup_refuses_when_the_cli_will_not_answer(server, monkeypatch):
     status, d = _call(server, "POST", "/api/claude/setup", {})
     # It must not switch a company onto a provider that cannot reply.
     assert status == 400 and d["ok"] is False
-    assert cfg.get_bool("CORP_LLM_MOCK", "true") is True   # unchanged
+    assert cfg.get_bool("CORP_LLM_MOCK", "true") is True  # unchanged
     assert cfg.get("CORP_NORMAL_MODEL", "x") != "claudecode:sonnet"
 
 

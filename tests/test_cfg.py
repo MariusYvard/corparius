@@ -1,11 +1,12 @@
 """The settings resolver. What matters here is the order of the layers and the
 fact that it is reportable: a value the operator cannot change from the console
 must be visible as such, never silently ignored."""
+
 import pytest
 
-from app import cfg
-from app.config import Settings
-from app.store import Store
+from corparius import cfg
+from corparius.config import Settings
+from corparius.store import Store
 
 
 @pytest.fixture()
@@ -21,6 +22,7 @@ def layers(tmp_path, monkeypatch):
 
 def test_dotenv_is_read_but_never_leaks_into_os_environ(layers, monkeypatch):
     import os
+
     monkeypatch.delenv("CORP_TRIVIAL_MODEL", raising=False)
     assert cfg.get("CORP_TRIVIAL_MODEL") == "local:from-dotenv"
     # The whole layering depends on this: if .env landed in os.environ it would
@@ -77,7 +79,7 @@ def test_missing_store_and_missing_dotenv_are_just_empty_layers(tmp_path, monkey
     cfg.set_dotenv_path(tmp_path / "absent.env")
     cfg.invalidate()
     assert cfg.get("CORP_HARD_MODEL", "fallback") == "fallback"
-    # Reading configuration must not create the data directory: app.config
+    # Reading configuration must not create the data directory: corparius.config
     # builds a Settings() at import time.
     assert not (tmp_path / "nothing-here").exists()
 
@@ -96,7 +98,11 @@ def test_parse_dotenv_tolerates_real_files():
         "URL=https://example.com/a?b=c\n"
     )
     assert parsed == {
-        "PLAIN": "value", "SPACED": "spaced value", "QUOTED": "quoted",
-        "SINGLE": "single", "EXPORTED": "exported", "EMPTY": "",
+        "PLAIN": "value",
+        "SPACED": "spaced value",
+        "QUOTED": "quoted",
+        "SINGLE": "single",
+        "EXPORTED": "exported",
+        "EMPTY": "",
         "URL": "https://example.com/a?b=c",
     }

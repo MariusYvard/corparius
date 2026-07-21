@@ -1,17 +1,28 @@
 """A simulated day must run every enabled agent, record its work, and hold the
 money-moving tool at the human gate until it is approved."""
-from app.config import Settings
-from app.store import Store
-from app.orchestrator import Runtime, due_roles
-from app.models import AgentRole
+
+from corparius.config import Settings
+from corparius.models import AgentRole
+from corparius.orchestrator import Runtime, due_roles
+from corparius.store import Store
 
 
 def _cfg() -> dict:
     return {
-        "slug": "t", "name": "T", "offer": {"product": "p"},
-        "agents": {"ceo": True, "social": True, "finance": True, "outreach": True,
-                   "support": True, "strategy": True, "competitor": True,
-                   "ads": False, "coder": False},
+        "slug": "t",
+        "name": "T",
+        "offer": {"product": "p"},
+        "agents": {
+            "ceo": True,
+            "social": True,
+            "finance": True,
+            "outreach": True,
+            "support": True,
+            "strategy": True,
+            "competitor": True,
+            "ads": False,
+            "coder": False,
+        },
         "budgets": {"session_tokens": 100000, "tokens_per_minute": 100000},
         "hitl_tools": ["send_financial_transaction", "publish_production_code"],
     }
@@ -28,7 +39,7 @@ def test_cadences_are_staggered():
     enabled = {r.value: True for r in AgentRole}
     due0 = {s.role for s in due_roles(0, enabled)}
     assert AgentRole.CEO in due0 and AgentRole.SOCIAL in due0
-    assert due_roles(1, enabled) == []            # nothing divides hour 1
+    assert due_roles(1, enabled) == []  # nothing divides hour 1
     due2 = {s.role for s in due_roles(2, enabled)}
     assert AgentRole.SOCIAL in due2 and AgentRole.CEO not in due2
 
@@ -54,7 +65,7 @@ def test_money_tool_waits_then_executes_after_approval(tmp_path):
     pending = store.list_approvals("t", "pending")
     assert pending, "the money transfer should be held for approval"
     store.set_approval_status(pending[0]["id"], "approved")
-    Runtime(s, store).run(_cfg(), ticks=6)   # next day
+    Runtime(s, store).run(_cfg(), ticks=6)  # next day
     assert store.find_approval("t", "send_financial_transaction", {}, "approved")
 
 
@@ -63,7 +74,7 @@ def test_circuit_breaker_freezes_the_session(tmp_path):
     store = Store(s.data_path)
     store.save_state("t", {"tick": 0})
     cfg = _cfg()
-    cfg["budgets"]["tokens_per_minute"] = 1   # trips on the first draft call
+    cfg["budgets"]["tokens_per_minute"] = 1  # trips on the first draft call
     result = Runtime(s, store).run(cfg, ticks=6)
     assert result["frozen"] is True
     # It froze inside the first tick, so most of the roster never ran.
@@ -74,7 +85,8 @@ def test_dead_llm_stops_the_run_cleanly(tmp_path, monkeypatch):
     """An unreachable LLM must leave a system action in the store and stop the
     run instead of crashing without a trace."""
     import requests as _requests
-    from app.orchestrator import Runtime
+
+    from corparius.orchestrator import Runtime
 
     s = _settings(tmp_path)
     s.llm_mock = False
@@ -88,6 +100,7 @@ def test_dead_llm_stops_the_run_cleanly(tmp_path, monkeypatch):
     result = rt.run(_cfg(), ticks=2)
     assert result["frozen"] is True
     rows = store.db.execute(
-        "SELECT tool, output FROM actions WHERE company='t' AND tool='llm_unreachable'").fetchall()
+        "SELECT tool, output FROM actions WHERE company='t' AND tool='llm_unreachable'"
+    ).fetchall()
     assert len(rows) == 1
     assert "doctor" in rows[0]["output"]

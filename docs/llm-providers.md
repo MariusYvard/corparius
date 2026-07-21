@@ -1,6 +1,6 @@
 # Providers LLM gratuits
 
-Le routeur accepte un modèle sous la forme "cible:nom". La cible "local" désigne Ollama, "cloud" l'API Anthropic, "claudecode" le CLI Claude Code et chaque entrée du registre OPENAI_COMPAT_PROVIDERS (app/llm.py) un service distant au dialecte OpenAI chat-completions. Un provider est actif quand CORP_CLOUD_ENABLED vaut true et que sa clé est définie dans l'environnement. Sans clé, il est absent du pool et le routeur l'ignore sans erreur.
+Le routeur accepte un modèle sous la forme "cible:nom". La cible "local" désigne Ollama, "cloud" l'API Anthropic, "claudecode" le CLI Claude Code et chaque entrée du registre OPENAI_COMPAT_PROVIDERS (corparius/llm.py) un service distant au dialecte OpenAI chat-completions. Un provider est actif quand CORP_CLOUD_ENABLED vaut true et que sa clé est définie dans l'environnement. Sans clé, il est absent du pool et le routeur l'ignore sans erreur.
 
 Quand un appel distant échoue (rate limit, panne, réseau), le routeur déroule la chaîne CORP_LLM_FALLBACK en ordre, puis termine sur le modèle local CORP_LOCAL_MODEL. Le local reste donc toujours disponible en dernier recours.
 
@@ -13,7 +13,7 @@ Tout se règle depuis l'onglet Providers de la console, sans éditer `.env` :
 - **Ollama** — la carte « Modèles locaux » montre ce qui est installé et tire en arrière-plan les modèles que vos tiers exigent.
 - **Serveur local (LM Studio, Jan, llama.cpp, vLLM, LocalAI)** — un préréglage remplit l'endpoint de la cible `custom:` ; démarrez le serveur, choisissez-le, pointez un tier sur `custom:<modèle>`.
 
-Quel que soit le fournisseur ou le modèle, les sorties destinées aux agents passent par le harness `app/structured.py` : même schéma en entrée, même dict validé en sortie. Un modèle bavard, un fence markdown ou une prose sans JSON donnent tous la même structure, avec un repli déterministe qui garde le tour de l'agent en vie.
+Quel que soit le fournisseur ou le modèle, les sorties destinées aux agents passent par le harness `corparius/structured.py` : même schéma en entrée, même dict validé en sortie. Un modèle bavard, un fence markdown ou une prose sans JSON donnent tous la même structure, avec un repli déterministe qui garde le tour de l'agent en vie.
 
 ## Registre
 

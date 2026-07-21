@@ -1,8 +1,9 @@
 """Schema versioning: a fresh store is at the current version, and an older
 store is migrated in place rather than needing a manual backup-and-recreate."""
+
 import sqlite3
 
-from app.store import SCHEMA_VERSION, Store
+from corparius.store import SCHEMA_VERSION, Store
 
 
 def _columns(db, table):
@@ -30,7 +31,7 @@ def test_old_store_is_migrated_in_place(tmp_path):
     assert "tool" not in _columns(db, "tasks")
     db.close()
 
-    store = Store(str(tmp_path))          # opening it runs the migration
+    store = Store(str(tmp_path))  # opening it runs the migration
     assert store.schema_version() == SCHEMA_VERSION
     assert "tool" in _columns(store.db, "tasks")
 

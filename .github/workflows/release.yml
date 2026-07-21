@@ -35,20 +35,20 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
 
-  # The tag must match app/__init__.py __version__, so the image tag, the
+  # The tag must match corparius/__init__.py __version__, so the image tag, the
   # GitHub Release and the code can never disagree about the version.
   version-guard:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4
-      - name: Tag matches app/__init__.py
+      - name: Tag matches corparius/__init__.py
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          code="$(python -c "import app; print(app.__version__)")"
+          code="$(python -c "import corparius; print(corparius.__version__)")"
           echo "tag=$tag  code=$code"
           if [ "$tag" != "$code" ]; then
-            echo "::error::git tag v$tag does not match app.__version__ ($code). Bump app/__init__.py first."
+            echo "::error::git tag v$tag does not match corparius.__version__ ($code). Bump corparius/__init__.py first."
             exit 1
           fi
 

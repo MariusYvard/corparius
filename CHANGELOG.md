@@ -1,5 +1,65 @@
 # Changelog
 
+## Unreleased — installable, formatted, and renamed to its own name
+
+- **`pip install corparius`.** The package is now a proper distribution:
+  `pyproject.toml` carries `[build-system]` (hatchling) and `[project]` metadata,
+  and installing it puts a `corparius` command on PATH. Runtime deps stay the two
+  the project has always had, `requests` and `PyYAML`; encryption and the MCP
+  server remain optional extras (`corparius[secrets]`, `corparius[mcp]`).
+- **The package is `corparius`, renamed from `app`.** `app` was generic enough
+  that a `pip install` would have dropped a colliding top-level module into
+  site-packages, which is why it was never installable. Running from source is
+  unchanged (`python -m corparius.cli`, or the launchers).
+- **Resources and state resolve correctly whether run from source, frozen, or
+  installed.** A wheel has no sibling `companies/` or `plugins/` in
+  site-packages, so the console HTML, the example company and the plugin registry
+  ride inside it and are found there; the operator's store, `.env` and companies
+  go to a per-OS directory, never into site-packages. A CI job builds the wheel,
+  installs it clean and runs a day offline to keep that true.
+- **`ruff format` and import sorting** are adopted across the tree and checked in
+  CI, and `mypy corparius/` is clean at the default level.
+
+## Unreleased — the console holds up under load and under a hostile tab
+
+- **Fixed: concurrent writes lost rows.** The console built a new SQLite
+  connection per HTTP request and never closed it, while the run loop wrote from
+  a background thread. Measured on twelve concurrent writers, nine died with
+  `database is locked`. One shared connection now serves the process, guarded by
+  a re-entrant lock, with WAL enabled for the read-only settings layer and the
+  CLI. Sharing it *without* that lock is worse than the original bug — threads
+  land inside each other's transaction and rows vanish with no error — so the
+  lock is load-bearing. Concurrent polls during a run went from 635 to 1940.
+- **Fixed: any web page you visited could drive the console.** Binding localhost
+  never protected against the browser already running on it: a hostile tab could
+  `fetch()` `http://127.0.0.1:8600` and start a run, save provider keys, publish
+  the site or delete a company. Writes now require `Sec-Fetch-Site`/`Origin` to
+  say the request came from the console's own page. **No configuration, no login
+  screen, no CSRF token**, and clients that send neither header (curl, scripts,
+  the MCP server) still work, so offline use is unchanged.
+- **Fixed: DNS rebinding.** `CORP_UI_ALLOWED_HOSTS` (new, environment/`.env`
+  only — never the settings store, which it protects) pins the `Host` names the
+  console answers to. Loopback binds need nothing.
+- **Breaking, if you run behind a reverse proxy:** a bind off-loopback now warns
+  in `doctor` until `CORP_UI_ALLOWED_HOSTS` names your hostname. Requests with an
+  unrecognised `Host` get a 403 that names the variable to set. Loopback and
+  Docker-with-published-ports are unaffected.
+- **`CORP_UI_TOKEN` now covers reads.** It guarded mutations only, so with a
+  token set `/api/settings` and `/api/company` still served company configs,
+  paths and provider status to anyone. With no token set, nothing changes.
+- **Request bodies are capped at 1 MiB**, malformed `Content-Length` is a 400
+  rather than a 500, chunked bodies are refused, and the token comparison is
+  constant-time.
+- **The Docker image runs as a non-root user** and carries a `HEALTHCHECK`.
+- **The console's two 60- and 85-line `if/elif` dispatch chains are one route
+  table.** That duplication was why the token check existed in one of them only;
+  a route is now authenticated unless it opts out, and a test pins the public set
+  so a new exception has to be written down.
+- **CI runs the platforms we ship**: Python 3.10/3.12/3.14 on Linux, 3.12/3.14 on
+  Windows, 3.12 on macOS. Adds `pyproject.toml` (tool configuration only) and
+  tests for the previously untested toolbox, roster, approval gate and backups.
+  171 tests → 243.
+
 ## Unreleased — a double-click start, accessible, no raw tracebacks
 
 - **Double-click launchers.** `start-windows.bat`, `start-macos.command` and
@@ -41,7 +101,7 @@
   conversation. Intent classification is provider-agnostic via the harness.
 - **Diagnosis strings are bilingual.** Testing mail, Claude, a provider or Ollama
   in a French console now answers in French; the CLI stays English. One
-  `app/i18n.pick(lang, en, fr)` keeps both strings at the call site.
+  `corparius/i18n.pick(lang, en, fr)` keeps both strings at the call site.
 - **A proactive diagnostics banner.** If the doctor reports a failure on load,
   the console surfaces it with a link to the fix, instead of leaving it unseen in
   a tab. Dismissible per session.
@@ -55,7 +115,7 @@
   newsletter — each prefills the ICP, channels, price and the right agents, so a
   newcomer edits a starting point instead of facing a blank ICP and price. The
   typed name and product still win over the template's examples. Blank is still
-  an option. Templates live in `app/company.py`, one source for the console.
+  an option. Templates live in `corparius/company.py`, one source for the console.
 
 ## Unreleased — a guided first run
 
@@ -75,7 +135,7 @@
 
 ### Same structure, whatever the model
 
-`app/structured.py` is a provider-agnostic harness: ask ten models to draft a
+`corparius/structured.py` is a provider-agnostic harness: ask ten models to draft a
 post and you get ten shapes (prose, JSON, JSON in a fence, a preamble, a
 refusal); the harness returns one validated dict every time. It works at the
 text level (instruct, extract, validate, repair once, then a deterministic
@@ -143,7 +203,7 @@ now. See `tests/test_cfg.py` for the layering the suite asserts instead.
 
 ### Settings
 
-- `app/cfg.py`: one resolver, four layers, highest wins — process environment,
+- `corparius/cfg.py`: one resolver, four layers, highest wins — process environment,
   then settings saved from the console, then `.env`, then the default in the
   code. `.env` is deliberately not loaded into `os.environ`: that would outrank
   the console and silently ignore what the operator just saved.
@@ -151,7 +211,7 @@ now. See `tests/test_cfg.py` for the layering the suite asserts instead.
   at class-definition time, so a second instance handed back the values the
   process started with and every console edit looked inert. `_fresh_settings()`
   now does what its docstring always claimed.
-- A settings screen driven by `app/settings_spec.py`: adding a setting is one
+- A settings screen driven by `corparius/settings_spec.py`: adding a setting is one
   row, not an HTML change. Each field shows which layer answers for it and goes
   read-only when the process environment pins it. Nothing is ignored in silence.
 - Secrets are write-only and stored in the clear in `data/corparius.sqlite`, as
@@ -163,7 +223,7 @@ now. See `tests/test_cfg.py` for the layering the suite asserts instead.
 
 ### Company
 
-- `app/company.py`: one loader, one validator, one atomic writer, shared by the
+- `corparius/company.py`: one loader, one validator, one atomic writer, shared by the
   CLI, the console and the MCP server. An empty `company.yaml` raised
   `AttributeError` from inside `setdefault(None)`; it now opens for repair with
   its problems named.
@@ -185,7 +245,7 @@ now. See `tests/test_cfg.py` for the layering the suite asserts instead.
   implicit TLS — and 465 is what Gmail, Fastmail and Infomaniak document. It
   failed with an error no operator could read.
 - Diagnostics name the fix, not the protocol.
-- `app/mailbox.py`: IMAP reading, read-only. corparius never marks a message
+- `corparius/mailbox.py`: IMAP reading, read-only. corparius never marks a message
   seen, moves it or deletes it. `triage_inbox` returned a fixed "3 support,
   1 sales, 0 urgent" for every company, configured or not; it reads now.
 - New `scan_replies` tool and an `outreach` table: the company knows which

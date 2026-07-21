@@ -12,7 +12,7 @@ CORP_DEPLOY_PROVIDERS fixe l'ordre, par défaut "local,netlify,s3,ssh". Un fourn
 
 ## Validation humaine
 
-La publication est une action sensible. L'outil deploy_site est soumis à la validation humaine, au même titre que l'envoi d'argent ou la mise en production de code. En ligne de commande, `python -m app.cli deploy --company example` publie directement, l'opérateur étant l'humain qui lance la commande.
+La publication est une action sensible. L'outil deploy_site est soumis à la validation humaine, au même titre que l'envoi d'argent ou la mise en production de code. En ligne de commande, `python -m corparius.cli deploy --company example` publie directement, l'opérateur étant l'humain qui lance la commande.
 
 ## Variables
 
@@ -25,7 +25,7 @@ Deux chemins de démarrage. `python start.py` prépare l'environnement virtuel, 
 
 Sans dépôt cloné, l'image publiée démarre en une commande, en mode mock hors-ligne, liée à localhost : `docker run -d -p 127.0.0.1:8600:8600 -v corparius_data:/app/data ghcr.io/mariusyvard/corparius`. Les tags suivent la version (`:vX.Y.Z` et `:latest`) ; l'image est multi-arch (amd64 et arm64) et accompagnée d'une attestation de provenance SLSA. Mise à jour : `docker pull ghcr.io/mariusyvard/corparius` puis recréez le conteneur ; le volume `corparius_data` conserve le store et les réglages.
 
-`python -m app.cli doctor` vérifie l'installation (Python, store, Ollama et ses modèles, clés, réseau) et dit quoi corriger ; le même diagnostic est disponible dans l'onglet Réglages de la console. `python -m app.cli backup` archive le store SQLite et les configurations de companies dans backups/ (horodaté) ; planifiez-le en cron ou tâche planifiée.
+`python -m corparius.cli doctor` vérifie l'installation (Python, store, Ollama et ses modèles, clés, réseau) et dit quoi corriger ; le même diagnostic est disponible dans l'onglet Réglages de la console. `python -m corparius.cli backup` archive le store SQLite et les configurations de companies dans backups/ (horodaté) ; planifiez-le en cron ou tâche planifiée.
 
 Mise à jour : `git pull`, puis `pip install -r requirements.txt` dans le venv (ou `docker compose build --pull` en Docker), puis redémarrez la console. Le schéma SQLite se crée à la demande ; sauvegardez avant toute montée de version.
 
@@ -38,7 +38,7 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=/opt/corparius
-ExecStart=/opt/corparius/.venv/bin/python -m app.cli ui
+ExecStart=/opt/corparius/.venv/bin/python -m corparius.cli ui
 Restart=on-failure
 User=corparius
 

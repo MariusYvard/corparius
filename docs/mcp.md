@@ -7,7 +7,7 @@ corparius s'expose comme serveur MCP, ce qui permet à un hôte compatible (Clau
 Installer la dépendance optionnelle puis démarrer le serveur en transport stdio.
 
     pip install -r requirements-mcp.txt
-    python -m app.mcp_server
+    python -m corparius.mcp_server
 
 ## Outils exposés
 
@@ -21,7 +21,7 @@ Déclarer le serveur dans la configuration MCP de l'hôte, avec une commande et 
       "mcpServers": {
         "corparius": {
           "command": "python",
-          "args": ["-m", "app.mcp_server"],
+          "args": ["-m", "corparius.mcp_server"],
           "cwd": "C:/Users/mariu/Claude/Projects/Corparius"
         }
       }

@@ -2,7 +2,7 @@
 
 ## What it is
 
-corparius runs autonomous AI micro-companies on the operator's own machine. The web console (app/webui.py) is the operator's control surface: watch a company work, unblock what waits for a human, steer the backlog, wire LLM providers and talk to the CEO agent.
+corparius runs autonomous AI micro-companies on the operator's own machine. The web console (corparius/webui.py) is the operator's control surface: watch a company work, unblock what waits for a human, steer the backlog, wire LLM providers and talk to the CEO agent.
 
 ## Users
 

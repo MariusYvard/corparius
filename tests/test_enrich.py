@@ -1,6 +1,7 @@
 """Enrichment fills gaps offline without overwriting real data."""
-from app.enrich import enrich, LocalHeuristicEnricher
-from app.leadsource import Lead
+
+from corparius.enrich import LocalHeuristicEnricher, enrich
+from corparius.leadsource import Lead
 
 
 def test_local_enricher_is_always_available():

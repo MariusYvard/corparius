@@ -1,0 +1,145 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "corparius"
+dynamic = ["version"]                # read from corparius/__init__.py below
+description = "A self-hosted framework for autonomous AI micro-companies."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Marius Yvard" }]
+keywords = ["ai", "agents", "automation", "self-hosted", "local-first", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Office/Business",
+]
+# The whole runtime, on purpose: everything else is stdlib. The optionals below
+# stay optional so mock mode installs with two wheels and no compiler.
+dependencies = [
+    "requests>=2.31",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+secrets = ["cryptography>=42"]       # at-rest encryption, opt-in; see docs/securite.md
+mcp = ["mcp>=1.0"]                    # the optional MCP server
+
+[project.scripts]
+corparius = "corparius.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/MariusYvard/corparius"
+Source = "https://github.com/MariusYvard/corparius"
+Issues = "https://github.com/MariusYvard/corparius/issues"
+Changelog = "https://github.com/MariusYvard/corparius/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "corparius/__init__.py"       # single source of truth, same file release.yml guards
+
+[tool.hatch.build.targets.wheel]
+packages = ["corparius"]
+# webui.html sits inside the package and ships as-is; page_file() finds it at
+# corparius/webui.html in every mode.
+artifacts = ["corparius/webui.html"]
+
+# A wheel has no sibling companies/ or plugins/ in site-packages, so the two
+# read-only resources that live outside the package at build time ride along
+# inside it under _data/. paths._resource() looks here when the repo-root
+# location is absent, i.e. only when installed.
+[tool.hatch.build.targets.wheel.force-include]
+"companies/example" = "corparius/_data/companies/example"
+"plugins/registry.json" = "corparius/_data/plugins/registry.json"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/corparius",
+    "/companies/example",
+    "/plugins/registry.json",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/docs",
+]
+
+[tool.pytest.ini_options]
+# tests/ only. A bare `pytest` from the root used to also collect
+# packaging/plugin-template/test_plugin.py, which registers an example provider
+# into llm.OPENAI_COMPAT_PROVIDERS and deploy.REGISTRY - module-level registries
+# every other test shares. It is still run in CI, in its own process, so the
+# template stays validated without leaking state into the suite.
+testpaths = ["tests"]
+# -ra surfaces skips and xfails in the summary: a test that quietly stopped
+# running is worse than one that fails.
+addopts = "-ra --strict-markers --strict-config"
+# Every warning is a failure, ResourceWarning included. The matrix spans 3.10 to
+# 3.14, so this turns "removed in the next Python" into a red leg today; and the
+# close_stores fixture in conftest.py plus Path.read_text in the site tests mean
+# a leaked sqlite handle or file now fails here rather than only breaking
+# tmp_path cleanup on Windows.
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 100          # matches the existing hand-wrapped style
+target-version = "py310"   # the oldest interpreter CI builds against
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    # The codebase wraps explanatory comments by hand and several exceed the
+    # limit by a word or two. Reflowing authored prose to satisfy a linter is a
+    # worse trade than the warning.
+    "E501",
+    # `p = lambda en, fr: i18n.pick(lang, en, fr)` is the localisation idiom in
+    # nine modules. A def would be three lines to say the same thing, and the
+    # point of the alias is that it stays visually out of the way.
+    "E731",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# start.py is the bootstrap: it runs under whatever Python the operator has,
+# which is the entire reason it checks for 3.10 first. ruff evaluates that
+# check against target-version and calls it dead code - true for the package,
+# false for the one file that has to run before the package does.
+"start.py" = ["UP036"]
+# Paired clear/update on one line, so the restore of each registry reads as the
+# single operation it is. Splitting them would obscure the pairing.
+"tests/test_plugins.py" = ["E702"]
+"tests/test_llm_setup.py" = ["E701"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+# Deliberately not --strict. The annotations here have never been checked, so a
+# strict pass reports hundreds of errors at once and gets switched off. The
+# per-module list below is the ratchet: clean leaves first, widen over time.
+warn_unused_configs = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+# All of corparius/ passes mypy at the default level (CI runs `mypy corparius/`).
+# The next ratchet is strictness: these leaf modules also require every def to be
+# annotated. Add a module here once it is fully typed.
+[[tool.mypy.overrides]]
+module = ["corparius.models", "corparius.paths", "corparius.settings_spec"]
+disallow_untyped_defs = true
+
+[tool.coverage.run]
+source = ["corparius"]
+branch = true
+omit = ["corparius/mcp_server.py"]   # optional extra, needs the mcp package
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+]

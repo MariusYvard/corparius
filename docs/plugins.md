@@ -73,10 +73,10 @@ Un plugin, c'est un manifeste plus un point d'entrée `register(api)` :
 ```python
 def register(api):
     api.register_llm_provider("monai", base="https://api.exemple.com/v1", key_env="MON_API_KEY")
-    # api.register_deploy_provider(instance)   # sous-classe app.deploy.DeployProvider
-    # api.register_lead_source(instance)       # sous-classe app.leadsource.LeadSource
-    # api.register_enricher(instance)          # sous-classe app.enrich.Enricher
-    # api.register_tool(tool)                  # app.tools.Tool (HITL + firewall s'appliquent)
+    # api.register_deploy_provider(instance)   # sous-classe corparius.deploy.DeployProvider
+    # api.register_lead_source(instance)       # sous-classe corparius.leadsource.LeadSource
+    # api.register_enricher(instance)          # sous-classe corparius.enrich.Enricher
+    # api.register_tool(tool)                  # corparius.tools.Tool (HITL + firewall s'appliquent)
     # api.register_template(dict)              # gabarit d'entreprise
     # api.customize_agent("strategy", system_prompt="...", playbook=[...])
 ```
@@ -113,6 +113,6 @@ Pour qu'un plugin devienne installable en un clic par tout le monde :
 
 ## Diagnostic
 
-`python -m app.cli doctor` (et l'onglet Réglages de la console) affiche l'état des
+`python -m corparius.cli doctor` (et l'onglet Réglages de la console) affiche l'état des
 plugins : activés ou non, combien d'installés et chargés, et un avertissement si
 un plugin **non vérifié** est chargé.

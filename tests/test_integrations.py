@@ -1,5 +1,6 @@
 """Integrations must stay dormant until configured, so the system runs offline."""
-from app import integrations
+
+from corparius import integrations
 
 
 def test_stripe_is_dormant_without_a_key(monkeypatch):

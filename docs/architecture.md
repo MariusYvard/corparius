@@ -36,7 +36,7 @@ Le routeur choisit un modèle selon le tier de difficulté. Les tâches très si
 
 ## Console opérateur
 
-Une console web locale (app/webui.py) sert une page unique via la bibliothèque standard : pouls de la company, file d'approbations, backlog kanban, métriques de flux, panneau providers (bascules, tiers, clés en écriture seule) et conversation avec l'agent CEO. Elle écoute sur 127.0.0.1, partage le store SQLite du CLI et lance les runs dans le même firewall. Voir console.md.
+Une console web locale (corparius/webui.py) sert une page unique via la bibliothèque standard : pouls de la company, file d'approbations, backlog kanban, métriques de flux, panneau providers (bascules, tiers, clés en écriture seule) et conversation avec l'agent CEO. Elle écoute sur 127.0.0.1, partage le store SQLite du CLI et lance les runs dans le même firewall. Voir console.md.
 
 ## Persistance et exécution durable
 

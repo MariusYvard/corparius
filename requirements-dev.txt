@@ -1,11 +1,11 @@
-# Development and test dependencies. Not needed to run corparius.
-#   pip install -r requirements.txt -r requirements-dev.txt
--r requirements.txt
-pytest>=8.0
+# Development dependencies. Not needed to run corparius.
+#   pip install -r requirements-dev.txt
+#
+# Tests alone live in requirements-test.txt, which the CI matrix installs. This
+# file adds PyInstaller on top: it trails new CPython releases by months, so
+# keeping it here stops one missing wheel from taking out every leg of a matrix
+# whose tests never touch it.
+-r requirements-test.txt
 
 # Builds the standalone binaries (see packaging/corparius.spec).
 pyinstaller>=6.0
-
-# Optional at-rest encryption (runtime-optional), pulled in for dev so its
-# tests actually run in CI. See requirements-secrets.txt.
-cryptography>=42

@@ -40,7 +40,7 @@ Par défaut, les clés API et jetons enregistrés depuis la console sont stocké
 
 Pour chiffrer ces secrets au repos, définissez `CORP_SECRET_KEY` (une phrase secrète). Les réglages marqués secrets sont alors chiffrés dans la base et dans les sauvegardes, via le paquet `cryptography` (`pip install -r requirements-secrets.txt`). Le chiffrement est **désactivé par défaut** pour que le mode mock hors-ligne n'exige aucune dépendance. La clé est dérivée de la phrase secrète par scrypt ; les valeurs chiffrées portent un préfixe `enc:v1:`, et les valeurs en clair déjà présentes restent lisibles jusqu'à leur prochaine écriture.
 
-Propriété importante : `CORP_SECRET_KEY` est une clé de démarrage, écrite dans `.env` (ou l'environnement), **jamais dans la base** — sinon il faudrait la base pour se déchiffrer elle-même. Comme `app/backup.py` archive `data/` et `companies/` mais **pas** `.env`, une sauvegarde volée ne contient que des secrets chiffrés, pas la phrase qui les ouvre. En contrepartie : perdez la phrase et les secrets chiffrés sont irrécupérables. Effectif au redémarrage.
+Propriété importante : `CORP_SECRET_KEY` est une clé de démarrage, écrite dans `.env` (ou l'environnement), **jamais dans la base** — sinon il faudrait la base pour se déchiffrer elle-même. Comme `corparius/backup.py` archive `data/` et `companies/` mais **pas** `.env`, une sauvegarde volée ne contient que des secrets chiffrés, pas la phrase qui les ouvre. En contrepartie : perdez la phrase et les secrets chiffrés sont irrécupérables. Effectif au redémarrage.
 
 ## Sources
 

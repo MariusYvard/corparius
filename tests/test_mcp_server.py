@@ -1,7 +1,8 @@
 """The MCP server's logic must work through its plain functions, with no `mcp`
 dependency imported (only build_server needs it)."""
-from app import mcp_server
-from app.store import Store
+
+from corparius import mcp_server
+from corparius.store import Store
 
 
 def test_run_and_status(tmp_path, monkeypatch):
@@ -18,8 +19,7 @@ def test_decide_task_modifies_and_approves(tmp_path, monkeypatch):
     monkeypatch.setattr(mcp_server.settings, "data_path", str(tmp_path))
     store = Store(str(tmp_path))
     tid = store.add_task("example", "Idea", "support", 1, "proposed", "support")
-    out = mcp_server.decide_task("example", tid, "approve",
-                                 tool="draft_support_reply", priority=2)
+    out = mcp_server.decide_task("example", tid, "approve", tool="draft_support_reply", priority=2)
     assert out["action"] == "approve" and "tool" in out["modified"]
     task = store.list_tasks("example", "approved")[0]
     assert task["tool"] == "draft_support_reply" and task["priority"] == 2

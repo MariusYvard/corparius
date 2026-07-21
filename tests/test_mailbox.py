@@ -3,12 +3,11 @@
 The company emails prospects; without this it never learns whether anyone
 answered, which is the one signal it exists to chase.
 """
+
 import types
 
-import pytest
-
-from app import cfg, mailbox, tools
-from app.store import Store
+from corparius import cfg, mailbox, tools
+from corparius.store import Store
 
 
 def test_unconfigured_mailbox_is_an_empty_layer_not_a_crash(monkeypatch):
@@ -33,11 +32,19 @@ def test_triage_says_it_is_using_samples_when_no_mailbox(monkeypatch):
 def test_triage_reads_a_real_inbox(monkeypatch):
     monkeypatch.setenv("CORP_IMAP_HOST", "imap.example.test")
     cfg.invalidate()
-    monkeypatch.setattr(mailbox, "fetch", lambda **kw: [
-        mailbox.Message(sender="ann@corp.test", sender_name="Ann",
-                        subject="URGENT: refund please", body="I want a refund"),
-        mailbox.Message(sender="bob@corp.test", subject="question", body="how does it work"),
-    ])
+    monkeypatch.setattr(
+        mailbox,
+        "fetch",
+        lambda **kw: [
+            mailbox.Message(
+                sender="ann@corp.test",
+                sender_name="Ann",
+                subject="URGENT: refund please",
+                body="I want a refund",
+            ),
+            mailbox.Message(sender="bob@corp.test", subject="question", body="how does it work"),
+        ],
+    )
     ctx = types.SimpleNamespace(company={"name": "X", "slug": "x"})
     out = tools._triage_inbox(ctx)
     assert "2 unread" in out and "1 look urgent" in out and "Ann" in out
@@ -51,10 +58,14 @@ def test_replies_are_matched_to_the_outreach_that_caused_them(tmp_path, monkeypa
     store.record_outreach("x", "silent@corp.test", "<mid-2>", "hello")
     assert store.outreach_stats("x") == {"sent": 2, "replied": 0, "reply_rate": 0.0}
 
-    monkeypatch.setattr(mailbox, "fetch", lambda **kw: [
-        mailbox.Message(sender="lead@corp.test", subject="Re: hello", body="Yes, interested."),
-        mailbox.Message(sender="stranger@nowhere.test", subject="spam", body="buy this"),
-    ])
+    monkeypatch.setattr(
+        mailbox,
+        "fetch",
+        lambda **kw: [
+            mailbox.Message(sender="lead@corp.test", subject="Re: hello", body="Yes, interested."),
+            mailbox.Message(sender="stranger@nowhere.test", subject="spam", body="buy this"),
+        ],
+    )
     ctx = types.SimpleNamespace(company={"name": "X", "slug": "x"}, store=store)
     out = tools._scan_replies(ctx)
 
@@ -71,8 +82,11 @@ def test_a_reply_is_only_counted_once(tmp_path, monkeypatch):
     cfg.invalidate()
     store = Store(str(tmp_path))
     store.record_outreach("x", "lead@corp.test", "<mid-1>", "hello")
-    monkeypatch.setattr(mailbox, "fetch", lambda **kw: [
-        mailbox.Message(sender="lead@corp.test", subject="Re: hello", body="yes")])
+    monkeypatch.setattr(
+        mailbox,
+        "fetch",
+        lambda **kw: [mailbox.Message(sender="lead@corp.test", subject="Re: hello", body="yes")],
+    )
     ctx = types.SimpleNamespace(company={"name": "X", "slug": "x"}, store=store)
     tools._scan_replies(ctx)
     second = tools._scan_replies(ctx)
@@ -91,13 +105,16 @@ def test_scan_replies_says_when_no_mailbox_is_connected(tmp_path, monkeypatch):
 
 
 def test_outreach_records_who_it_wrote_to(tmp_path, monkeypatch):
-    from app import integrations
-    from app.leadsource import Lead
+    from corparius import integrations
+    from corparius.leadsource import Lead
+
     store = Store(str(tmp_path))
-    monkeypatch.setattr(integrations, "send_email_tracked",
-                        lambda to, subject, body: ("sent", f"<{to}>"))
-    ctx = types.SimpleNamespace(company={"name": "X", "slug": "x"}, store=store,
-                                leads=[Lead(email="a@x.test")])
+    monkeypatch.setattr(
+        integrations, "send_email_tracked", lambda to, subject, body: ("sent", f"<{to}>")
+    )
+    ctx = types.SimpleNamespace(
+        company={"name": "X", "slug": "x"}, store=store, leads=[Lead(email="a@x.test")]
+    )
     tools._send_outreach(ctx, "hello")
     pending = store.pending_outreach("x")
     assert "a@x.test" in pending

@@ -8,7 +8,9 @@ non-zero on the first failure, with a GitHub-annotated message.
 Set CORP_HOME to a throwaway directory so the download lands in an isolated
 plugins folder.
 """
+
 from __future__ import annotations
+
 import os
 import sys
 
@@ -16,7 +18,7 @@ import sys
 # repo root on sys.path so `app` imports whatever the working directory.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import cfg, plugins
+from corparius import cfg, plugins
 
 
 def main() -> int:
@@ -34,7 +36,7 @@ def main() -> int:
     for entry in entries:
         name = entry["name"]
         try:
-            path = plugins.install_from_registry(name)   # download + sha256 verify
+            path = plugins.install_from_registry(name)  # download + sha256 verify
             print(f"downloaded and verified '{name}' -> {path}")
         except plugins.PluginError as exc:
             print(f"::error::{name}: {exc}")

@@ -8,7 +8,7 @@ Là où NullToHero est une boîte à outils large de conception et d'audit, ce m
 
 ## Utilisation
 
-En ligne de commande, `python -m app.cli site --company example` écrit la page dans data/sites/<slug>/index.html et affiche le chemin. L'option --headline force l'accroche. Le bouton pointe vers offer.payment_link de la config, sinon vers CORP_STRIPE_PAYMENT_LINK, sinon vers l'ancre de la section prix.
+En ligne de commande, `python -m corparius.cli site --company example` écrit la page dans data/sites/<slug>/index.html et affiche le chemin. L'option --headline force l'accroche. Le bouton pointe vers offer.payment_link de la config, sinon vers CORP_STRIPE_PAYMENT_LINK, sinon vers l'ancre de la section prix.
 
 Dans la boucle autonome, l'agent design rédige une accroche puis régénère la page à chaque cycle via l'outil build_sales_site. La page reste un artefact de données, hors du dépôt.
 

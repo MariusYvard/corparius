@@ -1,13 +1,12 @@
 """The plugin loader: off by default, curated by default, and isolated. These
 tests exercise a drop-in plugin under a temporary home so nothing touches the
 developer's machine, and restore the global registries afterwards."""
+
 import json
-import sys
 
 import pytest
 
-from app import cfg, company, plugins
-from app import llm, tools
+from corparius import cfg, company, llm, plugins, tools
 
 
 @pytest.fixture
@@ -19,27 +18,30 @@ def clean_registries():
     tpls = list(company.TEMPLATES)
     loaded = set(plugins._loaded)
     yield
-    llm.OPENAI_COMPAT_PROVIDERS.clear(); llm.OPENAI_COMPAT_PROVIDERS.update(prov)
-    tools.TOOLS.clear(); tools.TOOLS.update(tls)
+    llm.OPENAI_COMPAT_PROVIDERS.clear()
+    llm.OPENAI_COMPAT_PROVIDERS.update(prov)
+    tools.TOOLS.clear()
+    tools.TOOLS.update(tls)
     company.TEMPLATES[:] = tpls
-    plugins._loaded.clear(); plugins._loaded.update(loaded)
+    plugins._loaded.clear()
+    plugins._loaded.update(loaded)
 
 
-_REGISTER = '''
-from app.tools import Tool
-from app.models import ToolResult
+_REGISTER = """
+from corparius.tools import Tool
+from corparius.models import ToolResult
 
 def register(api):
     api.register_llm_provider("dummyprov", base="http://x/v1", key_env="DUMMY_KEY")
     api.register_tool(Tool("dummy_tool", "a plugin tool",
                            effect=lambda c, d: ToolResult(ok=True, output="ok")))
     api.register_template({"id": "dummytpl", "label_en": "Dummy", "label_fr": "Bidon"})
-'''
+"""
 
-_BROKEN = '''
+_BROKEN = """
 def register(api):
     raise RuntimeError("boom")
-'''
+"""
 
 
 def _install(home, name, code=_REGISTER, api_version=1, disabled=False, module=None):
@@ -47,10 +49,18 @@ def _install(home, name, code=_REGISTER, api_version=1, disabled=False, module=N
     d = home / "plugins" / name
     d.mkdir(parents=True, exist_ok=True)
     (d / f"{module}.py").write_text(code, encoding="utf-8")
-    (d / "corparius_plugin.json").write_text(json.dumps({
-        "name": name, "version": "0.1.0", "api_version": api_version,
-        "entrypoint": f"{module}:register", "kinds": ["llm", "tool", "template"],
-    }), encoding="utf-8")
+    (d / "corparius_plugin.json").write_text(
+        json.dumps(
+            {
+                "name": name,
+                "version": "0.1.0",
+                "api_version": api_version,
+                "entrypoint": f"{module}:register",
+                "kinds": ["llm", "tool", "template"],
+            }
+        ),
+        encoding="utf-8",
+    )
     if disabled:
         (d / ".disabled").write_text("", encoding="utf-8")
     return d
@@ -77,7 +87,7 @@ def test_unverified_skipped_without_optin(clean_registries, monkeypatch, tmp_pat
     monkeypatch.setenv("CORP_PLUGINS_ENABLED", "true")
     monkeypatch.delenv("CORP_PLUGINS_ALLOW_UNVERIFIED", raising=False)
     cfg.invalidate()
-    assert plugins.load() == []                       # not in the curated registry
+    assert plugins.load() == []  # not in the curated registry
     assert "dummyprov" not in llm.OPENAI_COMPAT_PROVIDERS
 
 
@@ -121,7 +131,7 @@ def test_broken_plugin_is_isolated(clean_registries, monkeypatch, tmp_path):
     monkeypatch.setenv("CORP_PLUGINS_ALLOW_UNVERIFIED", "true")
     cfg.invalidate()
     loaded = plugins.load()
-    assert "good" in loaded and "bad" not in loaded    # the bad one is skipped, not fatal
+    assert "good" in loaded and "bad" not in loaded  # the bad one is skipped, not fatal
     assert "dummyprov" in llm.OPENAI_COMPAT_PROVIDERS
 
 
@@ -138,14 +148,16 @@ def test_allowlist_limits_which_load(clean_registries, monkeypatch, tmp_path):
 
 # --- install / manage (no real network: _download is monkeypatched) -----------
 
+
 def _tarball(name: str, members: dict[str, str] | None = None) -> bytes:
     import io
     import tarfile
+
     root = f"{name}-main"
     files = members or {
-        "corparius_plugin.json": json.dumps({
-            "name": name, "version": "1.0.0", "api_version": 1,
-            "entrypoint": "p:register"}),
+        "corparius_plugin.json": json.dumps(
+            {"name": name, "version": "1.0.0", "api_version": 1, "entrypoint": "p:register"}
+        ),
         "p.py": "def register(api):\n    pass\n",
     }
     buf = io.BytesIO()
@@ -160,11 +172,21 @@ def _tarball(name: str, members: dict[str, str] | None = None) -> bytes:
 
 def test_install_from_registry_ok(monkeypatch, tmp_path):
     import hashlib
+
     home = _home(monkeypatch, tmp_path)
     blob = _tarball("acme")
-    monkeypatch.setattr(plugins, "registry_entries", lambda: [
-        {"name": "acme", "repo": "https://github.com/x/acme", "ref": "v1",
-         "sha256": hashlib.sha256(blob).hexdigest()}])
+    monkeypatch.setattr(
+        plugins,
+        "registry_entries",
+        lambda: [
+            {
+                "name": "acme",
+                "repo": "https://github.com/x/acme",
+                "ref": "v1",
+                "sha256": hashlib.sha256(blob).hexdigest(),
+            }
+        ],
+    )
     monkeypatch.setattr(plugins, "_download", lambda url, timeout=30.0: blob)
     path = plugins.install_from_registry("acme")
     assert path == home / "plugins" / "acme"
@@ -174,9 +196,13 @@ def test_install_from_registry_ok(monkeypatch, tmp_path):
 def test_install_from_registry_rejects_bad_sha256(monkeypatch, tmp_path):
     _home(monkeypatch, tmp_path)
     blob = _tarball("acme")
-    monkeypatch.setattr(plugins, "registry_entries", lambda: [
-        {"name": "acme", "repo": "https://github.com/x/acme", "ref": "v1",
-         "sha256": "deadbeef"}])
+    monkeypatch.setattr(
+        plugins,
+        "registry_entries",
+        lambda: [
+            {"name": "acme", "repo": "https://github.com/x/acme", "ref": "v1", "sha256": "deadbeef"}
+        ],
+    )
     monkeypatch.setattr(plugins, "_download", lambda url, timeout=30.0: blob)
     with pytest.raises(plugins.PluginError, match="sha256 mismatch"):
         plugins.install_from_registry("acme")
@@ -192,6 +218,7 @@ def test_install_unknown_registry_name(monkeypatch, tmp_path):
 def test_safe_extract_rejects_traversal(tmp_path):
     import io
     import tarfile
+
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for rel in ("acme-main/corparius_plugin.json", "../escape.py"):  # 2nd escapes dest

@@ -137,7 +137,7 @@ Or pull the published image — no checkout, one command (console on
 docker run -d -p 127.0.0.1:8600:8600 -v corparius_data:/app/data ghcr.io/mariusyvard/corparius
 ```
 
-The console walks you through creating your first company; `python -m app.cli
+The console walks you through creating your first company; `python -m corparius.cli
 doctor` diagnoses the installation and says what to fix. The CLI covers
 everything the console does: `run`, `status`, `tasks`, `board`, `flow`,
 `approvals`, `site`, `deploy`, `backup`. Compose profiles: `--profile loop`
@@ -145,7 +145,7 @@ adds the background company loop, `--profile extras` adds Postgres and n8n.
 
 ## Operator console
 
-`python -m app.cli ui` serves a zero-dependency web console on
+`python -m corparius.cli ui` serves a zero-dependency web console on
 `http://127.0.0.1:8600` (Python standard library only, single HTML file, dark
 and light themes).
 

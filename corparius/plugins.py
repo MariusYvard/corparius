@@ -147,7 +147,7 @@ def plugins_dir() -> Path:
 
 def registry_entries() -> list[dict]:
     """The curated allow-list shipped in the repo (a read-only resource)."""
-    path = paths.resource_dir() / "plugins" / "registry.json"
+    path = paths.plugin_registry_file()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return list(data.get("plugins", []))

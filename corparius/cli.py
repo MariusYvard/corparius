@@ -199,9 +199,13 @@ def cmd_decide(args, status: str) -> None:
 
 def main(argv=None) -> None:
     setup_logging()
-    from . import plugins
+    from . import company, plugins
 
     plugins.load()  # no-op unless CORP_PLUGINS_ENABLED; extends the registries
+    # Copy the bundled example into a fresh writable companies dir, the same
+    # first-run seeding the frozen launcher does. Guarded: in a source checkout
+    # the example already sits in companies/, so this is a stat and a return.
+    company.seed_examples()
     p = argparse.ArgumentParser(prog="corparius", description="Run autonomous AI micro-companies.")
     sub = p.add_subparsers(dest="cmd", required=True)
 

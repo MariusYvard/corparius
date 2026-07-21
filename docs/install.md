@@ -6,7 +6,8 @@ appel réseau.
 
 1. **Binaire téléchargé** — un fichier, un double-clic. Aucun Python, aucun terminal.
 2. **Image Docker** — une commande, sans dépôt cloné.
-3. **Depuis les sources** — `python start.py` ou les lanceurs double-clic (Python 3.10+ requis).
+3. **`pip install`** — pour qui a déjà Python et veut la commande `corparius` sur le PATH.
+4. **Depuis les sources** — `python start.py` ou les lanceurs double-clic (Python 3.10+ requis).
 
 ## 1. Binaire téléchargé (le plus simple)
 
@@ -59,7 +60,26 @@ L'image est multi-arch (amd64 et arm64), taguée `:vX.Y.Z` et `:latest`, avec un
 attestation de provenance SLSA. Le volume `corparius_data` conserve le store et
 les réglages. Voir [deploiement.md](deploiement.md) pour compose et les profils.
 
-## 3. Depuis les sources
+## 3. `pip install`
+
+Si vous avez déjà Python 3.10+ :
+
+```bash
+pip install corparius
+corparius              # lance la console sur http://127.0.0.1:8600
+```
+
+La commande `corparius` expose les mêmes sous-commandes que depuis les sources
+(`corparius run`, `corparius doctor`, `corparius plugin …`). Le mode mock reste
+le défaut : les deux seules dépendances installées sont `requests` et `PyYAML`.
+Le chiffrement au repos et le serveur MCP sont des extras optionnels :
+`pip install "corparius[secrets]"`, `pip install "corparius[mcp]"`.
+
+Au premier lancement, corparius crée la société d'exemple et écrit son store,
+son `.env` et vos sociétés dans un dossier de données par système (voir « Où
+vivent vos données » ci-dessous) — jamais dans `site-packages`.
+
+## 4. Depuis les sources
 
 `python start.py` prépare l'environnement virtuel, les dépendances, le `.env` et
 la société d'exemple, puis sert la console. Les lanceurs double-clic

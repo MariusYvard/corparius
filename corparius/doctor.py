@@ -303,6 +303,44 @@ def _check_deploy_order() -> tuple:
     return ("ok", "deploy", f"order: {', '.join(order)}")
 
 
+def _check_tier_coherence(s: Settings) -> tuple:
+    """The trap the defaults leave: enable cloud with one free key and the normal
+    tier works, but trivial still points at a local model that may be absent and
+    hard at paid Anthropic. A tier aimed at a provider with no key falls through
+    to local. Detect it and offer the one-click recommended routing as a fix."""
+    if s.llm_mock:
+        return ("ok", "routing", "mock mode: tiers are not used")
+    broken = []
+    for tier, model in (
+        ("trivial", s.trivial_model),
+        ("normal", s.normal_model),
+        ("hard", s.hard_model),
+    ):
+        target, _ = _split(model)
+        if target in ("local", "claudecode"):
+            continue
+        if target == "cloud":
+            if not cfg.get("ANTHROPIC_API_KEY", "").strip():
+                broken.append(tier)
+        elif target in OPENAI_COMPAT_PROVIDERS:
+            spec = OPENAI_COMPAT_PROVIDERS[target]
+            configured = cfg.get(spec["key_env"], "").strip() or (
+                spec.get("key_optional")
+                and (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base"))
+            )
+            if not configured:
+                broken.append(tier)
+    if broken:
+        return (
+            "warn",
+            "routing",
+            f"the {', '.join(broken)} tier points at a provider with no key; it falls "
+            "through to local. Use recommended routing (Providers) to fix it.",
+            "recommend_routing",
+        )
+    return ("ok", "routing", "every tier resolves to a configured provider")
+
+
 def run_checks(settings: Settings | None = None) -> list[dict]:
     s = settings or Settings()
     checks = [
@@ -316,12 +354,19 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_companies(),
         _check_ollama(s),
         _check_providers(s),
+        _check_tier_coherence(s),
         _check_network(s),
         _check_claude_cli(s),
         _check_deploy_order(),
         _check_plugins(s),
     ]
-    return [{"level": lv, "name": n, "message": m} for lv, n, m in checks]
+    out = []
+    for c in checks:
+        entry = {"level": c[0], "name": c[1], "message": c[2]}
+        if len(c) > 3 and c[3]:  # an optional one-click fix hint for the console
+            entry["fix"] = c[3]
+        out.append(entry)
+    return out
 
 
 def main(quiet: bool = False) -> int:

@@ -490,9 +490,12 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <div class="grid half">
       <div class="card">
         <h2 data-i18n="prov.tiers">Routing tiers</h2>
+        <p class="note" style="margin:-6px 0 10px" data-i18n="prov.routingNote">Connected a free key? Let the console fill every tier coherently instead of typing model strings.</p>
         <div class="tier-grid" id="tiers"></div>
-        <div style="margin-top:14px; display:flex; gap:10px; align-items:center">
-          <button id="save-tiers" class="primary" data-i18n="prov.saveTiers">Save tiers</button>
+        <datalist id="model-suggestions"></datalist>
+        <div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+          <button id="recommend-routing" class="primary" data-recommend data-i18n="prov.useRouting">Use recommended routing</button>
+          <button id="save-tiers" data-i18n="prov.saveTiers">Save tiers</button>
           <span class="note" data-i18n="prov.format">Format: target:model, e.g. groq:llama-3.3-70b-versatile</span>
         </div>
       </div>
@@ -689,6 +692,8 @@ en: {
   "prov.docs":"Detailed limits per provider",
   "prov.getKey":"Get a free key","prov.noCard":"no card","prov.noCardTip":"No payment card needed to sign up",
   "prov.startHere":"Start here","prov.moreProviders":"More providers","prov.activate":"Use this for the normal tier",
+  "prov.useRouting":"Use recommended routing","prov.models":"Models","prov.loadingModels":"Loading models…","prov.modelsLoaded":"{n} models added to suggestions",
+  "prov.routingNote":"Connected a free key? Let the console fill every tier coherently instead of typing model strings.",
   "prov.ladder":"Easiest first: stay in mock (already on, offline), use your Claude subscription above, get a free key below (Groq or Cerebras, no card, about two minutes), or run a local model with Ollama.",
   "ceo.empty":"Talk to the CEO agent about the plan, the backlog or the numbers. Replies use your configured routing (mock mode answers offline).",
   "ceo.placeholder":"Ask the CEO about the plan, the backlog, the numbers…","ceo.send":"Send",
@@ -704,12 +709,12 @@ en: {
   "site.generate":"Generate the site","site.regenerate":"Regenerate","site.open":"Open full size","site.built":"Site generated",
   "pay.title":"Payments","pay.desc":"Money actually received, read from Stripe.",
   "pay.total":"Total received","pay.none":"No payments yet.","pay.mock":"sample data: set STRIPE_API_KEY (restricted read key) for live payments",
-  "pay.error":"Stripe unreachable:","toast.saved":"Saved","toast.keySaved":"Key saved to .env","toast.tiersSaved":"Tiers saved","toast.activated":"Cloud on, normal tier set to this provider",
+  "pay.error":"Stripe unreachable:","toast.saved":"Saved","toast.keySaved":"Key saved to .env","toast.tiersSaved":"Tiers saved","toast.activated":"Cloud on, normal tier set to this provider","toast.routed":"Routing set from your connected providers",
   "toast.nothing":"Nothing to save","toast.pasteFirst":"Paste a key first",
   "wiz.template":"Start from","wiz.title":"Create your first company","wiz.desc":"Two fields are enough to start. Everything else takes a sensible default and is editable under Settings.",
   "wiz.name":"Company name","wiz.product":"What does it sell?","wiz.productPh":"Handmade scented candles, sold online in France.",
   "wiz.advanced":"Agents and budget (defaults are fine)","wiz.budget":"Token budget per run",
-  "wiz.create":"Create the company","wiz.hint":"Runs offline in mock mode by default.","wiz.created":"Company created",
+  "wiz.create":"Create the company","wiz.hint":"Runs offline in mock mode by default. Connect a free key in Providers, then Use recommended routing, to make it real.","wiz.created":"Company created",
   "wiz.newOption":"+ New company…",
   "doc.title":"Diagnostics","doc.desc":"Checks Python, the store, Ollama, providers and the network, and says what to fix.",
   "doc.run":"Run diagnostics","footer.support":"Support the project",
@@ -835,6 +840,8 @@ fr: {
   "prov.docs":"Limites détaillées par fournisseur",
   "prov.getKey":"Obtenir une clé gratuite","prov.noCard":"sans carte","prov.noCardTip":"Aucune carte bancaire pour s'inscrire",
   "prov.startHere":"Commencez ici","prov.moreProviders":"Autres fournisseurs","prov.activate":"Utiliser pour le tier normal",
+  "prov.useRouting":"Utiliser le routage recommandé","prov.models":"Modèles","prov.loadingModels":"Chargement des modèles…","prov.modelsLoaded":"{n} modèles ajoutés aux suggestions",
+  "prov.routingNote":"Une clé gratuite connectée ? Laissez la console remplir chaque tier de façon cohérente au lieu de taper des noms de modèles.",
   "prov.ladder":"Du plus simple au plus avancé : rester en mock (déjà actif, hors ligne), utiliser votre abonnement Claude ci-dessus, obtenir une clé gratuite ci-dessous (Groq ou Cerebras, sans carte, environ deux minutes), ou faire tourner un modèle local avec Ollama.",
   "ceo.empty":"Parlez à l'agent CEO du plan, du backlog ou des chiffres. Les réponses passent par votre routage configuré (le mode mock répond hors ligne).",
   "ceo.placeholder":"Interrogez le CEO sur le plan, le backlog, les chiffres…","ceo.send":"Envoyer",
@@ -892,12 +899,12 @@ fr: {
   "site.generate":"Générer le site","site.regenerate":"Régénérer","site.open":"Ouvrir en grand","site.built":"Site généré",
   "pay.title":"Paiements","pay.desc":"L'argent réellement reçu, lu depuis Stripe.",
   "pay.total":"Total reçu","pay.none":"Aucun paiement pour l'instant.","pay.mock":"données d'exemple : posez STRIPE_API_KEY (clé lecture restreinte) pour le réel",
-  "pay.error":"Stripe injoignable :","toast.saved":"Enregistré","toast.keySaved":"Clé écrite dans .env","toast.tiersSaved":"Tiers enregistrés","toast.activated":"Cloud activé, tier normal réglé sur ce fournisseur",
+  "pay.error":"Stripe injoignable :","toast.saved":"Enregistré","toast.keySaved":"Clé écrite dans .env","toast.tiersSaved":"Tiers enregistrés","toast.activated":"Cloud activé, tier normal réglé sur ce fournisseur","toast.routed":"Routage réglé depuis vos providers connectés",
   "toast.nothing":"Rien à enregistrer","toast.pasteFirst":"Collez d'abord une clé",
   "wiz.template":"Partir de","wiz.title":"Créez votre première société","wiz.desc":"Deux champs suffisent pour démarrer. Tout le reste prend une valeur par défaut, modifiable dans Réglages.",
   "wiz.name":"Nom de la société","wiz.product":"Que vend-elle ?","wiz.productPh":"Bougies parfumées artisanales, vendues en ligne en France.",
   "wiz.advanced":"Agents et budget (les défauts conviennent)","wiz.budget":"Budget tokens par run",
-  "wiz.create":"Créer la société","wiz.hint":"Tourne hors ligne en mode mock par défaut.","wiz.created":"Société créée",
+  "wiz.create":"Créer la société","wiz.hint":"Tourne hors ligne en mode mock par défaut. Connectez une clé gratuite dans Providers, puis Utiliser le routage recommandé, pour le rendre réel.","wiz.created":"Société créée",
   "wiz.newOption":"+ Nouvelle société…",
   "doc.title":"Diagnostics","doc.desc":"Vérifie Python, le store, Ollama, les providers et le réseau, et dit quoi corriger.",
   "doc.barFail":"{n} vérification(s) à corriger :","doc.barOpen":"Voir le diagnostic",
@@ -1574,19 +1581,33 @@ document.addEventListener("click", async e => {
     finally { b.disabled = false; }
     return;
   }
-  if (b.dataset.activateProvider) {
-    // The last step of getting a key working: flip the two toggles and point the
-    // normal tier at this provider, all through the same audited endpoint the
-    // manual switches use. No model runs on its own.
-    const prov = (state.providers && state.providers.providers || []).find(p => p.name === b.dataset.activateProvider);
-    if (!prov) return;
+  if (b.dataset.recommend !== undefined || b.id === "recommend-routing") {
+    // Turn the connected free provider(s) into a working setup in one call:
+    // flip mock off and cloud on, and fill every tier coherently (so none is
+    // left pointing at something unconfigured). Same audited endpoint as the
+    // manual switches; nothing runs on its own.
     b.disabled = true;
     try {
-      const values = {CORP_LLM_MOCK: "false", CORP_CLOUD_ENABLED: "true"};
-      if (prov.default_model) values.CORP_NORMAL_MODEL = prov.name + ":" + prov.default_model;
-      await api("/api/providers", {values});
-      toast(t("toast.activated")); await loadProviders(); await refresh();
+      await api("/api/tiers/recommend", {});
+      toast(t("toast.routed")); await loadProviders(); await refresh();
     } catch (err) { toast(err.message, true); b.disabled = false; }
+    return;
+  }
+  if (b.dataset.loadModels) {
+    // Fetch the models a provider advertises and add them to the shared datalist,
+    // so the tier fields autocomplete real names instead of remembered ones.
+    const name = b.dataset.loadModels;
+    const out = $(`[data-test-out="${CSS.escape(name)}"]`);
+    b.disabled = true; if (out) { out.textContent = t("prov.loadingModels"); out.style.color = "var(--muted)"; }
+    try {
+      const d = await api("/api/provider/models", {name});
+      const dl = $("#model-suggestions");
+      (d.models || []).forEach(m => {
+        const opt = document.createElement("option"); opt.value = name + ":" + m; dl.appendChild(opt);
+      });
+      if (out) { out.textContent = t("prov.modelsLoaded").replace("{n}", (d.models || []).length); out.style.color = "var(--ok)"; }
+    } catch (err) { if (out) { out.textContent = err.message; out.style.color = "var(--warn)"; } }
+    finally { b.disabled = false; }
     return;
   }
   try {
@@ -1743,7 +1764,7 @@ function renderProviders(d) {
     ["CORP_HARD_MODEL","tier.hard",d.tiers.hard],["CORP_LOCAL_MODEL","tier.local",d.tiers.local_fallback],
     ["CORP_LLM_FALLBACK","tier.chain",d.tiers.fallback_chain]];
   $("#tiers").innerHTML = tiers.map(([k, l, v]) =>
-    `<label for="tier-${k}">${t(l)}</label><input type="text" id="tier-${k}" data-tier="${k}" value="${esc(v)}" spellcheck="false"${k === "CORP_LLM_FALLBACK" ? ' placeholder="groq:llama-3.3-70b-versatile,cerebras:gpt-oss-120b"' : ""}>`).join("");
+    `<label for="tier-${k}">${t(l)}</label><input type="text" id="tier-${k}" data-tier="${k}" list="model-suggestions" value="${esc(v)}" spellcheck="false"${k === "CORP_LLM_FALLBACK" ? ' placeholder="groq:llama-3.3-70b-versatile,cerebras:gpt-oss-120b"' : ""}>`).join("");
   const st = $("#prov-status");
   if (d.llm_mock) { st.hidden = false; st.textContent = t("prov.stillMock"); }
   else if (!d.cloud_enabled) { st.hidden = false; st.textContent = t("prov.cloudOff"); }
@@ -1765,9 +1786,10 @@ function renderProviders(d) {
       <span class="pkey">
         ${pr.configured ? `<span class="badge ok">${t("badge.active")}</span>` : `<span class="badge dim">${t("badge.off")}</span>`}
         <input type="password" data-key="${esc(pr.key_env)}" placeholder="${t("prov.paste")}" aria-label="${esc(pr.key_env)}">
-        <span style="display:flex; gap:6px">
+        <span style="display:flex; gap:6px; flex-wrap:wrap">
           <button data-save-key="${esc(pr.key_env)}">${t("btn.save")}</button>
           <button data-test-provider="${esc(pr.name)}">${t("prov.test")}</button>
+          ${pr.configured ? `<button data-load-models="${esc(pr.name)}">${t("prov.models")}</button>` : ""}
         </span>
         <div class="note" data-test-out="${esc(pr.name)}" style="font-size:12px; grid-column:1/-1"></div>
       </span>
@@ -1796,12 +1818,12 @@ async function autoTestAndActivate(keyEnv) {
     const { result } = await api("/api/test/provider", {name: prov.name, lang});
     out.textContent = result.detail;
     out.style.color = result.ok ? "var(--ok)" : "var(--warn)";
-    const alreadyLive = !d.llm_mock && d.cloud_enabled && (d.tiers.normal || "").startsWith(prov.name + ":");
-    if (result.ok && !alreadyLive) {
+    const notLive = d.llm_mock || !d.cloud_enabled;
+    if (result.ok && notLive) {
       const btn = document.createElement("button");
       btn.className = "link-quiet"; btn.style.marginTop = "6px";
-      btn.textContent = t("prov.activate");
-      btn.dataset.activateProvider = prov.name;
+      btn.textContent = t("prov.useRouting");
+      btn.dataset.recommend = "1";
       out.appendChild(document.createElement("br"));
       out.appendChild(btn);
     }
@@ -1930,10 +1952,12 @@ $("#run-doctor").addEventListener("click", async () => {
   try {
     const { checks } = await api("/api/doctor");
     const cls = { ok: "ok", warn: "warn", fail: "danger" };
+    // A check may carry a one-click fix hint (currently only recommend_routing),
+    // so the diagnosis leads straight to the action instead of a manual detour.
     out.innerHTML = checks.map(c => `
       <div style="display:flex; gap:10px; align-items:baseline; font-size:13.5px">
         <span class="badge ${cls[c.level]}" style="min-width:52px; justify-content:center">${c.level}</span>
-        <span><strong>${esc(c.name)}</strong> · ${esc(c.message)}</span></div>`).join("");
+        <span><strong>${esc(c.name)}</strong> · ${esc(c.message)}${c.fix === "recommend_routing" ? ` <button class="link-quiet" data-recommend>${t("prov.useRouting")}</button>` : ""}</span></div>`).join("");
   } catch (e) { out.innerHTML = `<span class="badge danger">${esc(e.message)}</span>`; }
 });
 

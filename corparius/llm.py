@@ -75,28 +75,96 @@ def _mock_json(prompt: str, model: str) -> str:
 #   base_env: overrides base when the endpoint depends on the account
 #             (Cloudflare) or is self-chosen (custom: OmniRoute, LiteLLM,
 #             vLLM, LM Studio, any OpenAI-compatible gateway).
-# Free-tier limits and signup links are documented in docs/llm-providers.md.
+# Free-tier limits are documented in docs/llm-providers.md; the per-provider
+# signup page is carried here too so the console can link straight to it from the
+# row where the key is pasted, instead of sending the operator to read a table.
+#   signup:        the exact page that creates/holds the API key (https).
+#   no_card:       true only where signup needs no payment card (kept factual to
+#                  the doc: an over-promised badge is worse than none).
+#   recommended:   the "start here" picks - no card, fast, generous, no data
+#                  caveat. Rendered first, so 14 providers do not read as a wall.
+#   default_model: a sane model to route the normal tier to when the operator
+#                  accepts the one-click activation after a key tests green. Only
+#                  set where the model name is known-good (see the doc example).
 OPENAI_COMPAT_PROVIDERS: dict[str, dict] = {
-    "groq": {"base": "https://api.groq.com/openai/v1", "key_env": "GROQ_API_KEY"},
-    "cerebras": {"base": "https://api.cerebras.ai/v1", "key_env": "CEREBRAS_API_KEY"},
-    "openrouter": {"base": "https://openrouter.ai/api/v1", "key_env": "OPENROUTER_API_KEY"},
-    "mistral": {"base": "https://api.mistral.ai/v1", "key_env": "MISTRAL_API_KEY"},
+    "groq": {
+        "base": "https://api.groq.com/openai/v1",
+        "key_env": "GROQ_API_KEY",
+        "signup": "https://console.groq.com/keys",
+        "no_card": True,
+        "recommended": True,
+        "default_model": "llama-3.3-70b-versatile",
+    },
+    "cerebras": {
+        "base": "https://api.cerebras.ai/v1",
+        "key_env": "CEREBRAS_API_KEY",
+        "signup": "https://cloud.cerebras.ai",
+        "no_card": True,
+        "recommended": True,
+        "default_model": "gpt-oss-120b",
+    },
+    "openrouter": {
+        "base": "https://openrouter.ai/api/v1",
+        "key_env": "OPENROUTER_API_KEY",
+        "signup": "https://openrouter.ai/keys",
+        "default_model": "deepseek/deepseek-r1-0528:free",
+    },
+    "mistral": {
+        "base": "https://api.mistral.ai/v1",
+        "key_env": "MISTRAL_API_KEY",
+        "signup": "https://console.mistral.ai/api-keys",
+        "default_model": "mistral-small-latest",
+    },
     "gemini": {
         "base": "https://generativelanguage.googleapis.com/v1beta/openai",
         "key_env": "GEMINI_API_KEY",
+        "signup": "https://aistudio.google.com/app/apikey",
     },
-    "nvidia": {"base": "https://integrate.api.nvidia.com/v1", "key_env": "NVIDIA_API_KEY"},
-    "github": {"base": "https://models.github.ai/inference", "key_env": "GITHUB_TOKEN"},
-    "cohere": {"base": "https://api.cohere.ai/compatibility/v1", "key_env": "CO_API_KEY"},
-    "huggingface": {"base": "https://router.huggingface.co/v1", "key_env": "HF_TOKEN"},
+    "nvidia": {
+        "base": "https://integrate.api.nvidia.com/v1",
+        "key_env": "NVIDIA_API_KEY",
+        "signup": "https://build.nvidia.com/settings/api-keys",
+    },
+    "github": {
+        "base": "https://models.github.ai/inference",
+        "key_env": "GITHUB_TOKEN",
+        "signup": "https://github.com/settings/tokens",
+        "no_card": True,
+    },
+    "cohere": {
+        "base": "https://api.cohere.ai/compatibility/v1",
+        "key_env": "CO_API_KEY",
+        "signup": "https://dashboard.cohere.com/api-keys",
+    },
+    "huggingface": {
+        "base": "https://router.huggingface.co/v1",
+        "key_env": "HF_TOKEN",
+        "signup": "https://huggingface.co/settings/tokens",
+    },
     "ovh": {
         "base": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
         "key_env": "OVH_AI_ENDPOINTS_ACCESS_TOKEN",
         "key_optional": True,
+        "signup": "https://endpoints.ai.cloud.ovh.net",
+        "no_card": True,
+        "default_model": "gpt-oss-120b",
     },
-    "zhipu": {"base": "https://open.bigmodel.cn/api/paas/v4", "key_env": "ZHIPU_API_KEY"},
-    "siliconflow": {"base": "https://api.siliconflow.cn/v1", "key_env": "SILICONFLOW_API_KEY"},
-    "cloudflare": {"base": "", "base_env": "CF_AI_BASE_URL", "key_env": "CLOUDFLARE_API_TOKEN"},
+    "zhipu": {
+        "base": "https://open.bigmodel.cn/api/paas/v4",
+        "key_env": "ZHIPU_API_KEY",
+        "signup": "https://open.bigmodel.cn/usercenter/apikeys",
+    },
+    "siliconflow": {
+        "base": "https://api.siliconflow.cn/v1",
+        "key_env": "SILICONFLOW_API_KEY",
+        "signup": "https://cloud.siliconflow.cn/account/ak",
+    },
+    "cloudflare": {
+        "base": "",
+        "base_env": "CF_AI_BASE_URL",
+        "key_env": "CLOUDFLARE_API_TOKEN",
+        "signup": "https://dash.cloudflare.com/profile/api-tokens",
+    },
     "custom": {
         "base": "",
         "base_env": "CORP_CUSTOM_LLM_URL",

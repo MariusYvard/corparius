@@ -232,6 +232,13 @@ def _providers_payload() -> dict:
                 "key_optional": bool(spec.get("key_optional")),
                 "configured": bool(key) or (bool(spec.get("key_optional")) and bool(base)),
                 "key_set": bool(key),
+                # Onboarding metadata: the signup page to link to, whether it
+                # needs a card, the "start here" flag, and a model to route the
+                # normal tier to on one-click activation. See llm.py.
+                "signup": spec.get("signup", ""),
+                "no_card": bool(spec.get("no_card")),
+                "recommended": bool(spec.get("recommended")),
+                "default_model": spec.get("default_model", ""),
             }
         )
     return {

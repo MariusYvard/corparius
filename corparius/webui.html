@@ -482,8 +482,9 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
     <div class="card">
       <h2 data-i18n="prov.free">Free-tier providers</h2>
       <p class="banner" id="prov-status" style="margin:4px 0 12px" hidden></p>
-      <p class="note" style="margin:4px 0 14px" data-i18n="prov.freeNote">A provider joins the routing pool once its key is set (and cloud is enabled). Keys are write-only: the console never displays them back.</p>
-      <p class="note" style="margin:-8px 0 14px"><a href="https://github.com/MariusYvard/corparius/blob/main/docs/llm-providers.md" target="_blank" rel="noopener" data-i18n="prov.docs">Limits and signup links</a></p>
+      <p class="note" style="margin:4px 0 10px" data-i18n="prov.ladder">Easiest first: stay in mock (already on, offline) · use your Claude subscription above · get a free key below (Groq or Cerebras, no card, about two minutes) · or run a local model with Ollama.</p>
+      <p class="note" style="margin:0 0 14px" data-i18n="prov.freeNote">A provider joins the routing pool once its key is set (and cloud is enabled). Keys are write-only: the console never displays them back.</p>
+      <p class="note" style="margin:-8px 0 14px"><a href="https://github.com/MariusYvard/corparius/blob/main/docs/llm-providers.md" target="_blank" rel="noopener" data-i18n="prov.docs">Detailed limits per provider</a></p>
       <div id="providers"></div>
     </div>
       <div class="grid half">
@@ -685,7 +686,10 @@ en: {
   "prov.paste":"paste key","prov.optional":"optional","prov.endpoint":"endpoint URL",
   "prov.stillMock":"Mock mode is on: saved keys are kept but not used yet. Turn mock off in Runtime.",
   "prov.cloudOff":"Cloud is disabled: saved keys are kept but not used yet. Enable cloud in Runtime.",
-  "prov.docs":"Limits and signup links",
+  "prov.docs":"Detailed limits per provider",
+  "prov.getKey":"Get a free key","prov.noCard":"no card","prov.noCardTip":"No payment card needed to sign up",
+  "prov.startHere":"Start here","prov.moreProviders":"More providers","prov.activate":"Use this for the normal tier",
+  "prov.ladder":"Easiest first: stay in mock (already on, offline), use your Claude subscription above, get a free key below (Groq or Cerebras, no card, about two minutes), or run a local model with Ollama.",
   "ceo.empty":"Talk to the CEO agent about the plan, the backlog or the numbers. Replies use your configured routing (mock mode answers offline).",
   "ceo.placeholder":"Ask the CEO about the plan, the backlog, the numbers…","ceo.send":"Send",
   "ceo.proposes":"The CEO can do this now:","ceo.notNow":"Not now","ceo.launched":"Done.",
@@ -700,7 +704,7 @@ en: {
   "site.generate":"Generate the site","site.regenerate":"Regenerate","site.open":"Open full size","site.built":"Site generated",
   "pay.title":"Payments","pay.desc":"Money actually received, read from Stripe.",
   "pay.total":"Total received","pay.none":"No payments yet.","pay.mock":"sample data: set STRIPE_API_KEY (restricted read key) for live payments",
-  "pay.error":"Stripe unreachable:","toast.saved":"Saved","toast.keySaved":"Key saved to .env","toast.tiersSaved":"Tiers saved",
+  "pay.error":"Stripe unreachable:","toast.saved":"Saved","toast.keySaved":"Key saved to .env","toast.tiersSaved":"Tiers saved","toast.activated":"Cloud on, normal tier set to this provider",
   "toast.nothing":"Nothing to save","toast.pasteFirst":"Paste a key first",
   "wiz.template":"Start from","wiz.title":"Create your first company","wiz.desc":"Two fields are enough to start. Everything else takes a sensible default and is editable under Settings.",
   "wiz.name":"Company name","wiz.product":"What does it sell?","wiz.productPh":"Handmade scented candles, sold online in France.",
@@ -828,7 +832,10 @@ fr: {
   "prov.paste":"coller la clé","prov.optional":"facultatif","prov.endpoint":"URL de l'endpoint",
   "prov.stillMock":"Mode mock actif : les clés sont enregistrées mais pas encore utilisées. Désactivez le mock dans Exécution.",
   "prov.cloudOff":"Cloud désactivé : les clés sont enregistrées mais pas encore utilisées. Activez le cloud dans Exécution.",
-  "prov.docs":"Limites et liens d'inscription",
+  "prov.docs":"Limites détaillées par fournisseur",
+  "prov.getKey":"Obtenir une clé gratuite","prov.noCard":"sans carte","prov.noCardTip":"Aucune carte bancaire pour s'inscrire",
+  "prov.startHere":"Commencez ici","prov.moreProviders":"Autres fournisseurs","prov.activate":"Utiliser pour le tier normal",
+  "prov.ladder":"Du plus simple au plus avancé : rester en mock (déjà actif, hors ligne), utiliser votre abonnement Claude ci-dessus, obtenir une clé gratuite ci-dessous (Groq ou Cerebras, sans carte, environ deux minutes), ou faire tourner un modèle local avec Ollama.",
   "ceo.empty":"Parlez à l'agent CEO du plan, du backlog ou des chiffres. Les réponses passent par votre routage configuré (le mode mock répond hors ligne).",
   "ceo.placeholder":"Interrogez le CEO sur le plan, le backlog, les chiffres…","ceo.send":"Envoyer",
   "ceo.proposes":"Le CEO peut le faire maintenant :","ceo.notNow":"Pas maintenant","ceo.launched":"C'est fait.",
@@ -885,7 +892,7 @@ fr: {
   "site.generate":"Générer le site","site.regenerate":"Régénérer","site.open":"Ouvrir en grand","site.built":"Site généré",
   "pay.title":"Paiements","pay.desc":"L'argent réellement reçu, lu depuis Stripe.",
   "pay.total":"Total reçu","pay.none":"Aucun paiement pour l'instant.","pay.mock":"données d'exemple : posez STRIPE_API_KEY (clé lecture restreinte) pour le réel",
-  "pay.error":"Stripe injoignable :","toast.saved":"Enregistré","toast.keySaved":"Clé écrite dans .env","toast.tiersSaved":"Tiers enregistrés",
+  "pay.error":"Stripe injoignable :","toast.saved":"Enregistré","toast.keySaved":"Clé écrite dans .env","toast.tiersSaved":"Tiers enregistrés","toast.activated":"Cloud activé, tier normal réglé sur ce fournisseur",
   "toast.nothing":"Rien à enregistrer","toast.pasteFirst":"Collez d'abord une clé",
   "wiz.template":"Partir de","wiz.title":"Créez votre première société","wiz.desc":"Deux champs suffisent pour démarrer. Tout le reste prend une valeur par défaut, modifiable dans Réglages.",
   "wiz.name":"Nom de la société","wiz.product":"Que vend-elle ?","wiz.productPh":"Bougies parfumées artisanales, vendues en ligne en France.",
@@ -1567,6 +1574,21 @@ document.addEventListener("click", async e => {
     finally { b.disabled = false; }
     return;
   }
+  if (b.dataset.activateProvider) {
+    // The last step of getting a key working: flip the two toggles and point the
+    // normal tier at this provider, all through the same audited endpoint the
+    // manual switches use. No model runs on its own.
+    const prov = (state.providers && state.providers.providers || []).find(p => p.name === b.dataset.activateProvider);
+    if (!prov) return;
+    b.disabled = true;
+    try {
+      const values = {CORP_LLM_MOCK: "false", CORP_CLOUD_ENABLED: "true"};
+      if (prov.default_model) values.CORP_NORMAL_MODEL = prov.name + ":" + prov.default_model;
+      await api("/api/providers", {values});
+      toast(t("toast.activated")); await loadProviders(); await refresh();
+    } catch (err) { toast(err.message, true); b.disabled = false; }
+    return;
+  }
   try {
     if (b.dataset.toggle) {
       const next = b.getAttribute("aria-checked") !== "true";
@@ -1579,9 +1601,13 @@ document.addEventListener("click", async e => {
       const baseInput = b.closest(".prow").querySelector("input[data-base]");
       if (baseInput && baseInput.value.trim()) { values[baseInput.dataset.base] = baseInput.value.trim(); dirty = true; }
       if (!dirty) return toast(t("toast.nothing"), true);
+      const keyEnv = b.dataset.saveKey, keySaved = !!values[keyEnv];
       await api("/api/providers", {values});
       input.value = "";
       toast(t("toast.keySaved")); await loadProviders();
+      // A saved key is worth nothing until it is checked; test it now, and on a
+      // green result offer to make it the working config in one click.
+      if (keySaved) await autoTestAndActivate(keyEnv);
     } else if (b.id === "save-tiers") {
       const values = {};
       $$("input[data-tier]").forEach(i => values[i.dataset.tier] = i.value.trim());
@@ -1724,9 +1750,9 @@ function renderProviders(d) {
   else { st.hidden = true; }
   $("#anthropic-state").innerHTML = d.anthropic_key_set ? `<span class="badge ok">${t("badge.keySet")}</span>` : `<span class="badge dim">${t("badge.noKey")}</span>`;
   const servers = d.server_presets || [];
-  $("#providers").innerHTML = d.providers.map(pr => `
+  const row = pr => `
     <div class="prow">
-      <span><span class="pname">${esc(pr.name)}</span><br><span class="note mono">${esc(pr.name)}:&lt;model&gt;</span></span>
+      <span><span class="pname">${esc(pr.name)}</span>${pr.no_card ? ` <span class="badge dim" title="${esc(t("prov.noCardTip"))}">${t("prov.noCard")}</span>` : ""}<br><span class="note mono">${esc(pr.name)}:&lt;model&gt;</span></span>
       <span>
         ${pr.name === "custom" && servers.length ? `<select data-server-preset aria-label="${esc(t("prov.localServer"))}" style="width:100%; margin-bottom:6px">
             <option value="">${esc(t("prov.localServer"))}</option>
@@ -1734,6 +1760,7 @@ function renderProviders(d) {
           </select>` : ""}
         ${pr.base_env ? `<input type="text" data-base="${esc(pr.base_env)}" aria-label="${esc(pr.base_env)}" placeholder="${esc(pr.base_env)} (${t("prov.endpoint")})" value="${pr.base && pr.base_env ? esc(pr.base) : ""}" style="width:100%; margin-bottom:6px">` : `<span class="pbase">${esc(pr.base.replace("https://",""))}</span><br>`}
         <span class="pbase">${esc(pr.key_env)}${pr.key_optional ? " · " + t("prov.optional") : ""}</span>
+        ${pr.signup ? `<br><a href="${esc(pr.signup)}" target="_blank" rel="noopener" class="link-quiet" style="font-size:12.5px">${t("prov.getKey")}</a>` : ""}
       </span>
       <span class="pkey">
         ${pr.configured ? `<span class="badge ok">${t("badge.active")}</span>` : `<span class="badge dim">${t("badge.off")}</span>`}
@@ -1744,7 +1771,41 @@ function renderProviders(d) {
         </span>
         <div class="note" data-test-out="${esc(pr.name)}" style="font-size:12px; grid-column:1/-1"></div>
       </span>
-    </div>`).join("");
+    </div>`;
+  // "Start here" first: the no-card, fast, generous picks, so fourteen rows do
+  // not read as a wall. The rest follow under a quiet divider.
+  const recommended = d.providers.filter(p => p.recommended);
+  const rest = d.providers.filter(p => !p.recommended);
+  $("#providers").innerHTML =
+    (recommended.length ? `<p class="note" style="margin:0 0 8px">${t("prov.startHere")}</p>` + recommended.map(row).join("") : "") +
+    (recommended.length && rest.length ? `<p class="note" style="margin:14px 0 8px">${t("prov.moreProviders")}</p>` : "") +
+    rest.map(row).join("");
+}
+
+// Run the real test on a just-saved key, and if it passes offer a single button
+// that turns it into a working setup (cloud on, mock off, normal tier routed
+// here). The offer is skipped when that is already the case.
+async function autoTestAndActivate(keyEnv) {
+  const d = state.providers;
+  const prov = d && d.providers.find(p => p.key_env === keyEnv);
+  if (!prov) return;
+  const out = $(`[data-test-out="${CSS.escape(prov.name)}"]`);
+  if (!out) return;
+  out.textContent = t("prov.testing"); out.style.color = "var(--muted)";
+  try {
+    const { result } = await api("/api/test/provider", {name: prov.name, lang});
+    out.textContent = result.detail;
+    out.style.color = result.ok ? "var(--ok)" : "var(--warn)";
+    const alreadyLive = !d.llm_mock && d.cloud_enabled && (d.tiers.normal || "").startsWith(prov.name + ":");
+    if (result.ok && !alreadyLive) {
+      const btn = document.createElement("button");
+      btn.className = "link-quiet"; btn.style.marginTop = "6px";
+      btn.textContent = t("prov.activate");
+      btn.dataset.activateProvider = prov.name;
+      out.appendChild(document.createElement("br"));
+      out.appendChild(btn);
+    }
+  } catch (err) { out.textContent = err.message; out.style.color = "var(--danger)"; }
 }
 
 /* CEO chat */

@@ -188,6 +188,22 @@ MAIL_PRESETS: list[dict] = [
 # a tier at custom:<model>. Ports are the projects' defaults.
 LLM_SERVER_PRESETS: list[dict] = [
     {
+        # A gateway, not a single-model server: it aggregates many free tiers
+        # behind one endpoint and answers out of the box with keyless providers,
+        # so it is the shortest path to free models without collecting keys.
+        "id": "omniroute",
+        "label": "OmniRoute (free-tier gateway)",
+        "url": "http://localhost:20128/v1",
+        "note_en": "Self-hosted gateway over many free tiers. Run it "
+        "(docker run -d -p 127.0.0.1:20128:20128 diegosouzapw/omniroute:latest), "
+        "then paste the key from its dashboard, Endpoints. It answers immediately "
+        "with keyless providers, so no other key is needed to start.",
+        "note_fr": "Passerelle auto-hébergée sur de nombreux free tiers. Lancez-la "
+        "(docker run -d -p 127.0.0.1:20128:20128 diegosouzapw/omniroute:latest), "
+        "puis collez la clé depuis son dashboard, onglet Endpoints. Elle répond "
+        "d'emblée avec des providers sans clé : rien d'autre à configurer pour démarrer.",
+    },
+    {
         "id": "lmstudio",
         "label": "LM Studio",
         "url": "http://localhost:1234/v1",

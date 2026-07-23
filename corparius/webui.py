@@ -969,6 +969,48 @@ def _route_providers_post(ctx):
     return 200, _set_env(ctx.state, dict(ctx.body.get("values", {})))
 
 
+def _route_tiers_recommend(ctx):
+    # One click to a coherent routing over the free providers actually connected:
+    # flip mock off and cloud on, then fill every tier so none is left pointing at
+    # an unconfigured provider (the trap the defaults leave after a single key).
+    from .llm import recommended_routing
+
+    configured = [
+        name
+        for name, spec in OPENAI_COMPAT_PROVIDERS.items()
+        if cfg.get(spec["key_env"], "").strip()
+        or (
+            spec.get("key_optional")
+            and (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base"))
+        )
+    ]
+    routing = recommended_routing(configured, bool(ollama_setup.status().get("reachable")))
+    if routing is None:
+        return 400, {
+            "ok": False,
+            "error": "connect a free provider first (Groq or Cerebras are the quickest)",
+        }
+    result = _set_env(
+        ctx.state, {"CORP_LLM_MOCK": "false", "CORP_CLOUD_ENABLED": "true", **routing}
+    )
+    return (200 if result.get("ok") else 400), {**result, "routing": routing}
+
+
+def _route_provider_models(ctx):
+    # The models a provider advertises, so a tier can be filled from a list rather
+    # than a remembered string. A network failure is reported, never a 500.
+    from .llm import list_models
+
+    name = str(ctx.body.get("name", ""))
+    if name not in OPENAI_COMPAT_PROVIDERS:
+        return 404, {"ok": False, "error": f"unknown provider '{name}'"}
+    try:
+        return 200, {"ok": True, "models": list_models(name)}
+    except Exception as exc:  # network/HTTP/parse: report, do not crash the handler
+        log.info("model list for %s failed: %s", name, exc)
+        return 200, {"ok": False, "models": [], "error": "could not list models; check the key"}
+
+
 def _route_settings_post(ctx):
     result = _set_settings(
         ctx.state, dict(ctx.body.get("values", {})), list(ctx.body.get("unset", []))
@@ -1082,6 +1124,8 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/run/stop", _route_run_stop),
     Route("POST", "/api/run", _route_run_post),
     Route("POST", "/api/providers", _route_providers_post),
+    Route("POST", "/api/tiers/recommend", _route_tiers_recommend),
+    Route("POST", "/api/provider/models", _route_provider_models),
     Route("POST", "/api/settings", _route_settings_post),
     Route("POST", "/api/plugins", _route_plugins_post),
     Route("POST", "/api/theme", _route_theme_post),

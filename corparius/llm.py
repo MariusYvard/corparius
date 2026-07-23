@@ -184,6 +184,64 @@ def _split(model_str: str) -> tuple[str, str]:
     return "local", model_str
 
 
+# Preference for the general tiers: fast, generous models first; OpenRouter last
+# for the normal tier because its default is a reasoning model (slower), but
+# first choice for the hard tier for the same reason.
+_ROUTING_ORDER = ["groq", "cerebras", "mistral", "ovh", "openrouter"]
+
+
+def recommended_routing(configured: list[str], ollama_ready: bool) -> dict[str, str] | None:
+    """A coherent tier configuration from the free providers actually connected,
+    so no tier resolves to something the operator has not set up.
+
+    Returns the environment variables to write, or None when nothing usable is
+    connected. This closes the gap left by the defaults (trivial on a local model
+    that may be absent, normal/hard on paid Anthropic): enabling one free key set
+    only the normal tier and left the rest broken. Here every tier lands on a
+    connected provider - a reasoning model on hard when OpenRouter is in the mix,
+    fast general models elsewhere, local on trivial when Ollama is up - and the
+    fallback chain lists the remaining providers (the router always ends on local
+    after it)."""
+    picks = [
+        p
+        for p in _ROUTING_ORDER
+        if p in configured and OPENAI_COMPAT_PROVIDERS.get(p, {}).get("default_model")
+    ]
+    if not picks:
+        return None
+
+    def model(provider: str) -> str:
+        return f"{provider}:{OPENAI_COMPAT_PROVIDERS[provider]['default_model']}"
+
+    normal_p = picks[0]
+    hard_p = "openrouter" if "openrouter" in picks else normal_p
+    return {
+        "CORP_TRIVIAL_MODEL": "local:gemma4:e4b" if ollama_ready else model(normal_p),
+        "CORP_NORMAL_MODEL": model(normal_p),
+        "CORP_HARD_MODEL": model(hard_p),
+        "CORP_LLM_FALLBACK": ",".join(model(p) for p in picks if p != normal_p),
+    }
+
+
+def list_models(name: str, timeout: int = 8) -> list[str]:
+    """Model ids a provider advertises at its OpenAI-compatible /models endpoint,
+    so the console can offer real names instead of asking the operator to know
+    them. Returns [] when the provider is unconfigured or does not answer; the
+    caller surfaces that rather than guessing."""
+    spec = OPENAI_COMPAT_PROVIDERS.get(name)
+    if not spec:
+        return []
+    base = (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base", "")).rstrip("/")
+    if not base:
+        return []
+    key = cfg.get(spec["key_env"], "").strip()
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    r = requests.get(base + "/models", headers=headers, timeout=timeout)
+    r.raise_for_status()
+    data = r.json().get("data", [])
+    return sorted({m.get("id", "") for m in data if m.get("id")})
+
+
 class LLMProvider(ABC):
     name: str = "base"
 

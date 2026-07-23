@@ -2,8 +2,10 @@
 apply decisions, guard mutations with the optional token and never leak keys."""
 
 import json
+import logging
 import os
 import threading
+import time
 from http.client import HTTPConnection
 
 import pytest
@@ -53,6 +55,26 @@ def test_serves_page_and_companies(server):
     assert status == 200 and b"corparius console" in page
     status, data = _call(server, "GET", "/api/companies")
     assert status == 200 and "example" in data["companies"]
+
+
+def test_shutdown_drains_a_loop_run_before_closing_the_store(server, caplog):
+    """On shutdown a continuous run must be stopped and allowed to unwind before
+    the store closes; otherwise the day-boundary save_state() lands on a closed
+    connection and logs a traceback. The drain path is what prevents that."""
+    status, data = _call(
+        server, "POST", "/api/run", {"company": "example", "ticks": 4, "loop": True}
+    )
+    assert status == 200 and data["ok"]
+    time.sleep(0.4)  # let the worker enter its loop
+    state = server.RequestHandlerClass.state
+    assert any(r.get("stop") for r in state.runs.values()), "no run was active to drain"
+    with caplog.at_level(logging.ERROR):
+        webui._drain_and_close(state)
+    assert "closed database" not in caplog.text.lower()
+    assert state._store is None  # closed and cleared
+    assert not any(
+        t.name.startswith("corparius-run-") and t.is_alive() for t in threading.enumerate()
+    )
 
 
 def test_theme_persists_across_requests(server):

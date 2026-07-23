@@ -147,6 +147,22 @@ def test_loopback_hosts_are_accepted(server):
         assert _call(server, "GET", "/api/companies", headers={"Host": host}) == 200
 
 
+def test_bracketed_ipv6_loopback_is_accepted(server):
+    """A bare rsplit(":", 1) mangled a bracketed IPv6 literal and wrongly 403'd
+    the loopback address it was meant to allow. Both port forms must pass."""
+    port = server.socket.getsockname()[1]
+    for host in (f"[::1]:{port}", "[::1]"):
+        assert _call(server, "GET", "/api/companies", headers={"Host": host}) == 200
+
+
+def test_host_only_peels_ipv6_brackets():
+    assert webui._host_only("[::1]:8600") == "::1"
+    assert webui._host_only("[::1]") == "::1"
+    assert webui._host_only("127.0.0.1:8600") == "127.0.0.1"
+    assert webui._host_only("localhost") == "localhost"
+    assert webui._host_only("EVIL.example:80") == "evil.example"
+
+
 def test_an_operator_can_name_their_own_host(server, monkeypatch):
     """The escape hatch for a reverse proxy. Named in the 403 body so the
     operator who hits it knows what to set."""
@@ -185,6 +201,13 @@ def test_malformed_content_length_is_a_400_not_a_500(server):
         _call(server, "POST", "/api/run", raw_body=b"", headers={"Content-Length": "not-a-number"})
         == 400
     )
+
+
+@pytest.mark.parametrize("raw", [b"[]", b"123", b'"x"', b"null"])
+def test_non_object_json_body_is_ignored_not_a_500(server, raw):
+    """A body that is valid JSON but not an object made body.get(...) raise and
+    surfaced as a 500. It is now treated as no fields, so the request proceeds."""
+    assert _call(server, "POST", "/api/theme", raw_body=raw) == 200
 
 
 def test_chunked_bodies_are_refused(server):

@@ -74,6 +74,19 @@ MAX_BODY = 1 << 20
 _LOOPBACK = {"127.0.0.1", "localhost", "::1", "0.0.0.0", ""}
 
 
+def _host_only(header: str) -> str:
+    """The host from a Host header, without the port, bracket-aware for IPv6.
+
+    A bare rsplit(":", 1) mangles a bracketed literal: "[::1]" splits on the
+    inner colon. Peel the brackets first so "[::1]" and "[::1]:8600" both yield
+    "::1", while "127.0.0.1:8600" and "localhost" are unchanged.
+    """
+    raw = header.strip()
+    if raw.startswith("[") and "]" in raw:
+        return raw[1 : raw.index("]")].lower()
+    return raw.rsplit(":", 1)[0].lower()
+
+
 class _RequestRefused(Exception):
     """Refuse a request before any handler sees it, with the status to send.
     Raised from body parsing, where returning a value would mean having already
@@ -1135,9 +1148,13 @@ class Handler(BaseHTTPRequestHandler):
         if not length:
             return {}
         try:
-            return json.loads(self.rfile.read(length))
+            parsed = json.loads(self.rfile.read(length))
         except json.JSONDecodeError:
             return {}
+        # A body that is valid JSON but not an object ([], 123, "x", null) would
+        # make the handler's body.get(...) raise AttributeError and surface as a
+        # 500. Treat it as no fields, the same as an empty body.
+        return parsed if isinstance(parsed, dict) else {}
 
     def _authorized(self) -> bool:
         token = cfg.get("CORP_UI_TOKEN", "").strip()
@@ -1156,7 +1173,7 @@ class Handler(BaseHTTPRequestHandler):
         so the Origin check passes. What does not match is the console's own
         identity: the request still arrives with Host: evil.com.
         """
-        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+        host = _host_only(self.headers.get("Host") or "")
         allowed = {
             h.strip().lower() for h in cfg.get("CORP_UI_ALLOWED_HOSTS", "").split(",") if h.strip()
         }
@@ -1324,8 +1341,24 @@ def serve(settings: Settings, host: str | None = None, port: int | None = None) 
     except KeyboardInterrupt:
         server.shutdown()
     finally:
-        # The connection now outlives the request that opened it, so shutdown is
-        # what releases the file. Windows will not let anything delete or move a
-        # store that is still open.
-        server.RequestHandlerClass.state.close()  # type: ignore[attr-defined]  # injected in build_server
+        _drain_and_close(server.RequestHandlerClass.state)  # type: ignore[attr-defined]  # injected in build_server
     return 0
+
+
+def _drain_and_close(state: UiState, join_timeout: float = 5.0) -> None:
+    """Stop any in-flight run, let it unwind, then close the store.
+
+    A --loop run checks should_stop() at the top of each tick but still banks the
+    day with a save_state() afterwards, so closing the connection out from under
+    it would make that final write hit a closed database. Signal every run, join
+    the daemon workers briefly, then close - the connection outlives the request
+    that opened it, and on Windows nothing can move or delete the store while it
+    is open."""
+    for run in list(state.runs.values()):
+        ev = run.get("stop")
+        if ev is not None:
+            ev.set()
+    for t in threading.enumerate():
+        if t.name.startswith("corparius-run-"):
+            t.join(timeout=join_timeout)
+    state.close()

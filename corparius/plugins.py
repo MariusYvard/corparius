@@ -331,11 +331,12 @@ def _safe_extract(data: bytes, dest: Path) -> Path:
             tar.extractall(dest, filter="data")
         except TypeError:
             # `filter=` was backported to 3.10.12 and 3.11.4 as a security fix,
-            # so on any supported release this branch is unreachable. If it ever
-            # is reached, the interpreter is old enough that extracting without
-            # the filter is the last thing we should do: refuse instead. Tested
-            # by monkeypatching extractall, which exercises it on every version
-            # rather than hoping CI runs the right one.
+            # so this branch is reachable only on the older 3.10.0-3.10.11 and
+            # 3.11.0-3.11.3 patch releases (which our >=3.10 floor still admits).
+            # On exactly those, extracting without the filter is the unsafe path,
+            # so refuse instead. Tested by monkeypatching extractall, which
+            # exercises it on every version rather than hoping CI runs the right
+            # one.
             raise PluginError(
                 "this Python is too old to extract a plugin archive safely "
                 "(tarfile has no data filter); upgrade to 3.10.12+ or 3.11.4+"

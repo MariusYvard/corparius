@@ -10,6 +10,7 @@ Install and run:
 from __future__ import annotations
 
 import os
+import threading
 
 from . import deploy as deploy_mod
 from . import paths, sitegen
@@ -17,10 +18,28 @@ from .cli import _load_company
 from .config import settings
 from .store import Store
 
+# One connection for the whole server, not one per tool call. FastMCP.run() is a
+# long-lived process, so the per-call Store this used to build never got closed:
+# an MCP host polling status() a few hundred times leaked that many sqlite
+# handles, each re-running the schema and migration, and on Windows each open
+# handle keeps corparius.sqlite locked against backup. Store guards its own
+# connection, so sharing it across tool calls is safe. Mirrors UiState.store().
+_store_singleton: Store | None = None
+_store_lock = threading.Lock()
+
+
+def _store() -> Store:
+    global _store_singleton
+    if _store_singleton is None:
+        with _store_lock:
+            if _store_singleton is None:
+                _store_singleton = Store(settings.data_path)
+    return _store_singleton
+
 
 def _open(company: str):
     cfg = _load_company(company)
-    return cfg, Store(settings.data_path)
+    return cfg, _store()
 
 
 def run_company(company: str, ticks: int = 6) -> dict:

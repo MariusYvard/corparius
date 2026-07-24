@@ -30,6 +30,10 @@
   --accent-ink: oklch(0.99 calc(0.004 * var(--ui-chroma)) var(--ui-hue)); --accent-soft: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue) / 0.18);
   --ok: oklch(0.74 0.09 220); --ok-soft: oklch(0.74 0.09 220 / 0.18);   /* health: cool teal (fixed) */
   --warn: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue)); --warn-soft: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue) / 0.20);  /* attention */
+  /* Warm accent (amber ~hue 62), reintroduced for the human gate only: in an
+     all-blue instrument, hue alone cannot single out the one thing that wants
+     you. DESIGN.md departure, deliberate and confined to "waiting on you". */
+  --warm: oklch(0.74 0.145 62); --warm-soft: oklch(0.74 0.145 62 / 0.16); --warm-line: oklch(0.74 0.145 62 / 0.5);
   --danger: oklch(0.66 0.17 25); --danger-soft: oklch(0.66 0.17 25 / 0.16);  /* danger: red (fixed) */
   --shadow: none; color-scheme: dark;
 }
@@ -45,6 +49,7 @@
   --accent-soft: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue) / 0.10);
   --ok: oklch(0.47 0.10 225); --ok-soft: oklch(0.47 0.10 225 / 0.14);   /* fixed */
   --warn: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue)); --warn-soft: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue) / 0.12);
+  --warm: oklch(0.55 0.135 58); --warm-soft: oklch(0.55 0.135 58 / 0.12); --warm-line: oklch(0.55 0.135 58 / 0.5);
   --danger: oklch(0.52 0.17 25); --danger-soft: oklch(0.52 0.17 25 / 0.13);  /* fixed */
   --shadow: 0 1px 2px oklch(0.28 calc(0.08 * var(--ui-chroma)) var(--ui-hue) / 0.08); color-scheme: light;
 }
@@ -154,6 +159,106 @@ h3 { font-size: 14px; font-weight: 600; margin: 0; color: var(--muted); }
 .stat.lead:not(.needs):hover { background: var(--raised); }
 .stat.lead:not(.needs):hover::before { border-color: var(--border); }
 .stat.lead:active { transform: translateY(1px); }
+
+/* ============================================================================
+   Overview redesign. MagicUI-style effects, reimplemented in vanilla CSS so the
+   console stays a single offline file. Every motion carries meaning: the beam
+   runs only while the company works, the spotlight only under the cursor, the
+   ticker only when a value changed. Nothing loops idle (PRODUCT.md).
+   ============================================================================ */
+@property --beam { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+/* The status band: the hero. A dotted field behind it (a texture, not a
+   gradient), the human gate in display scale on the left, the live pulse on the
+   right. Full-bleed presence instead of one card among many. */
+.hero { position: relative; overflow: hidden; padding: 28px 30px;
+  display: grid; grid-template-columns: minmax(0, auto) 1fr; gap: 32px; align-items: center; }
+.hero .field { position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(var(--border-ui) 1.1px, transparent 1.1px);
+  background-size: 22px 22px; opacity: 0.18;
+  -webkit-mask: radial-gradient(115% 90% at 22% -10%, #000 30%, transparent 72%);
+  mask: radial-gradient(115% 90% at 22% -10%, #000 30%, transparent 72%); }
+/* Border beam: a light that travels the edge only while a run is live. It says
+   "working now", the one idle-looking motion DESIGN.md sanctions because it maps
+   to a real state. Off otherwise; off under reduced motion. */
+.hero.is-running::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+  padding: 1.5px; pointer-events: none;
+  background: conic-gradient(from var(--beam), transparent 62%, var(--ok) 80%, oklch(0.85 0.11 220) 88%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: beam 3.2s linear infinite; }
+@keyframes beam { to { --beam: 360deg; } }
+.hero-main { display: contents; }
+.hero-gate { all: unset; box-sizing: border-box; cursor: pointer; position: relative; z-index: 1;
+  display: block; padding: 6px 20px 8px 0; min-width: 190px;
+  transition: transform var(--t-feedback) var(--ease); }
+.hero-gate .g-label { font-size: 13px; color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; }
+.hero-gate .g-num { font-size: clamp(52px, 8vw, 76px); line-height: 0.95; font-weight: 600;
+  font-family: ui-monospace, "Cascadia Mono", monospace; color: var(--muted);
+  letter-spacing: -0.02em; margin: 4px 0 2px;
+  transition: color var(--t-state) var(--ease); font-variant-numeric: tabular-nums; }
+.hero-gate .g-hint { font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.hero-gate.needs .g-num, .hero-gate.needs .g-hint { color: var(--warm); }
+.hero-gate.needs .g-label { color: var(--warm); }
+.hero-gate::before { content: ""; position: absolute; inset: -6px -14px; border-radius: 14px;
+  border: 1px solid transparent; transition: border-color var(--t-feedback) var(--ease),
+  background-color var(--t-feedback) var(--ease); }
+.hero-gate:hover::before { border-color: var(--warm-line); background: var(--warm-soft); }
+.hero-gate:not(.needs):hover::before { border-color: var(--border); background: var(--raised); }
+.hero-gate:active { transform: translateY(1px); }
+.hero-side { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; align-items: flex-end; }
+.hero-side .pulse-row { justify-content: flex-end; gap: 30px; }
+.hero-side .stat { text-align: right; min-width: 0; }
+.hero-side .stat .value { font-size: 22px; }
+@media (max-width: 760px) {
+  .hero { grid-template-columns: 1fr; gap: 18px; }
+  .hero-side { align-items: flex-start; }
+  .hero-side .pulse-row { justify-content: flex-start; gap: 22px; }
+  .hero-side .stat { text-align: left; }
+}
+
+/* Bento: the daily state as varied cells, not a stack of identical cards. Weight
+   follows stakes (DESIGN.md): the log is tall, the meters are small. */
+.bento { display: grid; gap: 16px; grid-template-columns: 1fr; }
+.bento > .card { margin: 0; }
+@media (min-width: 900px) {
+  /* Six-column field. Row 1 pairs the tall log with the spend meters; row 2
+     lines up the three small readouts; the site preview takes the full width.
+     No row-spanning, so cells balance by content instead of leaving a gap. */
+  .bento { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .b-activity { grid-column: span 4; }
+  .b-spend { grid-column: span 2; }
+  .b-progress { grid-column: span 2; }
+  .b-payments { grid-column: span 2; }
+  .b-flow { grid-column: span 2; }
+  .b-site { grid-column: span 6; }
+}
+
+/* Magic-card spotlight: a soft light follows the cursor over an interactive card.
+   Hover feedback, gone when the cursor leaves. JS sets --mx / --my. */
+.spot { position: relative; }
+.spot::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  opacity: 0; transition: opacity var(--t-state) var(--ease);
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0%), var(--select-soft), transparent 70%); }
+.spot:hover::before { opacity: 1; }
+
+/* Blur-fade entrance: a view arrives, once per navigation, staggered. */
+@keyframes blur-fade { from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: blur(0); } }
+.reveal > * { animation: blur-fade var(--t-enter) var(--ease) both; }
+.reveal > :nth-child(1) { animation-delay: 0ms; } .reveal > :nth-child(2) { animation-delay: 45ms; }
+.reveal > :nth-child(3) { animation-delay: 90ms; } .reveal > :nth-child(4) { animation-delay: 135ms; }
+.reveal > :nth-child(5) { animation-delay: 180ms; } .reveal > :nth-child(n+6) { animation-delay: 200ms; }
+
+/* Animated list: a freshly-arrived activity row fades up. Marked by JS on new ids. */
+@keyframes row-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.row-new { animation: row-in var(--t-state) var(--ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero.is-running::after { animation: none; }
+  .reveal > *, .row-new { animation: none; }
+}
 .stat.lead:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
 .kv { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
 .kv:last-child { border-bottom: 0; }
@@ -384,6 +489,18 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
   </div>
 
   <section id="tab-overview" role="tabpanel" aria-labelledby="t-overview" class="stack">
+    <div class="card hero spot" id="hero">
+      <div class="field" aria-hidden="true"></div>
+      <button class="hero-gate" id="hero-gate" data-goto-ops>
+        <div class="g-label"></div>
+        <div class="g-num"></div>
+        <div class="g-hint"></div>
+      </button>
+      <div class="hero-side">
+        <span id="mode-badges" style="display:flex; gap:8px; flex-wrap:wrap"></span>
+        <div class="pulse-row" id="pulse"></div>
+      </div>
+    </div>
     <div class="card" id="onboard-card" hidden>
       <div class="card-head" style="display:flex; justify-content:space-between; gap:12px; align-items:baseline">
         <h2 style="margin:0" data-i18n="ob.title">Getting started</h2>
@@ -400,48 +517,32 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <p class="desc" data-i18n="live.desc">Three things turn a simulated company into one that can take money: a checkout link, a mail account, and a public web address.</p>
       <div id="golive-steps" class="stack" style="gap:2px; margin-top:12px"></div>
     </div>
-    <div class="card">
-      <div class="card-head" style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:16px">
-        <h2 style="margin:0" data-i18n="pulse.title">Company pulse</h2>
-        <span id="mode-badges" style="display:flex; gap:8px; flex-wrap:wrap"></span>
+    <div class="bento reveal">
+      <div class="card spot b-activity">
+        <h2 data-i18n="activity.title">Recent activity</h2>
+        <p class="desc" data-i18n="activity.desc">The last things agents did. Full log in Operations.</p>
+        <div id="activity"></div>
       </div>
-      <p class="desc" style="margin-top:-4px" data-i18n="pulse.desc">Where the company stands right now. One tick is one simulated hour.</p>
-      <div class="pulse-row" id="pulse"></div>
-    </div>
-    <div class="grid cols">
-      <div class="stack">
-        <div class="card">
-          <h2 data-i18n="progress.title">Progress</h2>
-          <p class="desc" data-i18n="progress.desc">How much of the backlog is delivered.</p>
-          <div id="progress"></div>
-        </div>
-        <div class="card">
-          <h2 data-i18n="site.title">Sales site</h2>
-          <p class="desc" data-i18n="site.desc">The single-file page the design agent builds from the company config.</p>
-          <div id="site-box"></div>
-        </div>
-        <div class="card">
-          <h2 data-i18n="activity.title">Recent activity</h2>
-          <p class="desc" data-i18n="activity.desc">The last things agents did. Full log in Operations.</p>
-          <div id="activity"></div>
-        </div>
+      <div class="card spot b-spend">
+        <h2 data-i18n="spend.title">Spend by agent</h2>
+        <div id="spend"></div>
       </div>
-      <div class="stack">
-        <div class="card">
-          <h2 data-i18n="spend.title">Spend by agent</h2>
-          <p class="desc" data-i18n="spend.desc">Who consumes the LLM budget.</p>
-          <div id="spend"></div>
-        </div>
-        <div class="card">
-          <h2 data-i18n="pay.title">Payments</h2>
-          <p class="desc" data-i18n="pay.desc">Money actually received, read from Stripe.</p>
-          <div id="payments"></div>
-        </div>
-        <div class="card">
-          <h2 data-i18n="flow.title">Flow</h2>
-          <p class="desc" data-i18n="flow.desc">Is work flowing or piling up?</p>
-          <div id="flow"></div>
-        </div>
+      <div class="card spot b-payments">
+        <h2 data-i18n="pay.title">Payments</h2>
+        <div id="payments"></div>
+      </div>
+      <div class="card spot b-progress">
+        <h2 data-i18n="progress.title">Progress</h2>
+        <div id="progress"></div>
+      </div>
+      <div class="card spot b-flow">
+        <h2 data-i18n="flow.title">Flow</h2>
+        <div id="flow"></div>
+      </div>
+      <div class="card spot b-site">
+        <h2 data-i18n="site.title">Sales site</h2>
+        <p class="desc" data-i18n="site.desc">The single-file page the design agent builds from the company config.</p>
+        <div id="site-box"></div>
       </div>
     </div>
   </section>
@@ -1395,6 +1496,16 @@ $("#golive-card").addEventListener("click", async (ev) => {
   } catch (err) { toast(err.message, true); b.disabled = false; }
 });
 
+// Magic-card spotlight: track the cursor over any .spot card so its ::before
+// radial highlight follows. Cheap (two setProperty calls), passive, no layout.
+document.addEventListener("pointermove", (e) => {
+  const card = e.target.closest && e.target.closest(".spot");
+  if (!card) return;
+  const r = card.getBoundingClientRect();
+  card.style.setProperty("--mx", (e.clientX - r.left) + "px");
+  card.style.setProperty("--my", (e.clientY - r.top) + "px");
+}, { passive: true });
+
 function render(d) {
   renderOnboard(d);
   loadGolive();
@@ -1416,10 +1527,17 @@ function render(d) {
     d.last_run && d.last_run.mode && !frozen ? `<span class="badge dim">${t("badge.breaker")} ${esc(d.last_run.mode)}</span>` : "",
   ].join("");
 
-  // The human gate is the point (PRODUCT.md), so what waits on you leads the row,
-  // reads sand, and takes you there. The rest are notes, not calls to act.
+  // The human gate is the point (PRODUCT.md): it leads the band in display scale,
+  // warm when it wants you, and takes you to Operations. The beam runs while the
+  // company works. The rest are quiet notes, right-aligned.
+  $("#hero").classList.toggle("is-running", !!d.running);
+  const gate = $("#hero-gate");
+  gate.classList.toggle("needs", !!needsYou);
+  gate.title = t("stat.waitingTip");
+  gate.querySelector(".g-label").textContent = t("stat.waiting");
+  gate.querySelector(".g-hint").textContent = needsYou ? t("stat.waitingGo") : t("stat.waitingClear");
+  tickTo(gate.querySelector(".g-num"), needsYou);
   const stats = [
-    ["waiting", "stat.waiting", needsYou, "stat.waitingTip"],
     ["hour", "stat.hour", d.tick, "stat.hourTip"],
     ["actions", "stat.actions", d.status.actions, "stat.actionsTip"],
     ["tokens", "stat.tokens", d.status.tokens, "stat.tokensTip"],
@@ -1428,22 +1546,16 @@ function render(d) {
   // Build once, then update in place: rebuilding innerHTML every poll would
   // replace the very nodes a number needs to travel across.
   if (!$("#pulse [data-stat]")) {
-    $("#pulse").innerHTML = stats.map(([id, l, , tip]) => id === "waiting"
-      ? `<button class="stat lead" data-goto-ops data-stat="waiting" title="${t(tip)}">
-           <div class="label" data-l="${l}"></div><div class="value"></div><div class="hint"></div>
-         </button>`
-      : `<div class="stat" data-stat="${id}" title="${t(tip)}">
-           <div class="label" data-l="${l}"></div><div class="value"></div>
-         </div>`).join("");
+    $("#pulse").innerHTML = stats.map(([id, l, , tip]) =>
+      `<div class="stat" data-stat="${id}" title="${t(tip)}">
+         <div class="label" data-l="${l}"></div><div class="value"></div>
+       </div>`).join("");
   }
   stats.forEach(([id, l, v]) => {
     const box = $(`#pulse [data-stat="${id}"]`);
     box.querySelector(".label").textContent = t(l);
     tickTo(box.querySelector(".value"), Number(v));
   });
-  const lead = $('#pulse [data-stat="waiting"]');
-  lead.classList.toggle("needs", !!needsYou);
-  lead.querySelector(".hint").textContent = needsYou ? t("stat.waitingGo") : t("stat.waitingClear");
 
   const all = Object.values(d.tasks).flat().length;
   const done = (d.tasks.done || []).length;

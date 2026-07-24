@@ -392,6 +392,14 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <p class="desc" data-i18n="ob.desc">Three steps to a company working on its own. This card leaves once they are done.</p>
       <div id="onboard-steps" class="stack" style="gap:2px; margin-top:12px"></div>
     </div>
+    <div class="card" id="golive-card" hidden>
+      <div class="card-head" style="display:flex; justify-content:space-between; gap:12px; align-items:baseline">
+        <h2 style="margin:0" data-i18n="live.title">Go live</h2>
+        <button class="link-quiet" id="golive-dismiss" data-i18n="ob.dismiss">Hide</button>
+      </div>
+      <p class="desc" data-i18n="live.desc">Three things turn a simulated company into one that can take money: a checkout link, a mail account, and a public web address.</p>
+      <div id="golive-steps" class="stack" style="gap:2px; margin-top:12px"></div>
+    </div>
     <div class="card">
       <div class="card-head" style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:16px">
         <h2 style="margin:0" data-i18n="pulse.title">Company pulse</h2>
@@ -635,6 +643,10 @@ en: {
   "ob.model":"Connect a model","ob.modelHint":"Or stay in mock mode: it runs offline, free, deterministic. Real models live under Providers.","ob.modelCta":"Open Providers",
   "ob.run":"Run a day","ob.runHint":"Advance the clock a few hours and watch the agents work.","ob.runCta":"Run now",
   "ob.decide":"Make a decision","ob.decideHint":"Money and production wait for you. Approve or reject the first one.","ob.decideCta":"Open Operations",
+  "live.title":"Go live","live.desc":"Three things turn a simulated company into one that can take money: a checkout link, a mail account, and a public web address.",
+  "live.payment":"Payment","live.paidOk":"checkout wired","live.paidNo":"button inert until you add a link","live.getStripe":"Create a Stripe payment link",
+  "live.mail":"Email","live.mailOk":"sends and reads","live.mailNo":"not connected","live.mailConfigure":"Set up email",
+  "live.hosting":"Hosting","live.hostLive":"live at","live.hostReady":"token set, not published yet","live.hostNo":"not hosted (site stays local)","live.netlifyToken":"paste Netlify token","live.publish":"Publish","live.getNetlify":"Create a Netlify token","live.publishing":"Publishing…","live.published":"Published",
   "pulse.title":"Company pulse","pulse.desc":"Where the company stands right now. One tick is one simulated hour.",
   "stat.hour":"simulated hour","stat.hourTip":"the company clock: one tick is one hour",
   "stat.actions":"actions taken","stat.actionsTip":"everything the agents did, logged",
@@ -782,6 +794,10 @@ fr: {
   "ob.model":"Connecter un modèle","ob.modelHint":"Ou restez en mode mock : hors ligne, gratuit, déterministe. Les vrais modèles sont dans Providers.","ob.modelCta":"Ouvrir Providers",
   "ob.run":"Lancer une journée","ob.runHint":"Avancez l'horloge de quelques heures et regardez les agents travailler.","ob.runCta":"Lancer",
   "ob.decide":"Prendre une décision","ob.decideHint":"L'argent et la production vous attendent. Approuvez ou rejetez la première.","ob.decideCta":"Ouvrir Opérations",
+  "live.title":"Passer en ligne","live.desc":"Trois choses transforment une société simulée en société qui peut encaisser : un lien de paiement, un compte mail, et une adresse web publique.",
+  "live.payment":"Paiement","live.paidOk":"caisse branchée","live.paidNo":"bouton inerte tant qu'aucun lien","live.getStripe":"Créer un lien de paiement Stripe",
+  "live.mail":"Email","live.mailOk":"envoie et lit","live.mailNo":"non connecté","live.mailConfigure":"Configurer l'email",
+  "live.hosting":"Hébergement","live.hostLive":"en ligne sur","live.hostReady":"token posé, pas encore publié","live.hostNo":"non hébergé (le site reste local)","live.netlifyToken":"coller le token Netlify","live.publish":"Publier","live.getNetlify":"Créer un token Netlify","live.publishing":"Publication…","live.published":"Publié",
   "pulse.title":"Pouls de la société","pulse.desc":"Où en est la société. Un tick correspond à une heure simulée.",
   "stat.hour":"heure simulée","stat.hourTip":"l'horloge de la société : un tick = une heure",
   "stat.actions":"actions menées","stat.actionsTip":"tout ce que les agents ont fait, journalisé",
@@ -1312,8 +1328,76 @@ function renderOnboard(d) {
   }).join("");
 }
 
+/* "Go live": the three integrations that turn a mock company into one that can
+   take money. Each row shows real status, a get-credential link, and the one
+   action that advances it. Dismissible, like the onboarding thread. */
+async function loadGolive() {
+  if (!state.company || localStorage.getItem("corparius-golive-hid") === "1") { $("#golive-card").hidden = true; return; }
+  try { renderGolive(await api(`/api/golive?company=${encodeURIComponent(state.company)}`)); }
+  catch (e) { $("#golive-card").hidden = true; }
+}
+function renderGolive(g) {
+  $("#golive-card").hidden = false;
+  const mark = ok => `<span class="ob-mark ${ok ? "" : ""}" style="background:${ok ? "var(--ok-soft)" : "transparent"}; border-color:${ok ? "var(--ok)" : "var(--line)"}; color:${ok ? "var(--ok)" : "var(--muted)"}">${ok ? "✓" : "·"}</span>`;
+  const link = (href, label) => `<a href="${esc(href)}" target="_blank" rel="noopener" class="link-quiet" style="font-size:12.5px">${t(label)}</a>`;
+  const host = g.hosting.published_url
+    ? `${t("live.hostLive")} <a href="${esc(g.hosting.published_url)}" target="_blank" rel="noopener">${esc(g.hosting.published_url)}</a>`
+    : (g.hosting.token_set ? t("live.hostReady") : t("live.hostNo"));
+  $("#golive-steps").innerHTML = `
+    <div class="ob-step">
+      ${mark(g.payment.wired)}
+      <span class="ob-text"><strong>${t("live.payment")}</strong> · <span class="note">${g.payment.wired ? t("live.paidOk") : t("live.paidNo")}</span><br>
+        <span style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px">
+          <input type="text" data-golive-key="CORP_STRIPE_PAYMENT_LINK" value="${esc(g.payment.link)}" placeholder="https://buy.stripe.com/…" spellcheck="false" style="flex:1; min-width:180px">
+          <button data-golive-save="CORP_STRIPE_PAYMENT_LINK">${t("btn.save")}</button></span>
+        <span style="display:block; margin-top:4px">${link("https://dashboard.stripe.com/payment-links", "live.getStripe")}</span></span>
+      <span></span></div>
+    <div class="ob-step">
+      ${mark(g.mail.wired)}
+      <span class="ob-text"><strong>${t("live.mail")}</strong> · <span class="note">${g.mail.wired ? t("live.mailOk") : t("live.mailNo")}</span><br>
+        <span style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px">
+          <button data-golive-tab>${t("live.mailConfigure")}</button>
+          <button data-golive-testmail>${t("prov.test")}</button></span></span>
+      <span></span></div>
+    <div class="ob-step">
+      ${mark(!!g.hosting.published_url)}
+      <span class="ob-text"><strong>${t("live.hosting")}</strong> · <span class="note">${host}</span><br>
+        <span style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px">
+          <input type="password" data-golive-key="NETLIFY_AUTH_TOKEN" placeholder="${t("live.netlifyToken")}" spellcheck="false" style="flex:1; min-width:180px">
+          <button data-golive-save="NETLIFY_AUTH_TOKEN">${t("btn.save")}</button>
+          <button class="primary" data-golive-publish>${t("live.publish")}</button></span>
+        <span style="display:block; margin-top:4px">${link("https://app.netlify.com/user/applications#personal-access-tokens", "live.getNetlify")}</span></span>
+      <span></span></div>`;
+}
+$("#golive-dismiss").addEventListener("click", () => {
+  localStorage.setItem("corparius-golive-hid", "1"); $("#golive-card").hidden = true;
+});
+$("#golive-card").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button"); if (!b) return;
+  try {
+    if (b.dataset.goliveSave) {
+      const input = $(`[data-golive-key="${CSS.escape(b.dataset.goliveSave)}"]`);
+      const v = input.value.trim(); if (!v) return toast(t("toast.nothing"), true);
+      await api("/api/providers", {values: {[b.dataset.goliveSave]: v}});
+      toast(t("toast.saved")); loadGolive();
+    } else if (b.dataset.golivePublish) {
+      b.disabled = true; toast(t("live.publishing"));
+      const d = await api("/api/deploy", {company: state.company});
+      if (d.published) toast(t("live.published")); else toast(t("site.publishFailed") + " " + (d.errors || []).join("; "), true);
+      loadGolive(); b.disabled = false;
+    } else if (b.dataset.goliveTestmail) {
+      b.disabled = true;
+      const { result } = await api("/api/test/mail", {to: "", lang});
+      toast(result.detail || t("prov.test"), !result.ok); b.disabled = false;
+    } else if (b.dataset.goliveTab !== undefined) {
+      selectTab($("#t-settings"));
+    }
+  } catch (err) { toast(err.message, true); b.disabled = false; }
+});
+
 function render(d) {
   renderOnboard(d);
+  loadGolive();
   $("#run-badge").innerHTML = d.running
     ? `<span class="badge ok"><span class="dot"></span>${t(d.stopping ? "badge.stopping" : (d.loop ? "badge.looping" : "badge.running"))}</span>`
     : "";

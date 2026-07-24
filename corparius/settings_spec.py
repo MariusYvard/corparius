@@ -100,6 +100,7 @@ MAIL_PRESETS: list[dict] = [
         "port": 587,
         "imap_host": "imap.gmail.com",
         "imap_port": 993,
+        "help_url": "https://myaccount.google.com/apppasswords",
         "note_en": "Needs a 16-character app password, created under 2-step verification. "
         "Your normal password will be refused.",
         "note_fr": "Exige un mot de passe d'application de 16 caractères, créé sous la "
@@ -123,6 +124,7 @@ MAIL_PRESETS: list[dict] = [
         "port": 1025,
         "imap_host": "127.0.0.1",
         "imap_port": 1143,
+        "help_url": "https://proton.me/mail/bridge",
         "note_en": "Requires Proton Mail Bridge running locally; it prints the password to use.",
         "note_fr": "Nécessite Proton Mail Bridge lancé en local ; il affiche le mot de passe.",
     },
@@ -270,6 +272,10 @@ class FieldSpec:
     label_fr: str = ""
     help_en: str = ""
     help_fr: str = ""
+    # A page where the operator gets this value (a Stripe payment link, a Netlify
+    # token). Rendered as a "get one" link next to the field, so the credential
+    # is one click away instead of a hunt.
+    help_url: str = ""
     choices: tuple = ()
     # Derived from the provider preset or from another field. Real, editable,
     # and folded away: an operator connecting Gmail should answer three
@@ -528,8 +534,13 @@ SPEC: list[FieldSpec] = [
         "payments",
         label_en="Payment link",
         label_fr="Lien de paiement",
-        help_en="The sales-site button target, when a company sets no link of its own.",
-        help_fr="Cible du bouton du site, quand une entreprise n'a pas son propre lien.",
+        help_url="https://dashboard.stripe.com/payment-links",
+        help_en="The sales-site checkout button points here. Create a Stripe payment "
+        "link (no code), paste the URL. Without it the button is inert (it just "
+        "scrolls to pricing). A company can set its own link to override this.",
+        help_fr="Le bouton de commande du site pointe ici. Créez un lien de paiement "
+        "Stripe (sans code), collez l'URL. Sans lui le bouton est inerte (il défile "
+        "vers les tarifs). Une entreprise peut définir son propre lien.",
     ),
     # --- mail account -------------------------------------------------------
     # The three that matter. Everything below them is filled by the provider
@@ -701,10 +712,25 @@ SPEC: list[FieldSpec] = [
         secret=True,
         label_en="Netlify token",
         label_fr="Token Netlify",
-        help_en="Also needs the netlify CLI on PATH.",
-        help_fr="Nécessite aussi le CLI netlify sur le PATH.",
+        help_url="https://app.netlify.com/user/applications#personal-access-tokens",
+        help_en="The simplest way to a public URL: paste a personal access token, "
+        "nothing else. corparius publishes over Netlify's API (no CLI to install), "
+        "creates a free site on the first publish and reuses it after.",
+        help_fr="Le plus simple pour une URL publique : collez un jeton d'accès "
+        "personnel, rien d'autre. corparius publie via l'API Netlify (aucun CLI à "
+        "installer), crée un site gratuit au premier envoi et le réutilise ensuite.",
     ),
-    _f("NETLIFY_SITE_ID", "publishing", label_en="Netlify site ID", label_fr="ID du site Netlify"),
+    _f(
+        "NETLIFY_SITE_ID",
+        "publishing",
+        advanced=True,
+        label_en="Netlify site ID",
+        label_fr="ID du site Netlify",
+        help_en="Optional: publish to an existing site instead of a created one. "
+        "Left empty, the first publish creates one and remembers it.",
+        help_fr="Optionnel : publier vers un site existant plutôt qu'un site créé. "
+        "Vide, le premier envoi en crée un et le mémorise.",
+    ),
     _f(
         "CORP_S3_BUCKET",
         "publishing",
@@ -867,6 +893,8 @@ def describe(key: str, lang_fields: bool = True) -> dict:
         "advanced": spec.advanced,
     }
     out["value"] = None if spec.secret else value
+    if spec.help_url:
+        out["help_url"] = spec.help_url
     if spec.choices:
         out["choices"] = list(spec.choices)
     if lang_fields:

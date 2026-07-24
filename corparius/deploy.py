@@ -11,6 +11,8 @@ import shutil
 import subprocess
 from abc import ABC, abstractmethod
 
+import requests
+
 from . import cfg, paths
 
 
@@ -44,22 +46,84 @@ class LocalDirProvider(DeployProvider):
 
 
 class NetlifyProvider(DeployProvider):
-    """Deploy via the Netlify CLI. Needs the `netlify` binary and a token."""
+    """Deploy to Netlify over its API: a token, no CLI, no local install.
+
+    This is the simplest public-hosting path. `available()` is true as soon as a
+    token is set - the earlier version needed the `netlify` binary on PATH, which
+    was the friction. The first publish creates a site (Netlify assigns a free
+    subdomain) and the id is remembered next to the built site, so later publishes
+    reuse it. Returns the live URL.
+
+    The digest deploy protocol: declare every file by its sha1, Netlify replies
+    with the subset it does not already have, upload those, and the deploy goes
+    live. All over `requests` - no new dependency.
+    """
 
     name = "netlify"
+    API = "https://api.netlify.com/api/v1"
 
     def available(self) -> bool:
-        return bool(shutil.which("netlify")) and bool(cfg.get("NETLIFY_AUTH_TOKEN"))
+        return bool(cfg.get("NETLIFY_AUTH_TOKEN", "").strip())
+
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {cfg.get('NETLIFY_AUTH_TOKEN', '').strip()}"}
+
+    def _resolve_site(self, site_dir: str) -> tuple[str, dict | None]:
+        """Return (site_id, created_site). An explicit NETLIFY_SITE_ID wins; then
+        the id remembered from a previous publish; otherwise create a new site."""
+        explicit = cfg.get("NETLIFY_SITE_ID", "").strip()
+        if explicit:
+            return explicit, None
+        marker = os.path.join(site_dir, ".netlify-site-id")
+        if os.path.isfile(marker):
+            with open(marker, encoding="utf-8") as fh:
+                remembered = fh.read().strip()
+            if remembered:
+                return remembered, None
+        r = requests.post(f"{self.API}/sites", headers=self._headers(), timeout=30)
+        r.raise_for_status()
+        site = r.json()
+        with open(marker, "w", encoding="utf-8") as fh:
+            fh.write(site["id"])
+        return site["id"], site
 
     def deploy(self, site_dir: str) -> str:
-        cmd = ["netlify", "deploy", "--dir", site_dir, "--prod"]
-        site = cfg.get("NETLIFY_SITE_ID", "")
-        if site:
-            cmd += ["--site", site]
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-        if out.returncode != 0:
-            raise RuntimeError(out.stderr.strip() or "netlify deploy failed")
-        return "netlify:prod"
+        import hashlib
+
+        site_id, created = self._resolve_site(site_dir)
+        files: dict[str, str] = {}
+        blobs: dict[str, tuple[str, bytes]] = {}
+        for entry in sorted(os.listdir(site_dir)):
+            full = os.path.join(site_dir, entry)
+            if os.path.isfile(full) and not entry.startswith("."):
+                with open(full, "rb") as fh:
+                    data = fh.read()
+                sha = hashlib.sha1(data).hexdigest()  # noqa: S324 - Netlify's digest, not security
+                files["/" + entry] = sha
+                blobs[sha] = (entry, data)
+        r = requests.post(
+            f"{self.API}/sites/{site_id}/deploys",
+            headers=self._headers(),
+            json={"files": files},
+            timeout=30,
+        )
+        r.raise_for_status()
+        dep = r.json()
+        for sha in dep.get("required", []):
+            entry, data = blobs[sha]
+            up = requests.put(
+                f"{self.API}/deploys/{dep['id']}/files/{entry}",
+                headers={**self._headers(), "Content-Type": "application/octet-stream"},
+                data=data,
+                timeout=120,
+            )
+            up.raise_for_status()
+        url = dep.get("ssl_url") or dep.get("url") or (created or {}).get("ssl_url", "")
+        if not url:  # older deploy payloads omit the url; ask the site
+            s = requests.get(f"{self.API}/sites/{site_id}", headers=self._headers(), timeout=30)
+            if s.ok:
+                url = s.json().get("ssl_url", "")
+        return f"netlify:{url or site_id}"
 
 
 class S3Provider(DeployProvider):

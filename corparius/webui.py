@@ -609,6 +609,13 @@ def _deploy(state: UiState, slug: str) -> tuple[int, dict]:
     if not paths.site_index(data_path, slug).exists():
         sitegen.build_site(company, str(out_dir))
     res = deploy.deploy_result(str(out_dir))
+    if res["ok"]:
+        # Remember where it went, so the "go live" card can show the live URL
+        # again after a reload, not only in this response.
+        try:
+            (out_dir / ".published").write_text(str(res["result"]), encoding="utf-8")
+        except OSError:
+            pass
     # The envelope succeeded; whether anything published is the payload's news.
     return 200, {
         "ok": True,
@@ -617,6 +624,34 @@ def _deploy(state: UiState, slug: str) -> tuple[int, dict]:
         "result": res["result"],
         "errors": res["errors"],
         "skipped": res["skipped"],
+    }
+
+
+def _golive_status(slug: str) -> dict:
+    """The three things between a mock company and one that can take money: a
+    checkout link, a mail account, and a public host. Reported as booleans plus
+    the live URL, so one card can guide the operator from A to Z."""
+    company = _load_company(slug) or {}
+    offer = company.get("offer", {}) or {}
+    pay = (
+        str(offer.get("payment_link") or "").strip()
+        or cfg.get("CORP_STRIPE_PAYMENT_LINK", "").strip()
+    )
+    published_url = ""
+    marker = paths.site_dir(_fresh_settings().data_path, slug) / ".published"
+    if marker.is_file():
+        target = marker.read_text(encoding="utf-8").strip()
+        if target.startswith("netlify:") and "http" in target:
+            published_url = target.split("netlify:", 1)[1]
+    smtp_ok = bool(cfg.get("CORP_SMTP_HOST", "").strip() and cfg.get("CORP_SMTP_USER", "").strip())
+    return {
+        "ok": True,
+        "payment": {"wired": pay.startswith("http"), "link": pay},
+        "mail": {"wired": smtp_ok},
+        "hosting": {
+            "token_set": bool(cfg.get("NETLIFY_AUTH_TOKEN", "").strip()),
+            "published_url": published_url,
+        },
     }
 
 
@@ -969,6 +1004,10 @@ def _route_providers_post(ctx):
     return 200, _set_env(ctx.state, dict(ctx.body.get("values", {})))
 
 
+def _route_golive(ctx):
+    return 200, _golive_status(ctx.slug)
+
+
 def _route_tiers_recommend(ctx):
     # One click to a coherent routing over the free providers actually connected:
     # flip mock off and cloud on, then fill every tier so none is left pointing at
@@ -1105,6 +1144,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/companies", _route_companies_get),
     Route("GET", "/api/overview", _route_overview, needs_slug=True),
     Route("GET", "/api/providers", _route_providers_get),
+    Route("GET", "/api/golive", _route_golive, needs_slug=True),
     Route("GET", "/api/settings", _route_settings_get),
     Route("GET", "/api/company", _route_company_get, needs_slug=True),
     Route("GET", "/api/ollama", _route_ollama_get),

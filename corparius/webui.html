@@ -482,9 +482,8 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
     <div class="card">
       <h2 data-i18n="prov.free">Free-tier providers</h2>
       <p class="banner" id="prov-status" style="margin:4px 0 12px" hidden></p>
-      <p class="note" style="margin:4px 0 10px" data-i18n="prov.ladder">Easiest first: stay in mock (already on, offline) · use your Claude subscription above · get a free key below (Groq or Cerebras, no card, about two minutes) · or run a local model with Ollama.</p>
-      <p class="note" style="margin:0 0 14px" data-i18n="prov.freeNote">A provider joins the routing pool once its key is set (and cloud is enabled). Keys are write-only: the console never displays them back.</p>
-      <p class="note" style="margin:-8px 0 14px"><a href="https://github.com/MariusYvard/corparius/blob/main/docs/llm-providers.md" target="_blank" rel="noopener" data-i18n="prov.docs">Detailed limits per provider</a></p>
+      <p class="note" style="margin:4px 0 4px" data-i18n="prov.freeNote">A provider joins the routing pool once its key is set (and cloud is enabled). Keys are write-only: the console never displays them back.</p>
+      <p class="note" style="margin:0 0 14px"><a href="https://github.com/MariusYvard/corparius/blob/main/docs/llm-providers.md" target="_blank" rel="noopener" data-i18n="prov.docs">Detailed limits per provider</a></p>
       <div id="providers"></div>
     </div>
       <div class="grid half">
@@ -694,7 +693,6 @@ en: {
   "prov.startHere":"Start here","prov.moreProviders":"More providers","prov.activate":"Use this for the normal tier",
   "prov.useRouting":"Use recommended routing","prov.models":"Models","prov.loadingModels":"Loading models…","prov.modelsLoaded":"{n} models added to suggestions",
   "prov.routingNote":"Connected a free key? Let the console fill every tier coherently instead of typing model strings.",
-  "prov.ladder":"Easiest first: stay in mock (already on, offline), use your Claude subscription above, get a free key below (Groq or Cerebras, no card, about two minutes), or run a local model with Ollama.",
   "ceo.empty":"Talk to the CEO agent about the plan, the backlog or the numbers. Replies use your configured routing (mock mode answers offline).",
   "ceo.placeholder":"Ask the CEO about the plan, the backlog, the numbers…","ceo.send":"Send",
   "ceo.proposes":"The CEO can do this now:","ceo.notNow":"Not now","ceo.launched":"Done.",
@@ -842,7 +840,6 @@ fr: {
   "prov.startHere":"Commencez ici","prov.moreProviders":"Autres fournisseurs","prov.activate":"Utiliser pour le tier normal",
   "prov.useRouting":"Utiliser le routage recommandé","prov.models":"Modèles","prov.loadingModels":"Chargement des modèles…","prov.modelsLoaded":"{n} modèles ajoutés aux suggestions",
   "prov.routingNote":"Une clé gratuite connectée ? Laissez la console remplir chaque tier de façon cohérente au lieu de taper des noms de modèles.",
-  "prov.ladder":"Du plus simple au plus avancé : rester en mock (déjà actif, hors ligne), utiliser votre abonnement Claude ci-dessus, obtenir une clé gratuite ci-dessous (Groq ou Cerebras, sans carte, environ deux minutes), ou faire tourner un modèle local avec Ollama.",
   "ceo.empty":"Parlez à l'agent CEO du plan, du backlog ou des chiffres. Les réponses passent par votre routage configuré (le mode mock répond hors ligne).",
   "ceo.placeholder":"Interrogez le CEO sur le plan, le backlog, les chiffres…","ceo.send":"Envoyer",
   "ceo.proposes":"Le CEO peut le faire maintenant :","ceo.notNow":"Pas maintenant","ceo.launched":"C'est fait.",

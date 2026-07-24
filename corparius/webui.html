@@ -30,6 +30,12 @@
   --accent-ink: oklch(0.99 calc(0.004 * var(--ui-chroma)) var(--ui-hue)); --accent-soft: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue) / 0.18);
   --ok: oklch(0.74 0.09 220); --ok-soft: oklch(0.74 0.09 220 / 0.18);   /* health: cool teal (fixed) */
   --warn: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue)); --warn-soft: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue) / 0.20);  /* attention */
+  /* Warm accent (amber ~hue 62), reintroduced for the human gate only: in an
+     all-blue instrument, hue alone cannot single out the one thing that wants
+     you. DESIGN.md departure, deliberate and confined to "waiting on you". */
+  --warm: oklch(0.74 0.145 62); --warm-soft: oklch(0.74 0.145 62 / 0.16); --warm-line: oklch(0.74 0.145 62 / 0.5);
+  /* Halo: a soft light glow behind logos and icons, in place of a solid chip. */
+  --halo: oklch(0.82 0.1 245 / 0.55);
   --danger: oklch(0.66 0.17 25); --danger-soft: oklch(0.66 0.17 25 / 0.16);  /* danger: red (fixed) */
   --shadow: none; color-scheme: dark;
 }
@@ -45,6 +51,8 @@
   --accent-soft: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue) / 0.10);
   --ok: oklch(0.47 0.10 225); --ok-soft: oklch(0.47 0.10 225 / 0.14);   /* fixed */
   --warn: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue)); --warn-soft: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue) / 0.12);
+  --warm: oklch(0.55 0.135 58); --warm-soft: oklch(0.55 0.135 58 / 0.12); --warm-line: oklch(0.55 0.135 58 / 0.5);
+  --halo: oklch(0.55 0.14 250 / 0.30);
   --danger: oklch(0.52 0.17 25); --danger-soft: oklch(0.52 0.17 25 / 0.13);  /* fixed */
   --shadow: 0 1px 2px oklch(0.28 calc(0.08 * var(--ui-chroma)) var(--ui-hue) / 0.08); color-scheme: light;
 }
@@ -69,9 +77,19 @@ body {
   font: 400 15px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-.ai { width: 20px; height: 20px; padding: 2px; box-sizing: border-box; border-radius: 5px;
-  background: oklch(0.97 0.008 255); image-rendering: pixelated; vertical-align: -5px; flex: none; }
+/* Icons: a soft halo behind the pixel-art instead of a solid ivory chip. The
+   glow follows the art's alpha (drop-shadow), and a touch of brightness lifts
+   the colours to read on the dark surface. */
+.ai { width: 20px; height: 20px; padding: 1px; box-sizing: border-box;
+  background: none; image-rendering: pixelated; vertical-align: -5px; flex: none;
+  filter: brightness(1.12) drop-shadow(0 0 3px var(--halo)) drop-shadow(0 0 1px var(--halo)); }
 [role="tab"] .ai { width: 18px; height: 18px; vertical-align: -4px; margin-right: 7px; }
+/* The wordmark: no chip, a wider glow so it floats on the header. The art is
+   lifted for the dark default; on light it is darkened back so it reads. */
+.brand img { border-radius: 0 !important;
+  filter: drop-shadow(0 0 8px var(--halo)) drop-shadow(0 0 3px var(--halo)); }
+[data-theme="light"] .brand img { filter: brightness(0.42) saturate(1.25) drop-shadow(0 0 6px var(--halo)); }
+[data-theme="light"] .ai { filter: brightness(0.95) drop-shadow(0 0 3px var(--halo)); }
 .site-frame { width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--border); border-radius: 10px;
   background: oklch(0.97 0.008 255); overflow: hidden; }
 .site-frame iframe { width: 400%; height: 400%; border: 0; transform: scale(0.25); transform-origin: 0 0; pointer-events: none; }
@@ -100,8 +118,14 @@ button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid v
 button:hover { background: var(--raised); border-color: var(--muted); }
 button:active:not(:disabled) { transform: translateY(1px); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600;
+  position: relative; overflow: hidden; }
 button.primary:hover { filter: brightness(1.07); }
+/* Ripple on press — the tactile confirm from the pointer's own position. One accent,
+   used for action (PRODUCT.md); reduced-motion skips it entirely below. */
+.ripple { position: absolute; border-radius: 50%; pointer-events: none; transform: scale(0);
+  background: var(--accent-ink); opacity: 0.28; animation: ripple 460ms var(--ease) forwards; }
+@keyframes ripple { to { transform: scale(2.4); opacity: 0; } }
 button.quiet-danger { color: var(--danger); }
 button.quiet-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
 button.icon { padding: 7px 9px; line-height: 0; }
@@ -154,6 +178,109 @@ h3 { font-size: 14px; font-weight: 600; margin: 0; color: var(--muted); }
 .stat.lead:not(.needs):hover { background: var(--raised); }
 .stat.lead:not(.needs):hover::before { border-color: var(--border); }
 .stat.lead:active { transform: translateY(1px); }
+
+/* ============================================================================
+   Overview redesign. MagicUI-style effects, reimplemented in vanilla CSS so the
+   console stays a single offline file. Every motion carries meaning: the beam
+   runs only while the company works, the spotlight only under the cursor, the
+   ticker only when a value changed. Nothing loops idle (PRODUCT.md).
+   ============================================================================ */
+@property --beam { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+/* The status band: the hero. A dotted field behind it (a texture, not a
+   gradient), the human gate in display scale on the left, the live pulse on the
+   right. Full-bleed presence instead of one card among many. */
+.hero { position: relative; overflow: hidden; padding: 28px 30px;
+  display: grid; grid-template-columns: minmax(0, auto) 1fr; gap: 32px; align-items: center; }
+.hero .field { position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(var(--border-ui) 1.1px, transparent 1.1px);
+  background-size: 22px 22px; opacity: 0.18;
+  -webkit-mask: radial-gradient(115% 90% at 22% -10%, #000 30%, transparent 72%);
+  mask: radial-gradient(115% 90% at 22% -10%, #000 30%, transparent 72%); }
+/* Border beam: a light that travels the edge only while a run is live. It says
+   "working now", the one idle-looking motion DESIGN.md sanctions because it maps
+   to a real state. Off otherwise; off under reduced motion. */
+.hero.is-running::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+  padding: 1.5px; pointer-events: none;
+  background: conic-gradient(from var(--beam), transparent 62%, var(--ok) 80%, oklch(0.85 0.11 220) 88%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: beam 3.2s linear infinite; }
+@keyframes beam { to { --beam: 360deg; } }
+.hero-main { display: contents; }
+.hero-gate { all: unset; box-sizing: border-box; cursor: pointer; position: relative; z-index: 1;
+  display: block; padding: 6px 20px 8px 0; min-width: 190px;
+  transition: transform var(--t-feedback) var(--ease); }
+.hero-gate .g-label { font-size: 13px; color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; }
+.hero-gate .g-num { font-size: clamp(52px, 8vw, 76px); line-height: 0.95; font-weight: 600;
+  font-family: ui-monospace, "Cascadia Mono", monospace; color: var(--muted);
+  letter-spacing: -0.02em; margin: 4px 0 2px;
+  transition: color var(--t-state) var(--ease); font-variant-numeric: tabular-nums; }
+.hero-gate .g-hint { font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.hero-gate.needs .g-num, .hero-gate.needs .g-hint { color: var(--warm); }
+.hero-gate.needs .g-label { color: var(--warm); }
+.hero-gate::before { content: ""; position: absolute; inset: -6px -14px; border-radius: 14px;
+  border: 1px solid transparent; transition: border-color var(--t-feedback) var(--ease),
+  background-color var(--t-feedback) var(--ease); }
+.hero-gate:hover::before { border-color: var(--warm-line); background: var(--warm-soft); }
+.hero-gate:not(.needs):hover::before { border-color: var(--border); background: var(--raised); }
+.hero-gate:active { transform: translateY(1px); }
+.hero-side { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; align-items: flex-end; }
+.hero-side .pulse-row { justify-content: flex-end; gap: 30px; }
+.hero-side .stat { text-align: right; min-width: 0; }
+.hero-side .stat .value { font-size: 22px; }
+@media (max-width: 760px) {
+  .hero { grid-template-columns: 1fr; gap: 18px; }
+  .hero-side { align-items: flex-start; }
+  .hero-side .pulse-row { justify-content: flex-start; gap: 22px; }
+  .hero-side .stat { text-align: left; }
+}
+
+/* Bento: the daily state as varied cells, not a stack of identical cards. Weight
+   follows stakes (DESIGN.md): the log is tall, the meters are small. */
+.bento { display: grid; gap: 16px; grid-template-columns: 1fr; }
+.bento > .card { margin: 0; }
+@media (min-width: 900px) {
+  /* Six-column field. Row 1 pairs the tall log with the spend meters; row 2
+     lines up the three small readouts; the site preview takes the full width.
+     No row-spanning, so cells balance by content instead of leaving a gap. */
+  .bento { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .b-activity { grid-column: span 4; }
+  .b-spend { grid-column: span 2; }
+  .b-progress { grid-column: span 2; }
+  .b-payments { grid-column: span 2; }
+  .b-flow { grid-column: span 2; }
+  .b-site { grid-column: span 6; }
+}
+
+/* Magic-card spotlight: a soft light follows the cursor over any card. An
+   overlay that lightens (screen blend) rather than a layer behind content, so it
+   needs no z-index juggling and cannot hide anything. Every tab gains it. */
+.card, .spot { position: relative; }
+/* The hero keeps ::after for its run beam; every other card gets the spotlight. */
+.card:not(.hero)::after, .spot:not(.hero)::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  opacity: 0; transition: opacity var(--t-state) var(--ease); mix-blend-mode: screen;
+  background: radial-gradient(200px circle at var(--mx, 50%) var(--my, -30%), var(--select-soft), transparent 62%); }
+.card:not(.hero):hover::after, .spot:not(.hero):hover::after { opacity: 1; }
+
+/* Blur-fade entrance: a view arrives, once per navigation, staggered. */
+@keyframes blur-fade { from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: blur(0); } }
+.reveal > * { animation: blur-fade var(--t-enter) var(--ease) both; }
+.reveal > :nth-child(1) { animation-delay: 0ms; } .reveal > :nth-child(2) { animation-delay: 45ms; }
+.reveal > :nth-child(3) { animation-delay: 90ms; } .reveal > :nth-child(4) { animation-delay: 135ms; }
+.reveal > :nth-child(5) { animation-delay: 180ms; } .reveal > :nth-child(n+6) { animation-delay: 200ms; }
+
+/* Animated list: a freshly-arrived activity row fades up. Marked by JS on new ids. */
+@keyframes row-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.row-new { animation: row-in var(--t-state) var(--ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero.is-running::after { animation: none; }
+  .reveal > *, .row-new, .ripple { animation: none; }
+  .ripple { display: none; }
+}
 .stat.lead:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
 .kv { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
 .kv:last-child { border-bottom: 0; }
@@ -300,7 +427,7 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
 <header class="top">
   <div class="wrap">
     <h1 class="brand" style="font-size:17px; margin:0">
-      <img src="data:image/png;base64,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" alt="corparius" style="height:58px; width:auto; border-radius:9px; image-rendering:pixelated; display:block">
+      <img src="data:image/png;base64,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" alt="corparius" style="height:58px; width:auto; border-radius:9px; image-rendering:pixelated; display:block">
       <span class="note" data-i18n="brand.console">console</span>
     </h1>
     <label class="note" for="company" data-i18n="header.company">company</label>
@@ -384,6 +511,18 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
   </div>
 
   <section id="tab-overview" role="tabpanel" aria-labelledby="t-overview" class="stack">
+    <div class="card hero spot" id="hero">
+      <div class="field" aria-hidden="true"></div>
+      <button class="hero-gate" id="hero-gate" data-goto-ops>
+        <div class="g-label"></div>
+        <div class="g-num"></div>
+        <div class="g-hint"></div>
+      </button>
+      <div class="hero-side">
+        <span id="mode-badges" style="display:flex; gap:8px; flex-wrap:wrap"></span>
+        <div class="pulse-row" id="pulse"></div>
+      </div>
+    </div>
     <div class="card" id="onboard-card" hidden>
       <div class="card-head" style="display:flex; justify-content:space-between; gap:12px; align-items:baseline">
         <h2 style="margin:0" data-i18n="ob.title">Getting started</h2>
@@ -400,48 +539,32 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <p class="desc" data-i18n="live.desc">Three things turn a simulated company into one that can take money: a checkout link, a mail account, and a public web address.</p>
       <div id="golive-steps" class="stack" style="gap:2px; margin-top:12px"></div>
     </div>
-    <div class="card">
-      <div class="card-head" style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:16px">
-        <h2 style="margin:0" data-i18n="pulse.title">Company pulse</h2>
-        <span id="mode-badges" style="display:flex; gap:8px; flex-wrap:wrap"></span>
+    <div class="bento reveal">
+      <div class="card spot b-activity">
+        <h2 data-i18n="activity.title">Recent activity</h2>
+        <p class="desc" data-i18n="activity.desc">The last things agents did. Full log in Operations.</p>
+        <div id="activity"></div>
       </div>
-      <p class="desc" style="margin-top:-4px" data-i18n="pulse.desc">Where the company stands right now. One tick is one simulated hour.</p>
-      <div class="pulse-row" id="pulse"></div>
-    </div>
-    <div class="grid cols">
-      <div class="stack">
-        <div class="card">
-          <h2 data-i18n="progress.title">Progress</h2>
-          <p class="desc" data-i18n="progress.desc">How much of the backlog is delivered.</p>
-          <div id="progress"></div>
-        </div>
-        <div class="card">
-          <h2 data-i18n="site.title">Sales site</h2>
-          <p class="desc" data-i18n="site.desc">The single-file page the design agent builds from the company config.</p>
-          <div id="site-box"></div>
-        </div>
-        <div class="card">
-          <h2 data-i18n="activity.title">Recent activity</h2>
-          <p class="desc" data-i18n="activity.desc">The last things agents did. Full log in Operations.</p>
-          <div id="activity"></div>
-        </div>
+      <div class="card spot b-spend">
+        <h2 data-i18n="spend.title">Spend by agent</h2>
+        <div id="spend"></div>
       </div>
-      <div class="stack">
-        <div class="card">
-          <h2 data-i18n="spend.title">Spend by agent</h2>
-          <p class="desc" data-i18n="spend.desc">Who consumes the LLM budget.</p>
-          <div id="spend"></div>
-        </div>
-        <div class="card">
-          <h2 data-i18n="pay.title">Payments</h2>
-          <p class="desc" data-i18n="pay.desc">Money actually received, read from Stripe.</p>
-          <div id="payments"></div>
-        </div>
-        <div class="card">
-          <h2 data-i18n="flow.title">Flow</h2>
-          <p class="desc" data-i18n="flow.desc">Is work flowing or piling up?</p>
-          <div id="flow"></div>
-        </div>
+      <div class="card spot b-payments">
+        <h2 data-i18n="pay.title">Payments</h2>
+        <div id="payments"></div>
+      </div>
+      <div class="card spot b-progress">
+        <h2 data-i18n="progress.title">Progress</h2>
+        <div id="progress"></div>
+      </div>
+      <div class="card spot b-flow">
+        <h2 data-i18n="flow.title">Flow</h2>
+        <div id="flow"></div>
+      </div>
+      <div class="card spot b-site">
+        <h2 data-i18n="site.title">Sales site</h2>
+        <p class="desc" data-i18n="site.desc">The single-file page the design agent builds from the company config.</p>
+        <div id="site-box"></div>
       </div>
     </div>
   </section>
@@ -1395,6 +1518,33 @@ $("#golive-card").addEventListener("click", async (ev) => {
   } catch (err) { toast(err.message, true); b.disabled = false; }
 });
 
+// Magic-card spotlight: track the cursor over any .card so its ::after radial
+// highlight follows. Cheap (two setProperty calls), passive, no layout.
+document.addEventListener("pointermove", (e) => {
+  const card = e.target.closest && e.target.closest(".card");
+  if (!card) return;
+  const r = card.getBoundingClientRect();
+  card.style.setProperty("--mx", (e.clientX - r.left) + "px");
+  card.style.setProperty("--my", (e.clientY - r.top) + "px");
+}, { passive: true });
+
+// Ripple from the pointer on every primary action. The span self-removes so the
+// DOM never accumulates; delegated so buttons rendered later are covered too.
+document.addEventListener("pointerdown", (e) => {
+  const btn = e.target.closest && e.target.closest("button.primary");
+  if (!btn || btn.disabled) return;
+  const r = btn.getBoundingClientRect();
+  const d = Math.max(r.width, r.height);
+  const s = document.createElement("span");
+  s.className = "ripple";
+  s.style.width = s.style.height = d + "px";
+  s.style.left = (e.clientX - r.left - d / 2) + "px";
+  s.style.top = (e.clientY - r.top - d / 2) + "px";
+  btn.appendChild(s);
+  s.addEventListener("animationend", () => s.remove());
+}, { passive: true });
+
+let seenActs = null;   // keys of activity rows shown last poll; null until primed
 function render(d) {
   renderOnboard(d);
   loadGolive();
@@ -1416,10 +1566,17 @@ function render(d) {
     d.last_run && d.last_run.mode && !frozen ? `<span class="badge dim">${t("badge.breaker")} ${esc(d.last_run.mode)}</span>` : "",
   ].join("");
 
-  // The human gate is the point (PRODUCT.md), so what waits on you leads the row,
-  // reads sand, and takes you there. The rest are notes, not calls to act.
+  // The human gate is the point (PRODUCT.md): it leads the band in display scale,
+  // warm when it wants you, and takes you to Operations. The beam runs while the
+  // company works. The rest are quiet notes, right-aligned.
+  $("#hero").classList.toggle("is-running", !!d.running);
+  const gate = $("#hero-gate");
+  gate.classList.toggle("needs", !!needsYou);
+  gate.title = t("stat.waitingTip");
+  gate.querySelector(".g-label").textContent = t("stat.waiting");
+  gate.querySelector(".g-hint").textContent = needsYou ? t("stat.waitingGo") : t("stat.waitingClear");
+  tickTo(gate.querySelector(".g-num"), needsYou);
   const stats = [
-    ["waiting", "stat.waiting", needsYou, "stat.waitingTip"],
     ["hour", "stat.hour", d.tick, "stat.hourTip"],
     ["actions", "stat.actions", d.status.actions, "stat.actionsTip"],
     ["tokens", "stat.tokens", d.status.tokens, "stat.tokensTip"],
@@ -1428,22 +1585,16 @@ function render(d) {
   // Build once, then update in place: rebuilding innerHTML every poll would
   // replace the very nodes a number needs to travel across.
   if (!$("#pulse [data-stat]")) {
-    $("#pulse").innerHTML = stats.map(([id, l, , tip]) => id === "waiting"
-      ? `<button class="stat lead" data-goto-ops data-stat="waiting" title="${t(tip)}">
-           <div class="label" data-l="${l}"></div><div class="value"></div><div class="hint"></div>
-         </button>`
-      : `<div class="stat" data-stat="${id}" title="${t(tip)}">
-           <div class="label" data-l="${l}"></div><div class="value"></div>
-         </div>`).join("");
+    $("#pulse").innerHTML = stats.map(([id, l, , tip]) =>
+      `<div class="stat" data-stat="${id}" title="${t(tip)}">
+         <div class="label" data-l="${l}"></div><div class="value"></div>
+       </div>`).join("");
   }
   stats.forEach(([id, l, v]) => {
     const box = $(`#pulse [data-stat="${id}"]`);
     box.querySelector(".label").textContent = t(l);
     tickTo(box.querySelector(".value"), Number(v));
   });
-  const lead = $('#pulse [data-stat="waiting"]');
-  lead.classList.toggle("needs", !!needsYou);
-  lead.querySelector(".hint").textContent = needsYou ? t("stat.waitingGo") : t("stat.waitingClear");
 
   const all = Object.values(d.tasks).flat().length;
   const done = (d.tasks.done || []).length;
@@ -1473,10 +1624,16 @@ function render(d) {
 
   const stateBadge = a => a.ok ? ["ok", t("badge.ok")] : (/pending human approval/.test(a.output || "") ? ["warn", t("badge.held")] : ["danger", t("badge.fail")]);
   const locale = lang === "fr" ? "fr-FR" : "en-GB";
-  $("#activity").innerHTML = d.recent_actions.length ? d.recent_actions.slice(0, 6).map(a => `
-    <div class="kv"><span><span class="badge ${stateBadge(a)[0]}" style="margin-right:8px">${stateBadge(a)[1]}</span>${agentIcon(a.agent)} ${esc(a.agent)} · ${esc(a.tool)}</span>
+  // Animated list: slide in only the rows that arrived since the last poll, never
+  // re-animate the whole log every 5s. First render primes the set silently.
+  const shown = d.recent_actions.slice(0, 6);
+  const keyOf = a => `${a.ts}|${a.agent}|${a.tool}`;
+  const prev = seenActs;
+  $("#activity").innerHTML = shown.length ? shown.map(a => `
+    <div class="kv${prev && !prev.has(keyOf(a)) ? " row-new" : ""}"><span><span class="badge ${stateBadge(a)[0]}" style="margin-right:8px">${stateBadge(a)[1]}</span>${agentIcon(a.agent)} ${esc(a.agent)} · ${esc(a.tool)}</span>
     <span class="v" style="color:var(--muted)">${new Date(a.ts * 1000).toLocaleTimeString(locale)}</span></div>`).join("")
     : `<div class="empty">${t("activity.empty")}</div>`;
+  seenActs = new Set(shown.map(keyOf));
   if (d.recent_actions.length) $("#activity").insertAdjacentHTML("beforeend",
     `<div style="padding-top:12px"><button class="link-ops" style="font-size:13px">${t("activity.openLog")}</button></div>`);
 

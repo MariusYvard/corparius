@@ -281,6 +281,37 @@ h3 { font-size: 14px; font-weight: 600; margin: 0; color: var(--muted); }
   .reveal > *, .row-new, .ripple { animation: none; }
   .ripple { display: none; }
 }
+
+/* ── CEO: a chat with a face ───────────────────────────────────────────────
+   An identity header gives the agent presence; suggestion chips turn the empty
+   state from a dead box into a first move the operator can just click. */
+.chat { grid-template-rows: auto 1fr auto; }
+.chat-id { display: flex; align-items: center; gap: 13px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
+.chat-id .ai { width: 30px; height: 30px; padding: 0; }
+.chat-id h2 { font-size: 15px; margin: 0; }
+.chat-id .desc { margin: 3px 0 0; }
+.suggest { display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; margin-top: 18px; }
+.suggest button { font-size: 13px; border-radius: 999px; padding: 8px 15px; color: var(--muted); }
+.suggest button:hover { color: var(--text); border-color: var(--muted); }
+
+/* ── Settings: a two-column page ───────────────────────────────────────────
+   The company form is the tall primary surface; configuration, diagnostics and
+   console prefs sit in a side rail, reclaiming the horizontal space the single
+   stack left empty. Collapses to one column on narrow viewports. */
+.settings-grid { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.settings-side { display: grid; gap: 24px; align-content: start; }
+@media (min-width: 1040px) { .settings-grid { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); } }
+
+/* ── Plugins: a field behind a deliberately sparse surface ──────────────────
+   The registry is small by design; a dot texture and framed empty states give
+   the page presence without inventing content that is not there. */
+.pl-field { position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(var(--border-ui) 1.1px, transparent 1.1px);
+  background-size: 22px 22px; opacity: 0.14;
+  -webkit-mask: radial-gradient(90% 80% at 92% 0%, #000 18%, transparent 68%);
+  mask: radial-gradient(90% 80% at 92% 0%, #000 18%, transparent 68%); }
+.pl-body { position: relative; }
+.pl-body .banner.warn { justify-content: space-between; }
 .stat.lead:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
 .kv { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
 .kv:last-child { border-bottom: 0; }
@@ -646,7 +677,11 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
 </section>
 
   <section id="tab-ceo" role="tabpanel" aria-labelledby="t-ceo" hidden>
-    <div class="card chat">
+    <div class="card chat" style="max-width:880px">
+      <div class="chat-id">
+        <img class="ai" id="ceo-ava" alt="" aria-hidden="true">
+        <div><h2 data-i18n="ceo.name">CEO</h2><p class="desc" data-i18n="ceo.role">The plan, the backlog, the numbers.</p></div>
+      </div>
       <div class="chat-log" id="chat-log"></div>
       <div id="chat-proposal" hidden style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 0"></div>
       <p class="sr-only" id="chat-live" aria-live="polite"></p>
@@ -658,24 +693,26 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
     </div>
   </section>
 
-  <section id="tab-settings" role="tabpanel" aria-labelledby="t-settings" class="stack" hidden>
-    <div class="card" style="max-width:720px">
+  <section id="tab-settings" role="tabpanel" aria-labelledby="t-settings" hidden>
+   <div class="settings-grid">
+    <div class="card">
       <h2 data-i18n="co.title">This company</h2>
       <p class="desc" data-i18n="co.desc">What the agents sell, to whom, and on what budget. Written straight to the company file.</p>
       <div id="company-editor" class="stack" style="gap:12px; margin-top:12px"></div>
     </div>
-    <div class="card" style="max-width:720px">
+    <div class="settings-side">
+    <div class="card">
       <h2 data-i18n="cfg.title">Configuration</h2>
       <p class="desc" data-i18n="cfg.desc">Everything corparius reads. Saved here, applied without touching a file. A field the process environment defines is shown read-only.</p>
       <div id="settings-groups" class="stack" style="gap:10px; margin-top:12px"></div>
     </div>
-    <div class="card" style="max-width:560px">
+    <div class="card">
       <h2 data-i18n="doc.title">Diagnostics</h2>
       <p class="desc" data-i18n="doc.desc">Checks Python, the store, Ollama, providers and the network, and says what to fix.</p>
       <button id="run-doctor" data-i18n="doc.run">Run diagnostics</button>
       <div id="doctor-out" class="stack" style="gap:6px; margin-top:12px"></div>
     </div>
-    <div class="card" style="max-width:560px">
+    <div class="card">
       <h2 data-i18n="settings.title">Console settings</h2>
       <p class="desc" data-i18n="settings.desc">Stored in this browser only; they change nothing on the server.</p>
       <div class="kv"><span data-i18n="settings.language">Interface language</span>
@@ -699,18 +736,23 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
           <button id="theme-reset" data-i18n="settings.reset">Reset</button>
         </span></div>
     </div>
+    </div>
+   </div>
   </section>
 
-  <section id="tab-plugins" role="tabpanel" aria-labelledby="t-plugins" class="stack" hidden>
-    <div class="card">
+  <section id="tab-plugins" role="tabpanel" aria-labelledby="t-plugins" hidden>
+    <div class="card" style="position:relative; overflow:hidden">
+     <div class="pl-field"></div>
+     <div class="pl-body">
       <h2 data-i18n="pl.title">Plugins</h2>
       <p class="muted" data-i18n="pl.intro">Plugins extend corparius with extra providers, tools, templates and agents. Verified plugins come from the curated registry and are checked against a SHA-256.</p>
-      <div id="pl-off" class="banner warn" hidden data-i18n="pl.off">Plugins are off. Turn them on in Settings (Enable plugins), then restart.</div>
+      <div id="pl-off" class="banner warn" hidden><span data-i18n="pl.off">Plugins are off. Turn them on in Settings (Enable plugins), then restart.</span><button id="pl-goto-settings" class="link-quiet" data-i18n="pl.openSettings">Open Settings</button></div>
       <h3 data-i18n="pl.installed">Installed</h3>
       <div id="pl-installed" class="stack" style="gap:8px"></div>
       <h3 style="margin-top:16px" data-i18n="pl.available">Available in the registry</h3>
       <div id="pl-registry" class="stack" style="gap:8px"></div>
       <p class="muted" style="margin-top:12px" data-i18n="pl.unverified">Installing an unverified plugin runs unaudited third-party code and is only possible from the command line, behind an explicit opt-in.</p>
+     </div>
     </div>
   </section>
 
@@ -755,7 +797,7 @@ en: {
   "run.button":"Run","run.title":"Runs the scheduled agents for the selected simulated time, in the background",
   "nav.overview":"Overview","nav.operations":"Operations","nav.providers":"Providers","nav.settings":"Settings","nav.plugins":"Plugins",
   "pl.title":"Plugins","pl.intro":"Plugins extend corparius with extra providers, tools, templates and agents. Verified plugins come from the curated registry and are checked against a SHA-256.",
-  "pl.off":"Plugins are off. Turn them on in Settings (Enable plugins), then restart.",
+  "pl.off":"Plugins are off. Turn them on in Settings (Enable plugins), then restart.","pl.openSettings":"Open Settings",
   "pl.installed":"Installed","pl.available":"Available in the registry",
   "pl.unverified":"Installing an unverified plugin runs unaudited third-party code and is only possible from the command line, behind an explicit opt-in.",
   "pl.none":"No plugins installed.","pl.regEmpty":"The registry is empty for now.",
@@ -832,6 +874,9 @@ en: {
   "ceo.placeholder":"Ask the CEO about the plan, the backlog, the numbers…","ceo.send":"Send",
   "ceo.proposes":"The CEO can do this now:","ceo.notNow":"Not now","ceo.launched":"Done.",
   "ceo.mockNote":"Mock mode is on: the CEO echoes instead of thinking. Turn mock off and configure a provider in the Providers tab to talk to the real one.",
+  "ceo.name":"CEO","ceo.role":"The plan, the backlog, the numbers.",
+  "ceo.s1":"Where does the backlog stand?","ceo.s2":"How much have we taken in?",
+  "ceo.s3":"What should we prioritise today?","ceo.s4":"Sum up the day.",
   "settings.title":"Console settings","settings.desc":"Stored in this browser only; they change nothing on the server.",
   "settings.language":"Interface language","settings.theme":"Theme","settings.dark":"Dark","settings.light":"Light",
   "settings.accent":"Accent colour","settings.intensity":"Intensity","settings.reset":"Reset",
@@ -906,7 +951,7 @@ fr: {
   "run.button":"Lancer","run.title":"Exécute les agents planifiés pour la durée simulée choisie, en arrière-plan",
   "nav.overview":"Vue d'ensemble","nav.operations":"Opérations","nav.providers":"Providers","nav.settings":"Réglages","nav.plugins":"Plugins",
   "pl.title":"Plugins","pl.intro":"Les plugins étendent corparius avec des providers, outils, gabarits et agents supplémentaires. Les plugins vérifiés viennent du registre curaté et sont contrôlés par un SHA-256.",
-  "pl.off":"Les plugins sont désactivés. Activez-les dans Réglages (Activer les plugins), puis redémarrez.",
+  "pl.off":"Les plugins sont désactivés. Activez-les dans Réglages (Activer les plugins), puis redémarrez.","pl.openSettings":"Ouvrir les Réglages",
   "pl.installed":"Installés","pl.available":"Disponibles dans le registre",
   "pl.unverified":"Installer un plugin non vérifié exécute du code tiers non audité et n'est possible qu'en ligne de commande, derrière un opt-in explicite.",
   "pl.none":"Aucun plugin installé.","pl.regEmpty":"Le registre est vide pour l'instant.",
@@ -983,6 +1028,9 @@ fr: {
   "ceo.placeholder":"Interrogez le CEO sur le plan, le backlog, les chiffres…","ceo.send":"Envoyer",
   "ceo.proposes":"Le CEO peut le faire maintenant :","ceo.notNow":"Pas maintenant","ceo.launched":"C'est fait.",
   "ceo.mockNote":"Mode mock actif : le CEO répète au lieu de réfléchir. Désactivez le mock et configurez un provider dans l'onglet Providers pour parler au vrai.",
+  "ceo.name":"CEO","ceo.role":"Le plan, le backlog, les chiffres.",
+  "ceo.s1":"Où en est le backlog ?","ceo.s2":"Combien avons-nous encaissé ?",
+  "ceo.s3":"Quelle priorité aujourd'hui ?","ceo.s4":"Résume la journée.",
   "settings.title":"Réglages de la console","settings.desc":"Stockés dans ce navigateur uniquement ; rien ne change côté serveur.",
   "settings.language":"Langue de l'interface","settings.theme":"Thème","settings.dark":"Sombre","settings.light":"Clair",
   "settings.accent":"Couleur d'accent","settings.intensity":"Intensité","settings.reset":"Réinitialiser",
@@ -1319,15 +1367,16 @@ async function loadPlugins() {
         : `<button data-pl="disable" data-pl-name="${esc(p.name)}">${t("pl.disable")}</button>`;
       return `<div class="kv"><span><strong>${esc(p.name)}</strong> <span class="muted">v${esc(p.version)} · ${flags.join(" · ")}</span>${p.description ? `<br><span class="muted">${esc(p.description)}</span>` : ""}</span>
         <span style="display:flex; gap:8px">${toggle}<button class="danger" data-pl="remove" data-pl-name="${esc(p.name)}">${t("pl.remove")}</button></span></div>`;
-    }).join("") : `<p class="muted">${t("pl.none")}</p>`;
+    }).join("") : `<div class="empty">${t("pl.none")}</div>`;
     const names = new Set(inst.map(p => p.name));
     const reg = (st.registry || []).filter(e => e.name && !names.has(e.name));
     $("#pl-registry").innerHTML = reg.length ? reg.map(e =>
       `<div class="kv"><span><strong>${esc(e.name)}</strong>${e.description ? `<br><span class="muted">${esc(e.description)}</span>` : ""}</span>
        <button data-pl="install" data-pl-name="${esc(e.name)}">${t("pl.install")}</button></div>`
-    ).join("") : `<p class="muted">${t("pl.regEmpty")}</p>`;
+    ).join("") : `<div class="empty">${t("pl.regEmpty")}</div>`;
   } catch (e) {}
 }
+$("#pl-goto-settings")?.addEventListener("click", () => selectTab($("#t-settings")));
 document.addEventListener("click", async (ev) => {
   const b = ev.target.closest("[data-pl]");
   if (!b) return;
@@ -1543,6 +1592,15 @@ document.addEventListener("pointerdown", (e) => {
   btn.appendChild(s);
   s.addEventListener("animationend", () => s.remove());
 }, { passive: true });
+
+// Give the CEO chat a face, and let a suggestion chip send itself.
+$("#ceo-ava").src = AGENT_ICONS.ceo;
+document.addEventListener("click", (ev) => {
+  const s = ev.target.closest("[data-suggest]");
+  if (!s) return;
+  $("#chat-input").value = s.getAttribute("data-suggest");
+  sendChat();
+});
 
 let seenActs = null;   // keys of activity rows shown last poll; null until primed
 function render(d) {
@@ -2070,10 +2128,18 @@ async function autoTestAndActivate(keyEnv) {
 
 /* CEO chat */
 function renderChat(history) {
-  $("#chat-log").innerHTML = history.length ? history.map(m => `
-    <div class="msg ${m.role === "user" ? "user" : "ceo"}">${esc(m.text)}${m.model ? `<div class="meta">${esc(m.provider)} · ${esc(m.model)}</div>` : ""}</div>`).join("")
-    : `<div class="empty">${t("ceo.empty")}</div>`;
-  const log = $("#chat-log"); log.scrollTop = log.scrollHeight;
+  const log = $("#chat-log");
+  if (!history.length) {
+    // Empty state as a first move: four questions the operator can just click,
+    // each sends straight away. Beats an empty box that answers nothing.
+    log.innerHTML = `<div class="empty">${t("ceo.empty")}
+      <div class="suggest">${["s1", "s2", "s3", "s4"].map(k =>
+        `<button type="button" data-suggest="${esc(t("ceo." + k))}">${esc(t("ceo." + k))}</button>`).join("")}</div></div>`;
+    return;
+  }
+  log.innerHTML = history.map(m => `
+    <div class="msg ${m.role === "user" ? "user" : "ceo"}">${esc(m.text)}${m.model ? `<div class="meta">${esc(m.provider)} · ${esc(m.model)}</div>` : ""}</div>`).join("");
+  log.scrollTop = log.scrollHeight;
 }
 async function loadChat() {
   if (!state.company) return;

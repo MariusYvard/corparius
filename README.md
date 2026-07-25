@@ -151,12 +151,16 @@ and light themes).
 
 ![corparius operator console](docs/screenshots/console.png)
 
-It gives you, per company: a pulse view led by what waits on your decision, lean
-flow metrics with the current bottleneck, per-agent spend, the action log, the
-approval queue with inline approve and reject, the CEO-governed backlog as a
-kanban you can arbitrate and edit in place, run control (a burst of ticks or a
-loop you can stop), the sales site with a headline and a publish button, backups,
-and a chat with the CEO agent that answers from live company state.
+The interface leads with what needs you: a status band puts the count of decisions
+waiting on your approval in display scale, warm and unmissable, above everything
+else, and the daily detail sits below it as a bento of varied cards rather than a
+stack of identical boxes. Below the band, per company: lean flow metrics with the
+current bottleneck, per-agent spend, the action log, the approval queue with
+inline approve and reject, the CEO-governed backlog as a kanban you can arbitrate
+and edit in place, run control (a burst of ticks or a loop you can stop), the
+sales site with a headline and a publish button, backups, and a chat with the CEO
+agent (given a face and a set of one-click openers) that answers from live company
+state.
 
 Nothing here needs a text editor. The company editor covers every field of the
 company config; Settings covers everything corparius reads, from provider keys to

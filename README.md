@@ -1,21 +1,23 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg">
-    <img src="docs/banner.svg" alt="corparius" width="100%">
+    <img src="docs/banner.svg" alt="corparius — self-hosted autonomous AI micro-companies you run yourself" width="100%">
   </picture>
+</p>
+
+<p align="center">
+  <a href="https://github.com/MariusYvard/corparius/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/MariusYvard/corparius/ci.yml?branch=main&style=flat-square&label=CI&labelColor=0A1D48" alt="CI"></a>
+  <img src="https://img.shields.io/badge/python-3.10+-2456D3?style=flat-square&labelColor=0A1D48&logo=python&logoColor=white" alt="Python 3.10+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2456D3?style=flat-square&labelColor=0A1D48" alt="MIT"></a>
+  <img src="https://img.shields.io/badge/self--hosted-first-537CD6?style=flat-square&labelColor=0A1D48" alt="Self-hosted first">
+  <img src="https://img.shields.io/badge/runs-offline%2C%20no%20keys-64B8D2?style=flat-square&labelColor=0A1D48" alt="Runs offline, no keys">
 </p>
 
 # corparius
 
-[![CI](https://github.com/MariusYvard/corparius/actions/workflows/ci.yml/badge.svg)](https://github.com/MariusYvard/corparius/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Self-hosted](https://img.shields.io/badge/self--hosted-first-8A2BE2)](docs/architecture.md)
-
-Self-hosted framework for autonomous AI micro-companies. Describe a business in
-plain language; corparius runs it as a set of scheduled cognitive agents (a CEO
-plus nine operational roles) that pursue one signal, revenue, while a budget and
-loop firewall stops them running away.
+Describe a business in plain language; corparius runs it as a set of scheduled
+cognitive agents — a CEO plus nine operational roles — that pursue one signal,
+revenue, while a budget and loop firewall stops them running away.
 
 It is the local-first answer to hosted platforms like NanoCorp and Polsia: the
 company config, the runtime state and the models stay on your own machine. Cloud
@@ -43,27 +45,12 @@ LLMs are an opt-in escalation, never a requirement. Ship nothing you cannot audi
 
 ## How it works
 
-```
-company.yaml  ->  Scheduler        picks the agents due this tick
-                     |
-                     v
-                  Agent turn        system prompt + company state -> LLM
-                     |                 (HybridRouter: local first, remote
-                     |                  on escalation, fallback chain)
-                     v
-                  Tool calls        guarded by the safety firewall
-                     |                  - TokenBudget      (hard ceiling)
-                     |                  - LoopGuard        (semantic stutter)
-                     |                  - CircuitBreaker   (spend velocity)
-                     v
-                  HITL gate         money / prod code -> wait for a human
-                     |
-                     v
-                  Store (SQLite)    actions, usage, approvals, tasks, KPIs
-                     |
-                     v
-                  Interfaces        CLI · operator console (web) · MCP server
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/pipeline-dark.svg">
+    <img src="docs/readme/pipeline.svg" alt="One tick: company.yaml feeds the Scheduler, which picks the agents due; each Agent turn routes through the HybridRouter (local first, cloud on escalation); Tool calls are guarded by TokenBudget, LoopGuard and CircuitBreaker; money and production code wait at the human gate; everything lands in the SQLite store; and the CLI, operator console and MCP server read it back." width="100%">
+  </picture>
+</p>
 
 Each agent runs on its own cadence (the CEO twice a day, outreach every three
 hours, and so on). A tick advances the clock, runs whatever is due, records every
@@ -86,6 +73,13 @@ so the company does not spend its whole budget in one burst.
 | Competitor | daily | Web research, updates competitor profiles |
 | Design | daily | Visual direction, brand consistency, builds the sales site |
 | Coder | on demand | Builds features, fixes bugs, opens pull requests |
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/rule-dark.svg">
+    <img src="docs/readme/rule.svg" alt="" width="100%">
+  </picture>
+</p>
 
 ## Quick start
 
@@ -220,6 +214,13 @@ When a remote call fails (rate limit, outage), the router walks the
 company keeps working offline. Free-tier limits, signup links and privacy notes
 per provider: `docs/llm-providers.md`.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/rule-dark.svg">
+    <img src="docs/readme/rule.svg" alt="" width="100%">
+  </picture>
+</p>
+
 ## Safety firewall
 
 An autonomous agent left alone with an API and a credit card is a runaway-cost
@@ -251,10 +252,17 @@ covers the parts that bite: e-invoicing through an approved PDP (Factur-X, the
 AI Act classifies an agent as high-risk. Read `docs/conformite-fr.md` before you
 point this at real customers.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/rule-dark.svg">
+    <img src="docs/readme/rule.svg" alt="" width="100%">
+  </picture>
+</p>
+
 ## Project layout
 
 ```
-app/
+corparius/
   cfg.py           settings resolver: environment > console > .env > default
   config.py        env-driven settings (dataclass, CORP_ prefix)
   settings_spec.py the registry of settings the console may write (one row each)

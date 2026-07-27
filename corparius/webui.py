@@ -951,9 +951,33 @@ def _route_update(ctx):
 
 
 def _route_plugins_get(ctx):
-    from . import plugins
+    from . import plugins, skills
 
-    return 200, {"ok": True, **plugins.status()}
+    s = _fresh_settings()
+    # Read-only, and deliberately so. A skill is a file the operator wrote; the
+    # console tells them which ones are in play and which tools each one reaches,
+    # rather than becoming a second, worse text editor.
+    catalog: list[dict] = []
+    if s.skills_enabled:
+        loader = skills.SkillLoader.for_company(ctx.slug or "", max_chars=s.skill_max_chars)
+        catalog = [
+            {
+                "name": sk.name,
+                "description": sk.description,
+                "scope": sk.scope,
+                "tools": sk.allowed_tools,
+                "unknown_tools": [t for t in sk.allowed_tools if t not in TOOLS],
+                "chars": len(sk.instructions),
+                "path": str(sk.path),
+            }
+            for sk in loader.skills
+        ]
+    return 200, {
+        "ok": True,
+        **plugins.status(),
+        "skills": catalog,
+        "skills_enabled": s.skills_enabled,
+    }
 
 
 def _route_theme_get(ctx):

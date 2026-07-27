@@ -83,6 +83,15 @@ class PluginAPI:
 
         tools.TOOLS[tool.name] = tool
 
+    def register_skill_dir(self, path) -> None:
+        """Add a directory of SKILL.md folders to the search path. A plugin that
+        packages domain knowledge — a vertical's objection handling, a
+        regulator's wording — ships it as prose rather than as a tool, and the
+        same `allowed-tools` matching applies."""
+        from . import skills
+
+        skills.EXTRA_DIRS.append(str(path))
+
     def register_template(self, template: dict) -> None:
         from . import company
 

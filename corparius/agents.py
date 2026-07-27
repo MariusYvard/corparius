@@ -113,7 +113,17 @@ def _messages(spec: AgentSpec, ctx, tool) -> list[dict]:
         f"Offer: {offer.get('product', '')}. "
         f"Task: {tool.draft_prompt(ctx)}"
     )
-    return [{"role": "system", "content": spec.system_prompt}, {"role": "user", "content": user}]
+    system = spec.system_prompt
+    # What this company knows about this job, selected by code rather than by
+    # the model: a skill is in scope when it names the tool about to run. The
+    # catalogue is not sent — nothing downstream could act on it, since the
+    # model has no way to ask for a skill it was not given.
+    loader = getattr(ctx, "skills", None)
+    if loader is not None:
+        knowledge = loader.context_for(tool.name)
+        if knowledge:
+            system = f"{system}\n\nWhat this company knows about this job:\n{knowledge}"
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
 class Executor:

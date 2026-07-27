@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased — a company can be taught its own trade
+
+- **Skills.** A `SKILL.md` folder under `companies/<slug>/skills/` or the shared
+  `skills/` directory carries what a company knows, in prose: the objection its
+  market actually raises, the price it never discounts below, the two words its
+  founder refuses to see in a post. Plugins already extended corparius with
+  *code* — seven Python seams, an allow-list, a SHA-256 check — and none of that
+  is a place to put a paragraph, so it was not being written down at all.
+- **Selection is code, not a tool call.** OpenWorker injects a catalogue and lets
+  the agent call `load_skill`; corparius has no tool-calling loop and wants none,
+  so a skill is in scope when the tool about to run is named in its
+  `allowed-tools`. That also makes the catalogue pointless in the prompt — the
+  model cannot ask for a skill it was not given — so a turn pays for the skills
+  that apply to it and nothing else. Cheaper than progressive disclosure, not
+  merely as cheap.
+- **Bounded and honest.** `CORP_SKILL_MAX_CHARS` (4000) caps what one prompt
+  carries; past it a skill is truncated *and marked truncated* rather than
+  silently halved. A company skill replaces a shared one of the same name instead
+  of stacking with it — two sets of instructions for one job, both in context, is
+  how a model gets told to do opposite things. Malformed frontmatter is skipped
+  with a warning, as a plugin that fails to import already is.
+- **Visible when wrong.** A skill naming a tool that does not exist is read,
+  parsed, and then never applies — the one failure nothing else would show. The
+  doctor warns about it by name. The console lists skills read-only in the
+  Plugins tab (scope, size, tools reached, path) rather than becoming a second,
+  worse text editor. Plugins can contribute directories via
+  `PluginAPI.register_skill_dir`; a company skill still wins.
+- On by default, unlike plugins: this is text read into a prompt, not third-party
+  code executed in this process, so the supply-chain reason to ship it off does
+  not apply. `CORP_SKILLS_ENABLED=false` turns it off.
+
 ## Unreleased — the gate says why, and stops idling the company
 
 - **Permissions are decided, not flagged.** `corparius/permissions.py` replaces

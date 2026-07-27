@@ -18,6 +18,7 @@ from .hitl import ApprovalGate
 from .llm import HybridRouter
 from .permissions import PermissionEngine
 from .safety import CircuitBreaker, TokenBudget
+from .skills import SkillLoader
 
 log = logging.getLogger("corparius.orchestrator")
 
@@ -34,6 +35,18 @@ class RunContext:
     store: object = None
     role: str = ""
     structured: object = None  # the last structured.Result, when a tool asked for one
+    skills: object = None  # a skills.SkillLoader, or None when skills are off
+
+
+def _load_skills(settings, slug: str):
+    """None rather than an empty loader when skills are off, so _messages has a
+    single condition to check and a company with no skills pays nothing."""
+    if not getattr(settings, "skills_enabled", True):
+        return None
+    loader = SkillLoader.for_company(slug, max_chars=getattr(settings, "skill_max_chars", None))
+    if loader.skills:
+        log.info("%d skill(s) loaded for %s", len(loader.skills), slug)
+    return loader if loader.skills else None
 
 
 def due_roles(tick: int, enabled: dict) -> list[AgentSpec]:
@@ -67,6 +80,7 @@ class Runtime:
         executor = Executor(self.router, gate, self.store, self.settings)
         enabled = company.get("agents", {})
 
+        skills = _load_skills(self.settings, slug)
         start = int(self.store.load_state(slug).get("tick", 0))
         # Yesterday's summaries. Re-read at every day boundary below: read once
         # here and a --loop company writes an EOD summary every day and never
@@ -109,6 +123,7 @@ class Runtime:
                     data_path=self.settings.data_path,
                     memory=memory,
                     store=self.store,
+                    skills=skills,
                 )
                 for spec in due_roles(tick, enabled):
                     try:
@@ -166,6 +181,7 @@ class Runtime:
             gate = ApprovalGate(
                 self.store, PermissionEngine.from_settings(self.settings, company, self.store)
             )
+            skills = _load_skills(self.settings, slug)
             executor = Executor(self.router, gate, self.store, self.settings)
             time.sleep(1)
         # A rule granted "for this run" that outlived the run would be a standing

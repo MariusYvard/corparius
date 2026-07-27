@@ -226,6 +226,41 @@ def _check_permissions(s: Settings) -> tuple:
     return ("ok", "permissions", f"{mode}, asks above {s.ask_above}; gated by name: {gated}")
 
 
+def _check_skills(s: Settings) -> tuple:
+    """A skill that names a tool nobody has never applies, and does so silently:
+    it is read, parsed and then matched against a name that does not exist. That
+    is the one failure the operator cannot see from the console."""
+    if not s.skills_enabled:
+        return ("ok", "skills", "off (CORP_SKILLS_ENABLED=false)")
+    from . import skills as skills_mod
+    from .tools import TOOLS
+
+    base = paths.companies_dir()
+    slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
+    found: dict[str, skills_mod.Skill] = {}
+    for slug in slugs or [""]:
+        for skill in skills_mod.SkillLoader.for_company(slug).skills:
+            found[f"{skill.scope}/{skill.name}"] = skill
+    if not found:
+        return (
+            "ok",
+            "skills",
+            "none written yet; copy packaging/skill-template into "
+            "companies/<slug>/skills/ to teach a company its own trade.",
+        )
+    unknown = sorted(
+        f"{s_.name}:{t}" for s_ in found.values() for t in s_.allowed_tools if t not in TOOLS
+    )
+    if unknown:
+        return (
+            "warn",
+            "skills",
+            f"{len(found)} loaded, but these name a tool that does not exist and so never "
+            f"apply: {', '.join(unknown)}.",
+        )
+    return ("ok", "skills", f"{len(found)} loaded across {len(slugs) or 1} company(ies)")
+
+
 def _check_ollama(s: Settings) -> tuple:
     tiers = [s.trivial_model, s.normal_model, s.hard_model]
     needs_local = s.llm_mock is False and (
@@ -398,6 +433,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_claude_cli(s),
         _check_deploy_order(),
         _check_plugins(s),
+        _check_skills(s),
     ]
     out = []
     for c in checks:

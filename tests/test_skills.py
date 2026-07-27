@@ -1,0 +1,149 @@
+"""Skills carry what a company knows, in prose.
+
+The properties worth pinning: a skill reaches only the tools it names, a company
+overrides a shared one instead of stacking with it, a malformed file is skipped
+rather than fatal, and the injected block is bounded — a note nobody reads must
+not become the largest line in the token budget.
+"""
+
+import types
+
+from corparius.agents import ROSTER, _messages
+from corparius.models import AgentRole
+from corparius.skills import Skill, SkillLoader, parse
+from corparius.tools import TOOLS
+
+
+def _write(base, name, body="Say less.", front=None, tools="send_outreach"):
+    folder = base / name
+    folder.mkdir(parents=True, exist_ok=True)
+    if front is None:
+        front = f"---\nname: {name}\ndescription: d\nallowed-tools: {tools}\n---\n"
+    (folder / "SKILL.md").write_text(front + body, encoding="utf-8")
+    return folder / "SKILL.md"
+
+
+def _loader(*dirs, max_chars=None):
+    return SkillLoader([(d, "global") for d in dirs], max_chars=max_chars)
+
+
+def test_a_skill_reaches_only_the_tools_it_names(tmp_path):
+    _write(tmp_path, "voice", tools="send_outreach")
+    loader = _loader(tmp_path)
+    assert "Say less." in loader.context_for("send_outreach")
+    assert loader.context_for("draft_social_post") == ""
+
+
+def test_a_skill_with_no_tool_list_applies_to_every_tool(tmp_path):
+    _write(tmp_path, "about-us", front="---\nname: about-us\ndescription: d\n---\n")
+    loader = _loader(tmp_path)
+    assert loader.context_for("draft_social_post")
+    assert loader.context_for("review_kpis")
+
+
+def test_a_company_skill_replaces_the_shared_one_of_the_same_name(tmp_path):
+    """Two sets of instructions for the same job, both in context, is how a
+    model gets told to do opposite things."""
+    shared, company = tmp_path / "shared", tmp_path / "company"
+    _write(shared, "voice", body="Be formal.")
+    _write(company, "voice", body="Be blunt.")
+    loader = SkillLoader([(shared, "global"), (company, "acme")])
+    assert len(loader.skills) == 1
+    out = loader.context_for("send_outreach")
+    assert "Be blunt." in out and "Be formal." not in out
+
+
+def test_a_comma_list_and_a_yaml_list_mean_the_same_thing(tmp_path):
+    _write(tmp_path, "a", tools="send_outreach, schedule_post")
+    b = tmp_path / "b"
+    b.mkdir()
+    (b / "SKILL.md").write_text(
+        "---\nname: b\ndescription: d\nallowed-tools:\n  - send_outreach\n  - schedule_post\n---\nx",
+        encoding="utf-8",
+    )
+    loader = _loader(tmp_path)
+    assert all(s.allowed_tools == ["send_outreach", "schedule_post"] for s in loader.skills)
+
+
+def test_broken_frontmatter_is_skipped_not_fatal(tmp_path):
+    """One bad file in a folder must not stop a company from running, exactly as
+    a plugin that fails to import does not."""
+    _write(tmp_path, "good")
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    (bad / "SKILL.md").write_text("---\nname: [unclosed\n---\nbody", encoding="utf-8")
+    loader = _loader(tmp_path)
+    assert [s.name for s in loader.skills] == ["good"]
+
+
+def test_a_file_with_no_frontmatter_is_all_body(tmp_path):
+    folder = tmp_path / "notes"
+    folder.mkdir()
+    (folder / "SKILL.md").write_text("Just a note somebody typed.", encoding="utf-8")
+    loader = _loader(tmp_path)
+    assert loader.skills[0].name == "notes"
+    assert "Just a note" in loader.context_for("review_kpis")
+
+
+def test_the_injected_block_is_capped_and_says_it_was_cut(tmp_path):
+    _write(tmp_path, "long", body="x" * 5000)
+    out = _loader(tmp_path, max_chars=100).context_for("send_outreach")
+    assert "[truncated]" in out
+    assert len(out) < 400, "the cap did not hold"
+
+
+def test_a_second_skill_past_the_cap_does_not_smuggle_more_in(tmp_path):
+    _write(tmp_path, "a", body="a" * 90)
+    _write(tmp_path, "b", body="b" * 90)
+    out = _loader(tmp_path, max_chars=100).context_for("send_outreach")
+    assert out.count("a" * 90) == 1
+    assert "b" * 90 not in out
+
+
+def test_no_skills_costs_nothing(tmp_path):
+    assert _loader(tmp_path).context_for("send_outreach") == ""
+
+
+def test_the_prompt_is_unchanged_when_no_skill_applies(tmp_path):
+    """The default path for every company that has written none. A blank block,
+    a trailing newline or a header would still be tokens spent on nothing."""
+    _write(tmp_path, "voice", tools="send_outreach")
+    ctx = types.SimpleNamespace(
+        company={"name": "T", "offer": {}}, memory=[], skills=_loader(tmp_path)
+    )
+    spec = ROSTER[AgentRole.SOCIAL]
+    system = _messages(spec, ctx, TOOLS["draft_social_post"])[0]["content"]
+    assert system == spec.system_prompt
+
+
+def test_an_applicable_skill_reaches_the_system_prompt(tmp_path):
+    _write(tmp_path, "voice", body="Never promise a callback rate.")
+    ctx = types.SimpleNamespace(
+        company={"name": "T", "offer": {}}, memory=[], leads=[], skills=_loader(tmp_path)
+    )
+    spec = ROSTER[AgentRole.OUTREACH]
+    system = _messages(spec, ctx, TOOLS["send_outreach"])[0]["content"]
+    assert spec.system_prompt in system
+    assert "Never promise a callback rate." in system
+
+
+def test_an_agent_with_no_loader_is_unaffected():
+    """RunContext.skills is None when skills are off, and every existing caller
+    that builds a context by hand leaves it unset."""
+    ctx = types.SimpleNamespace(company={"name": "T", "offer": {}}, memory=[])
+    spec = ROSTER[AgentRole.SOCIAL]
+    assert _messages(spec, ctx, TOOLS["draft_social_post"])[0]["content"] == spec.system_prompt
+
+
+def test_the_shipped_example_skill_names_real_tools():
+    """A skill naming a tool nobody has is read, parsed, and then never applies.
+    Shipping one like that would teach the wrong thing by example."""
+    from corparius import paths
+
+    path = paths.companies_dir() / "example" / "skills" / "outreach-voice" / "SKILL.md"
+    if not path.is_file():  # a wheel install without the example seeded yet
+        return
+    skill = parse(path)
+    assert isinstance(skill, Skill)
+    assert skill.allowed_tools
+    assert [t for t in skill.allowed_tools if t not in TOOLS] == []

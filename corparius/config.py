@@ -111,6 +111,17 @@ class Settings:
     # cannot quietly loosen a stricter mode the operator picked on purpose.
     auto_allow: list[str] = field(default_factory=lambda: cfg.get_csv("CORP_AUTO_ALLOW"))
 
+    # Skills: SKILL.md folders carrying what a company knows, in prose. On by
+    # default, unlike plugins: this is text read into a prompt, not third-party
+    # code executed in this process, so the supply-chain reason to be off does
+    # not apply.
+    skills_enabled: bool = field(
+        default_factory=lambda: cfg.get_bool("CORP_SKILLS_ENABLED", "true")
+    )
+    # Ceiling on the instructions injected into one prompt, so a long note
+    # cannot quietly become the largest line in the token budget.
+    skill_max_chars: int = field(default_factory=lambda: cfg.get_int("CORP_SKILL_MAX_CHARS", 4000))
+
 
 settings = Settings()
 

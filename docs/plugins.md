@@ -78,6 +78,7 @@ def register(api):
     # api.register_enricher(instance)          # sous-classe corparius.enrich.Enricher
     # api.register_tool(tool)                  # corparius.tools.Tool (HITL + firewall s'appliquent)
     # api.register_template(dict)              # gabarit d'entreprise
+    # api.register_skill_dir(chemin)           # dossiers SKILL.md (voir docs/skills.md)
     # api.customize_agent("strategy", system_prompt="...", playbook=[...])
 ```
 

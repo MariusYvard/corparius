@@ -316,6 +316,25 @@ Write one from [`packaging/plugin-template/`](packaging/plugin-template/), then
 propose it by opening a PR that adds it to `plugins/registry.json` — CI validates
 and loads it. Full guide: [`docs/plugins.md`](docs/plugins.md).
 
+## Skills
+
+Plugins extend corparius with code. **Skills** extend it with what your company
+knows — the objection your market actually raises, the price you never discount
+below, the two words your founder refuses to see in a post. A skill is a
+`SKILL.md` folder with YAML frontmatter; prose, not code, and nothing in it is
+executed.
+
+```
+companies/<slug>/skills/<name>/SKILL.md   one company
+skills/<name>/SKILL.md                    every company on this machine
+```
+
+`allowed-tools` in the frontmatter decides everything: the body is read into the
+prompt only when the tool about to run is one it names, so a turn pays for the
+skills that apply to it and nothing else. Start from
+[`packaging/skill-template/`](packaging/skill-template/); the example company
+ships one. Full guide: [`docs/skills.md`](docs/skills.md).
+
 ## Documentation
 
 | Doc | Covers |
@@ -332,6 +351,7 @@ and loads it. Full guide: [`docs/plugins.md`](docs/plugins.md).
 | `docs/leads.md` `docs/pipeline.md` | lead research, enrichment, deliverability, signals |
 | `docs/mcp.md` | driving corparius from any MCP host |
 | `docs/plugins.md` | writing, installing and proposing plugins |
+| `docs/skills.md` | teaching a company its trade in prose (SKILL.md) |
 | `docs/install.md` | download/run per OS, data locations, updates |
 | `docs/roadmap-90j.md` | the 90-day build cycle |
 | `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia, Uclic and OpenWorker |

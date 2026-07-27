@@ -21,7 +21,7 @@ from pathlib import Path
 
 import yaml
 
-from . import paths
+from . import paths, permissions
 
 # The writable home under which `companies/` lives. In a source checkout this is
 # the repository root (unchanged); frozen, it is a per-OS directory that
@@ -292,6 +292,53 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     if unknown_tools:
         warnings.append(f"hitl_tools: {', '.join(unknown_tools)} match no tool and gate nothing")
 
+    # Permission overrides are opt-in and only written back when the operator
+    # put them in the file. Emitting them always would pin every company to
+    # whatever the global setting said the day it was created, and a later
+    # change in the console would silently apply to nobody.
+    perms: dict = {}
+    if "permission_mode" in raw:
+        mode = str(raw.get("permission_mode", "")).strip()
+        if mode in permissions.MODES:
+            perms["permission_mode"] = mode
+        else:
+            warnings.append(
+                f"permission_mode: '{mode}' is not one of "
+                f"{', '.join(permissions.MODES)}; the global setting applies"
+            )
+    if "ask_above" in raw:
+        above = str(raw.get("ask_above", "")).strip()
+        if above in permissions.RISK_CLASSES:
+            perms["ask_above"] = above
+        else:
+            warnings.append(
+                f"ask_above: '{above}' is not one of "
+                f"{', '.join(permissions.RISK_CLASSES)}; the global setting applies"
+            )
+    if "auto_allow" in raw:
+        raw_allow = raw.get("auto_allow")
+        allow = [
+            str(x).strip() for x in (raw_allow if isinstance(raw_allow, list) else []) if str(x)
+        ]
+        unknown_allow = [x for x in allow if x not in TOOLS]
+        if unknown_allow:
+            warnings.append(
+                f"auto_allow: {', '.join(unknown_allow)} match no tool and allow nothing"
+            )
+        gated = [x for x in allow if x in hitl]
+        if gated:
+            warnings.append(
+                f"auto_allow: {', '.join(gated)} are gated by name and stay gated; "
+                "remove them from hitl_tools to auto-allow them"
+            )
+        declared = perms.get("permission_mode", "")
+        if allow and declared and declared != permissions.CUSTOM:
+            warnings.append(
+                f"auto_allow is only honoured in custom permission mode, and this company "
+                f"declares '{declared}'; the list does nothing"
+            )
+        perms["auto_allow"] = allow
+
     cfg = {
         "slug": slug,
         "name": name,
@@ -314,6 +361,7 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             "daily_ad_spend_eur": ads_eur,
         },
         "hitl_tools": hitl,
+        **perms,
     }
     return cfg, errors, warnings
 

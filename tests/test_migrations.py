@@ -36,6 +36,34 @@ def test_old_store_is_migrated_in_place(tmp_path):
     assert "tool" in _columns(store.db, "tasks")
 
 
+def test_a_populated_v1_store_gains_the_rules_table_without_losing_data(tmp_path):
+    """The upgrade an existing operator actually performs. Standing permission
+    rules arrived at v2, and a store with real history in it has to reach the
+    new shape by being migrated, not by being recreated."""
+    path = tmp_path / "corparius.sqlite"
+    db = sqlite3.connect(str(path))
+    db.executescript(
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT,"
+        " title TEXT, target TEXT, priority INTEGER, status TEXT, created_by TEXT,"
+        " note TEXT, ts REAL, tool TEXT);"
+        "CREATE TABLE approvals (id TEXT PRIMARY KEY, company TEXT, agent TEXT,"
+        " tool TEXT, parameters TEXT, status TEXT, note TEXT, ts REAL);"
+        "PRAGMA user_version = 1;"
+    )
+    db.execute(
+        "INSERT INTO tasks (company, title, target, priority, status, created_by, note, ts, tool)"
+        " VALUES ('t','Ship it','coder',2,'approved','ceo','',1.0,'generate_code')"
+    )
+    db.commit()
+    db.close()
+
+    store = Store(str(tmp_path))
+    assert store.schema_version() == SCHEMA_VERSION
+    assert store.list_tasks("t", "approved")[0]["title"] == "Ship it"
+    store.add_rule("t", "generate_code", "always")
+    assert store.find_rule("t", "generate_code") == "always"
+
+
 def test_migration_is_idempotent(tmp_path):
     Store(str(tmp_path))
     # Reopening an already-current store must not raise or change the version.

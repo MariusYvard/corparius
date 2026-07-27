@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from . import cfg, paths
+from . import cfg, paths, permissions
 
 
 @dataclass
@@ -89,12 +89,27 @@ class Settings:
     ui_port: int = field(default_factory=lambda: cfg.get_int("CORP_UI_PORT", 8600))
     ui_token: str = field(default_factory=lambda: cfg.get("CORP_UI_TOKEN", ""))
 
-    # Human in the loop.
+    # Human in the loop. `hitl_tools` gates tools by name and outranks
+    # everything else; the three below are the dials that decide what else has
+    # to ask. See corparius/permissions.py for the resolution order.
     hitl_tools: list[str] = field(
         default_factory=lambda: cfg.get_csv(
             "CORP_HITL_TOOLS", "send_financial_transaction,publish_production_code,deploy_site"
         )
     )
+    # discuss | interactive | auto | custom.
+    permission_mode: str = field(
+        default_factory=lambda: cfg.get("CORP_PERMISSION_MODE", permissions.INTERACTIVE)
+    )
+    # Ask for anything strictly above this risk class. The default (external)
+    # plus the shipped hitl_tools is the behaviour corparius had before risk
+    # classes existed, so upgrading changes nothing until the operator says so.
+    ask_above: str = field(
+        default_factory=lambda: cfg.get("CORP_ASK_ABOVE", permissions.DEFAULT_ASK_ABOVE)
+    )
+    # Auto-approved tool names. Honoured in `custom` mode only, so the list
+    # cannot quietly loosen a stricter mode the operator picked on purpose.
+    auto_allow: list[str] = field(default_factory=lambda: cfg.get_csv("CORP_AUTO_ALLOW"))
 
 
 settings = Settings()

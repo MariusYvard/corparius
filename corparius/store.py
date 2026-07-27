@@ -42,13 +42,17 @@ CREATE TABLE IF NOT EXISTS outreach (
     replied_at REAL, reply_snippet TEXT
 );
 CREATE INDEX IF NOT EXISTS outreach_by_email ON outreach (company, email);
+CREATE TABLE IF NOT EXISTS rules (
+    company TEXT, tool TEXT, scope TEXT, note TEXT, ts REAL,
+    PRIMARY KEY (company, tool)
+);
 """
 
 # Bump this and add a migration below whenever the schema changes in a way that
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -61,8 +65,20 @@ def _migration_1(db: sqlite3.Connection) -> None:
         pass
 
 
+def _migration_2(db: sqlite3.Connection) -> None:
+    """Standing permission rules ("approve, and stop asking"), added with the
+    risk-classed permission engine. CREATE TABLE IF NOT EXISTS in SCHEMA already
+    covers fresh stores; this exists so an upgrade in place reaches the same
+    shape without the operator recreating the database."""
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS rules ("
+        " company TEXT, tool TEXT, scope TEXT, note TEXT, ts REAL,"
+        " PRIMARY KEY (company, tool))"
+    )
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
-MIGRATIONS = {1: _migration_1}
+MIGRATIONS = {1: _migration_1, 2: _migration_2}
 
 
 def _locked(method):
@@ -243,6 +259,27 @@ class Store:
         return dict(row) if row else None
 
     @_locked
+    def pending_approval_for(self, company, tool):
+        """The oldest undecided request for this tool, whatever its parameters.
+
+        Looked up before an agent drafts anything, so a company that already has
+        one deploy waiting does not spend a model call producing a second
+        request the operator will see as a duplicate. It never widens the gate:
+        matching an approval to an execution still goes through find_approval,
+        which compares parameters exactly."""
+        row = self.db.execute(
+            "SELECT * FROM approvals WHERE company=? AND tool=? AND status='pending'"
+            " ORDER BY ts LIMIT 1",
+            (company, tool),
+        ).fetchone()
+        return dict(row) if row else None
+
+    @_locked
+    def get_approval(self, approval_id):
+        row = self.db.execute("SELECT * FROM approvals WHERE id=?", (approval_id,)).fetchone()
+        return dict(row) if row else None
+
+    @_locked
     def list_approvals(self, company, status="pending"):
         rows = self.db.execute(
             "SELECT * FROM approvals WHERE company=? AND status=? ORDER BY ts",
@@ -257,6 +294,46 @@ class Store:
         )
         self.db.commit()
         return cur.rowcount > 0
+
+    @_locked
+    def add_rule(self, company, tool, scope="always", note="") -> None:
+        """A standing "stop asking me about this tool" for one company. `run`
+        expires with the run that granted it, `always` persists. Re-granting
+        replaces rather than duplicates, so the operator cannot end up with two
+        rules disagreeing about the same tool."""
+        self.db.execute(
+            "INSERT OR REPLACE INTO rules (company, tool, scope, note, ts) VALUES (?,?,?,?,?)",
+            (company, tool, scope, note, time.time()),
+        )
+        self.db.commit()
+
+    @_locked
+    def find_rule(self, company, tool) -> str:
+        row = self.db.execute(
+            "SELECT scope FROM rules WHERE company=? AND tool=?", (company, tool)
+        ).fetchone()
+        return str(row["scope"]) if row else ""
+
+    @_locked
+    def list_rules(self, company):
+        rows = self.db.execute(
+            "SELECT * FROM rules WHERE company=? ORDER BY tool", (company,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    @_locked
+    def drop_rule(self, company, tool) -> bool:
+        cur = self.db.execute("DELETE FROM rules WHERE company=? AND tool=?", (company, tool))
+        self.db.commit()
+        return cur.rowcount > 0
+
+    @_locked
+    def clear_run_rules(self, company) -> int:
+        """Called when a run ends. A run-scoped rule that outlived its run would
+        be an `always` rule the operator never granted."""
+        cur = self.db.execute("DELETE FROM rules WHERE company=? AND scope='run'", (company,))
+        self.db.commit()
+        return cur.rowcount
 
     @_locked
     def save_state(self, company, data: dict) -> None:
@@ -441,6 +518,56 @@ class Store:
         self.db.commit()
 
     @_locked
+    def park_task(self, task_id, approval_id: str) -> None:
+        """Hold a task aside until a named approval is decided.
+
+        `waiting` is deliberately not a status claim_next_task looks at, so the
+        agent that parked it moves straight on to the next task instead of
+        picking the same blocked one up again every turn."""
+        self.db.execute(
+            "UPDATE tasks SET status='waiting', note=? WHERE id=?",
+            (f"approval:{approval_id}", task_id),
+        )
+        self.db.commit()
+
+    @_locked
+    def release_waiting_tasks(self, company) -> dict:
+        """Put parked tasks back in play once the operator has answered.
+
+        Polled rather than pushed on purpose: an approval can be decided from
+        the console, the CLI or an MCP host, and a run can be restarted between
+        the question and the answer. Reading the answer back is the only version
+        of this that works from all of them."""
+        released = 0
+        refused = 0
+        for task in self.db.execute(
+            "SELECT id, note FROM tasks WHERE company=? AND status='waiting'", (company,)
+        ).fetchall():
+            note = str(task["note"] or "")
+            if not note.startswith("approval:"):
+                continue
+            row = self.db.execute(
+                "SELECT status FROM approvals WHERE id=?", (note[len("approval:") :],)
+            ).fetchone()
+            if row is None or row["status"] == "pending":
+                continue
+            if row["status"] == "approved":
+                self.db.execute(
+                    "UPDATE tasks SET status='approved', note='approved, back in the queue'"
+                    " WHERE id=?",
+                    (task["id"],),
+                )
+                released += 1
+            else:
+                self.db.execute(
+                    "UPDATE tasks SET status='rejected', note='refused by the operator' WHERE id=?",
+                    (task["id"],),
+                )
+                refused += 1
+        self.db.commit()
+        return {"released": released, "refused": refused}
+
+    @_locked
     def update_task(self, task_id, **fields) -> None:
         allowed = {"title", "target", "priority", "note", "status", "tool"}
         items = [(k, v) for k, v in fields.items() if k in allowed]
@@ -463,6 +590,12 @@ class Store:
         rows = self.list_tasks(company)
         done = [t for t in rows if t["status"] == "done"]
         wip = [t for t in rows if t["status"] in ("approved", "in_progress")]
+        # Blocked work is counted apart from WIP rather than folded into it. It
+        # is genuinely in flight, so hiding it would flatter the board; but
+        # charging it against the pull limit would let four unanswered
+        # approvals stop the company from starting anything else, which is the
+        # opposite of what parking a task is for.
+        blocked = [t for t in rows if t["status"] == "waiting"]
         by_target: dict[str, int] = {}
         for t in wip:
             by_target[t["target"]] = by_target.get(t["target"], 0) + 1
@@ -474,6 +607,7 @@ class Store:
         return {
             "throughput": len(done),
             "wip": len(wip),
+            "blocked": len(blocked),
             "by_target": by_target,
             "bottleneck": bottleneck,
             "waiting": st["pending_approvals"],

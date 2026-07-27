@@ -34,6 +34,7 @@ from . import (
     mailbox,
     ollama_setup,
     paths,
+    permissions,
     provider_check,
     settings_spec,
     sitegen,
@@ -185,15 +186,28 @@ def _overview(state: UiState, slug: str) -> dict:
     actions = store.recent_actions(slug)
     frozen = store.count_actions_by_tool(slug, "circuit_breaker_freeze")
     approvals = store.list_approvals(slug, "pending")
+    s = _fresh_settings()
+    company_cfg = _load_company(slug) or {}
+    engine = permissions.PermissionEngine.from_settings(s, company_cfg, store)
     for a in approvals:  # parameters are stored as a JSON string
         if isinstance(a.get("parameters"), str):
             try:
                 a["parameters"] = json.loads(a["parameters"])
             except json.JSONDecodeError:
                 pass
-    s = _fresh_settings()
+        tool = TOOLS.get(a.get("tool", ""))
+        a["risk"] = permissions.risk_of(tool) if tool else permissions.READ
+        # A tool gated by name can never be silenced by a standing rule, so the
+        # console must not offer a button that would do nothing.
+        a["can_remember"] = bool(tool) and engine.evaluate(tool, slug).rule != "hitl"
     run = state.runs.get(slug, {})
-    by_status: dict[str, list] = {"proposed": [], "approved": [], "in_progress": [], "done": []}
+    by_status: dict[str, list] = {
+        "proposed": [],
+        "approved": [],
+        "in_progress": [],
+        "waiting": [],
+        "done": [],
+    }
     for t in tasks:
         by_status.setdefault(t["status"], []).append(t)
     return {
@@ -204,6 +218,9 @@ def _overview(state: UiState, slug: str) -> dict:
         "flow": flow,
         "tasks": by_status,
         "approvals": approvals,
+        "rules": store.list_rules(slug),
+        "permission_mode": engine.mode,
+        "ask_above": engine.ask_above,
         "spend_by_agent": spend,
         "recent_actions": actions,
         "freezes": frozen,
@@ -955,10 +972,47 @@ def _route_approvals_post(ctx):
     decision = ctx.body.get("decision")
     if decision not in ("approved", "rejected"):
         return 400, {"ok": False, "error": "decision must be approved or rejected"}
-    done = ctx.store().set_approval_status(
-        str(ctx.body.get("id")), decision, str(ctx.body.get("note", "via console"))
+    store = ctx.store()
+    approval_id = str(ctx.body.get("id"))
+    # Read before writing: the approval carries the company, and this endpoint
+    # is deliberately not slug-scoped so an approval can be decided from
+    # anywhere it is visible.
+    approval = store.get_approval(approval_id)
+    done = store.set_approval_status(
+        approval_id, decision, str(ctx.body.get("note", "via console"))
     )
-    return (200 if done else 404), {"ok": done, "error": None if done else "approval not found"}
+    # "Approve, and stop asking" is granted here rather than through its own
+    # endpoint, because it is one operator gesture and must not half-apply.
+    remembered = ""
+    scope = str(ctx.body.get("remember", "")).strip()
+    if done and decision == "approved" and scope in ("run", "always") and approval:
+        slug = approval["company"]
+        tool = TOOLS.get(approval["tool"])
+        engine = permissions.PermissionEngine.from_settings(
+            _fresh_settings(), _load_company(slug) or {}, store
+        )
+        if tool and engine.evaluate(tool, slug).rule != "hitl":
+            store.add_rule(slug, approval["tool"], scope, "granted from the console")
+            remembered = scope
+    return (200 if done else 404), {
+        "ok": done,
+        "remembered": remembered,
+        "error": None if done else "approval not found",
+    }
+
+
+def _route_rules_post(ctx):
+    """Revoke a standing rule. Granting one goes through the approval it came
+    from; revoking has to stand alone, or a rule granted by mistake could only
+    be undone by editing the database."""
+    tool = str(ctx.body.get("tool", "")).strip()
+    if not tool:
+        return 400, {"ok": False, "error": "tool is required"}
+    dropped = ctx.store().drop_rule(ctx.slug, tool)
+    return (200 if dropped else 404), {
+        "ok": dropped,
+        "error": None if dropped else "no standing rule for that tool",
+    }
 
 
 def _route_tasks_post(ctx):
@@ -1157,6 +1211,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/chat", _route_chat_get, needs_slug=True),
     Route("POST", "/api/companies", _route_companies_post),
     Route("POST", "/api/approvals", _route_approvals_post),
+    Route("POST", "/api/rules", _route_rules_post, needs_slug=True),
     Route("POST", "/api/tasks", _route_tasks_post),
     Route("POST", "/api/site", _route_site_post),
     Route("POST", "/api/deploy", _route_deploy_post),

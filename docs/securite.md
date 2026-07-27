@@ -24,7 +24,29 @@ L'ingénierie de fiabilité des agents suit des indicateurs de conformité, par 
 
 ## Validation humaine
 
-Certaines actions ne s'exécutent jamais sans accord. Tout outil listé dans CORP_HITL_TOOLS (par défaut send_financial_transaction et publish_production_code) met le flux en pause et dépose une demande d'approbation avec le nom de l'outil et ses paramètres. L'exploitant approuve ou rejette depuis la CLI, ou via un canal externe comme n8n, Slack, Telegram ou courriel. Un rejet est rendu à l'agent comme une erreur d'outil récupérable, avec le message "Tool execution denied: Approval rejected by administrator."
+Certaines actions ne s'exécutent jamais sans accord. Tout outil listé dans CORP_HITL_TOOLS (par défaut send_financial_transaction, publish_production_code et deploy_site) met le flux en pause et dépose une demande d'approbation avec le nom de l'outil et ses paramètres. L'exploitant approuve ou rejette depuis la console, la CLI, le serveur MCP, ou via un canal externe comme n8n, Slack, Telegram ou courriel. Un rejet est rendu à l'agent comme une erreur d'outil récupérable, avec le message "Tool execution denied: Approval rejected by administrator."
+
+### Ce qui décide de demander
+
+Une liste de noms ne répond qu'à « est-ce que ça s'arrête », jamais à « pourquoi celui-là est passé ». Depuis les classes de risque, la décision se compose de trois éléments, résolus par `corparius/permissions.py`.
+
+Chaque outil déclare une classe de risque décrivant son effet sur le monde extérieur, pas son sujet: `read` (lit, rédige, calcule, rien ne sort du processus), `write_local` (écrit sous le répertoire de données), `external` (appelle un tiers, ou quelqu'un reçoit quelque chose), `code` (livre du code à un endroit qui l'exécute), `money` (déplace l'argent de l'exploitant). Rédiger une note de prix est `read`; envoyer un seul courriel froid est `external`.
+
+L'exploitant choisit un mode et un seuil. `CORP_PERMISSION_MODE` vaut `discuss` (répétition à blanc: rien de conséquent ne s'exécute, et rien ne s'empile dans la file), `interactive` (défaut: tout ce qui dépasse le seuil demande), `auto` (rien ne demande, sauf les outils nommés) ou `custom` (interactive plus la liste `CORP_AUTO_ALLOW`). `CORP_ASK_ABOVE` fixe le seuil, `external` par défaut: combiné aux trois outils nommés, cela reproduit exactement le comportement d'avant les classes de risque, donc une mise à jour ne change rien tant que l'exploitant ne le demande pas. Passer le seuil à `read` fait confirmer chaque effet de bord.
+
+L'ordre de résolution est explicite et une interdiction déclarée l'emporte toujours. Un outil nommé dans `hitl_tools`, ou portant `hitl=True`, demande quelle que soit la suite: ni le mode `auto`, ni `auto_allow`, ni une règle permanente ne peuvent le taire. Sans cela, la seule garantie que le produit donne dépendrait de l'ordre dans lequel l'exploitant a cliqué.
+
+Une règle permanente est un « approuver, et ne plus demander » accordé depuis la console ou par `corparius approve --always`. Sa portée est une entreprise et un outil; `run` expire avec l'exécution qui l'a accordée, `always` persiste jusqu'à révocation (`corparius rules --revoke`). Le journal des actions porte désormais, à côté de chaque appel, la classe de risque, le motif de la décision et la règle qui l'a produite.
+
+### Attendre sans s'arrêter
+
+Une approbation en attente ne suspend plus le tour de l'agent. Auparavant une question non répondue sur un paiement empêchait le même agent de faire les autres choses de son playbook, et la tâche derrière repartait en file pour être reprise au tour suivant et redéposer la même demande: l'entreprise dépensait son budget à reposer une question et ne faisait rien d'autre.
+
+Désormais un garde-fou qui se déclenche arrête le tour, un humain sollicité non. La tâche concernée est mise de côté au statut `waiting` avec l'identifiant de l'approbation qui la débloquerait, statut que `claim_next_task` ignore, donc l'agent passe directement à la suivante. À chaque tick, `release_waiting_tasks` relit les réponses arrivées entre-temps et remet en file ce qui a été approuvé, ferme ce qui a été refusé. La lecture est faite par sondage et non par notification, parce qu'une approbation peut être tranchée depuis la console, la CLI ou un hôte MCP, et qu'une exécution peut être redémarrée entre la question et la réponse.
+
+Le travail bloqué est compté à part du travail en cours (`blocked` dans les indicateurs de flux). Le compter dans l'en-cours flatterait le tableau; le facturer sur la limite de tirage laisserait quatre approbations sans réponse empêcher l'entreprise de commencer quoi que ce soit d'autre, ce qui est l'inverse du but.
+
+Enfin, un outil déjà en attente pour cette entreprise n'est pas redemandé: la vérification a lieu avant la rédaction, donc aucun appel de modèle n'est dépensé à produire une seconde demande identique. Cela n'élargit pas la porte, puisque l'association d'une approbation à une exécution continue de comparer les paramètres exactement.
 
 Bonne pratique d'intégration: ne pas déléguer au modèle l'extraction des métadonnées de la demande (objet, expéditeur, corps). Un nœud de récupération déterministe (requête directe ou lecture de message) hydrate la demande transmise à l'humain, ce qui écarte toute mauvaise interprétation.
 

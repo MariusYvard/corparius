@@ -54,6 +54,10 @@ class ToolResult:
     output: str
     denied: bool = False  # rejected by a human approver
     pending: bool = False  # waiting on a human approver
+    # The approval this result is waiting on. Carried so a backlog task can
+    # record which decision would unblock it, instead of being retried blindly
+    # on every turn while the operator has not answered.
+    approval_id: str = ""
 
 
 @dataclass

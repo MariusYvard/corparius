@@ -352,6 +352,7 @@ ships one. Full guide: [`docs/skills.md`](docs/skills.md).
 | `docs/mcp.md` | driving corparius from any MCP host |
 | `docs/plugins.md` | writing, installing and proposing plugins |
 | `docs/skills.md` | teaching a company its trade in prose (SKILL.md) |
+| `docs/memoire.md` | yesterday vs what stays true: durable memory |
 | `docs/install.md` | download/run per OS, data locations, updates |
 | `docs/roadmap-90j.md` | the 90-day build cycle |
 | `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia, Uclic and OpenWorker |

@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased — what a company learns now outlives three days
+
+- **Durable memory.** A company remembered exactly the last three end-of-day
+  summaries. That guard is right — a `--loop` company that never re-read them
+  would plan each morning as if it had just been born — but a three-day horizon
+  erases everything it learns about its market. The CEO and strategy agents now
+  carry a `remember` tool, and the most relevant facts are recalled into each
+  prompt.
+- **Kept apart from yesterday.** `ctx.memory` is still the three summaries, read
+  positionally by `set_daily_plan`. Merging durable facts into that list would
+  have made `memory[0]` a fact instead of yesterday, and broken that tool without
+  breaking a test.
+- **No vector store, no new dependency.** Ranking and deduplication reuse
+  `safety.hash_embed`, the dependency-free bag-of-tokens embedding already
+  written for the loop guard. It catches an observation restated with different
+  word order, casing or punctuation — which is what an agent asked the same
+  question daily actually produces — and deliberately does *not* catch true
+  paraphrase: loosening it that far would start merging facts that only sound
+  alike, which loses more than it saves. The docstring and a test say so rather
+  than letting the code imply otherwise.
+- **The operator owns it.** Facts are listed in the console and the CLI
+  (`corparius memory`), pinnable and deletable. A pinned fact outranks relevance
+  and is never dropped by `CORP_MEMORY_MAX`, which caps unpinned facts only —
+  counting pinned ones against the cap would mean that pinning enough of them
+  silently stops the company from learning. Store schema v3, migrated in place.
+- **Fixed: the circuit breaker could talk itself down.** `record()` read
+  `SAFE if mode == CONSERVATIVE else CONSERVATIVE`, so a session already in
+  SECURISE dropped back to CONSERVATEUR on its very next spend. Whether a runaway
+  day actually froze depended on whether it had spent an odd or an even number of
+  times, and adding one tool to a playbook was enough to move that parity and
+  stop the freeze. It now escalates monotonically while over the limit, and still
+  recovers when the rolling 60s rate falls back under it. Found because adding
+  `remember` to the CEO's playbook turned a passing orchestrator test red.
+
 ## Unreleased — a company can be taught its own trade
 
 - **Skills.** A `SKILL.md` folder under `companies/<slug>/skills/` or the shared

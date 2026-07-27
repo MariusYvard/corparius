@@ -122,6 +122,16 @@ class Settings:
     # cannot quietly become the largest line in the token budget.
     skill_max_chars: int = field(default_factory=lambda: cfg.get_int("CORP_SKILL_MAX_CHARS", 4000))
 
+    # Durable memory. Separate from the three end-of-day summaries a run always
+    # re-reads: those are yesterday, this is what stays true.
+    memory_enabled: bool = field(
+        default_factory=lambda: cfg.get_bool("CORP_MEMORY_ENABLED", "true")
+    )
+    memory_top_k: int = field(default_factory=lambda: cfg.get_int("CORP_MEMORY_TOP_K", 5))
+    # Ceiling on stored facts per company. Oldest unpinned are pruned first; a
+    # pinned fact is the operator saying "this one stays" and is never pruned.
+    memory_max: int = field(default_factory=lambda: cfg.get_int("CORP_MEMORY_MAX", 200))
+
 
 settings = Settings()
 

@@ -91,6 +91,32 @@ def _social_post(ctx) -> str:
     return f"Post drafted for {_channel(ctx)}: {headline[:100]}{tail}{note}"
 
 
+def _remember(ctx) -> str:
+    """Reads the validated draft, so what gets stored is a fact and a reason
+    rather than whatever prose the model happened to produce. The store refuses
+    a fact it already holds in other words, so an agent asked this every day
+    does not fill the memory with paraphrases of one observation."""
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "Memory unavailable"
+    r = getattr(ctx, "structured", None)
+    data = r.data if r else {}
+    fact = str(data.get("fact", "")).strip()
+    if not fact:
+        return "Nothing worth remembering today"
+    slug = ctx.company.get("slug", "company")
+    kept = store.remember(
+        slug,
+        getattr(ctx, "role", "") or "ceo",
+        fact,
+        str(data.get("why", "")).strip(),
+        max_rows=cfg.get_int("CORP_MEMORY_MAX", 200),
+    )
+    if not kept:
+        return f"Already known, not stored again: {fact[:90]}"
+    return f"Remembered: {fact[:110]}"
+
+
 def _review_ad_budget(ctx) -> str:
     """budgets.daily_ad_spend_eur was the other write-only field: the log said
     '0 EUR/day, within cap' no matter what the operator had budgeted."""
@@ -375,6 +401,20 @@ _ALL = [
         needs_draft=True,
         prompt=lambda c: f"In one sentence, summarise the day for {_name(c)}.",
         effect=lambda c, d: _ok(f"EOD summary: {d[:140]}"),
+    ),
+    Tool(
+        "remember",
+        "Write down one thing the company learned",
+        needs_draft=True,
+        prompt=lambda c: (
+            f"What did {_name(c)} learn today that is still true next month? "
+            "One fact about the market, the offer or the customers — not today's numbers."
+        ),
+        schema={
+            "fact": {"type": "str", "required": True, "max_len": 200},
+            "why": {"type": "str", "default": "", "max_len": 200},
+        },
+        effect=lambda c, d: _ok(_remember(c)),
     ),
     Tool(
         "create_tasks", "CEO adds tasks to the backlog", effect=lambda c, d: _ok(_create_tasks(c))

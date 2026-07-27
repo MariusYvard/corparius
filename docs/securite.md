@@ -18,6 +18,10 @@ Un agent normal alterne appels au modèle et attentes d'entrée-sortie, sous que
 
 Deux fichiers séparent la règle dure de la règle comportementale. Un fichier d'orchestration force l'arrêt système si un outil est appelé avec des paramètres identiques plusieurs fois de suite. Un fichier d'instructions impose à l'agent d'examiner son propre historique de planification à chaque tour et de s'arrêter s'il ne progresse pas vers l'état visé.
 
+### Le coupe-circuit ne se dé-escalade pas
+
+`CircuitBreaker.record` faisait auparavant `SAFE si mode == CONSERVATEUR sinon CONSERVATEUR`, ce qui rendait le mode SECURISE réversible à la dépense suivante. Le mode dans lequel une session terminait un tour dépendait donc de la parité du nombre de dépenses, et une journée emballée pouvait sortir du gel qu'elle venait de mériter en dépensant davantage. Ajouter un outil à un playbook suffisait à déplacer cette parité. L'escalade est désormais monotone tant que la vélocité dépasse le plafond; le retour à NORMAL reste possible quand la fenêtre glissante de 60 secondes repasse sous le plafond, sans quoi un seul pic condamnerait l'entreprise définitivement.
+
 ## Indicateurs de sécurité
 
 L'ingénierie de fiabilité des agents suit des indicateurs de conformité, par exemple la part des actions financières et des écritures système qui ont respecté la pré-approbation et l'audit. Dans corparius, le journal des approbations et le journal des actions fournissent cette trace. Chaque action porte l'agent qui l'a déclenchée, chaque outil sensible laisse une demande d'approbation datée.

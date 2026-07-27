@@ -612,6 +612,11 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <p class="desc" data-i18n="ops.rulesDesc">Tools you told the gate to stop asking about. Money and production tools cannot be listed here.</p>
       <div id="perm-rules" class="stack" style="gap:8px"></div>
     </div>
+    <div class="card">
+      <h2 data-i18n="mem.title">What the company has learned</h2>
+      <p class="desc" data-i18n="mem.desc">Facts its agents wrote down because they stay true. Pin one to keep it forever; forget one it got wrong.</p>
+      <div id="memory" class="stack" style="gap:8px"></div>
+    </div>
     <div>
       <h2 data-i18n="ops.backlog">Backlog</h2>
       <p class="desc" style="margin-top:-6px" data-i18n="ops.backlogDesc">The CEO's board. Proposals from agents need your call; the rest moves on its own.</p>
@@ -849,6 +854,9 @@ en: {
   "ops.mode":"Mode","ops.askAbove":"asks above","ops.always":"Approve, stop asking",
   "ops.rules":"Standing rules","ops.rulesDesc":"Tools you told the gate to stop asking about. Money and production tools cannot be listed here.",
   "ops.rulesEmpty":"No standing rule. Every gated tool still asks.","ops.revoke":"Revoke",
+  "mem.title":"What the company has learned","mem.desc":"Facts its agents wrote down because they stay true. Pin one to keep it forever; forget one it got wrong.",
+  "mem.none":"Nothing learned yet. The CEO and strategy agents write here as they run.","mem.off":"Durable memory is off. Turn it on in Settings.",
+  "mem.pin":"Pin","mem.unpin":"Unpin","mem.forget":"Forget","mem.pinned":"pinned",
   "risk.read":"read","risk.write_local":"local write","risk.external":"external","risk.code":"code","risk.money":"money",
   "col.proposed":"Proposed, your call","col.approved":"Approved","col.in_progress":"In progress","col.waiting":"Held, waiting on you","col.done":"Done","col.empty":"Empty",
   "th.time":"Time","th.agent":"Agent","th.tool":"Tool","th.state":"State","th.output":"Output",
@@ -897,7 +905,7 @@ en: {
   "settings.title":"Console settings","settings.desc":"Stored in this browser only; they change nothing on the server.",
   "settings.language":"Interface language","settings.theme":"Theme","settings.dark":"Dark","settings.light":"Light",
   "settings.accent":"Accent colour","settings.intensity":"Intensity","settings.reset":"Reset",
-  "toast.approved":"Approved","toast.rejected":"Rejected","toast.remembered":"Approved, and no longer asked","toast.revoked":"Rule revoked","toast.taskApproved":"Task approved","toast.taskRejected":"Task rejected",
+  "toast.approved":"Approved","toast.rejected":"Rejected","toast.remembered":"Approved, and no longer asked","toast.revoked":"Rule revoked","toast.memory":"Memory updated","toast.taskApproved":"Task approved","toast.taskRejected":"Task rejected",
   "toast.runStarted":"Run started","toast.runDone":"Run finished:",
   "site.title":"Sales site","site.desc":"The single-file page the design agent builds from the company config.",
   "site.none":"Not built yet. Generate it, then the design agent keeps it fresh.",
@@ -1011,6 +1019,9 @@ fr: {
   "ops.mode":"Mode","ops.askAbove":"demande au-dessus de","ops.always":"Approuver, ne plus demander",
   "ops.rules":"Règles permanentes","ops.rulesDesc":"Les outils pour lesquels vous avez dit à la porte de ne plus demander. Les outils d'argent et de production ne peuvent pas y figurer.",
   "ops.rulesEmpty":"Aucune règle permanente. Chaque outil sous garde demande encore.","ops.revoke":"Révoquer",
+  "mem.title":"Ce que l'entreprise a appris","mem.desc":"Les faits que ses agents ont notés parce qu'ils restent vrais. Épinglez-en un pour le garder toujours ; oubliez celui qu'ils ont eu faux.",
+  "mem.none":"Rien d'appris pour l'instant. Le PDG et la stratégie écrivent ici au fil des exécutions.","mem.off":"La mémoire durable est désactivée. Activez-la dans Réglages.",
+  "mem.pin":"Épingler","mem.unpin":"Désépingler","mem.forget":"Oublier","mem.pinned":"épinglé",
   "risk.read":"lecture","risk.write_local":"écriture locale","risk.external":"extérieur","risk.code":"code","risk.money":"argent",
   "col.proposed":"Proposées, à arbitrer","col.approved":"Approuvées","col.in_progress":"En cours","col.waiting":"Retenues, en attente de vous","col.done":"Terminées","col.empty":"Vide",
   "th.time":"Heure","th.agent":"Agent","th.tool":"Outil","th.state":"État","th.output":"Sortie",
@@ -1101,7 +1112,7 @@ fr: {
   "task.edit":"Modifier","task.save":"Enregistrer","task.cancel":"Annuler","task.saved":"Tâche modifiée",
   "token.needed":"Cette console exige un token d'accès.","token.placeholder":"CORP_UI_TOKEN",
   "token.save":"Utiliser ce token","token.ok":"Token accepté",
-  "toast.approved":"Approuvé","toast.rejected":"Rejeté","toast.remembered":"Approuvé, et ne sera plus demandé","toast.revoked":"Règle révoquée","toast.taskApproved":"Tâche approuvée","toast.taskRejected":"Tâche rejetée",
+  "toast.approved":"Approuvé","toast.rejected":"Rejeté","toast.remembered":"Approuvé, et ne sera plus demandé","toast.revoked":"Règle révoquée","toast.memory":"Mémoire mise à jour","toast.taskApproved":"Tâche approuvée","toast.taskRejected":"Tâche rejetée",
   "toast.runStarted":"Run lancé","toast.runDone":"Run terminé :",
   "site.title":"Site de vente","site.desc":"La page single-file que l'agent design construit depuis la config de la société.",
   "site.none":"Pas encore généré. Générez-le, l'agent design l'entretiendra ensuite.",
@@ -1760,6 +1771,19 @@ function render(d) {
     </div>`).join("")
     : `<div class="empty">${t("ops.rulesEmpty")}</div>`;
 
+  $("#memory").innerHTML = !d.memory_enabled
+    ? `<div class="empty">${t("mem.off")}</div>`
+    : ((d.memory || []).length ? d.memory.map(m => `
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px">
+        <span>${m.pinned ? `<span class="badge dim">${t("mem.pinned")}</span> ` : ""}${esc(m.fact)}${m.why ? `<br><span class="note">${esc(m.why)}</span>` : ""}
+          <br><span class="note">${agentIcon(m.agent)} ${esc(m.agent)}</span></span>
+        <span style="display:flex; gap:8px; flex:none">
+          <button class="quiet" data-mem="${m.pinned ? "unpin" : "pin"}" data-mem-id="${m.id}">${m.pinned ? t("mem.unpin") : t("mem.pin")}</button>
+          <button class="quiet-danger" data-mem="forget" data-mem-id="${m.id}">${t("mem.forget")}</button>
+        </span>
+      </div>`).join("")
+      : `<div class="empty">${t("mem.none")}</div>`);
+
   // The 5s poll must not delete what the operator is typing.
   if (!$("#kanban [data-f=title]")) renderKanban(d);
   renderLog(d);
@@ -1870,6 +1894,7 @@ document.addEventListener("click", async e => {
   if (b.dataset.reject) return act(() => api("/api/approvals", {id: b.dataset.reject, decision: "rejected", note: noteFor(b.dataset.reject)}), t("toast.rejected"));
   if (b.dataset.always) return act(() => api("/api/approvals", {id: b.dataset.always, decision: "approved", remember: "always", note: noteFor(b.dataset.always)}), t("toast.remembered"));
   if (b.dataset.revoke) return act(() => api("/api/rules", {tool: b.dataset.revoke}), t("toast.revoked"));
+  if (b.dataset.mem) return act(() => api("/api/memory", {id: +b.dataset.memId, action: b.dataset.mem}), t("toast.memory"));
   if (b.dataset.taskApprove) return act(() => api("/api/tasks", {id: +b.dataset.taskApprove, decision: "approved"}), t("toast.taskApproved"));
   if (b.dataset.taskReject) return act(() => api("/api/tasks", {id: +b.dataset.taskReject, decision: "rejected"}), t("toast.taskRejected"));
   if (b.dataset.taskEdit) return openTaskEditor(b, +b.dataset.taskEdit);

@@ -1,4 +1,4 @@
-"""SQLite persistence: actions, token usage, approvals, and per-company state."""
+"""SQLite persistence: actions, token usage, approvals, memory, and per-company state."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ import os
 import sqlite3
 import threading
 import time
+
+from .safety import cosine, hash_embed
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS actions (
@@ -46,13 +48,18 @@ CREATE TABLE IF NOT EXISTS rules (
     company TEXT, tool TEXT, scope TEXT, note TEXT, ts REAL,
     PRIMARY KEY (company, tool)
 );
+CREATE TABLE IF NOT EXISTS memory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company TEXT, agent TEXT, fact TEXT, why TEXT, pinned INTEGER DEFAULT 0, ts REAL
+);
+CREATE INDEX IF NOT EXISTS memory_by_company ON memory (company, pinned, ts);
 """
 
 # Bump this and add a migration below whenever the schema changes in a way that
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -77,8 +84,29 @@ def _migration_2(db: sqlite3.Connection) -> None:
     )
 
 
+def _migration_3(db: sqlite3.Connection) -> None:
+    """Durable memory, added when three days of EOD summaries stopped being
+    enough. Same guarded shape as _migration_2."""
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS memory ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " company TEXT, agent TEXT, fact TEXT, why TEXT, pinned INTEGER DEFAULT 0, ts REAL)"
+    )
+    db.execute("CREATE INDEX IF NOT EXISTS memory_by_company ON memory (company, pinned, ts)")
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
-MIGRATIONS = {1: _migration_1, 2: _migration_2}
+MIGRATIONS = {1: _migration_1, 2: _migration_2, 3: _migration_3}
+
+
+_PUNCT = str.maketrans({c: " " for c in ".,;:!?()[]\"'`—–-"})
+
+
+def _words(text: str) -> str:
+    """Strip what a restatement changes and meaning does not. Without this the
+    memory deduplicator compares tokens like `renew,` against `renew` and calls
+    one sentence two facts."""
+    return text.lower().translate(_PUNCT)
 
 
 def _locked(method):
@@ -334,6 +362,98 @@ class Store:
         cur = self.db.execute("DELETE FROM rules WHERE company=? AND scope='run'", (company,))
         self.db.commit()
         return cur.rowcount
+
+    @_locked
+    def remember(self, company, agent, fact, why="", pinned=False, max_rows=200) -> int:
+        """Write down something the company learned. Returns the row id, or 0
+        when the same fact is already held.
+
+        Deduplicated on the words, not on the string: the same observation
+        restated with different word order, casing or punctuation is recognised
+        and dropped, which is what an agent asked the same question every day
+        actually produces. It is *not* paraphrase detection — the comparison is
+        cosine over safety.hash_embed, a bag-of-tokens embedding, so "coaches
+        renew" and "our coaching customers stay" are two facts as far as this is
+        concerned. Catching those would need a real embedding model, and would
+        risk merging two facts that only sound alike, which is worse than
+        keeping one line twice.
+
+        Reusing hash_embed is what keeps this dependency-free and offline, like
+        the loop guard it was written for.
+        """
+        fact = str(fact).strip()
+        if not fact:
+            return 0
+        target = hash_embed(_words(fact))
+        for row in self.db.execute(
+            "SELECT fact FROM memory WHERE company=?", (company,)
+        ).fetchall():
+            if cosine(target, hash_embed(_words(row["fact"]))) >= 0.95:
+                return 0
+        cur = self.db.execute(
+            "INSERT INTO memory (company, agent, fact, why, pinned, ts) VALUES (?,?,?,?,?,?)",
+            (company, agent, fact, str(why).strip(), 1 if pinned else 0, time.time()),
+        )
+        # max_rows caps the *unpinned* facts, oldest dropped first. A pinned
+        # fact is the operator saying "this one stays", so it is neither counted
+        # against the cap nor discarded by it — otherwise pinning enough facts
+        # would silently stop the company from learning anything new.
+        self.db.execute(
+            "DELETE FROM memory WHERE id IN ("
+            " SELECT id FROM memory WHERE company=? AND pinned=0"
+            " ORDER BY ts DESC LIMIT -1 OFFSET ?)",
+            (company, max(0, int(max_rows))),
+        )
+        self.db.commit()
+        assert cur.lastrowid is not None
+        return cur.lastrowid
+
+    @_locked
+    def recall(self, company, query="", limit=5) -> list[dict]:
+        """The facts most worth putting in front of this particular prompt.
+
+        Pinned first, then by similarity to the query, then by recency. Ranking
+        in Python over a few hundred rows rather than in SQL: the ordering is
+        semantic, and pushing it into the query would mean either a vector
+        extension or a LIKE that matches words instead of meaning."""
+        rows = [
+            dict(r)
+            for r in self.db.execute(
+                "SELECT * FROM memory WHERE company=? ORDER BY ts DESC", (company,)
+            ).fetchall()
+        ]
+        if not rows:
+            return []
+        if query.strip():
+            target = hash_embed(query)
+            for row in rows:
+                row["score"] = cosine(target, hash_embed(f"{row['fact']} {row['why']}"))
+        else:
+            for row in rows:
+                row["score"] = 0.0
+        rows.sort(key=lambda r: (r["pinned"], r["score"], r["ts"]), reverse=True)
+        return rows[: max(0, int(limit))]
+
+    @_locked
+    def list_memory(self, company) -> list[dict]:
+        rows = self.db.execute(
+            "SELECT * FROM memory WHERE company=? ORDER BY pinned DESC, ts DESC", (company,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    @_locked
+    def pin_memory(self, memory_id, pinned=True) -> bool:
+        cur = self.db.execute(
+            "UPDATE memory SET pinned=? WHERE id=?", (1 if pinned else 0, memory_id)
+        )
+        self.db.commit()
+        return cur.rowcount > 0
+
+    @_locked
+    def forget(self, memory_id) -> bool:
+        cur = self.db.execute("DELETE FROM memory WHERE id=?", (memory_id,))
+        self.db.commit()
+        return cur.rowcount > 0
 
     @_locked
     def save_state(self, company, data: dict) -> None:

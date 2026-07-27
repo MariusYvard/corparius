@@ -60,6 +60,13 @@
   stop the freeze. It now escalates monotonically while over the limit, and still
   recovers when the rolling 60s rate falls back under it. Found because adding
   `remember` to the CEO's playbook turned a passing orchestrator test red.
+- **Consequence of that fix:** the example company's `tokens_per_minute` goes
+  from 8000 to 60000. It is a wall-clock ceiling and a mock run compresses a
+  whole simulated day into under a second, so the demo started tripping a limit
+  no live run — where every tick waits on a real model — comes near. The number
+  had been calibrated against a breaker that did not stick. The global default
+  (10000) is unchanged, and it is the one to reason about for a company that is
+  actually spending.
 
 ## Unreleased — a company can be taught its own trade
 

@@ -93,6 +93,21 @@ def decide_approval(company: str, approval_id: str, approve: bool = True, note: 
     }
 
 
+def list_inbox(company: str) -> list:
+    """Questions and notices waiting on the operator. A host driving corparius
+    should see the same queue the console does, or it will report a company as
+    idle when it is in fact blocked on a person."""
+    cfg, store = _open(company)
+    return store.list_inbox(cfg["slug"], "pending")
+
+
+def answer_inbox(company: str, item_id: str, answer: str = "") -> dict:
+    cfg, store = _open(company)
+    done = store.resolve_inbox(item_id, answer)
+    freed = store.release_waiting_tasks(cfg["slug"]) if done else {"released": 0}
+    return {"item": item_id, "answered": done, "released": freed["released"]}
+
+
 def build_site(company: str) -> dict:
     cfg, _ = _open(company)
     out = str(paths.site_dir(settings.data_path, cfg["slug"]))
@@ -152,6 +167,16 @@ def build_server():
     def approve(company: str, id: str, approve: bool = True, note: str = "") -> dict:
         """Approve or reject a pending HITL request by id."""
         return decide_approval(company, id, approve, note)
+
+    @server.tool()
+    def inbox(company: str) -> list:
+        """Questions and notices waiting on the operator."""
+        return list_inbox(company)
+
+    @server.tool()
+    def answer(company: str, id: str, text: str = "") -> dict:
+        """Answer a question or dismiss a notice, and release any task it held."""
+        return answer_inbox(company, id, text)
 
     @server.tool()
     def site(company: str) -> dict:

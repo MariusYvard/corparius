@@ -62,9 +62,12 @@ def test_a_populated_v1_store_gains_the_rules_table_without_losing_data(tmp_path
     assert store.list_tasks("t", "approved")[0]["title"] == "Ship it"
     store.add_rule("t", "generate_code", "always")
     assert store.find_rule("t", "generate_code") == "always"
-    # v3 arrived with durable memory; the same store must reach it too.
+    # v3 arrived with durable memory and v4 with the typed inbox; the same
+    # store must reach both.
     assert store.remember("t", "ceo", "Coaches renew.")
     assert store.recall("t")[0]["fact"] == "Coaches renew."
+    ident = store.add_inbox("t", "design", "question", "Where should it be published?")
+    assert store.resolve_inbox(ident, "netlify") is True
 
 
 def test_migration_is_idempotent(tmp_path):

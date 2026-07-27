@@ -605,6 +605,7 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <h2 data-i18n="ops.waiting">Waiting for you</h2>
       <p class="desc" data-i18n="ops.waitingDesc">Money and production actions pause here until you decide. Nothing runs without you.</p>
       <div id="perm-posture" class="stack" style="gap:6px; margin-bottom:12px"></div>
+      <div id="inbox" class="stack" style="gap:12px; margin-bottom:12px"></div>
       <div id="approvals" class="stack" style="gap:12px"></div>
     </div>
     <div class="card">
@@ -857,6 +858,7 @@ en: {
   "mem.title":"What the company has learned","mem.desc":"Facts its agents wrote down because they stay true. Pin one to keep it forever; forget one it got wrong.",
   "mem.none":"Nothing learned yet. The CEO and strategy agents write here as they run.","mem.off":"Durable memory is off. Turn it on in Settings.",
   "mem.pin":"Pin","mem.unpin":"Unpin","mem.forget":"Forget","mem.pinned":"pinned",
+  "ib.question":"asks you","ib.notification":"notice","ib.answer":"Your answer","ib.send":"Answer","ib.dismiss":"Dismiss",
   "risk.read":"read","risk.write_local":"local write","risk.external":"external","risk.code":"code","risk.money":"money",
   "col.proposed":"Proposed, your call","col.approved":"Approved","col.in_progress":"In progress","col.waiting":"Held, waiting on you","col.done":"Done","col.empty":"Empty",
   "th.time":"Time","th.agent":"Agent","th.tool":"Tool","th.state":"State","th.output":"Output",
@@ -905,7 +907,7 @@ en: {
   "settings.title":"Console settings","settings.desc":"Stored in this browser only; they change nothing on the server.",
   "settings.language":"Interface language","settings.theme":"Theme","settings.dark":"Dark","settings.light":"Light",
   "settings.accent":"Accent colour","settings.intensity":"Intensity","settings.reset":"Reset",
-  "toast.approved":"Approved","toast.rejected":"Rejected","toast.remembered":"Approved, and no longer asked","toast.revoked":"Rule revoked","toast.memory":"Memory updated","toast.taskApproved":"Task approved","toast.taskRejected":"Task rejected",
+  "toast.approved":"Approved","toast.rejected":"Rejected","toast.remembered":"Approved, and no longer asked","toast.revoked":"Rule revoked","toast.memory":"Memory updated","toast.answered":"Answered","toast.taskApproved":"Task approved","toast.taskRejected":"Task rejected",
   "toast.runStarted":"Run started","toast.runDone":"Run finished:",
   "site.title":"Sales site","site.desc":"The single-file page the design agent builds from the company config.",
   "site.none":"Not built yet. Generate it, then the design agent keeps it fresh.",
@@ -1022,6 +1024,7 @@ fr: {
   "mem.title":"Ce que l'entreprise a appris","mem.desc":"Les faits que ses agents ont notés parce qu'ils restent vrais. Épinglez-en un pour le garder toujours ; oubliez celui qu'ils ont eu faux.",
   "mem.none":"Rien d'appris pour l'instant. Le PDG et la stratégie écrivent ici au fil des exécutions.","mem.off":"La mémoire durable est désactivée. Activez-la dans Réglages.",
   "mem.pin":"Épingler","mem.unpin":"Désépingler","mem.forget":"Oublier","mem.pinned":"épinglé",
+  "ib.question":"vous demande","ib.notification":"avis","ib.answer":"Votre réponse","ib.send":"Répondre","ib.dismiss":"Écarter",
   "risk.read":"lecture","risk.write_local":"écriture locale","risk.external":"extérieur","risk.code":"code","risk.money":"argent",
   "col.proposed":"Proposées, à arbitrer","col.approved":"Approuvées","col.in_progress":"En cours","col.waiting":"Retenues, en attente de vous","col.done":"Terminées","col.empty":"Vide",
   "th.time":"Heure","th.agent":"Agent","th.tool":"Outil","th.state":"État","th.output":"Sortie",
@@ -1112,7 +1115,7 @@ fr: {
   "task.edit":"Modifier","task.save":"Enregistrer","task.cancel":"Annuler","task.saved":"Tâche modifiée",
   "token.needed":"Cette console exige un token d'accès.","token.placeholder":"CORP_UI_TOKEN",
   "token.save":"Utiliser ce token","token.ok":"Token accepté",
-  "toast.approved":"Approuvé","toast.rejected":"Rejeté","toast.remembered":"Approuvé, et ne sera plus demandé","toast.revoked":"Règle révoquée","toast.memory":"Mémoire mise à jour","toast.taskApproved":"Tâche approuvée","toast.taskRejected":"Tâche rejetée",
+  "toast.approved":"Approuvé","toast.rejected":"Rejeté","toast.remembered":"Approuvé, et ne sera plus demandé","toast.revoked":"Règle révoquée","toast.memory":"Mémoire mise à jour","toast.answered":"Répondu","toast.taskApproved":"Tâche approuvée","toast.taskRejected":"Tâche rejetée",
   "toast.runStarted":"Run lancé","toast.runDone":"Run terminé :",
   "site.title":"Site de vente","site.desc":"La page single-file que l'agent design construit depuis la config de la société.",
   "site.none":"Pas encore généré. Générez-le, l'agent design l'entretiendra ensuite.",
@@ -1662,7 +1665,9 @@ function render(d) {
   $("#run").disabled = d.running;
   $("#stop").hidden = !d.running;
   $("#stop").disabled = d.stopping;
-  const needsYou = d.approvals.length + (d.tasks.proposed || []).length;
+  // Questions count as much as approvals: both are the company stopped,
+  // waiting on this person.
+  const needsYou = d.approvals.length + (d.inbox || []).length + (d.tasks.proposed || []).length;
   $("#ops-count").hidden = !needsYou;
   $("#ops-count").textContent = needsYou;
   $("#chat-mock-note").hidden = !d.llm_mock;
@@ -1748,6 +1753,17 @@ function render(d) {
   $("#perm-posture").innerHTML =
     `<div class="note">${t("ops.mode")}: <strong>${esc(d.permission_mode || "")}</strong>` +
     ` &middot; ${t("ops.askAbove")} <strong>${t("risk." + (d.ask_above || "external"))}</strong></div>`;
+
+  $("#inbox").innerHTML = (d.inbox || []).map(m => `
+    <div class="approval">
+      <div class="head"><span class="badge ${m.kind === "question" ? "warn" : "dim"}">${t("ib." + m.kind)}</span>
+        <strong>${esc(m.title)}</strong><span class="note">${agentIcon(m.agent)} ${esc(m.agent)}</span></div>
+      ${m.body ? `<div class="note" style="overflow-wrap:anywhere">${esc(m.body)}</div>` : ""}
+      <div class="actions">
+        ${m.kind === "question" ? `<input type="text" placeholder="${t("ib.answer")}" aria-label="${t("ib.answer")}" data-ib-note="${esc(m.id)}">` : ""}
+        <button class="primary" data-ib="${esc(m.id)}">${m.kind === "question" ? t("ib.send") : t("ib.dismiss")}</button>
+      </div>
+    </div>`).join("");
 
   $("#approvals").innerHTML = d.approvals.length ? d.approvals.map(a => `
     <div class="approval">
@@ -1895,6 +1911,10 @@ document.addEventListener("click", async e => {
   if (b.dataset.always) return act(() => api("/api/approvals", {id: b.dataset.always, decision: "approved", remember: "always", note: noteFor(b.dataset.always)}), t("toast.remembered"));
   if (b.dataset.revoke) return act(() => api("/api/rules", {tool: b.dataset.revoke}), t("toast.revoked"));
   if (b.dataset.mem) return act(() => api("/api/memory", {id: +b.dataset.memId, action: b.dataset.mem}), t("toast.memory"));
+  if (b.dataset.ib) {
+    const field = $(`[data-ib-note="${CSS.escape(b.dataset.ib)}"]`);
+    return act(() => api("/api/inbox", {id: b.dataset.ib, answer: field ? field.value : ""}), t("toast.answered"));
+  }
   if (b.dataset.taskApprove) return act(() => api("/api/tasks", {id: +b.dataset.taskApprove, decision: "approved"}), t("toast.taskApproved"));
   if (b.dataset.taskReject) return act(() => api("/api/tasks", {id: +b.dataset.taskReject, decision: "rejected"}), t("toast.taskRejected"));
   if (b.dataset.taskEdit) return openTaskEditor(b, +b.dataset.taskEdit);

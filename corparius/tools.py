@@ -11,6 +11,7 @@ from . import (
     cfg,
     deploy,
     enrich,
+    inbox,
     integrations,
     leadsource,
     mailbox,
@@ -117,6 +118,24 @@ def _remember(ctx) -> str:
     return f"Remembered: {fact[:110]}"
 
 
+def _ask_operator(ctx) -> ToolResult:
+    """A backlog task the CEO could only describe, not do. Mapped through
+    ROLE_TOOL like any other, so "ask about X" is queued, parked and released by
+    the machinery that already exists rather than by a second mechanism."""
+    r = getattr(ctx, "structured", None)
+    data = r.data if r else {}
+    question = str(data.get("question", "")).strip()
+    if not question:
+        return _fail("Nothing to ask")
+    answered = inbox.answer_to(ctx, question)
+    if answered:
+        return _ok(f"Operator answered: {answered[:120]}")
+    ident = inbox.ask(ctx, question, str(data.get("why", "")).strip())
+    if not ident:
+        return _fail("Cannot reach the inbox")
+    return ToolResult(ok=False, output=f"asked: {question}", pending=True, question_id=ident)
+
+
 def _review_ad_budget(ctx) -> str:
     """budgets.daily_ad_spend_eur was the other write-only field: the log said
     '0 EUR/day, within cap' no matter what the operator had budgeted."""
@@ -156,9 +175,27 @@ def _deploy_site(ctx) -> ToolResult:
         return _ok(f"Site published: {res['provider']} -> {res['result']}")
     if res["errors"]:
         return _fail("Site not published, every provider failed: " + "; ".join(res["errors"]))
-    return _fail(
-        "Site not published: no provider is configured. "
-        + ("Skipped " + "; ".join(res["skipped"]) if res["skipped"] else "")
+    # Not a failure of the agent: it did its part and is missing something only
+    # a human has. Recording that as a failed action buried it in the log, and
+    # the backlog task behind it churned forever against a wall nobody was told
+    # about. So it asks, and the work parks until the operator answers.
+    title = "Where should the sales site be published?"
+    question = inbox.ask(
+        ctx,
+        title,
+        "No deploy provider is configured. Set one in the console (Providers), then answer "
+        "here with its name — netlify, vercel, github-pages — to release this task."
+        + (" Skipped: " + "; ".join(res["skipped"]) if res["skipped"] else ""),
+    )
+    if not question:
+        answered = inbox.answer_to(ctx, title)
+        return _fail(
+            f"Site not published: still no provider after '{answered}'."
+            if answered
+            else "Site not published: no provider is configured."
+        )
+    return ToolResult(
+        ok=False, output=f"asked the operator: {title}", pending=True, question_id=question
     )
 
 
@@ -415,6 +452,20 @@ _ALL = [
             "why": {"type": "str", "default": "", "max_len": 200},
         },
         effect=lambda c, d: _ok(_remember(c)),
+    ),
+    Tool(
+        "ask_operator",
+        "Ask the operator for something only they can supply",
+        needs_draft=True,
+        prompt=lambda c: (
+            f"In one sentence, ask the operator of {_name(c)} for the one piece of "
+            "information or access this task cannot proceed without."
+        ),
+        schema={
+            "question": {"type": "str", "required": True, "max_len": 160},
+            "why": {"type": "str", "default": "", "max_len": 300},
+        },
+        effect=lambda c, d: _ask_operator(c),
     ),
     Tool(
         "create_tasks", "CEO adds tasks to the backlog", effect=lambda c, d: _ok(_create_tasks(c))

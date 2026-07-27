@@ -1,4 +1,4 @@
-"""Command line: init / run / status / approvals / approve / reject / rules / memory."""
+"""Command line: init / run / status / approvals / approve / reject / rules / memory / inbox."""
 
 from __future__ import annotations
 
@@ -219,6 +219,26 @@ def cmd_decide(args, status: str) -> None:
         print(f"unblocked {freed['released']} task(s), refused {freed['refused']}")
 
 
+def cmd_inbox(args) -> None:
+    cfg = _load_company(args.company)
+    store = _store()
+    if args.answer_to:
+        if store.resolve_inbox(args.answer_to, args.answer):
+            freed = store.release_waiting_tasks(cfg["slug"])
+            print(f"answered {args.answer_to}; unblocked {freed['released']} task(s)")
+        else:
+            print("already answered, or no such item")
+        return
+    rows = store.list_inbox(cfg["slug"], "pending")
+    print(f"== inbox: {cfg.get('name')} ==")
+    for r in rows:
+        print(f"[{r['kind']}] {r['id']}  {r['title']}")
+        if r["body"]:
+            print(f"    {r['body']}")
+    if not rows:
+        print("nothing waiting on you")
+
+
 def cmd_memory(args) -> None:
     cfg = _load_company(args.company)
     store = _store()
@@ -324,6 +344,11 @@ def main(argv=None) -> None:
         help="also stop asking about this tool for this company",
     )
     sp.set_defaults(fn=lambda a: cmd_decide(a, "approved"))
+
+    sp = with_company(sub.add_parser("inbox"))
+    sp.add_argument("--answer-to", default="", help="inbox item id to answer or dismiss")
+    sp.add_argument("--answer", default="", help="the answer text")
+    sp.set_defaults(fn=cmd_inbox)
 
     sp = with_company(sub.add_parser("memory"))
     sp.add_argument("--pin", type=int, default=0, help="memory id to pin")

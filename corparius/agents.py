@@ -197,8 +197,10 @@ class Executor:
             # again on the next turn and re-file the same request, so the agent
             # would spend every turn re-asking one question instead of doing the
             # next thing. store.release_waiting_tasks puts it back once answered.
-            self.store.park_task(task["id"], result.approval_id)
-            done.append(f"backlog #{task['id']} parked, waiting on approval {result.approval_id}")
+            kind = "question" if result.question_id else "approval"
+            blocker = result.question_id or result.approval_id
+            self.store.park_task(task["id"], blocker, kind)
+            done.append(f"backlog #{task['id']} parked, waiting on {kind} {blocker}")
         else:
             self.store.set_task_status(task["id"], "approved", "returned to backlog")
             done.append(f"backlog #{task['id']} returned to backlog")

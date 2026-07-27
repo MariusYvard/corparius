@@ -42,6 +42,18 @@ L'ordre de résolution est explicite et une interdiction déclarée l'emporte to
 
 Une règle permanente est un « approuver, et ne plus demander » accordé depuis la console ou par `corparius approve --always`. Sa portée est une entreprise et un outil; `run` expire avec l'exécution qui l'a accordée, `always` persiste jusqu'à révocation (`corparius rules --revoke`). Le journal des actions porte désormais, à côté de chaque appel, la classe de risque, le motif de la décision et la règle qui l'a produite.
 
+### Demander, et prévenir
+
+Une approbation répond à « puis-je faire ceci ». Deux choses n'avaient jusqu'ici nulle part où aller.
+
+Un agent à qui il manque un fait ne pouvait pas le demander. Une prospection sans boîte mail configurée, un déploiement sans fournisseur: chacun mourait à l'intérieur d'un outil, laissait une ligne dans le journal des actions et n'était plus jamais vu. L'entreprise continuait comme si de rien n'était, ce qui est la même défaillance qu'inventer une réponse, une couche plus bas. Et une session qui se gèle elle-même n'avait aucun moyen de le dire: un déclenchement du coupe-circuit ou un modèle injoignable écrivait une ligne, et l'entreprise pouvait rester morte une journée.
+
+`corparius/inbox.py` ajoute donc deux genres à côté de l'approbation. Une **question** bloque le travail qui l'a soulevée, exactement comme une approbation — même résultat `pending`, même tâche mise de côté — et le débloque à la réponse. Un **avis** ne bloque rien et existe pour être vu.
+
+L'identité est un hachage de ce qui est demandé, pas un identifiant neuf à chaque tentative, donc rejouer un tick retrouve la question déjà posée au lieu de la poser deux fois. Une réponse est appariée sur l'intitulé et non sur l'identifiant, qui inclut l'agent: « depuis quelle boîte mail ? » répondu pour la prospection l'est aussi pour le support, sinon l'exploitant se ferait poser la même question une fois par rôle. Une résolution est unique et le premier arrivé gagne: le travail en attente est déjà reparti sur la première réponse, et réécrire l'enregistrement laisserait le magasin en désaccord avec ce qui s'est produit.
+
+Les surfaces sont les mêmes que pour les approbations: console, `corparius inbox` et `corparius inbox --answer-to <id> --answer "..."`, et les outils MCP `inbox` et `answer`.
+
 ### Attendre sans s'arrêter
 
 Une approbation en attente ne suspend plus le tour de l'agent. Auparavant une question non répondue sur un paiement empêchait le même agent de faire les autres choses de son playbook, et la tâche derrière repartait en file pour être reprise au tour suivant et redéposer la même demande: l'entreprise dépensait son budget à reposer une question et ne faisait rien d'autre.

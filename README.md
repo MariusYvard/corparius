@@ -334,7 +334,7 @@ and loads it. Full guide: [`docs/plugins.md`](docs/plugins.md).
 | `docs/plugins.md` | writing, installing and proposing plugins |
 | `docs/install.md` | download/run per OS, data locations, updates |
 | `docs/roadmap-90j.md` | the 90-day build cycle |
-| `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia and Uclic |
+| `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia, Uclic and OpenWorker |
 
 ## Support
 

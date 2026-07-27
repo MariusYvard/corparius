@@ -491,6 +491,47 @@ SPEC: list[FieldSpec] = [
         "humaine. Une entreprise peut redéfinir la liste.",
     ),
     _f(
+        "CORP_PERMISSION_MODE",
+        "safety",
+        type="select",
+        default="interactive",
+        choices=("discuss", "interactive", "auto", "custom"),
+        label_en="Permission mode",
+        label_fr="Mode de permission",
+        help_en="discuss runs nothing consequential (a dry run). interactive asks above the "
+        "threshold below. auto asks only for the tools gated by name. custom is interactive "
+        "plus the auto-allowed list.",
+        help_fr="discuss n'exécute rien de conséquent (répétition à blanc). interactive demande "
+        "au-dessus du seuil ci-dessous. auto ne demande que pour les outils nommés. custom, "
+        "c'est interactive plus la liste d'auto-autorisations.",
+    ),
+    _f(
+        "CORP_ASK_ABOVE",
+        "safety",
+        type="select",
+        default="external",
+        choices=("read", "write_local", "external", "code", "money"),
+        label_en="Ask above risk class",
+        label_fr="Demander au-dessus de",
+        help_en="Every tool declares what it does to the outside world. Anything strictly above "
+        "this class needs a human. The default reproduces the behaviour before risk classes; "
+        "read confirms every side effect.",
+        help_fr="Chaque outil déclare son effet sur le monde extérieur. Tout ce qui est "
+        "strictement au-dessus exige un humain. Le défaut reproduit le comportement d'avant "
+        "les classes de risque ; read fait confirmer chaque effet de bord.",
+    ),
+    _f(
+        "CORP_AUTO_ALLOW",
+        "safety",
+        default="",
+        label_en="Auto-allowed tools",
+        label_fr="Outils auto-autorisés",
+        help_en="Comma-separated, honoured in custom mode only. Tools gated by name above are "
+        "never auto-allowed.",
+        help_fr="Séparés par des virgules, pris en compte en mode custom seulement. Les outils "
+        "nommés ci-dessus ne sont jamais auto-autorisés.",
+    ),
+    _f(
         "CORP_WIP_LIMIT",
         "safety",
         type="int",

@@ -16,6 +16,7 @@ from .agents import ROSTER, AgentSpec, Executor
 from .config import Settings
 from .hitl import ApprovalGate
 from .llm import HybridRouter
+from .permissions import PermissionEngine
 from .safety import CircuitBreaker, TokenBudget
 
 log = logging.getLogger("corparius.orchestrator")
@@ -60,7 +61,9 @@ class Runtime:
         should_stop = should_stop or (lambda: False)
         slug = company["slug"]
         budgets = company.get("budgets", {})
-        gate = ApprovalGate(self.store, company.get("hitl_tools", self.settings.hitl_tools))
+        gate = ApprovalGate(
+            self.store, PermissionEngine.from_settings(self.settings, company, self.store)
+        )
         executor = Executor(self.router, gate, self.store, self.settings)
         enabled = company.get("agents", {})
 
@@ -86,6 +89,18 @@ class Runtime:
                     break
                 tick = start + offset
                 done_ticks = offset + 1
+                # Answers arrive between ticks, from whichever surface the
+                # operator happened to be in front of. Reading them back here is
+                # what turns "held" into "moving again" without the run having
+                # to be restarted.
+                freed = self.store.release_waiting_tasks(slug)
+                if freed["released"] or freed["refused"]:
+                    log.info(
+                        "tick %d unblocked %d task(s), %d refused",
+                        tick,
+                        freed["released"],
+                        freed["refused"],
+                    )
                 ctx = RunContext(
                     company=company,
                     tick=tick,
@@ -145,8 +160,17 @@ class Runtime:
             memory = self.store.recent_outputs(slug, "write_eod_summary", 3)
             self.settings = Settings()
             self.router = HybridRouter(self.settings)
+            # The gate is rebuilt for the same reason as the router: an operator
+            # who tightens the permission mode mid-run expects tomorrow morning
+            # to obey it, not the mode the process started with.
+            gate = ApprovalGate(
+                self.store, PermissionEngine.from_settings(self.settings, company, self.store)
+            )
             executor = Executor(self.router, gate, self.store, self.settings)
             time.sleep(1)
+        # A rule granted "for this run" that outlived the run would be a standing
+        # authorisation the operator never gave.
+        self.store.clear_run_rules(slug)
         # `ran`, not ticks * days: a run stopped mid-day did not play a full day,
         # and reporting that it did would be the console lying about its own work.
         return {"ticks_run": ran, "next_tick": start, "days": days, "stopped": stopped, **last}

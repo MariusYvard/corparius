@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — the gate says why, and stops idling the company
+
+- **Permissions are decided, not flagged.** `corparius/permissions.py` replaces
+  `tool.hitl or name in hitl_tools` with a resolution over three inputs: a risk
+  class each tool declares (`read`, `write_local`, `external`, `code`, `money`,
+  describing the effect on the outside world, not the subject), a mode
+  (`CORP_PERMISSION_MODE`: discuss, interactive, auto, custom) and a threshold
+  (`CORP_ASK_ABOVE`). It returns a `Decision` carrying the verdict *and* its
+  motive, and the motive is written to the action log — a trail that says a tool
+  ran but not why it was allowed to answers half the question you open it to ask.
+- **Defaults are pinned to the old behaviour.** Threshold `external` plus the
+  three shipped `hitl_tools` gates exactly `send_financial_transaction`,
+  `publish_production_code` and `deploy_site`, as before. A test asserts that set
+  literally, so a later change to a risk class cannot quietly widen or narrow
+  what an existing company has to approve. Tighten with `CORP_ASK_ABOVE=read`.
+- **A declared gate always wins.** Neither `auto` mode, nor `CORP_AUTO_ALLOW`,
+  nor a standing rule can silence a tool named in `hitl_tools`. Otherwise the one
+  guarantee the product makes would depend on the order you clicked in.
+- **"Approve, and stop asking"** grants a standing rule scoped to one company and
+  one tool, from the console or `corparius approve --always`; `run` expires with
+  the run, `always` persists until `corparius rules --revoke`. Store schema v2,
+  migrated in place.
+- **Fixed: one unanswered approval idled the whole company.** A held tool broke
+  the agent's turn, so a question about a payment stopped that agent from doing
+  the nine other things in its playbook — and the backlog task behind it went
+  back to `approved`, was claimed again next turn, and re-filed the same request.
+  The company spent its budget re-asking and did nothing else until a human came
+  back. Now a guard tripping halts the turn and a human being asked does not: the
+  task is parked at `waiting` against the approval that would free it,
+  `claim_next_task` skips it so the agent moves to the next one, and each tick
+  reads back answers arriving from the console, the CLI or an MCP host. Blocked
+  work is reported apart from WIP — counted, so the board does not flatter
+  itself; not charged against the pull limit, or four unanswered questions would
+  stop the company starting anything else.
+- **A tool already waiting is not asked about twice.** Checked before the draft
+  rather than after, so no model call is spent producing a duplicate request. It
+  does not widen the gate: matching an approval to an execution still compares
+  parameters exactly, so an approved 12 EUR payment still cannot authorise a
+  12000 EUR one.
+
 ## Unreleased — what corparius takes from OpenWorker
 
 - **A teardown of OpenWorker**, Andrew Ng's MIT-licensed desktop agent, in

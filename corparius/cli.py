@@ -1,4 +1,4 @@
-"""Command line: init / run / status / approvals / approve / reject."""
+"""Command line: init / run / status / approvals / approve / reject / rules."""
 
 from __future__ import annotations
 
@@ -8,8 +8,9 @@ import os
 import sys
 
 from . import company, paths
-from .config import settings, setup_logging
+from .config import Settings, settings, setup_logging
 from .store import Store
+from .tools import TOOLS
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -153,7 +154,7 @@ def cmd_board(args) -> None:
     store = _store()
     rows = store.list_tasks(cfg["slug"])
     print(f"== board: {cfg.get('name')} ==")
-    for col in ("proposed", "approved", "in_progress", "done", "rejected"):
+    for col in ("proposed", "approved", "in_progress", "waiting", "done", "rejected"):
         items = [t for t in rows if t["status"] == col]
         head = ", ".join(f"#{t['id']}:{t['target']}" for t in items[:6])
         print(f"{col:12} ({len(items)}): {head}")
@@ -191,10 +192,49 @@ def cmd_approvals(args) -> None:
 
 
 def cmd_decide(args, status: str) -> None:
-    _load_company(args.company)  # validates --company, exits with a message if wrong
+    cfg = _load_company(args.company)  # validates --company, exits with a message if wrong
     store = _store()
+    approval = store.get_approval(args.id)
     ok = store.set_approval_status(args.id, status, args.note or "")
-    print(f"{args.id} -> {status}" if ok else "approval id not found")
+    if not ok:
+        print("approval id not found")
+        return
+    print(f"{args.id} -> {status}")
+    # Granted here rather than by a separate command: "yes, and stop asking" is
+    # one decision, and splitting it in two invites the half that never runs.
+    if getattr(args, "always", False) and status == "approved" and approval:
+        from .permissions import PermissionEngine
+
+        slug = approval["company"]
+        tool = TOOLS.get(approval["tool"])
+        engine = PermissionEngine.from_settings(Settings(), cfg, store)
+        if tool is None or engine.evaluate(tool, slug).rule == "hitl":
+            print(f"{approval['tool']} is gated by name; it keeps asking")
+        else:
+            store.add_rule(slug, approval["tool"], "always", "granted via CLI")
+            print(f"standing rule added: {approval['tool']} no longer asks for {slug}")
+    # Whatever decided it, a task parked on this approval can move again.
+    freed = store.release_waiting_tasks(cfg["slug"])
+    if freed["released"] or freed["refused"]:
+        print(f"unblocked {freed['released']} task(s), refused {freed['refused']}")
+
+
+def cmd_rules(args) -> None:
+    cfg = _load_company(args.company)
+    store = _store()
+    if args.revoke:
+        print(
+            f"revoked {args.revoke}"
+            if store.drop_rule(cfg["slug"], args.revoke)
+            else "no standing rule for that tool"
+        )
+        return
+    rules = store.list_rules(cfg["slug"])
+    print(f"== standing rules: {cfg.get('name')} ==")
+    for r in rules:
+        print(f"{r['tool']:32} {r['scope']}")
+    if not rules:
+        print("none; every gated tool still asks")
 
 
 def main(argv=None) -> None:
@@ -259,7 +299,16 @@ def main(argv=None) -> None:
     sp = with_company(sub.add_parser("approve"))
     sp.add_argument("--id", required=True)
     sp.add_argument("--note", default="")
+    sp.add_argument(
+        "--always",
+        action="store_true",
+        help="also stop asking about this tool for this company",
+    )
     sp.set_defaults(fn=lambda a: cmd_decide(a, "approved"))
+
+    sp = with_company(sub.add_parser("rules"))
+    sp.add_argument("--revoke", default="", help="tool name whose standing rule to drop")
+    sp.set_defaults(fn=cmd_rules)
 
     sp = with_company(sub.add_parser("reject"))
     sp.add_argument("--id", required=True)

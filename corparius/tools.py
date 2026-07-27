@@ -7,7 +7,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from . import cfg, deploy, enrich, integrations, leadsource, mailbox, paths, signals, sitegen
+from . import (
+    cfg,
+    deploy,
+    enrich,
+    integrations,
+    leadsource,
+    mailbox,
+    paths,
+    permissions,
+    signals,
+    sitegen,
+)
 from .models import ToolResult
 
 
@@ -19,6 +30,7 @@ class Tool:
         effect: Callable,
         *,
         hitl: bool = False,
+        risk: str = permissions.READ,
         needs_draft: bool = False,
         prompt: Callable | None = None,
         schema: dict | None = None,
@@ -26,6 +38,11 @@ class Tool:
         self.name = name
         self.description = description
         self.hitl = hitl
+        # What this tool does to the world outside the process, which is what
+        # corparius/permissions.py weighs against the operator's threshold.
+        # `hitl` stays separate and stronger: it is a gate declared by name,
+        # not a class, and no threshold or standing rule can lower it.
+        self.risk = risk
         self.needs_draft = needs_draft
         # Opt-in structured output: when a tool declares a schema, the executor
         # drives the router through corparius/structured so the effect receives a
@@ -336,6 +353,11 @@ def _kaizen(ctx) -> str:
     )
 
 
+# Risk classes below describe the effect, not the subject. Drafting a pricing
+# note is READ because nothing leaves the process; sending one cold email is
+# EXTERNAL because a stranger receives it. Tools whose mock effect will become a
+# real integration are classed for the integration, not for the mock, so
+# swapping the effect does not silently widen what runs unattended.
 _ALL = [
     Tool(
         "set_daily_plan",
@@ -387,20 +409,33 @@ _ALL = [
     Tool(
         "schedule_post",
         "Schedule the drafted post",
+        risk=permissions.EXTERNAL,
         effect=lambda c, d: _ok(f"Post scheduled for +2h on {_channel(c)}"),
     ),
-    Tool("find_targets", "Find ICP-matching prospects", effect=lambda c, d: _ok(_find_targets(c))),
+    Tool(
+        "find_targets",
+        "Find ICP-matching prospects",
+        risk=permissions.EXTERNAL,
+        effect=lambda c, d: _ok(_find_targets(c)),
+    ),
     Tool(
         "send_outreach",
         "Send a cold email sequence",
+        risk=permissions.EXTERNAL,
         needs_draft=True,
         prompt=lambda c: f"Draft a 2-line cold email opener for {_name(c)}.",
         effect=lambda c, d: _ok(_send_outreach(c, d)),
     ),
-    Tool("triage_inbox", "Triage the support inbox", effect=lambda c, d: _ok(_triage_inbox(c))),
+    Tool(
+        "triage_inbox",
+        "Triage the support inbox",
+        risk=permissions.EXTERNAL,
+        effect=lambda c, d: _ok(_triage_inbox(c)),
+    ),
     Tool(
         "scan_replies",
         "Check the inbox for prospect replies",
+        risk=permissions.EXTERNAL,
         effect=lambda c, d: _ok(_scan_replies(c)),
     ),
     Tool(
@@ -418,6 +453,7 @@ _ALL = [
     Tool(
         "adjust_bids",
         "Write ad variants and adjust bids",
+        risk=permissions.EXTERNAL,
         needs_draft=True,
         prompt=lambda c: f"Write one ad headline for {_name(c)}.",
         effect=lambda c, d: _ok(f"Bid variant written: {d[:90]}"),
@@ -425,6 +461,7 @@ _ALL = [
     Tool(
         "reconcile_stripe",
         "Reconcile Stripe cashflow",
+        risk=permissions.EXTERNAL,
         effect=lambda c, d: _ok(
             integrations.stripe_reconcile() or "Stripe reconciled: MRR 27 EUR, 3 active subs (mock)"
         ),
@@ -432,6 +469,7 @@ _ALL = [
     Tool(
         "send_financial_transaction",
         "Pay an invoice / move money",
+        risk=permissions.MONEY,
         hitl=True,
         effect=lambda c, d: _ok("Paid infrastructure invoice 12 EUR (mock)"),
     ),
@@ -450,6 +488,7 @@ _ALL = [
     Tool(
         "scan_competitors",
         "Scan and summarise competitors",
+        risk=permissions.EXTERNAL,
         needs_draft=True,
         prompt=lambda c: f"Name one competitor risk for {_name(c)} in a sentence.",
         effect=lambda c, d: _ok(f"Competitor scan: {d[:120]}"),
@@ -457,6 +496,7 @@ _ALL = [
     Tool(
         "scan_signals",
         "Watch configured sources for buying signals",
+        risk=permissions.EXTERNAL,
         effect=lambda c, d: _ok(_scan_signals(c)),
     ),
     Tool(
@@ -469,6 +509,7 @@ _ALL = [
     Tool(
         "publish_production_code",
         "Merge a PR to production",
+        risk=permissions.CODE,
         hitl=True,
         effect=lambda c, d: _ok("Merged PR #42 to production (mock)"),
     ),
@@ -487,6 +528,7 @@ _ALL = [
     Tool(
         "build_sales_site",
         "Generate the sales landing page",
+        risk=permissions.WRITE_LOCAL,
         needs_draft=True,
         prompt=lambda c: f"Write one punchy sales headline, under 10 words, for {_name(c)}.",
         effect=lambda c, d: _ok(_build_site(c, d)),
@@ -494,6 +536,7 @@ _ALL = [
     Tool(
         "deploy_site",
         "Publish the sales site to the configured hosts",
+        risk=permissions.EXTERNAL,
         hitl=True,
         effect=lambda c, d: _deploy_site(c),
     ),

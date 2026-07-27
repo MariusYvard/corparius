@@ -12,7 +12,7 @@ from pathlib import Path
 
 import requests
 
-from . import cfg, paths
+from . import cfg, paths, permissions
 from .config import Settings
 from .llm import OPENAI_COMPAT_PROVIDERS, _split
 
@@ -188,6 +188,44 @@ def _check_mode(s: Settings) -> tuple:
     return ("ok", "mode", "live with remote providers enabled")
 
 
+def _check_permissions(s: Settings) -> tuple:
+    """The posture, stated plainly. The dangerous configuration is not an
+    invalid one, it is a coherent one the operator forgot they chose: `auto`
+    against live providers means only the three named tools ever ask."""
+    mode = s.permission_mode if s.permission_mode in permissions.MODES else ""
+    if not mode:
+        return (
+            "fail",
+            "permissions",
+            f"CORP_PERMISSION_MODE={s.permission_mode!r} is not one of "
+            f"{', '.join(permissions.MODES)}; interactive applies instead.",
+        )
+    if s.ask_above not in permissions.ORDER:
+        return (
+            "fail",
+            "permissions",
+            f"CORP_ASK_ABOVE={s.ask_above!r} is not a risk class "
+            f"({', '.join(permissions.RISK_CLASSES)}); {permissions.DEFAULT_ASK_ABOVE} applies.",
+        )
+    gated = ", ".join(s.hitl_tools) or "nothing"
+    if mode == permissions.AUTO and not s.llm_mock:
+        return (
+            "warn",
+            "permissions",
+            f"auto mode against live providers: only {gated} will ever ask. "
+            "Set CORP_PERMISSION_MODE=interactive to restore the gate.",
+        )
+    if mode == permissions.CUSTOM and not s.auto_allow:
+        return (
+            "warn",
+            "permissions",
+            "custom mode with an empty CORP_AUTO_ALLOW behaves exactly like interactive.",
+        )
+    if mode == permissions.DISCUSS:
+        return ("ok", "permissions", "discuss (dry run): nothing consequential executes.")
+    return ("ok", "permissions", f"{mode}, asks above {s.ask_above}; gated by name: {gated}")
+
+
 def _check_ollama(s: Settings) -> tuple:
     tiers = [s.trivial_model, s.normal_model, s.hard_model]
     needs_local = s.llm_mock is False and (
@@ -349,6 +387,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_settings_source(s),
         _check_mode(s),
         _check_exposure(s),
+        _check_permissions(s),
         _check_store(s),
         _check_secrets_at_rest(s),
         _check_companies(),

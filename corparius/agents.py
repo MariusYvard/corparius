@@ -13,7 +13,8 @@ import logging
 from dataclasses import dataclass
 
 from . import structured
-from .models import AgentRole, Difficulty
+from .models import AgentRole, Difficulty, ToolResult
+from .permissions import risk_of
 from .safety import BudgetExceeded, LoopGuard
 from .tools import TOOLS
 
@@ -142,7 +143,12 @@ class Executor:
             result, stop = self._invoke(company, spec, ctx, tool_name, loop)
             if result is not None:
                 done.append(f"{tool_name}: {result.output}")
-            if stop or (result is not None and result.pending):
+            # A guard tripping halts the turn; a human being asked does not.
+            # Waiting on an approval is not a failure of the agent, and the rest
+            # of its playbook has nothing to do with the tool that is held, so
+            # stopping here used to idle a whole company on one unanswered
+            # question.
+            if stop:
                 break
         return done
 
@@ -157,6 +163,13 @@ class Executor:
         if result is not None and result.ok and not result.pending:
             self.store.complete_task(task["id"], result.output[:120])
             done.append(f"backlog #{task['id']} done via {tool_name}: {result.output}")
+        elif result is not None and result.pending:
+            # Parked, not returned to the queue: `approved` would be claimed
+            # again on the next turn and re-file the same request, so the agent
+            # would spend every turn re-asking one question instead of doing the
+            # next thing. store.release_waiting_tasks puts it back once answered.
+            self.store.park_task(task["id"], result.approval_id)
+            done.append(f"backlog #{task['id']} parked, waiting on approval {result.approval_id}")
         else:
             self.store.set_task_status(task["id"], "approved", "returned to backlog")
             done.append(f"backlog #{task['id']} returned to backlog")
@@ -172,6 +185,27 @@ class Executor:
             log.warning("[%s] budget stop: %s", spec.role.value, exc)
             self.store.record_action(company, spec.role.value, tool_name, {}, str(exc), False)
             return None, True
+        decision = self.gate.decide(tool, company)
+        # Already queued for this operator, on this tool. Drafting again would
+        # spend a model call to produce a second request saying the same thing,
+        # and the queue is a place to decide, not a place to accumulate. Checked
+        # before the draft rather than after, because the draft is the expensive
+        # half. It does not widen the gate: nothing runs either way, and matching
+        # an approval to an execution still compares parameters exactly, in
+        # ApprovalGate.execute.
+        if decision.needs_user:
+            waiting = self.store.pending_approval_for(company, tool_name)
+            if waiting:
+                log.info("[%s] %s still held, moving on", spec.role.value, tool_name)
+                return (
+                    ToolResult(
+                        ok=False,
+                        output=f"still waiting on approval {waiting['id']}",
+                        pending=True,
+                        approval_id=waiting["id"],
+                    ),
+                    False,
+                )
         draft = ""
         ctx.structured = None
         if tool.needs_draft and tool.schema:
@@ -208,9 +242,17 @@ class Executor:
         if loop.observe_tool_call(tool_name, params):
             log.warning("[%s] loop stop: repeated call to %s", spec.role.value, tool_name)
             return None, True
+        # The decision is journalled next to the action, not instead of it: a log
+        # that says a tool ran but not why it was allowed to answers half the
+        # question an operator opens the audit trail to ask.
         result = self.gate.execute(company, spec.role.value, tool, ctx, draft, params)
         self.store.record_action(
-            company, spec.role.value, tool_name, params, result.output, result.ok
+            company,
+            spec.role.value,
+            tool_name,
+            {**params, "risk": risk_of(tool), "why": decision.reason, "rule": decision.rule},
+            result.output,
+            result.ok,
         )
         if result.pending:
             log.info("[%s] paused for human approval on %s", spec.role.value, tool_name)

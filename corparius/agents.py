@@ -37,7 +37,7 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         12,
         Difficulty.EASY,
         "You are the CEO. Own the backlog: create data-driven tasks from what the company observes, arbitrate proposals, keep it solvent.",
-        ["set_daily_plan", "review_proposals", "create_tasks", "write_eod_summary"],
+        ["set_daily_plan", "review_proposals", "create_tasks", "remember", "write_eod_summary"],
     ),
     AgentRole.SOCIAL: AgentSpec(
         AgentRole.SOCIAL,
@@ -79,7 +79,7 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         24,
         Difficulty.HARD,
         "You own strategy, pricing, the roadmap and continuous improvement (kaizen).",
-        ["review_kpis", "update_pricing", "kaizen"],
+        ["review_kpis", "update_pricing", "kaizen", "remember"],
     ),
     AgentRole.COMPETITOR: AgentSpec(
         AgentRole.COMPETITOR,
@@ -123,7 +123,26 @@ def _messages(spec: AgentSpec, ctx, tool) -> list[dict]:
         knowledge = loader.context_for(tool.name)
         if knowledge:
             system = f"{system}\n\nWhat this company knows about this job:\n{knowledge}"
+    learned = _recall(ctx, tool)
+    if learned:
+        system = f"{system}\n\nWhat this company has learned:\n{learned}"
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def _recall(ctx, tool) -> str:
+    """Durable facts, ranked against the prompt about to be sent.
+
+    Separate from ctx.memory, which stays what it has always been: the last
+    three end-of-day summaries, read positionally by set_daily_plan. Merging the
+    two would have made memory[0] a fact instead of yesterday, and broken that
+    tool without breaking a test.
+    """
+    store = getattr(ctx, "store", None)
+    top_k = int(getattr(ctx, "memory_top_k", 0) or 0)
+    if store is None or top_k <= 0 or not hasattr(store, "recall"):
+        return ""
+    rows = store.recall(ctx.company.get("slug", ""), query=tool.draft_prompt(ctx), limit=top_k)
+    return "\n".join(f"- {r['fact']}" + (f" ({r['why']})" if r["why"] else "") for r in rows)
 
 
 class Executor:

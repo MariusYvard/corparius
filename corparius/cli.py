@@ -1,4 +1,4 @@
-"""Command line: init / run / status / approvals / approve / reject / rules."""
+"""Command line: init / run / status / approvals / approve / reject / rules / memory."""
 
 from __future__ import annotations
 
@@ -219,6 +219,25 @@ def cmd_decide(args, status: str) -> None:
         print(f"unblocked {freed['released']} task(s), refused {freed['refused']}")
 
 
+def cmd_memory(args) -> None:
+    cfg = _load_company(args.company)
+    store = _store()
+    if args.forget:
+        print("forgotten" if store.forget(args.forget) else "no such memory")
+        return
+    if args.pin:
+        print("pinned" if store.pin_memory(args.pin, True) else "no such memory")
+        return
+    rows = store.list_memory(cfg["slug"])
+    print(f"== memory: {cfg.get('name')} ==")
+    for r in rows:
+        mark = "*" if r["pinned"] else " "
+        why = f"  ({r['why']})" if r["why"] else ""
+        print(f"{mark}#{r['id']:<4} [{r['agent']}] {r['fact']}{why}")
+    if not rows:
+        print("nothing learned yet; the CEO and strategy agents write here as they run")
+
+
 def cmd_rules(args) -> None:
     cfg = _load_company(args.company)
     store = _store()
@@ -305,6 +324,11 @@ def main(argv=None) -> None:
         help="also stop asking about this tool for this company",
     )
     sp.set_defaults(fn=lambda a: cmd_decide(a, "approved"))
+
+    sp = with_company(sub.add_parser("memory"))
+    sp.add_argument("--pin", type=int, default=0, help="memory id to pin")
+    sp.add_argument("--forget", type=int, default=0, help="memory id to delete")
+    sp.set_defaults(fn=cmd_memory)
 
     sp = with_company(sub.add_parser("rules"))
     sp.add_argument("--revoke", default="", help="tool name whose standing rule to drop")

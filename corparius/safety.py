@@ -122,7 +122,15 @@ class CircuitBreaker:
             self._events.popleft()
         rate = sum(t for _, t in self._events)
         if rate > self.limit:
-            self.mode = self.SAFE if self.mode == self.CONSERVATIVE else self.CONSERVATIVE
+            # Escalate, never step back down while still over the limit. The
+            # previous form was `SAFE if mode == CONSERVATIVE else CONSERVATIVE`,
+            # which flipped SAFE back to CONSERVATEUR on the very next call: the
+            # mode an agent ended a turn in depended on whether it had spent an
+            # odd or an even number of times, and a session that had already
+            # earned a freeze could talk itself out of one by burning more
+            # tokens. Adding one tool to a playbook was enough to move the
+            # parity and stop a runaway day from freezing.
+            self.mode = self.CONSERVATIVE if self.mode == self.NORMAL else self.SAFE
         else:
             self.mode = self.NORMAL
         return self.mode

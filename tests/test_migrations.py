@@ -62,6 +62,9 @@ def test_a_populated_v1_store_gains_the_rules_table_without_losing_data(tmp_path
     assert store.list_tasks("t", "approved")[0]["title"] == "Ship it"
     store.add_rule("t", "generate_code", "always")
     assert store.find_rule("t", "generate_code") == "always"
+    # v3 arrived with durable memory; the same store must reach it too.
+    assert store.remember("t", "ceo", "Coaches renew.")
+    assert store.recall("t")[0]["fact"] == "Coaches renew."
 
 
 def test_migration_is_idempotent(tmp_path):

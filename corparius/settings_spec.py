@@ -556,6 +556,43 @@ SPEC: list[FieldSpec] = [
         "sont tronquées et signalées comme telles plutôt qu'écartées en silence.",
     ),
     _f(
+        "CORP_MEMORY_ENABLED",
+        "safety",
+        type="bool",
+        default="true",
+        label_en="Durable memory",
+        label_fr="Mémoire durable",
+        help_en="Lets the CEO and strategy agents write down what stays true, and recalls the "
+        "most relevant facts into each prompt. Separate from the three end-of-day summaries a "
+        "run always re-reads.",
+        help_fr="Permet au PDG et à la stratégie de noter ce qui reste vrai, et rappelle les "
+        "faits les plus pertinents dans chaque invite. Distinct des trois résumés de fin de "
+        "journée qu'une exécution relit toujours.",
+    ),
+    _f(
+        "CORP_MEMORY_TOP_K",
+        "safety",
+        type="int",
+        default="5",
+        label_en="Facts recalled per prompt",
+        label_fr="Faits rappelés par invite",
+        help_en="Ranked by relevance to the prompt about to be sent, pinned facts first.",
+        help_fr="Classés par pertinence pour l'invite sur le point d'être envoyée, les faits "
+        "épinglés d'abord.",
+    ),
+    _f(
+        "CORP_MEMORY_MAX",
+        "safety",
+        type="int",
+        default="200",
+        label_en="Facts kept per company",
+        label_fr="Faits conservés par entreprise",
+        help_en="Past this, the oldest unpinned facts are dropped. A pinned fact is never "
+        "dropped by the cap.",
+        help_fr="Au-delà, les faits non épinglés les plus anciens sont supprimés. Un fait "
+        "épinglé n'est jamais supprimé par le plafond.",
+    ),
+    _f(
         "CORP_WIP_LIMIT",
         "safety",
         type="int",

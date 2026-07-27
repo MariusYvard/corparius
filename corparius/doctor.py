@@ -261,6 +261,32 @@ def _check_skills(s: Settings) -> tuple:
     return ("ok", "skills", f"{len(found)} loaded across {len(slugs) or 1} company(ies)")
 
 
+def _check_memory(s: Settings) -> tuple:
+    if not s.memory_enabled:
+        return ("ok", "memory", "off (CORP_MEMORY_ENABLED=false)")
+    if s.memory_top_k <= 0:
+        return (
+            "warn",
+            "memory",
+            "on, but CORP_MEMORY_TOP_K is 0, so nothing is ever recalled. Agents write "
+            "facts nobody reads back.",
+        )
+    try:
+        from .store import Store
+
+        store = Store(s.data_path)
+    except Exception:
+        return ("ok", "memory", "no store yet")
+    base = paths.companies_dir()
+    slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
+    total = sum(len(store.list_memory(slug)) for slug in slugs)
+    return (
+        "ok",
+        "memory",
+        f"{total} fact(s) stored, {s.memory_top_k} recalled per prompt, capped at {s.memory_max}",
+    )
+
+
 def _check_ollama(s: Settings) -> tuple:
     tiers = [s.trivial_model, s.normal_model, s.hard_model]
     needs_local = s.llm_mock is False and (
@@ -434,6 +460,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_deploy_order(),
         _check_plugins(s),
         _check_skills(s),
+        _check_memory(s),
     ]
     out = []
     for c in checks:

@@ -36,6 +36,7 @@ class RunContext:
     role: str = ""
     structured: object = None  # the last structured.Result, when a tool asked for one
     skills: object = None  # a skills.SkillLoader, or None when skills are off
+    memory_top_k: int = 0  # durable facts recalled per prompt; 0 disables recall
 
 
 def _load_skills(settings, slug: str):
@@ -47,6 +48,13 @@ def _load_skills(settings, slug: str):
     if loader.skills:
         log.info("%d skill(s) loaded for %s", len(loader.skills), slug)
     return loader if loader.skills else None
+
+
+def _memory_top_k(settings) -> int:
+    """0 when memory is off, which is the single condition _recall checks."""
+    if not getattr(settings, "memory_enabled", True):
+        return 0
+    return max(0, int(getattr(settings, "memory_top_k", 5)))
 
 
 def due_roles(tick: int, enabled: dict) -> list[AgentSpec]:
@@ -81,6 +89,7 @@ class Runtime:
         enabled = company.get("agents", {})
 
         skills = _load_skills(self.settings, slug)
+        memory_top_k = _memory_top_k(self.settings)
         start = int(self.store.load_state(slug).get("tick", 0))
         # Yesterday's summaries. Re-read at every day boundary below: read once
         # here and a --loop company writes an EOD summary every day and never
@@ -124,6 +133,7 @@ class Runtime:
                     memory=memory,
                     store=self.store,
                     skills=skills,
+                    memory_top_k=memory_top_k,
                 )
                 for spec in due_roles(tick, enabled):
                     try:
@@ -182,6 +192,7 @@ class Runtime:
                 self.store, PermissionEngine.from_settings(self.settings, company, self.store)
             )
             skills = _load_skills(self.settings, slug)
+            memory_top_k = _memory_top_k(self.settings)
             executor = Executor(self.router, gate, self.store, self.settings)
             time.sleep(1)
         # A rule granted "for this run" that outlived the run would be a standing

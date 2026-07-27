@@ -34,9 +34,14 @@ agents:
   coder: false      # on demand only
 
 # Safety budgets for this company (override the global .env defaults).
+# tokens_per_minute is a wall-clock velocity ceiling, and a mock run compresses
+# a whole simulated day into well under a minute, so a demo day would trip a
+# ceiling that no live run — where each tick waits on a real model — ever comes
+# near. Sized for the demo; the global default (10000) is the one to reason
+# about for a company that is actually spending.
 budgets:
   session_tokens: 80000
-  tokens_per_minute: 8000
+  tokens_per_minute: 60000
   daily_ad_spend_eur: 0
 
 # Tools that always require human approval before executing.

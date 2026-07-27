@@ -125,6 +125,16 @@ def companies_dir() -> Path:
     return user_home() / "companies"
 
 
+def skills_dir() -> Path:
+    """Skills that apply to every company (writable). Per-company skills live in
+    `companies/<slug>/skills/` instead, next to the config they belong to."""
+    return user_home() / "skills"
+
+
+def company_skills_dir(slug: str) -> Path:
+    return companies_dir() / (slug or "company") / "skills"
+
+
 def dotenv_file() -> Path:
     """The .env the console writes and corparius/cfg.py reads as its lowest layer."""
     return user_home() / ".env"

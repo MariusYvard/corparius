@@ -532,6 +532,30 @@ SPEC: list[FieldSpec] = [
         "nommés ci-dessus ne sont jamais auto-autorisés.",
     ),
     _f(
+        "CORP_SKILLS_ENABLED",
+        "safety",
+        type="bool",
+        default="true",
+        label_en="Company skills",
+        label_fr="Compétences de l'entreprise",
+        help_en="Reads SKILL.md folders from companies/<slug>/skills/ and the shared skills/ "
+        "directory. A skill applies to a tool call when it names that tool.",
+        help_fr="Lit les dossiers SKILL.md de companies/<slug>/skills/ et du répertoire skills/ "
+        "partagé. Une compétence s'applique à un appel d'outil quand elle nomme cet outil.",
+    ),
+    _f(
+        "CORP_SKILL_MAX_CHARS",
+        "safety",
+        type="int",
+        default="4000",
+        label_en="Max skill characters per prompt",
+        label_fr="Caractères de compétence max par invite",
+        help_en="Ceiling on the instructions injected into one prompt. Past it, skills are "
+        "truncated and marked as such rather than dropped silently.",
+        help_fr="Plafond des instructions injectées dans une invite. Au-delà, les compétences "
+        "sont tronquées et signalées comme telles plutôt qu'écartées en silence.",
+    ),
+    _f(
         "CORP_WIP_LIMIT",
         "safety",
         type="int",

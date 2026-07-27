@@ -758,6 +758,9 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <h3 style="margin-top:16px" data-i18n="pl.available">Available in the registry</h3>
       <div id="pl-registry" class="stack" style="gap:8px"></div>
       <p class="muted" style="margin-top:12px" data-i18n="pl.unverified">Installing an unverified plugin runs unaudited third-party code and is only possible from the command line, behind an explicit opt-in.</p>
+      <h3 style="margin-top:20px" data-i18n="sk.title">Skills</h3>
+      <p class="muted" data-i18n="sk.intro">What this company knows, in prose. A skill is a SKILL.md folder under companies/&lt;slug&gt;/skills/ or the shared skills/ directory, read into the prompt when the tool about to run is one it names. Prose, not code: nothing here is executed.</p>
+      <div id="sk-list" class="stack" style="gap:8px"></div>
      </div>
     </div>
   </section>
@@ -807,6 +810,10 @@ en: {
   "pl.installed":"Installed","pl.available":"Available in the registry",
   "pl.unverified":"Installing an unverified plugin runs unaudited third-party code and is only possible from the command line, behind an explicit opt-in.",
   "pl.none":"No plugins installed.","pl.regEmpty":"The registry is empty for now.",
+  "sk.title":"Skills","sk.intro":"What this company knows, in prose. A skill is a SKILL.md folder under companies/<slug>/skills/ or the shared skills/ directory, read into the prompt when the tool about to run is one it names. Prose, not code: nothing here is executed.",
+  "sk.none":"None written yet. Copy packaging/skill-template into companies/<slug>/skills/ to teach a company its own trade.",
+  "sk.off":"Skills are off. Turn them on in Settings (Company skills).",
+  "sk.applies":"Applies to","sk.everyTool":"every tool","sk.chars":"chars","sk.unknown":"names no such tool: {n}",
   "pl.verified":"verified","pl.unverifiedTag":"UNVERIFIED","pl.disabled":"disabled","pl.loaded":"loaded",
   "pl.enable":"Enable","pl.disable":"Disable","pl.remove":"Remove","pl.install":"Install",
   "pl.saved":"Done — restart to apply","pl.confirmRemove":"Remove plugin {n}?",
@@ -965,6 +972,10 @@ fr: {
   "pl.installed":"Installés","pl.available":"Disponibles dans le registre",
   "pl.unverified":"Installer un plugin non vérifié exécute du code tiers non audité et n'est possible qu'en ligne de commande, derrière un opt-in explicite.",
   "pl.none":"Aucun plugin installé.","pl.regEmpty":"Le registre est vide pour l'instant.",
+  "sk.title":"Compétences","sk.intro":"Ce que cette entreprise sait, en prose. Une compétence est un dossier SKILL.md sous companies/<slug>/skills/ ou dans le répertoire skills/ partagé, lu dans l'invite quand l'outil sur le point de tourner est l'un de ceux qu'elle nomme. De la prose, pas du code : rien ici n'est exécuté.",
+  "sk.none":"Aucune écrite pour l'instant. Copiez packaging/skill-template dans companies/<slug>/skills/ pour apprendre son métier à une entreprise.",
+  "sk.off":"Les compétences sont désactivées. Activez-les dans Réglages (Compétences de l'entreprise).",
+  "sk.applies":"S'applique à","sk.everyTool":"tous les outils","sk.chars":"caractères","sk.unknown":"ne nomme aucun outil existant : {n}",
   "pl.verified":"vérifié","pl.unverifiedTag":"NON VÉRIFIÉ","pl.disabled":"désactivé","pl.loaded":"chargé",
   "pl.enable":"Activer","pl.disable":"Désactiver","pl.remove":"Supprimer","pl.install":"Installer",
   "pl.saved":"Fait — redémarrez pour appliquer","pl.confirmRemove":"Supprimer le plugin {n} ?",
@@ -1369,7 +1380,8 @@ $("#update-bar-hide").addEventListener("click", () => {
    install of VERIFIED registry plugins. Unverified install stays CLI-only. */
 async function loadPlugins() {
   try {
-    const st = await api("/api/plugins");
+    // Skills are per-company, so the plugins payload carries the slug too.
+    const st = await api(`/api/plugins?company=${encodeURIComponent(state.company || "")}`);
     $("#pl-off").hidden = !!st.enabled;
     const inst = st.installed || [];
     $("#pl-installed").innerHTML = inst.length ? inst.map(p => {
@@ -1388,6 +1400,19 @@ async function loadPlugins() {
       `<div class="kv"><span><strong>${esc(e.name)}</strong>${e.description ? `<br><span class="muted">${esc(e.description)}</span>` : ""}</span>
        <button data-pl="install" data-pl-name="${esc(e.name)}">${t("pl.install")}</button></div>`
     ).join("") : `<div class="empty">${t("pl.regEmpty")}</div>`;
+    const skills = st.skills || [];
+    $("#sk-list").innerHTML = !st.skills_enabled
+      ? `<div class="empty">${t("sk.off")}</div>`
+      : (skills.length ? skills.map(s => {
+          const tools = s.tools.length
+            ? s.tools.map(x => `<span class="mono">${esc(x)}</span>`).join(", ")
+            : t("sk.everyTool");
+          const bad = s.unknown_tools.length
+            ? `<br><span class="badge warn">${t("sk.unknown").replace("{n}", esc(s.unknown_tools.join(", ")))}</span>`
+            : "";
+          return `<div class="kv"><span><strong>${esc(s.name)}</strong> <span class="muted">${esc(s.scope)} · ${s.chars} ${t("sk.chars")}</span>${s.description ? `<br><span class="muted">${esc(s.description)}</span>` : ""}<br><span class="muted">${t("sk.applies")} ${tools}</span>${bad}</span>
+            <span class="mono muted" style="overflow-wrap:anywhere">${esc(s.path)}</span></div>`;
+        }).join("") : `<div class="empty">${t("sk.none")}</div>`);
   } catch (e) {}
 }
 $("#pl-goto-settings")?.addEventListener("click", () => selectTab($("#t-settings")));

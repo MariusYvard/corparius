@@ -53,13 +53,19 @@ CREATE TABLE IF NOT EXISTS memory (
     company TEXT, agent TEXT, fact TEXT, why TEXT, pinned INTEGER DEFAULT 0, ts REAL
 );
 CREATE INDEX IF NOT EXISTS memory_by_company ON memory (company, pinned, ts);
+CREATE TABLE IF NOT EXISTS inbox (
+    id TEXT PRIMARY KEY,
+    company TEXT, agent TEXT, kind TEXT, title TEXT, body TEXT, options TEXT,
+    state TEXT, resolution TEXT, resolved_at REAL, ts REAL
+);
+CREATE INDEX IF NOT EXISTS inbox_by_company ON inbox (company, state, ts);
 """
 
 # Bump this and add a migration below whenever the schema changes in a way that
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -95,8 +101,20 @@ def _migration_3(db: sqlite3.Connection) -> None:
     db.execute("CREATE INDEX IF NOT EXISTS memory_by_company ON memory (company, pinned, ts)")
 
 
+def _migration_4(db: sqlite3.Connection) -> None:
+    """The typed inbox: questions an agent could not ask before, and notices a
+    frozen session could not send. Same guarded shape as the two above."""
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS inbox ("
+        " id TEXT PRIMARY KEY,"
+        " company TEXT, agent TEXT, kind TEXT, title TEXT, body TEXT, options TEXT,"
+        " state TEXT, resolution TEXT, resolved_at REAL, ts REAL)"
+    )
+    db.execute("CREATE INDEX IF NOT EXISTS inbox_by_company ON inbox (company, state, ts)")
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
-MIGRATIONS = {1: _migration_1, 2: _migration_2, 3: _migration_3}
+MIGRATIONS = {1: _migration_1, 2: _migration_2, 3: _migration_3, 4: _migration_4}
 
 
 _PUNCT = str.maketrans({c: " " for c in ".,;:!?()[]\"'`—–-"})
@@ -456,6 +474,89 @@ class Store:
         return cur.rowcount > 0
 
     @_locked
+    def add_inbox(self, company, agent, kind, title, body="", options=()) -> str:
+        """File a question or a notice. Idempotent on its deterministic id, so
+        re-running the tick that raised it does not raise it twice, and a
+        restart between the question and the answer changes nothing.
+
+        INSERT OR IGNORE, not OR REPLACE: replacing would reset the state of an
+        item the operator had already answered."""
+        from .inbox import PENDING, item_id
+
+        ident = item_id(company, kind, agent, title)
+        self.db.execute(
+            "INSERT OR IGNORE INTO inbox"
+            " (id, company, agent, kind, title, body, options, state, resolution,"
+            "  resolved_at, ts) VALUES (?,?,?,?,?,?,?,?,'',0,?)",
+            (
+                ident,
+                company,
+                agent,
+                kind,
+                title,
+                body,
+                json.dumps(list(options)),
+                PENDING,
+                time.time(),
+            ),
+        )
+        self.db.commit()
+        return ident
+
+    @_locked
+    def list_inbox(self, company, state=None, kind=None) -> list[dict]:
+        q = "SELECT * FROM inbox WHERE company=?"
+        args: list = [company]
+        if state:
+            q += " AND state=?"
+            args.append(state)
+        if kind:
+            q += " AND kind=?"
+            args.append(kind)
+        rows = self.db.execute(q + " ORDER BY ts DESC", args).fetchall()
+        out = []
+        for row in rows:
+            item = dict(row)
+            try:
+                item["options"] = json.loads(item["options"] or "[]")
+            except json.JSONDecodeError:
+                item["options"] = []
+            out.append(item)
+        return out
+
+    @_locked
+    def resolved_inbox(self, company, kind, title):
+        """The answer to one question, or None while it is still pending.
+
+        Matched on the title rather than on the id, because the id folds in the
+        agent that asked: "which mailbox should I send from?" answered for
+        outreach is answered for support too, and asking the operator the same
+        thing once per role would be the failure this exists to remove."""
+        from .inbox import RESOLVED
+
+        row = self.db.execute(
+            "SELECT * FROM inbox WHERE company=? AND kind=? AND title=? AND state=?"
+            " ORDER BY resolved_at DESC LIMIT 1",
+            (company, kind, title, RESOLVED),
+        ).fetchone()
+        return dict(row) if row else None
+
+    @_locked
+    def resolve_inbox(self, item_id_, resolution="") -> bool:
+        """First responder wins. A second answer to a decided item returns
+        False rather than overwriting: the work that was waiting has already
+        moved on the first one, and rewriting the record would leave the store
+        disagreeing with what actually happened."""
+        from .inbox import PENDING, RESOLVED
+
+        cur = self.db.execute(
+            "UPDATE inbox SET state=?, resolution=?, resolved_at=? WHERE id=? AND state=?",
+            (RESOLVED, str(resolution), time.time(), item_id_, PENDING),
+        )
+        self.db.commit()
+        return cur.rowcount > 0
+
+    @_locked
     def save_state(self, company, data: dict) -> None:
         self.db.execute(
             "INSERT OR REPLACE INTO state (company, data) VALUES (?,?)",
@@ -638,15 +739,16 @@ class Store:
         self.db.commit()
 
     @_locked
-    def park_task(self, task_id, approval_id: str) -> None:
-        """Hold a task aside until a named approval is decided.
+    def park_task(self, task_id, blocker_id: str, kind: str = "approval") -> None:
+        """Hold a task aside until a named approval is decided, or a named
+        question answered.
 
         `waiting` is deliberately not a status claim_next_task looks at, so the
         agent that parked it moves straight on to the next task instead of
         picking the same blocked one up again every turn."""
         self.db.execute(
             "UPDATE tasks SET status='waiting', note=? WHERE id=?",
-            (f"approval:{approval_id}", task_id),
+            (f"{kind}:{blocker_id}", task_id),
         )
         self.db.commit()
 
@@ -664,11 +766,28 @@ class Store:
             "SELECT id, note FROM tasks WHERE company=? AND status='waiting'", (company,)
         ).fetchall():
             note = str(task["note"] or "")
-            if not note.startswith("approval:"):
+            # Two things can hold a task: an approval ("may I") and a question
+            # ("what should I use"). Both park it the same way, so both have to
+            # release it, or an answered question would leave its task parked
+            # for good.
+            if note.startswith("approval:"):
+                row = self.db.execute(
+                    "SELECT status FROM approvals WHERE id=?", (note[len("approval:") :],)
+                ).fetchone()
+            elif note.startswith("question:"):
+                answered = self.db.execute(
+                    "SELECT state FROM inbox WHERE id=?", (note[len("question:") :],)
+                ).fetchone()
+                # An answered question is a go-ahead: the operator supplied what
+                # was missing, so the task returns to the queue rather than
+                # being closed. There is no "refused" for a question.
+                row = (
+                    {"status": "approved" if answered["state"] == "resolved" else "pending"}
+                    if answered
+                    else None
+                )
+            else:
                 continue
-            row = self.db.execute(
-                "SELECT status FROM approvals WHERE id=?", (note[len("approval:") :],)
-            ).fetchone()
             if row is None or row["status"] == "pending":
                 continue
             if row["status"] == "approved":

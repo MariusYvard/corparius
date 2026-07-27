@@ -96,14 +96,37 @@ def test_deploy_publishes_locally_with_nothing_configured(tmp_path):
     assert (tmp_path / "data" / "sites" / "published" / "index.html").is_file()
 
 
-def test_deploy_fails_honestly_when_no_provider_is_available(tmp_path, monkeypatch):
-    """deploy_result exists because deploy_site returns a string either way: a
+def test_deploy_asks_the_operator_when_no_provider_is_available(tmp_path, monkeypatch):
+    """deploy_result exists because deploy_site returned a string either way: a
     total failure used to come back looking exactly like a success and was
-    logged as one. Drop the always-on local provider and the tool must say so."""
+    logged as one. It must still never report success — and a missing provider
+    is not the agent's failure, it is a thing only a human has, so it asks
+    instead of dead-ending in the log where nobody reads it."""
     monkeypatch.setenv("CORP_DEPLOY_PROVIDERS", "netlify,s3,ssh")
     ctx = _ctx(tmp_path)
     result = TOOLS["deploy_site"].run(ctx, "")
     assert result.ok is False
+    assert result.pending is True and result.question_id
+    asked = ctx.store.list_inbox("t", "pending", "question")
+    assert len(asked) == 1 and "published" in asked[0]["title"]
+
+
+def test_deploy_asks_once_however_many_times_it_runs(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORP_DEPLOY_PROVIDERS", "netlify,s3,ssh")
+    ctx = _ctx(tmp_path)
+    for _ in range(3):
+        TOOLS["deploy_site"].run(ctx, "")
+    assert len(ctx.store.list_inbox("t", "pending", "question")) == 1
+
+
+def test_deploy_still_fails_plainly_with_nowhere_to_ask(tmp_path, monkeypatch):
+    """No store, no inbox. The tool must not swallow the outcome just because
+    it could not file the question."""
+    monkeypatch.setenv("CORP_DEPLOY_PROVIDERS", "netlify,s3,ssh")
+    ctx = _ctx(tmp_path)
+    ctx.store = None
+    result = TOOLS["deploy_site"].run(ctx, "")
+    assert result.ok is False and not result.pending
     assert "not published" in result.output
 
 

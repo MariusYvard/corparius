@@ -11,7 +11,7 @@ Installer la dépendance optionnelle puis démarrer le serveur en transport stdi
 
 ## Outils exposés
 
-run pour lancer la boucle, status pour l'état, tasks pour lire le backlog, task pour arbitrer une tâche (le CEO valide, modifie ou refuse), approvals et approve pour la validation humaine des actions sensibles, site et deploy pour la page de vente. Les garde-fous, la mémoire et le stockage local restent en place derrière chaque appel.
+run pour lancer la boucle, status pour l'état, tasks pour lire le backlog, task pour arbitrer une tâche (le CEO valide, modifie ou refuse), approvals et approve pour la validation humaine des actions sensibles, inbox et answer pour les questions qu'un agent bloqué a posées et les avis qu'une session gelée a déposés, site et deploy pour la page de vente. Les garde-fous, la mémoire et le stockage local restent en place derrière chaque appel.
 
 ## Connexion depuis un hôte
 

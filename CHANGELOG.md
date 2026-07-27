@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased — an agent that does not know can now ask
+
+- **A typed inbox beside the approvals.** Approvals answer "may I". Two things
+  had nowhere to go. An agent lacking a fact could not ask for it: a deploy with
+  no provider configured dead-ended inside its tool, left one line in the action
+  log and was never seen again, while the company carried on as if nothing had
+  happened — the same failure as inventing an answer, one layer down. And a
+  session that froze itself could not say so, so a company could sit dead for a
+  day unless the operator thought to read the log.
+- **Questions block, notices do not.** A question parks the work that raised it
+  exactly as an approval does — same `pending` result, same `waiting` task — and
+  releases it when answered. `deploy_site` with no provider now asks instead of
+  failing into the log, and `ask_operator` is a mappable tool so the CEO can
+  queue "ask about X" and have it parked and released by machinery that already
+  exists. A circuit-breaker freeze and an unreachable model each leave a notice.
+- **Asked once, answered once.** The id is a hash of what is being asked, so a
+  re-run of the same tick finds the question it already filed. An answer is
+  matched on the title rather than the id, which folds in the agent: "which
+  mailbox?" answered for outreach is answered for support, instead of the
+  operator being asked the same thing once per role. Resolution is
+  first-responder-wins — the waiting work has already moved on the first answer,
+  and overwriting the record would leave the store disagreeing with what
+  happened.
+- Visible from every surface that already decides approvals: the console
+  (Operations, counted in the "needs you" badge), `corparius inbox`, and the MCP
+  tools `inbox` and `answer`. Store schema v4, migrated in place.
+
 ## Unreleased — what a company learns now outlives three days
 
 - **Durable memory.** A company remembered exactly the last three end-of-day

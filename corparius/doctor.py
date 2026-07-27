@@ -261,6 +261,37 @@ def _check_skills(s: Settings) -> tuple:
     return ("ok", "skills", f"{len(found)} loaded across {len(slugs) or 1} company(ies)")
 
 
+def _check_inbox(s: Settings) -> tuple:
+    """A company stopped on an unanswered question looks, from every automated
+    angle, exactly like a company with nothing to do. The doctor is where an
+    operator asks "is anything wrong", so it has to be one of the answers."""
+    try:
+        from .store import Store
+
+        store = Store(s.data_path)
+    except Exception:
+        return ("ok", "inbox", "no store yet")
+    base = paths.companies_dir()
+    slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
+    questions, notices = 0, 0
+    for slug in slugs:
+        for item in store.list_inbox(slug, "pending"):
+            if item["kind"] == "question":
+                questions += 1
+            else:
+                notices += 1
+    if questions:
+        return (
+            "warn",
+            "inbox",
+            f"{questions} unanswered question(s) holding work. Run `corparius inbox "
+            "--company <slug>`, or answer from the console.",
+        )
+    if notices:
+        return ("warn", "inbox", f"{notices} notice(s) waiting to be read")
+    return ("ok", "inbox", "nothing waiting on you")
+
+
 def _check_memory(s: Settings) -> tuple:
     if not s.memory_enabled:
         return ("ok", "memory", "off (CORP_MEMORY_ENABLED=false)")
@@ -461,6 +492,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_plugins(s),
         _check_skills(s),
         _check_memory(s),
+        _check_inbox(s),
     ]
     out = []
     for c in checks:

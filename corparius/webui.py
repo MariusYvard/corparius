@@ -219,6 +219,7 @@ def _overview(state: UiState, slug: str) -> dict:
         "tasks": by_status,
         "approvals": approvals,
         "rules": store.list_rules(slug),
+        "inbox": store.list_inbox(slug, "pending"),
         "memory": store.list_memory(slug) if s.memory_enabled else [],
         "memory_enabled": s.memory_enabled,
         "permission_mode": engine.mode,
@@ -1027,6 +1028,23 @@ def _route_approvals_post(ctx):
     }
 
 
+def _route_inbox_post(ctx):
+    """Answer a question, or dismiss a notice. First responder wins: a second
+    answer to a decided item is refused rather than overwriting one the waiting
+    work has already moved on."""
+    item = str(ctx.body.get("id", "")).strip()
+    if not item:
+        return 400, {"ok": False, "error": "id is required"}
+    store = ctx.store()
+    done = store.resolve_inbox(item, str(ctx.body.get("answer", "")))
+    freed = store.release_waiting_tasks(ctx.slug) if done and ctx.slug else {"released": 0}
+    return (200 if done else 409), {
+        "ok": done,
+        "released": freed["released"],
+        "error": None if done else "already answered, or no such item",
+    }
+
+
 def _route_memory_post(ctx):
     """Pin or forget one fact. The operator owns their company's memory the same
     way they own its secrets: a wrong thing an agent wrote down must be
@@ -1257,6 +1275,7 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/approvals", _route_approvals_post),
     Route("POST", "/api/rules", _route_rules_post, needs_slug=True),
     Route("POST", "/api/memory", _route_memory_post),
+    Route("POST", "/api/inbox", _route_inbox_post),
     Route("POST", "/api/tasks", _route_tasks_post),
     Route("POST", "/api/site", _route_site_post),
     Route("POST", "/api/deploy", _route_deploy_post),

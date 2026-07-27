@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 import requests
 
+from . import inbox
 from .agents import ROSTER, AgentSpec, Executor
 from .config import Settings
 from .hitl import ApprovalGate
@@ -151,6 +152,15 @@ class Runtime:
                             f"run stopped: {exc}. Check `python -m corparius.cli doctor`.",
                             False,
                         )
+                        # A run that stops itself has to say so somewhere the
+                        # operator looks. One row in the action log is not that.
+                        inbox.notify(
+                            self.store,
+                            slug,
+                            "system",
+                            "The run stopped: no model could be reached",
+                            f"{exc}. Run `corparius doctor` to see which tier is unreachable.",
+                        )
                         frozen = True
                         break
                     # Graceful degradation: a SAFE breaker freezes the whole session.
@@ -163,6 +173,14 @@ class Runtime:
                             {"mode": breaker.mode},
                             "session frozen, operator alerted",
                             False,
+                        )
+                        inbox.notify(
+                            self.store,
+                            slug,
+                            "system",
+                            "The session froze: token velocity hit the ceiling",
+                            "The circuit breaker reached SECURISE and stopped the day. Raise "
+                            "CORP_TOKENS_PER_MINUTE_LIMIT, or find what is spending.",
                         )
                         frozen = True
                         break

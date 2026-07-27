@@ -54,10 +54,12 @@ class ToolResult:
     output: str
     denied: bool = False  # rejected by a human approver
     pending: bool = False  # waiting on a human approver
-    # The approval this result is waiting on. Carried so a backlog task can
-    # record which decision would unblock it, instead of being retried blindly
-    # on every turn while the operator has not answered.
+    # What this result is waiting on, so a backlog task can record which answer
+    # would unblock it instead of being retried blindly every turn while the
+    # operator has not responded. An approval answers "may I"; a question
+    # answers "with what". Both park the work the same way.
     approval_id: str = ""
+    question_id: str = ""
 
 
 @dataclass

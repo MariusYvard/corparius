@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — what corparius takes from OpenWorker
+
+- **A teardown of OpenWorker**, Andrew Ng's MIT-licensed desktop agent, in
+  `docs/reverse-engineering/openworker.md`. It is the only comparable that shares
+  corparius' self-hosted, bring-your-own-keys stance, so the dossier records four
+  subsystems worth taking — risk-classed permissions, prose skills, persistent
+  memory, a typed inbox — and argues, from the Polsia teardown, against taking its
+  ReAct loop, its subagents or its OAuth connector fleet. The rule throughout:
+  take the data model and the semantics, never the agency it grants the model.
+
 ## Unreleased — installable, formatted, and renamed to its own name
 
 - **`pip install corparius`.** The package is now a proper distribution:

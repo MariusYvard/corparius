@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — a Claude subscription is one command
+
+- **`corparius claude`.** Running every tier on a Claude subscription needs four
+  settings to agree — mock off, cloud on, Claude Code on, tiers pointed at
+  `claudecode:` — and that hidden conjunction was most of why nobody turned it
+  on. The console has had a one-press card for it, but it sits in the Providers
+  tab behind fourteen other providers, and an operator who drives corparius from
+  a terminal never saw it. One command now, applying the same plan, and refusing
+  to write anything if the CLI test fails: half-configuring "cloud on, mock off"
+  against a CLI that cannot answer leaves the operator worse off than before.
+- **It is now discoverable, not just available.** `corparius doctor` used to say
+  "disabled" when the target was off; it now says so *and* names the command when
+  the `claude` CLI is already installed on the machine. `start.py` says the same
+  on a first run. Someone holding a subscription was otherwise paying for
+  inference they could get from a login they already have.
+- **Fixed: `cli._store()` escaped the test fixtures.** It read the import-time
+  settings snapshot, taken at collection — before the hermetic fixture redirects
+  `CORP_DATA_PATH`. Any test calling a `cmd_*` function therefore wrote to the
+  developer's own store. It resolves `Settings()` at call time now, which is what
+  every other surface already does.
+
 ## Unreleased — a model name that rots is now caught, not shipped
 
 - **Fixed: the shipped OpenRouter default no longer existed.**

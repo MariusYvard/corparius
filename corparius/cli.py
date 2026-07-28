@@ -1,4 +1,4 @@
-"""Command line: init / run / status / approvals / approve / reject / rules / memory / inbox."""
+"""Command line: init / run / status / approvals / approve / reject / rules / memory / inbox / claude."""
 
 from __future__ import annotations
 
@@ -16,12 +16,20 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _store() -> Store:
-    """One construction point for the nine commands that open the store. Each CLI
+    """One construction point for the commands that open the store. Each CLI
     command is a short-lived, single-threaded process that exits right after, so
     unlike the console (see UiState.store) there is no connection to share or
     close - but keeping the construction in one place means a future argument or
-    a pragma lands in exactly one spot."""
-    return Store(settings.data_path)
+    a pragma lands in exactly one spot.
+
+    Settings() rather than the module-level `settings` snapshot. In a real run
+    the two agree, because the snapshot is taken microseconds earlier at import.
+    In a test they do not: the snapshot is taken at collection, before the
+    hermetic fixture redirects CORP_DATA_PATH, so a test calling a cmd_* function
+    wrote to the developer's own store. Resolving here is what keeps the CLI
+    inside the same layering everything else obeys.
+    """
+    return Store(Settings().data_path)
 
 
 def _company_path(slug_or_path: str) -> str:
@@ -158,6 +166,35 @@ def cmd_board(args) -> None:
         items = [t for t in rows if t["status"] == col]
         head = ", ".join(f"#{t['id']}:{t['target']}" for t in items[:6])
         print(f"{col:12} ({len(items)}): {head}")
+
+
+def cmd_claude(args) -> None:
+    """Turn on the Claude subscription path, or test it.
+
+    The console has had a one-press card for this since the beginning, but it
+    lives in the Providers tab behind fourteen other providers, and an operator
+    who drives corparius from a terminal never sees it. Four settings have to
+    agree — mock off, cloud on, Claude Code on, and the tiers pointed at
+    `claudecode:` — and that hidden conjunction is most of why this was hard to
+    turn on. It is one command now, and the same plan the console applies.
+    """
+    from . import claudecli
+
+    result = claudecli.check()
+    print(result["detail"])
+    if args.check:
+        return
+    if not result["ok"]:
+        print("nothing changed; fix the above, then run this again")
+        raise SystemExit(1)
+    plan = claudecli.plan()
+    store = _store()
+    for key, value in plan.items():
+        store.set_setting(key, value)
+    print("\nClaude Code is now serving every tier:")
+    for key, value in plan.items():
+        print(f"  {key}={value}")
+    print("\nNo API key, no credits: calls go through your subscription login.")
 
 
 def cmd_doctor(args) -> None:
@@ -344,6 +381,12 @@ def main(argv=None) -> None:
         help="also stop asking about this tool for this company",
     )
     sp.set_defaults(fn=lambda a: cmd_decide(a, "approved"))
+
+    sp = sub.add_parser("claude", help="use your Claude subscription for every tier")
+    sp.add_argument(
+        "--check", action="store_true", help="test the CLI login without changing any setting"
+    )
+    sp.set_defaults(fn=cmd_claude)
 
     sp = with_company(sub.add_parser("inbox"))
     sp.add_argument("--answer-to", default="", help="inbox item id to answer or dismiss")

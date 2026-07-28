@@ -391,6 +391,18 @@ def _check_network(s: Settings) -> tuple:
 
 def _check_claude_cli(s: Settings) -> tuple:
     if not s.claude_code_enabled:
+        # The discovery case. Someone with a Claude subscription and the CLI
+        # already installed is paying for inference they could be getting from
+        # a login they already have, and the old message ("disabled") told them
+        # nothing. The doctor is where an operator asks what is wrong, so it is
+        # also the right place to say what is available.
+        if shutil.which("claude"):
+            return (
+                "ok",
+                "claude cli",
+                "off, but the `claude` CLI is installed here. `corparius claude` points every "
+                "tier at your subscription — no API key, no credits.",
+            )
         return ("ok", "claude cli", "disabled (CORP_CLAUDE_CODE=false)")
     if shutil.which("claude"):
         # Whether it is logged in needs a real call, which the doctor will not

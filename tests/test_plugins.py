@@ -249,3 +249,79 @@ def test_enable_disable_remove(monkeypatch, tmp_path):
     assert not (home / "plugins" / "acme").exists()
     with pytest.raises(plugins.PluginError):
         plugins.remove("acme")
+
+
+# --- a pack of prose has no module to import -------------------------------
+SKILLS_MANIFEST = {
+    "name": "vertical-knowledge",
+    "version": "1.0.0",
+    "api_version": 1,
+    "kinds": ["skills"],
+    "description": "how this vertical words an objection",
+}
+
+
+def _pack(
+    tmp_path, manifest=None, body="---\nname: p\nallowed-tools: send_outreach\n---\nsay less"
+):
+    d = tmp_path / "plugins" / "vertical-knowledge"
+    (d / "skills" / "p").mkdir(parents=True)
+    (d / "skills" / "p" / "SKILL.md").write_text(body, encoding="utf-8")
+    (d / plugins.MANIFEST_NAME).write_text(
+        json.dumps(manifest or SKILLS_MANIFEST), encoding="utf-8"
+    )
+    return d
+
+
+def test_a_skills_pack_needs_no_entrypoint(tmp_path):
+    """Requiring one meant the only way to ship prose was to write Python that
+    runs in order to execute nothing."""
+    m = plugins.PluginManifest.from_dict(SKILLS_MANIFEST, tmp_path)
+    assert m.entrypoint == "" and m.kinds == ["skills"]
+
+
+def test_a_code_plugin_with_no_entrypoint_is_still_an_error():
+    """The relaxation is for one declared shape, not for everyone."""
+    with pytest.raises(ValueError, match="entrypoint"):
+        plugins.PluginManifest.from_dict({"name": "x", "kinds": ["tools"]})
+    with pytest.raises(ValueError, match="entrypoint"):
+        plugins.PluginManifest.from_dict({"name": "x"})
+    with pytest.raises(ValueError, match="entrypoint"):
+        plugins.PluginManifest.from_dict({"name": "x", "kinds": ["skills", "tools"]})
+
+
+def test_a_malformed_entrypoint_is_still_an_error():
+    with pytest.raises(ValueError, match="module:function"):
+        plugins.PluginManifest.from_dict({"name": "x", "entrypoint": "not_a_pair"})
+
+
+def test_a_skills_pack_registers_its_folder_and_imports_nothing(tmp_path, monkeypatch):
+    from corparius import skills as skills_mod
+
+    monkeypatch.setattr(skills_mod, "EXTRA_DIRS", [])
+    monkeypatch.setattr(plugins.importlib, "import_module", _never)
+    path = _pack(tmp_path)
+    manifest = plugins.PluginManifest.from_dict(SKILLS_MANIFEST, path)
+    plugins._call_register(manifest)
+    assert skills_mod.EXTRA_DIRS == [str(path / "skills")]
+
+    loader = skills_mod.SkillLoader([(path / "skills", "plugin")])
+    assert [s.name for s in loader.for_tool("send_outreach")] == ["p"]
+
+
+def _never(*a, **k):
+    raise AssertionError("a prose-only pack must not import anything")
+
+
+def test_an_unverified_skills_pack_is_still_refused(tmp_path, monkeypatch):
+    """Prose executes nothing, and it still enters the prompt of every agent it
+    scopes to. The allow-list is not about execution."""
+    monkeypatch.setenv("CORP_PLUGINS_ENABLED", "true")
+    monkeypatch.delenv("CORP_PLUGINS_ALLOW_UNVERIFIED", raising=False)
+    monkeypatch.setattr(plugins, "_loaded", set())
+    monkeypatch.setattr(
+        plugins, "discover", lambda: [plugins.PluginManifest.from_dict(SKILLS_MANIFEST, tmp_path)]
+    )
+    monkeypatch.setattr(plugins, "registry_names", lambda: set())
+    cfg.invalidate()
+    assert plugins.load() == []

@@ -224,3 +224,56 @@ def test_the_shipped_template_is_well_formed():
     skill = parse(path)
     assert skill is not None and skill.allowed_tools
     assert not skill.unscoped
+
+
+def test_the_starter_pack_passes_the_bar_it_teaches():
+    """It is what `corparius skills install starter` copies into a fresh
+    install, so it is the first prose most operators will ever read here. One
+    unscoped skill in it would put its whole body on every prompt of every
+    agent — the tax the loader was hardened to expose, shipped by us."""
+    from pathlib import Path
+
+    from corparius.skills import DEFAULT_MAX_CHARS, SkillLoader
+
+    base = Path("packaging/skill-pack-starter/skills")
+    if not base.is_dir():  # a wheel install without packaging/
+        return
+    loader = SkillLoader([(base, "starter")])
+    assert len(loader.skills) == 6
+    for skill in loader.skills:
+        assert skill.allowed_tools, f"{skill.name} declares no allowed-tools"
+        assert [t for t in skill.allowed_tools if t not in TOOLS] == [], skill.name
+        assert len(skill.instructions) <= DEFAULT_MAX_CHARS, f"{skill.name} is over the cap"
+        assert skill.description, f"{skill.name} has no description"
+    assert loader.warnings() == []
+    assert loader.always_on_chars() == 0
+
+
+def test_the_starter_pack_covers_jobs_that_had_nothing():
+    """The three example skills cover ads, outreach and pricing. The pack exists
+    for the tools that had no prose at all, starting with the two most frequent
+    tiers in the roster: social every 2h, support every 3h."""
+    from pathlib import Path
+
+    from corparius.skills import SkillLoader
+
+    base = Path("packaging/skill-pack-starter/skills")
+    if not base.is_dir():
+        return
+    loader = SkillLoader([(base, "starter")])
+    for tool in ("draft_social_post", "triage_inbox", "reconcile_stripe", "scan_competitors"):
+        assert loader.for_tool(tool), f"nothing covers {tool}"
+
+
+def test_the_starter_pack_credits_where_it_came_from():
+    """Apache-2.0 with a LICENSE.txt per skill upstream. Adapted prose is still
+    derived prose, and the frontmatter is where it costs nothing to say so."""
+    from pathlib import Path
+
+    base = Path("packaging/skill-pack-starter/skills")
+    if not base.is_dir():
+        return
+    for path in base.glob("*/SKILL.md"):
+        head = path.read_text(encoding="utf-8")
+        assert "knowledge-work-plugins" in head, path
+        assert "Apache-2.0" in head, path

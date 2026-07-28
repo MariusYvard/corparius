@@ -9,6 +9,12 @@ __pycache__/
 *.sqlite3
 companies/*/data/
 companies/*/state.json
+# Shared skills the operator wrote or imported. In a source checkout
+# paths.user_home() is the repository root, so this is where they land.
+/skills/
+# Installed plugin folders, but not plugins/registry.json, which is the
+# curated allow-list and belongs to the repository.
+/plugins/*/
 # Local model caches
 .ollama/
 

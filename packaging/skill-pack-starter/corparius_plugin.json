@@ -1,0 +1,8 @@
+{
+  "name": "skill-pack-starter",
+  "version": "1.0.0",
+  "api_version": 1,
+  "kinds": ["skills"],
+  "needs_network": false,
+  "description": "Six starting skills, one per job this roster already does. Prose only, no code."
+}

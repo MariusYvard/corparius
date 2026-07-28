@@ -293,3 +293,57 @@ def test_bench_exits_nonzero_when_there_is_nothing_to_measure(monkeypatch, capsy
         cli.main(["bench"])
     assert exc.value.code == 1
     assert "Nothing to measure" in capsys.readouterr().out
+
+
+# --- corparius skills ------------------------------------------------------
+def test_skills_list_names_what_rides_on_every_prompt(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    shared = tmp_path / "skills" / "house-voice"
+    shared.mkdir(parents=True)
+    (shared / "SKILL.md").write_text(
+        "---\nname: house-voice\ndescription: how we write\n---\nShort sentences.",
+        encoding="utf-8",
+    )
+    cli.main(["skills", "list"])
+    out = capsys.readouterr().out
+    assert "house-voice" in out and "EVERY TOOL" in out
+    assert "ride on EVERY prompt" in out
+
+
+def test_skills_import_refuses_a_tool_that_does_not_exist(tmp_path, monkeypatch, capsys):
+    """A skill naming a missing tool is parsed and then never applies. Letting
+    --tools write one would hand the operator a file that does nothing."""
+    src = tmp_path / "incoming"
+    src.mkdir()
+    (src / "SKILL.md").write_text("---\nname: x\ndescription: d\n---\nbody", encoding="utf-8")
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    with pytest.raises(SystemExit):
+        cli.main(["skills", "import", str(src), "--tools", "not_a_tool"])
+    assert not (tmp_path / "skills" / "x").exists(), "a refusal must not have written first"
+
+
+def test_skills_import_dry_run_writes_nothing(tmp_path, monkeypatch, capsys):
+    src = tmp_path / "incoming"
+    src.mkdir()
+    (src / "SKILL.md").write_text(
+        "---\nname: draft-response\ndescription: d\n---\nbody", encoding="utf-8"
+    )
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    cli.main(["skills", "import", str(src), "--dry-run"])
+    out = capsys.readouterr().out
+    assert "would write" in out and "draft_support_reply" in out
+    assert not (tmp_path / "skills" / "draft-response").exists()
+
+
+def test_skills_import_says_loudly_when_nothing_here_does_that_job(tmp_path, monkeypatch, capsys):
+    src = tmp_path / "incoming"
+    src.mkdir()
+    (src / "SKILL.md").write_text(
+        "---\nname: sox-testing\ndescription: d\n---\nbody", encoding="utf-8"
+    )
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    cli.main(["skills", "import", str(src)])
+    out = capsys.readouterr().out
+    assert "NO allowed-tools" in out and "every turn" in out
+    written = (tmp_path / "skills" / "sox-testing" / "SKILL.md").read_text(encoding="utf-8")
+    assert "allowed-tools:\n" in written, "no scope must be invented"

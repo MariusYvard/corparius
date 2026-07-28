@@ -13,6 +13,21 @@ from corparius.config import Settings
 from .test_webui import _call
 
 
+@pytest.fixture(autouse=True)
+def no_ollama_probe(monkeypatch):
+    """The setup handler asks whether Ollama answers, to decide whether the
+    trivial tier goes local or to a free provider. That is a real socket, and a
+    unit test must not depend on one: on a runner where 127.0.0.1:11434 is
+    filtered rather than refused, the connect timeout outlived the test
+    client's own and these tests failed with a socket timeout rather than an
+    assertion. Answer "not reachable" without leaving the process."""
+    from corparius import ollama_setup
+
+    monkeypatch.setattr(
+        ollama_setup, "status", lambda *a, **k: {"ok": False, "reachable": False, "missing": []}
+    )
+
+
 @pytest.fixture()
 def server(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
@@ -95,6 +110,8 @@ def test_setup_leaves_the_simple_work_on_a_free_provider(server, monkeypatch):
     assert status == 200 and d["ok"]
     assert cfg.get("CORP_HARD_MODEL") == "claudecode:opus"
     assert not cfg.get("CORP_NORMAL_MODEL").startswith("claudecode:")
+    # No Ollama here, so trivial lands on a free provider rather than local.
+    assert not cfg.get("CORP_TRIVIAL_MODEL").startswith("claudecode:")
     # And the chain ends on Sonnet, not Opus: the chain is shared by every
     # tier, so the most expensive model must not be what a failed social post
     # escalates to.
@@ -128,3 +145,22 @@ def test_providers_payload_exposes_readiness(server, monkeypatch):
     monkeypatch.setattr(claudecli, "installed", lambda: True)
     status, d = _call(server, "GET", "/api/providers")
     assert status == 200 and "claude_installed" in d and "claude_ready" in d
+
+
+def test_the_polled_providers_endpoint_makes_no_network_probe(server, monkeypatch):
+    """/api/providers is polled by the console. It used to build the Claude
+    plan, which needs to know whether Ollama answers — so every poll on a
+    machine without Ollama paid a connect timeout, and on a runner where the
+    port is filtered rather than refused it blocked past the client's own
+    timeout. The payload now carries only what costs nothing to compute."""
+    from corparius import ollama_setup
+
+    def explode(*a, **k):
+        raise AssertionError("/api/providers probed the network")
+
+    monkeypatch.setattr(ollama_setup, "status", explode)
+    status, d = _call(server, "GET", "/api/providers")
+    assert status == 200 and d["ok"]
+    assert d["claude_hard_tier"] == claudecli.HARD_TIER
+    # Everything the card needs to say "mixed or every tier" is already here.
+    assert isinstance(d["providers"], list) and "configured" in d["providers"][0]

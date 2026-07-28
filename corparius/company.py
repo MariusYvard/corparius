@@ -273,6 +273,14 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
         budgets_in.get("tokens_per_minute", max(1000, session // 10)), max(1000, session // 10)
     )
     tpm = max(100, min(tpm, session))
+    # Opt-in, like the permission keys: emitting it always would pin every
+    # company to whatever the global setting said the day it was created.
+    cost_budget = None
+    if "cost_budget" in budgets_in:
+        try:
+            cost_budget = max(0.0, float(budgets_in.get("cost_budget") or 0))
+        except (TypeError, ValueError):
+            warnings.append("budgets.cost_budget is not a number; the global setting applies")
     ads_eur = _int(budgets_in.get("daily_ad_spend_eur", 0), 0)
     if ads_eur < 0:
         warnings.append("budgets.daily_ad_spend_eur cannot be negative; set to 0")
@@ -359,6 +367,7 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             "session_tokens": session,
             "tokens_per_minute": tpm,
             "daily_ad_spend_eur": ads_eur,
+            **({"cost_budget": cost_budget} if cost_budget is not None else {}),
         },
         "hitl_tools": hitl,
         **perms,

@@ -40,6 +40,16 @@ def _flatten(messages: list[dict]) -> str:
     return "\n".join(m.get("content", "") for m in messages)
 
 
+def _float(value) -> float:
+    """A cost field that is missing, null or a string is worth 0.0 rather than a
+    crashed turn. Providers send it as a JSON number or as a decimal string
+    depending on the day, and a run must not die over which."""
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 0.0
+
+
 # The harness's marker and a hint-line parser, kept here so the mock can answer
 # structured prompts offline without importing corparius.structured (which imports
 # models, which is fine, but this keeps the mock dependency-free and fast).
@@ -374,7 +384,15 @@ class OpenAICompatProvider(LLMProvider):
         choice = (data.get("choices") or [{}])[0]
         text = (choice.get("message") or {}).get("content") or ""
         u = data.get("usage") or {}
-        usage = Usage(u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
+        # OpenRouter reports what the call actually cost, in the same usage block
+        # every OpenAI-compatible provider fills in, on the endpoint already
+        # being called. It was being read for tokens and thrown away for money,
+        # which is the number an operator running a company actually budgets in.
+        # The other providers do not send it and stay at 0.0 — "not reported",
+        # not "free"; see Usage.cost.
+        usage = Usage(
+            u.get("prompt_tokens", 0), u.get("completion_tokens", 0), _float(u.get("cost"))
+        )
         return LLMResult(text=text, usage=usage, model=model, provider=self.name)
 
 

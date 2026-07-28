@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS actions (
 );
 CREATE TABLE IF NOT EXISTS token_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    company TEXT, agent TEXT, input_tokens INTEGER, output_tokens INTEGER, ts REAL
+    company TEXT, agent TEXT, input_tokens INTEGER, output_tokens INTEGER, ts REAL,
+    cost REAL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS approvals (
     id TEXT PRIMARY KEY,
@@ -65,7 +66,7 @@ CREATE INDEX IF NOT EXISTS inbox_by_company ON inbox (company, state, ts);
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -113,8 +114,24 @@ def _migration_4(db: sqlite3.Connection) -> None:
     db.execute("CREATE INDEX IF NOT EXISTS inbox_by_company ON inbox (company, state, ts)")
 
 
+def _migration_5(db: sqlite3.Connection) -> None:
+    """Cost per call, added when OpenRouter turned out to report it in the usage
+    block corparius was already parsing for tokens. Existing rows keep 0, which
+    reads as "not reported" rather than "free"."""
+    try:
+        db.execute("ALTER TABLE token_usage ADD COLUMN cost REAL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
-MIGRATIONS = {1: _migration_1, 2: _migration_2, 3: _migration_3, 4: _migration_4}
+MIGRATIONS = {
+    1: _migration_1,
+    2: _migration_2,
+    3: _migration_3,
+    4: _migration_4,
+    5: _migration_5,
+}
 
 
 _PUNCT = str.maketrans({c: " " for c in ".,;:!?()[]\"'`—–-"})
@@ -230,11 +247,11 @@ class Store:
         self.db.commit()
 
     @_locked
-    def record_usage(self, company, agent, input_tokens, output_tokens) -> None:
+    def record_usage(self, company, agent, input_tokens, output_tokens, cost=0.0) -> None:
         self.db.execute(
-            "INSERT INTO token_usage (company, agent, input_tokens, output_tokens, ts)"
-            " VALUES (?,?,?,?,?)",
-            (company, agent, input_tokens, output_tokens, time.time()),
+            "INSERT INTO token_usage (company, agent, input_tokens, output_tokens, ts, cost)"
+            " VALUES (?,?,?,?,?,?)",
+            (company, agent, input_tokens, output_tokens, time.time(), float(cost or 0.0)),
         )
         self.db.commit()
 
@@ -253,12 +270,26 @@ class Store:
     # resource, which is exactly the interleaving _locked exists to prevent.
     @_locked
     def spend_by_agent(self, company) -> list[dict]:
+        """Tokens and money side by side. `cost` is 0 for every provider that
+        does not report one, so a caller showing it has to know whether any
+        provider reported anything at all — see `cost_reported`."""
         rows = self.db.execute(
-            "SELECT agent, COALESCE(SUM(input_tokens+output_tokens),0) t "
+            "SELECT agent, COALESCE(SUM(input_tokens+output_tokens),0) t, "
+            "COALESCE(SUM(cost),0) cost "
             "FROM token_usage WHERE company=? GROUP BY agent ORDER BY t DESC",
             (company,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    @_locked
+    def cost_reported(self, company) -> bool:
+        """Whether any call for this company came back with a cost. Without it,
+        a total of 0.00 is indistinguishable from a free run, and the console
+        would quietly tell an operator on a paid key that they spent nothing."""
+        row = self.db.execute(
+            "SELECT COUNT(*) n FROM token_usage WHERE company=? AND cost > 0", (company,)
+        ).fetchone()
+        return row["n"] > 0
 
     @_locked
     def recent_actions(self, company, limit=25) -> list[dict]:

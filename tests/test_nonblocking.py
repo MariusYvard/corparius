@@ -23,7 +23,8 @@ from corparius.tools import TOOLS, Tool
 class _Router:
     def generate(self, messages, **kw):
         return types.SimpleNamespace(
-            text="draft", usage=types.SimpleNamespace(input_tokens=1, output_tokens=1, total=2)
+            text="draft",
+            usage=types.SimpleNamespace(input_tokens=1, output_tokens=1, total=2, cost=0.0),
         )
 
     def embed(self, text):

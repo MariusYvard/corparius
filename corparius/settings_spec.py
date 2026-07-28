@@ -472,6 +472,19 @@ SPEC: list[FieldSpec] = [
         "est suspendu pour bégaiement.",
     ),
     _f(
+        "CORP_SESSION_COST_BUDGET",
+        "safety",
+        type="float",
+        default="0",
+        label_en="Cost ceiling per session",
+        label_fr="Plafond de coût par session",
+        help_en="In the provider's own currency, and only where a provider reports a cost — "
+        "OpenRouter does, most do not. 0 disables it and the token budget still applies.",
+        help_fr="Dans la devise du fournisseur, et seulement là où un fournisseur rapporte un "
+        "coût — OpenRouter le fait, la plupart non. 0 le désactive, le budget de jetons "
+        "s'applique toujours.",
+    ),
+    _f(
         "CORP_MAX_IDENTICAL_TOOL_CALLS",
         "safety",
         type="int",

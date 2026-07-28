@@ -147,3 +147,45 @@ def test_the_shipped_example_skill_names_real_tools():
     assert isinstance(skill, Skill)
     assert skill.allowed_tools
     assert [t for t in skill.allowed_tools if t not in TOOLS] == []
+
+
+def test_a_skill_with_no_allowed_tools_is_reported_as_unscoped(tmp_path):
+    """The failure a third-party skill library creates by default. Its SKILL.md
+    files declare no allowed-tools, so every one of them lands in every prompt
+    of every agent — silently, in the direction that costs most."""
+    _write(tmp_path, "everywhere", front="---\nname: everywhere\ndescription: d\n---\n")
+    loader = _loader(tmp_path)
+    assert loader.skills[0].unscoped is True
+    kinds = [w["kind"] for w in loader.warnings()]
+    assert "unscoped" in kinds
+
+
+def test_a_scoped_skill_raises_no_warning(tmp_path):
+    _write(tmp_path, "voice", tools="send_outreach")
+    assert _loader(tmp_path).warnings() == []
+
+
+def test_the_always_on_weight_is_counted(tmp_path):
+    """The number nothing displayed: what a folder of unscoped skills costs on
+    every single prompt, whatever the tool."""
+    _write(tmp_path, "a", body="x" * 100, front="---\nname: a\ndescription: d\n---\n")
+    _write(tmp_path, "b", body="y" * 50, tools="send_outreach")
+    assert _loader(tmp_path).always_on_chars() == 100
+
+
+def test_an_oversized_skill_is_reported_as_truncated(tmp_path):
+    """context_for already marks [truncated] inside the prompt, where only the
+    model sees it. The operator never did."""
+    _write(tmp_path, "long", body="x" * 5000, tools="send_outreach")
+    warnings = _loader(tmp_path, max_chars=100).warnings()
+    assert [w["kind"] for w in warnings] == ["truncated"]
+    assert warnings[0]["chars"] == 5000 and warnings[0]["cap"] == 100
+
+
+def test_both_failures_at_once_are_both_reported(tmp_path):
+    """Exactly what dropping in a skill written for another host produces."""
+    _write(tmp_path, "big", body="x" * 9000, front="---\nname: big\ndescription: d\n---\n")
+    assert {w["kind"] for w in _loader(tmp_path, max_chars=4000).warnings()} == {
+        "unscoped",
+        "truncated",
+    }

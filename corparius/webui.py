@@ -975,6 +975,8 @@ def _route_plugins_get(ctx):
                 "tools": sk.allowed_tools,
                 "unknown_tools": [t for t in sk.allowed_tools if t not in TOOLS],
                 "chars": len(sk.instructions),
+                "unscoped": sk.unscoped,
+                "truncated": len(sk.instructions) > s.skill_max_chars,
                 "path": str(sk.path),
             }
             for sk in loader.skills
@@ -984,6 +986,7 @@ def _route_plugins_get(ctx):
         **plugins.status(),
         "skills": catalog,
         "skills_enabled": s.skills_enabled,
+        "skills_always_on_chars": loader.always_on_chars() if s.skills_enabled else 0,
     }
 
 

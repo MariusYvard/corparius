@@ -347,3 +347,27 @@ def test_skills_import_says_loudly_when_nothing_here_does_that_job(tmp_path, mon
     assert "NO allowed-tools" in out and "every turn" in out
     written = (tmp_path / "skills" / "sox-testing" / "SKILL.md").read_text(encoding="utf-8")
     assert "allowed-tools:\n" in written, "no scope must be invented"
+
+
+def test_skills_install_starter_lands_scoped_and_is_idempotent(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    cli.main(["skills", "install", "starter"])
+    first = capsys.readouterr().out
+    assert "6 skill(s)" in first
+    cli.main(["skills", "list"])
+    listed = capsys.readouterr().out
+    assert "EVERY TOOL" not in listed, "a shipped skill must never be unscoped"
+    assert "ride on EVERY prompt" not in listed
+
+    # Run twice: an operator who edited one must not lose it to a reinstall.
+    edited = tmp_path / "skills" / "social-cadence" / "SKILL.md"
+    edited.write_text("---\nname: social-cadence\nallowed-tools: schedule_post\n---\nmine\n")
+    cli.main(["skills", "install", "starter"])
+    assert "kept your own social-cadence" in capsys.readouterr().out
+    assert edited.read_text().endswith("mine\n")
+
+
+def test_skills_install_refuses_a_pack_that_does_not_ship(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    with pytest.raises(SystemExit):
+        cli.main(["skills", "install", "nope"])

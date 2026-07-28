@@ -348,7 +348,18 @@ class OllamaProvider(LLMProvider):
         r.raise_for_status()
         data = r.json()
         text = data.get("message", {}).get("content", "")
-        usage = Usage(data.get("prompt_eval_count", 0), data.get("eval_count", 0))
+        # Ollama times its own generation and reports it here. Reading it means a
+        # real turn measures the machine as accurately as a dedicated probe does,
+        # through the same parser — see corparius/hardware.parse_timings.
+        from .hardware import parse_timings
+
+        timed = parse_timings(data)
+        usage = Usage(
+            data.get("prompt_eval_count", 0),
+            data.get("eval_count", 0),
+            tokens_per_second=timed.get("tokens_per_second", 0.0),
+            load_seconds=timed.get("load_seconds", 0.0),
+        )
         return LLMResult(text=text, usage=usage, model=model, provider=self.name)
 
     def embed(self, text: str) -> list[float]:

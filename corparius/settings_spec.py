@@ -472,6 +472,31 @@ SPEC: list[FieldSpec] = [
         "est suspendu pour bégaiement.",
     ),
     _f(
+        "CORP_LOCAL_MIN_TOKENS_PER_SEC",
+        "inference",
+        type="float",
+        default="15",
+        label_en="Minimum local speed",
+        label_fr="Vitesse locale minimale",
+        help_en="Measured tokens per second below which local inference is not given a tier. "
+        "Run `corparius bench` to measure; a 512-token draft takes 512/speed seconds.",
+        help_fr="Débit mesuré en jetons par seconde sous lequel aucun palier n'est confié à "
+        "l'inférence locale. `corparius bench` mesure ; un brouillon de 512 jetons prend "
+        "512/débit secondes.",
+    ),
+    _f(
+        "CORP_BENCH_MAX_AGE_DAYS",
+        "inference",
+        type="int",
+        default="30",
+        label_en="Measurement good for",
+        label_fr="Mesure valable",
+        help_en="Days before the machine measurement is reported as stale. Speed does not "
+        "drift, but free memory and installed models do.",
+        help_fr="Jours avant que la mesure de la machine soit signalée comme périmée. La "
+        "vitesse ne dérive pas, la mémoire libre et les modèles installés si.",
+    ),
+    _f(
         "CORP_SESSION_COST_BUDGET",
         "safety",
         type="float",

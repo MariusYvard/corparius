@@ -60,13 +60,18 @@ CREATE TABLE IF NOT EXISTS inbox (
     state TEXT, resolution TEXT, resolved_at REAL, ts REAL
 );
 CREATE INDEX IF NOT EXISTS inbox_by_company ON inbox (company, state, ts);
+CREATE TABLE IF NOT EXISTS machine (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    cores INTEGER, ram_total INTEGER, ram_available INTEGER,
+    tokens_per_second REAL, load_seconds REAL, placement TEXT, model TEXT, ts REAL
+);
 """
 
 # Bump this and add a migration below whenever the schema changes in a way that
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -124,6 +129,18 @@ def _migration_5(db: sqlite3.Connection) -> None:
         pass
 
 
+def _migration_6(db: sqlite3.Connection) -> None:
+    """The measured machine profile, added when the routing turned out to decide
+    the trivial tier on nothing but "Ollama's port answered". One row, pinned by
+    a CHECK: there is exactly one machine."""
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS machine ("
+        " id INTEGER PRIMARY KEY CHECK (id = 1),"
+        " cores INTEGER, ram_total INTEGER, ram_available INTEGER,"
+        " tokens_per_second REAL, load_seconds REAL, placement TEXT, model TEXT, ts REAL)"
+    )
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 MIGRATIONS = {
     1: _migration_1,
@@ -131,6 +148,7 @@ MIGRATIONS = {
     3: _migration_3,
     4: _migration_4,
     5: _migration_5,
+    6: _migration_6,
 }
 
 
@@ -586,6 +604,38 @@ class Store:
         )
         self.db.commit()
         return cur.rowcount > 0
+
+    @_locked
+    def save_machine(self, profile: dict) -> None:
+        """Record what this machine measured. One row, replaced each time: a
+        history of benchmarks would be a history of one number that does not
+        drift, and the stale one is never the one to act on."""
+        self.db.execute(
+            "INSERT OR REPLACE INTO machine"
+            " (id, cores, ram_total, ram_available, tokens_per_second, load_seconds,"
+            "  placement, model, ts) VALUES (1,?,?,?,?,?,?,?,?)",
+            (
+                profile.get("cores"),
+                profile.get("ram_total"),
+                profile.get("ram_available"),
+                profile.get("tokens_per_second"),
+                profile.get("load_seconds"),
+                profile.get("placement", ""),
+                profile.get("model", ""),
+                time.time(),
+            ),
+        )
+        self.db.commit()
+
+    @_locked
+    def load_machine(self):
+        """The cached profile, or None when nothing has been measured yet.
+
+        None is a real answer the caller must handle — "not measured" is not
+        "incapable", and treating it as such would silently stop routing local
+        work on machines that were simply never benchmarked."""
+        row = self.db.execute("SELECT * FROM machine WHERE id=1").fetchone()
+        return dict(row) if row else None
 
     @_locked
     def save_state(self, company, data: dict) -> None:

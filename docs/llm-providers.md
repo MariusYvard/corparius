@@ -64,16 +64,28 @@ MISTRAL_API_KEY=...
 
 ## Abonnement Claude
 
-Un abonnement Claude (Pro ou Max) fait tourner corparius sans clé API et sans crédits, en passant par la connexion que le CLI Claude Code détient déjà. Deux prérequis, une fois : installer Claude Code, puis `claude login`.
-
-Ensuite, une commande :
+Un abonnement Claude (Pro ou Max) fait tourner corparius sans clé API et sans crédits, en passant par la connexion que le CLI Claude Code détient déjà.
 
 ```bash
-corparius claude            # teste la connexion, puis bascule tous les paliers
-corparius claude --check    # teste seulement, ne modifie rien
+corparius claude --install   # installe le CLI s'il manque, teste, puis configure
+corparius claude             # si le CLI est déjà là
+corparius claude --check     # teste seulement, ne modifie rien
+corparius claude --all-tiers # met tous les paliers sur l'abonnement
 ```
 
-Elle applique exactement le même plan que le bouton « Utiliser votre abonnement Claude » de la console (onglet Providers), et refuse d'écrire quoi que ce soit si le test échoue : laisser « cloud activé, mock désactivé » sur un CLI qui ne répond pas mettrait l'exploitant dans un état pire qu'avant.
+Entre les deux, une étape reste manuelle : `claude login`, qui ouvre une invite interactive et choisit votre abonnement. Le CLI la demande, corparius ne peut pas la faire à votre place.
+
+La commande applique exactement le même plan que le bouton « Utiliser votre abonnement Claude » de la console (onglet Providers) — mêmes fournisseurs connectés, même verdict machine mesuré — et refuse d'écrire quoi que ce soit si le test échoue : laisser « cloud activé, mock désactivé » sur un CLI qui ne répond pas mettrait l'exploitant dans un état pire qu'avant.
+
+### Claude Desktop n'est pas le CLI
+
+Ce sont deux produits. **Claude Desktop** est l'application de discussion ; **Claude Code** est le CLI que corparius pilote en mode headless (`claude -p … --output-format json`), et une interface graphique ne répond pas à ça. Le message « installez Claude Code » se lit donc comme « c'est déjà fait » par quiconque possède Desktop — c'est un vrai rapport, pas une hypothèse.
+
+corparius détecte maintenant l'application de bureau et le dit :
+
+> Claude Desktop est installé sur cette machine, mais c'est l'application de discussion — corparius a besoin du CLI Claude Code, qui s'installe à part. **Même abonnement, rien de plus à souscrire.**
+
+Cette détection ne fait que changer le message. Ce qui décide si le CLI est appelable reste `shutil.which("claude")`, et rien d'autre : une application de bureau ne doit jamais être prise pour le CLI.
 
 ### Le gratuit d'abord, l'abonnement pour le difficile
 
@@ -126,7 +138,7 @@ corparius bench --json   # pour l'automatisation
 
 Sortie réelle sur la machine de développement de ce dépôt :
 
-```
+```text
 machine: 8 cores, 17.0 GB (1.9 GB free)
 gemma4:e4b: 2.2 tokens/s on the CPU, 93.1s to load
 

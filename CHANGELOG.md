@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased — l'abonnement Claude, sans le piège
+
+- **Fixed: `corparius claude` et la console écrivaient deux plans différents.**
+  Le terminal appelait `claudecli.plan()` sans argument, ce qui se lit comme
+  « aucun gratuit n'est connecté » et met **tous** les paliers sur l'abonnement
+  — le défaut coûteux contre lequel la docstring de `plan()` met elle-même en
+  garde. Il ignorait aussi `--all-tiers`, déclaré dans l'analyseur d'arguments
+  et jamais lu, et le verdict machine mesuré ne l'atteignait pas. Il passe
+  maintenant les mêmes entrées que la console : fournisseurs connectés et
+  verdict local.
+- **Fixed: le test qui aurait dû l'attraper comparait au même appel fautif.**
+  `test_the_one_command_writes_exactly_the_console_plan` vérifiait le résultat
+  contre `claudecli.plan()` — sans argument lui aussi — donc il était d'accord
+  avec le bug. Ce sont les **entrées** qui doivent correspondre, pas seulement
+  la fonction appelée.
+- **« Installez Claude Code » se lisait comme « c'est déjà fait »** par
+  quiconque possède Claude Desktop. Ce sont deux produits : Desktop est
+  l'application de discussion, corparius pilote le CLI en mode headless, et une
+  interface graphique ne répond pas à `claude -p … --output-format json`.
+  corparius détecte l'application de bureau et le dit, en précisant que
+  l'abonnement est le même et qu'il n'y a rien de plus à souscrire. La
+  détection ne change que le message : `shutil.which("claude")` reste seul juge
+  de ce qui est appelable.
+- **Le message nomme la commande au lieu de renvoyer vers une page produit**, et
+  `corparius claude --install` fait l'étape npm. Jamais implicite : poser un
+  paquet global sur la machine de l'exploitant n'est pas une décision que prend
+  un contrôle d'état. Même bouton sur la carte de la console, et un test tient
+  que l'endpoint sondé n'installe jamais rien.
+
 ## Unreleased — « joignable » n'est pas « capable »
 
 - **Fixed: le routage recommandé donnait le palier trivial au local dès qu'un

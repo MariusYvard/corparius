@@ -93,6 +93,30 @@ Les agents : `AgentRole` est un enum figé, donc en v1 un plugin **personnalise 
 rôle existant** (prompt, playbook, cadence, modèle) ; ajouter un rôle inédit n'est
 pas encore supporté.
 
+### Un pack de compétences n'a pas besoin de code
+
+Un pack de prose n'a pas de module à importer. Exiger un `entrypoint` obligeait
+donc à écrire du Python qui tourne pour n'exécuter rien. Un manifeste qui déclare
+`kinds: ["skills"]` peut l'omettre :
+
+```json
+{
+  "name": "vertical-knowledge",
+  "version": "1.0.0",
+  "api_version": 1,
+  "kinds": ["skills"],
+  "description": "comment ce secteur formule une objection"
+}
+```
+
+Le dossier `skills/` du plugin est enregistré tel quel : rien n'est importé,
+`sys.path` n'est pas touché. **Toute autre forme doit encore nommer du code** —
+un plugin de code sans point d'entrée reste une erreur, pas une forme.
+
+L'exemple de référence est [`packaging/skill-pack-starter/`](../packaging/skill-pack-starter/).
+La liste blanche vérifiée s'applique quand même à un pack de prose, pour la
+raison du paragraphe suivant.
+
 ## Proposer un plugin via GitHub
 
 Pour qu'un plugin devienne installable en un clic par tout le monde :

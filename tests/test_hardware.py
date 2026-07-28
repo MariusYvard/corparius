@@ -196,3 +196,56 @@ def test_measure_survives_an_unreachable_ollama(monkeypatch):
     monkeypatch.setattr(hardware.requests, "post", down)
     out = hardware.measure("gemma:2b", timeout=1)
     assert out["ok"] is False and "did not answer" in out["detail"]
+
+
+def test_the_doctor_reads_the_cache_and_never_measures(tmp_path, monkeypatch):
+    """A measurement costs a real generation — 93 seconds to load the configured
+    model on the machine this was written for. The doctor runs on every launcher
+    start and is served over HTTP; probing here would be the polled-endpoint
+    mistake with a much bigger timer."""
+    from corparius import doctor
+    from corparius.config import Settings
+
+    def explode(*a, **k):
+        raise AssertionError("the doctor measured")
+
+    monkeypatch.setattr(hardware, "measure", explode)
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    s = Settings()
+    level, name, message = doctor._check_machine(s)
+    assert name == "machine" and level == "ok"
+    assert "corparius bench" in message
+
+
+def test_the_doctor_reports_a_measured_machine(tmp_path, monkeypatch):
+    from corparius import doctor
+    from corparius.config import Settings
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(hardware, "installed_models", lambda **k: [])
+    Store(str(tmp_path)).save_machine(
+        {"cores": 8, "ram_total": 17 * GB, "tokens_per_second": 2.2, "placement": "cpu"}
+    )
+    level, _, message = doctor._check_machine(Settings())
+    assert level == "ok" and "2.2 tokens/s on the CPU" in message
+    assert "fallback only" in message
+
+
+def test_the_doctor_flags_a_stale_measurement(tmp_path, monkeypatch):
+    from corparius import doctor
+    from corparius.config import Settings
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    Store(str(tmp_path)).save_machine({"tokens_per_second": 40.0, "placement": "gpu"})
+    monkeypatch.setattr(
+        hardware,
+        "profile",
+        lambda *a, **k: {
+            "tokens_per_second": 40.0,
+            "placement": "gpu",
+            "age_days": 90.0,
+            "stale": True,
+        },
+    )
+    level, _, message = doctor._check_machine(Settings())
+    assert level == "warn" and "older than" in message

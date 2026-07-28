@@ -81,16 +81,16 @@ Un abonnement Claude se mesure en fenêtres d'usage, pas en jetons. Le dépenser
 
 L'abonnement ferme aussi la chaîne `CORP_LLM_FALLBACK`, avant le repli local : un gratuit qui tombe escalade vers l'abonnement au lieu de retomber sur un modèle local qui n'est peut-être pas installé.
 
-**C'est Sonnet en bout de chaîne, pas Opus.** La chaîne est partagée par tous les paliers : ce qui se trouve à son extrémité est aussi ce vers quoi un *post social* raté escalade, pas seulement une revue de stratégie. Y mettre Opus transformerait une panne de fournisseur en l'heure la plus chère que l'entreprise ait jamais tournée. Sonnet est ce vers quoi le travail courant doit se dégrader ; Opus reste le modèle du palier difficile, atteint parce qu'on le demande et non parce qu'autre chose est tombé.
+**C'est Haiku puis Sonnet en bout de chaîne, jamais Opus.** La chaîne est partagée par tous les paliers : ce qui se trouve à son extrémité est aussi ce vers quoi un *post social* raté escalade, pas seulement une revue de stratégie. Haiku vient en premier parce qu'une machine incapable de faire tourner du local envoie déjà son travail trivial chez un gratuit, et quand celui-ci tombe, Haiku est le bon barreau suivant — Sonnet seulement si Haiku est tombé aussi. Y mettre Opus transformerait une panne de fournisseur en l'heure la plus chère que l'entreprise ait jamais tournée : Opus reste le modèle du palier difficile, atteint parce qu'on le demande et non parce qu'autre chose est tombé.
 
 ```bash
 CORP_LLM_MOCK=false                        # sortir du mode hors ligne
 CORP_CLOUD_ENABLED=true                    # la porte maîtresse de tout distant
 CORP_CLAUDE_CODE=true                      # autoriser la cible claudecode:
-CORP_TRIVIAL_MODEL=local:gemma4:e4b        # Ollama si disponible
+CORP_TRIVIAL_MODEL=local:gemma4:e4b        # si la machine a été mesurée capable
 CORP_NORMAL_MODEL=groq:llama-3.3-70b-versatile
 CORP_HARD_MODEL=claudecode:opus
-CORP_LLM_FALLBACK=openrouter:...,claudecode:sonnet
+CORP_LLM_FALLBACK=openrouter:...,claudecode:haiku,claudecode:sonnet
 ```
 
 Il en faut quatre à la fois — mock, cloud, Claude Code, paliers — et c'est cette conjonction cachée qui rendait la chose difficile à activer à la main.
@@ -112,6 +112,38 @@ En mode « tous les paliers » (`--all-tiers`), l'échelle est complète : haiku
 Rappel du découpage : TRIVIAL sert social, publicité, finance et concurrence ; NORMAL sert le PDG, la prospection, le support et le design ; HARD sert la stratégie et le codeur.
 
 Si le CLI est installé mais la cible inactive, `corparius doctor` le signale et donne la commande : quelqu'un qui a déjà l'abonnement paie sinon une inférence qu'il pourrait obtenir d'une connexion qu'il possède. Le lanceur `start.py` le dit aussi au premier démarrage.
+
+## « Joignable » n'est pas « capable »
+
+Le port d'Ollama qui répond ne dit rien de la vitesse à laquelle la machine produit du texte. Le routage recommandé décidait pourtant le palier trivial sur ce seul bit, et pouvait donc y installer un modèle de 9,6 Go sur un processeur qui met une minute à écrire un brouillon — sur le palier **le plus fréquent** du roster : social toutes les 2 h, publicité et finance toutes les 6 h.
+
+corparius mesure donc, au lieu de déduire. C'est déjà la règle du dépôt pour le SMTP et pour le CLI Claude : prouver que la chose marche plutôt que demander qu'on y croie, en faisant un vrai appel minimal.
+
+```bash
+corparius bench          # une génération réelle, affiche et met en cache
+corparius bench --json   # pour l'automatisation
+```
+
+Sortie réelle sur la machine de développement de ce dépôt :
+
+```
+machine: 8 cores, 17.0 GB (1.9 GB free)
+gemma4:e4b: 2.2 tokens/s on the CPU, 93.1s to load
+
+local inference: 2.2 tokens/s on the CPU, so a 512-token draft takes 232.7s (threshold 15.0/s)
+The trivial tier will go to a free provider instead.
+```
+
+Ce qui est mesuré vient des champs qu'Ollama envoie déjà — `eval_count`, `eval_duration`, `load_duration` — et que `OllamaProvider` jetait. Un serveur qui ne les envoie pas ne produit **aucun** verdict, plutôt qu'un verdict calculé sur l'horloge de ce processus, qui replierait la file d'attente et le réseau dans le résultat.
+
+Deux questions distinctes sont tranchées :
+
+- **Est-ce que ça tient en mémoire ?** Contre la RAM **totale**, avec une marge — pas contre la RAM libre. Mesurée à une heure d'écart sur la même machine, la RAM libre est passée de 4,0 Go à 1,9 Go simplement parce qu'une suite de tests tournait. Un verdict qui change avec la météo n'est pas un verdict. L'encombrement du moment est signalé (« il faudra évincer du cache pour le charger maintenant »), il ne refuse jamais.
+- **Est-ce assez rapide ?** `tokens_per_second` contre `CORP_LOCAL_MIN_TOKENS_PER_SEC` (15 par défaut). Le seuil est un jugement, donc réglable, et le message montre son arithmétique : on peut être en désaccord avec un seuil, pas avec « à 2,2 jetons/s, 512 jetons prennent 232,7 s ».
+
+**Quand la machine ne peut servir aucun palier**, le trivial part chez un fournisseur gratuit comme le reste, puis Haiku via la chaîne de repli. Le local **reste** le dernier maillon de cette chaîne dans tous les cas : c'est le filet de sécurité du routeur, et le retirer serait un autre bug.
+
+**La mesure n'a jamais lieu toute seule.** Elle coûte une génération réelle — 93 secondes de chargement sur la machine ci-dessus — donc elle se déclenche sur `corparius bench` ou sur le bouton « Mesurer cette machine » de la carte Ollama, et rien d'autre. `corparius doctor`, `/api/providers` et `/api/ollama` lisent le cache et ne mesurent jamais. Au-delà de `CORP_BENCH_MAX_AGE_DAYS` (30) la mesure est signalée périmée — pas silencieusement réutilisée, pas silencieusement jetée.
 
 ## Confidentialité et conformité
 

@@ -1005,8 +1005,7 @@ SPEC: list[FieldSpec] = [
         label_en="GitHub token",
         label_fr="Jeton GitHub",
         help_en="Scope 'repo'. Leave empty to use the gh CLI if you are already signed in.",
-        help_fr="Portee 'repo'. Laissez vide pour utiliser le CLI gh si vous y etes deja "
-        "connecte.",
+        help_fr="Portee 'repo'. Laissez vide pour utiliser le CLI gh si vous y etes deja connecte.",
     ),
     _f(
         "GITLAB_TOKEN",

@@ -437,7 +437,9 @@ def main(argv=None) -> None:
     with_company(sub.add_parser("deploy")).set_defaults(fn=cmd_deploy)
 
     sp = with_company(sub.add_parser("repo"))
-    sp.add_argument("--status", action="store_true", help="show the repository state, change nothing")
+    sp.add_argument(
+        "--status", action="store_true", help="show the repository state, change nothing"
+    )
     sp.add_argument("--sync", action="store_true", help="commit and push the company folder now")
     sp.add_argument("--message", default="", help="commit message for --sync")
     sp.set_defaults(fn=cmd_repo)

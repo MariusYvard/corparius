@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — spend measured in money, not only in tokens
+
+- **Fixed: the cost was arriving and being thrown away.** OpenRouter reports what
+  a call cost in the same `usage` block corparius already parsed for token
+  counts, on the `/chat/completions` endpoint it already called.
+  `OpenAICompatProvider.generate` read `prompt_tokens` and `completion_tokens`
+  and dropped the rest, so the whole safety story was denominated in tokens while
+  the operator it is written for budgets in euros. `Usage.cost` now carries it
+  through the budget, the circuit breaker and the store, repair rounds included.
+- **Zero means "not reported", never "free".** Thirteen of the fourteen
+  OpenAI-compatible providers send no cost at all. `store.cost_reported()` says
+  whether anything was ever reported, and the console prints money only when it
+  was — printing "0.00" for a provider that reports nothing would tell an
+  operator on a paid key that they spent nothing.
+- **An opt-in money ceiling.** `CORP_SESSION_COST_BUDGET` (and `cost_budget` per
+  company) stops a session the way the token budget does. Default 0, disabled:
+  a second way for a run to stop has to be asked for, not inherited.
+- Store schema v5, migrated in place; existing usage rows keep 0.
+
 ## Unreleased — an agent that does not know can now ask
 
 - **A typed inbox beside the approvals.** Approvals answer "may I". Two things

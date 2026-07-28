@@ -34,6 +34,11 @@ class Difficulty(str, Enum):
 class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
+    # What the provider says this call cost, in its own account currency, when
+    # it says anything at all. Most do not: `cost` is 0.0 for them, and that
+    # means "not reported", never "free". Anything displaying it has to keep
+    # those two apart, or a paid run reads as costless.
+    cost: float = 0.0
 
     @property
     def total(self) -> int:

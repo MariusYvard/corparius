@@ -102,7 +102,10 @@ class Runtime:
         stopped = False
         last = {"mode": CircuitBreaker.NORMAL, "budget_used": 0, "frozen": False}
         while True:
-            budget = TokenBudget(budgets.get("session_tokens", self.settings.session_token_budget))
+            budget = TokenBudget(
+                budgets.get("session_tokens", self.settings.session_token_budget),
+                budgets.get("cost_budget", self.settings.session_cost_budget),
+            )
             breaker = CircuitBreaker(
                 budgets.get("tokens_per_minute", self.settings.tokens_per_minute_limit)
             )

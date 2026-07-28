@@ -16,18 +16,29 @@ class BudgetExceeded(Exception):
 
 
 class TokenBudget:
-    """A hard per-session ceiling. Check before an LLM call, record after it."""
+    """A hard per-session ceiling. Check before an LLM call, record after it.
 
-    def __init__(self, max_tokens: int):
+    Two ceilings, not one. Tokens are the ceiling that always applies, because
+    every provider reports them. Money is the ceiling an operator actually cares
+    about, and it only applies where a provider reports a cost — so it is opt-in
+    (`max_cost=0` disables it) rather than a silent second way for a run to stop.
+    """
+
+    def __init__(self, max_tokens: int, max_cost: float = 0.0):
         self.max_tokens = max_tokens
+        self.max_cost = max(0.0, max_cost)
         self.used = 0
+        self.spent = 0.0
 
     def check_before(self, estimate: int = 0) -> None:
         if self.used + estimate >= self.max_tokens:
             raise BudgetExceeded(f"token budget spent: {self.used}/{self.max_tokens}")
+        if self.max_cost and self.spent >= self.max_cost:
+            raise BudgetExceeded(f"cost budget spent: {self.spent:.4f}/{self.max_cost:.4f}")
 
-    def record_usage(self, input_tokens: int, output_tokens: int) -> None:
+    def record_usage(self, input_tokens: int, output_tokens: int, cost: float = 0.0) -> None:
         self.used += max(0, input_tokens) + max(0, output_tokens)
+        self.spent += max(0.0, cost)
 
     @property
     def remaining(self) -> int:

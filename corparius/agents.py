@@ -246,10 +246,10 @@ class Executor:
                 self.router, _messages(spec, ctx, tool), tool.schema, difficulty=spec.difficulty
             )
             for used in result.usages:  # a repair round is a real call; bill it
-                ctx.budget.record_usage(used.input_tokens, used.output_tokens)
+                ctx.budget.record_usage(used.input_tokens, used.output_tokens, used.cost)
                 ctx.breaker.record(used.total)
                 self.store.record_usage(
-                    company, spec.role.value, used.input_tokens, used.output_tokens
+                    company, spec.role.value, used.input_tokens, used.output_tokens, used.cost
                 )
             ctx.structured = result
             draft = json.dumps(result.data, ensure_ascii=False)
@@ -260,10 +260,14 @@ class Executor:
             res = self.router.generate(
                 _messages(spec, ctx, tool), difficulty=spec.difficulty, model=spec.model
             )
-            ctx.budget.record_usage(res.usage.input_tokens, res.usage.output_tokens)
+            ctx.budget.record_usage(res.usage.input_tokens, res.usage.output_tokens, res.usage.cost)
             ctx.breaker.record(res.usage.total)
             self.store.record_usage(
-                company, spec.role.value, res.usage.input_tokens, res.usage.output_tokens
+                company,
+                spec.role.value,
+                res.usage.input_tokens,
+                res.usage.output_tokens,
+                res.usage.cost,
             )
             if loop.observe_output(self.router.embed(res.text)):
                 log.warning("[%s] loop stop: semantic stutter", spec.role.value)

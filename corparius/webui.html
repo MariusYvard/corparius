@@ -579,6 +579,7 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <div class="card spot b-spend">
         <h2 data-i18n="spend.title">Spend by agent</h2>
         <div id="spend"></div>
+        <p class="note" id="spend-note"></p>
       </div>
       <div class="card spot b-payments">
         <h2 data-i18n="pay.title">Payments</h2>
@@ -845,6 +846,7 @@ en: {
   "activity.empty":"Nothing logged yet. Press Run above to simulate a few hours.","activity.openLog":"Open the full log",
   "spend.title":"Spend by agent","spend.desc":"Who consumes the LLM budget.",
   "spend.empty":"No spend yet. Run a day to see per-agent usage.",
+  "spend.noCost":"Tokens only: none of the providers used report a cost. OpenRouter does.",
   "flow.title":"Flow","flow.desc":"Is work flowing or piling up?",
   "flow.delivered":"Tasks delivered","flow.wip":"In progress now","flow.busiest":"Busiest role","flow.waiting":"Waiting on you","flow.none":"none",
   "ops.waiting":"Action approvals","ops.waitingDesc":"Money and production actions pause here until you decide. Nothing runs without you.",
@@ -1011,6 +1013,7 @@ fr: {
   "activity.empty":"Rien de journalisé. Cliquez Lancer ci-dessus pour simuler quelques heures.","activity.openLog":"Ouvrir le journal complet",
   "spend.title":"Dépense par agent","spend.desc":"Qui consomme le budget LLM.",
   "spend.empty":"Aucune dépense. Lancez une journée pour voir l'usage par agent.",
+  "spend.noCost":"Jetons seuls : aucun des fournisseurs utilisés ne rapporte de coût. OpenRouter, si.",
   "flow.title":"Flux","flow.desc":"Le travail circule-t-il ou s'accumule-t-il ?",
   "flow.delivered":"Tâches livrées","flow.wip":"En cours","flow.busiest":"Rôle le plus chargé","flow.waiting":"En attente de vous","flow.none":"aucun",
   "ops.waiting":"Approbations d'actions","ops.waitingDesc":"Les actions d'argent et de production s'arrêtent ici jusqu'à votre décision. Rien ne part sans vous.",
@@ -1721,13 +1724,17 @@ function render(d) {
     <div style="padding:10px 0 4px"><div class="bar"><i style="width:100%; transform:scaleX(${pct / 100})"></i></div></div>
     <div class="kv"><span>${t("progress.lastRun")}</span><span class="v">${lastRun}</span></div>`;
 
+  const money = v => (Math.round((v || 0) * 1e6) / 1e6).toFixed(4);
   const spend = d.spend_by_agent;
   const max = Math.max(1, ...spend.map(r => r.t));
   $("#spend").innerHTML = spend.length ? spend.map(r => `
     <div class="spend-row"><span style="display:flex; align-items:center; gap:8px">${agentIcon(r.agent)}${esc(r.agent)}</span>
     <div class="bar"><i style="width:100%; transform:scaleX(${Math.max(0.02, r.t / max).toFixed(3)})"></i></div>
-    <span class="n">${fmt(r.t)} tk</span></div>`).join("")
+    <span class="n">${fmt(r.t)} tk${d.cost_reported ? ` · ${money(r.cost)}` : ""}</span></div>`).join("")
     : `<div class="empty">${t("spend.empty")}</div>`;
+  // Money is shown only where a provider actually reported one. Printing
+  // "0.00" for the thirteen providers that report nothing would read as free.
+  $("#spend-note").textContent = spend.length && !d.cost_reported ? t("spend.noCost") : "";
 
   $("#flow").innerHTML = `
     <div class="kv"><span>${t("flow.delivered")}</span><span class="v">${d.flow.throughput}</span></div>

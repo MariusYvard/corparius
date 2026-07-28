@@ -79,3 +79,11 @@ Plusieurs free tiers exploitent les prompts pour l'entraînement ou la journalis
 - github.com/mnfst/awesome-free-llm-apis
 - github.com/open-free-llm-api/awesome-freellm-apis
 - github.com/diegosouzapw/OmniRoute (gateway auto-hébergé, à brancher via la cible "custom")
+
+## Le coût réel
+
+OpenRouter renvoie le coût de chaque appel dans le bloc `usage` de la réponse, sur le même endpoint `/chat/completions` que corparius appelle déjà. Il est lu, accumulé dans le budget de session, enregistré par agent et affiché dans la console.
+
+Les treize autres fournisseurs compatibles OpenAI n'envoient rien. Leur coût vaut donc 0, et **0 veut dire « non rapporté », pas « gratuit »** : la console n'affiche un montant que si au moins un appel en a rapporté un, sinon elle le dit. Afficher « 0,00 » pour un fournisseur muet reviendrait à annoncer à un exploitant sur clé payante qu'il n'a rien dépensé.
+
+`CORP_SESSION_COST_BUDGET` plafonne la dépense dans la devise du fournisseur, et `cost_budget` fait la même chose par entreprise dans `company.yaml`. Le défaut est 0, c'est-à-dire désactivé : le budget de jetons reste le plafond qui s'applique partout, puisque tous les fournisseurs comptent des jetons.

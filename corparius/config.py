@@ -71,6 +71,12 @@ class Settings:
     session_token_budget: int = field(
         default_factory=lambda: cfg.get_int("CORP_SESSION_TOKEN_BUDGET", 100000)
     )
+    # A ceiling in the provider's own currency, applied only where a provider
+    # reports a cost (OpenRouter does; most do not). 0 disables it, which is the
+    # default: a second way for a run to stop has to be asked for.
+    session_cost_budget: float = field(
+        default_factory=lambda: cfg.get_float("CORP_SESSION_COST_BUDGET", 0.0)
+    )
     tokens_per_minute_limit: int = field(
         default_factory=lambda: cfg.get_int("CORP_TOKENS_PER_MINUTE_LIMIT", 10000)
     )

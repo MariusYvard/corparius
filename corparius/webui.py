@@ -225,6 +225,10 @@ def _overview(state: UiState, slug: str) -> dict:
         "permission_mode": engine.mode,
         "ask_above": engine.ask_above,
         "spend_by_agent": spend,
+        # Whether any provider reported a cost at all. Without it a total of
+        # 0.00 is indistinguishable from a free run, and the page would tell
+        # an operator on a paid key that they spent nothing.
+        "cost_reported": store.cost_reported(slug),
         "recent_actions": actions,
         "freezes": frozen,
         "session_budget": s.session_token_budget,

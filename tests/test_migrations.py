@@ -68,6 +68,11 @@ def test_a_populated_v1_store_gains_the_rules_table_without_losing_data(tmp_path
     assert store.recall("t")[0]["fact"] == "Coaches renew."
     ident = store.add_inbox("t", "design", "question", "Where should it be published?")
     assert store.resolve_inbox(ident, "netlify") is True
+    # v5 added the cost column; an existing usage row keeps 0, which the console
+    # reads as "not reported" rather than "free".
+    assert store.cost_reported("t") is False
+    store.record_usage("t", "ceo", 10, 5, 0.002)
+    assert store.cost_reported("t") is True
 
 
 def test_migration_is_idempotent(tmp_path):

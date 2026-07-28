@@ -47,6 +47,14 @@ Tout ce qui suit l'en-tête part dans l'invite système de l'agent. Écrivez ce 
 
 `CORP_SKILL_MAX_CHARS` plafonne ce qu'une invite transporte (4000 caractères par défaut). Au-delà, une compétence est tronquée et signalée comme tronquée plutôt qu'écartée en silence, donc ce sont les premiers paragraphes qui survivent: mettez la règle qui compte en premier.
 
+### Étiqueter les chiffres
+
+La seule règle qui mérite d'être écrite dans toute skill qui touche à des nombres: **dire d'où vient un chiffre, et ne jamais présenter une supposition comme un fait.** Mesuré (venu du magasin, de la boîte mail, d'un compte connecté), Fourni (écrit par l'exploitant dans `company.yaml` ou répondu dans l'inbox), Estimé (calculé — dites-le, et dites à partir de quoi). Pas d'étiquette possible? Dites que vous n'avez pas le chiffre.
+
+C'est la discipline que corparius s'applique déjà à lui-même: un déploiement qui n'a rien publié ne se journalise pas en succès, une journée arrêtée à midi ne se compte pas entière. Un agent qui annonce « la conversion est à 4 % » sans rien derrière coûte une décision à l'exploitant, ce qui est pire que de ne rien annoncer.
+
+Reprise de `aaron-he-zhu/aaron-marketing-skills`, dont les cent vingt skills portent cette règle. Les deux skills d'exemple `pricing-discipline` et `ads-restraint` l'appliquent.
+
 Préférez ce qui est vrai de *votre* marché: l'objection que vous recevez réellement et la réponse qui marche réellement, le prix sous lequel vous ne descendez jamais et pourquoi, les deux mots que votre fondateur refuse de voir dans un message, le segment qu'il faut laisser tranquille. Évitez de répéter ce que l'agent lit déjà dans `company.yaml` — son nom, son offre, son prix et ses canaux sont dans chaque invite.
 
 ## Une skill est une entrée de confiance

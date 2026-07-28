@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — the one habit worth borrowing from a skill library
+
+- **"Label every number."** Say whether a figure is Measured, Given or Estimated,
+  and never state one with no label. It is the single transferable idea from
+  `aaron-he-zhu/aaron-marketing-skills` (120 marketing skills, Apache-2.0), and it
+  is the discipline corparius already applies to itself: a deploy that published
+  nothing is not logged as a success, a day stopped at noon is not counted whole.
+  An agent reporting "conversion is 4%" with nothing behind it costs the operator
+  a decision. Written into `packaging/skill-template/SKILL.md`.
+- **Two more example skills**, `pricing-discipline` and `ads-restraint`, applying
+  that rule. They also demonstrate the shape by being the opposite of what made
+  that library undroppable here: `allowed-tools` named, well under the cap. A
+  test asserts every shipped skill and the template stay that way.
+- **What was left**: `when_to_use` separate from `description` (nothing would
+  read it — selection is by `allowed-tools`), and the "Handoff Summary" /
+  "Next Best Skill" sections, which are model-side routing.
+
 ## Unreleased — the skill loader stops failing silently
 
 - **Fixed: a skill with no `allowed-tools` applied to everything, and said

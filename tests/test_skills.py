@@ -189,3 +189,38 @@ def test_both_failures_at_once_are_both_reported(tmp_path):
         "unscoped",
         "truncated",
     }
+
+
+def test_every_shipped_example_skill_is_well_formed():
+    """The example company is what an operator copies. A skill that shipped
+    unscoped, oversized, or naming a tool nobody has would teach exactly the
+    mistakes the doctor now warns about."""
+    from corparius import paths
+    from corparius.skills import DEFAULT_MAX_CHARS, SkillLoader
+
+    base = paths.companies_dir() / "example" / "skills"
+    if not base.is_dir():  # a wheel install without the example seeded yet
+        return
+    loader = SkillLoader([(base, "example")])
+    assert len(loader.skills) >= 3
+    for skill in loader.skills:
+        assert skill.allowed_tools, f"{skill.name} declares no allowed-tools"
+        assert [t for t in skill.allowed_tools if t not in TOOLS] == [], skill.name
+        assert len(skill.instructions) <= DEFAULT_MAX_CHARS, f"{skill.name} is over the cap"
+    assert loader.warnings() == []
+    assert loader.always_on_chars() == 0
+
+
+def test_the_shipped_template_is_well_formed():
+    """It is copied verbatim as the starting point, so it has to pass the same
+    bar it teaches."""
+    from pathlib import Path
+
+    from corparius.skills import parse
+
+    path = Path("packaging/skill-template/SKILL.md")
+    if not path.is_file():
+        return
+    skill = parse(path)
+    assert skill is not None and skill.allowed_tools
+    assert not skill.unscoped

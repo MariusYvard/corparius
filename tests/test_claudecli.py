@@ -75,7 +75,7 @@ def test_one_press_setup_flips_everything_and_survives_restart(server, monkeypat
     assert cfg.get_bool("CORP_LLM_MOCK", "true") is False
     assert cfg.get_bool("CORP_CLOUD_ENABLED") is True
     assert cfg.get_bool("CORP_CLAUDE_CODE") is True
-    assert cfg.get("CORP_HARD_MODEL") == "claudecode:sonnet"
+    assert cfg.get("CORP_HARD_MODEL") == "claudecode:opus"
     assert claudecli.already_on() is True
     # Stored, not just in-process: a restart keeps it.
     cfg.invalidate()
@@ -93,12 +93,12 @@ def test_setup_leaves_the_simple_work_on_a_free_provider(server, monkeypatch):
     cfg.invalidate()
     status, d = _call(server, "POST", "/api/claude/setup", {})
     assert status == 200 and d["ok"]
-    assert cfg.get("CORP_HARD_MODEL") == "claudecode:sonnet"
+    assert cfg.get("CORP_HARD_MODEL") == "claudecode:opus"
     assert not cfg.get("CORP_NORMAL_MODEL").startswith("claudecode:")
     # And the subscription is the last remote step before local, so a free
     # provider going down escalates instead of dropping to a model that may not
     # be installed.
-    assert cfg.get("CORP_LLM_FALLBACK").endswith("claudecode:sonnet")
+    assert cfg.get("CORP_LLM_FALLBACK").endswith("claudecode:opus")
 
 
 def test_all_tiers_is_available_when_asked_for(server, monkeypatch):
@@ -111,7 +111,7 @@ def test_all_tiers_is_available_when_asked_for(server, monkeypatch):
     assert status == 200 and d["ok"]
     assert cfg.get("CORP_TRIVIAL_MODEL") == "claudecode:haiku"
     assert cfg.get("CORP_NORMAL_MODEL") == "claudecode:sonnet"
-    assert cfg.get("CORP_HARD_MODEL") == "claudecode:sonnet"
+    assert cfg.get("CORP_HARD_MODEL") == "claudecode:opus"
 
 
 def test_setup_refuses_when_the_cli_will_not_answer(server, monkeypatch):

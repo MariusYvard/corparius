@@ -18,17 +18,24 @@ import subprocess
 
 from . import cfg, i18n
 
-# CLI model aliases, so the tiers track the latest release instead of pinning a
-# dated id. Trivial work goes to the cheapest, everyday and hard work to Sonnet.
+# CLI model aliases, not dated ids: the CLI resolves `haiku`, `sonnet` and
+# `opus` to whatever the current release is, so the tiers track it without
+# anything here to update. A ladder, one model per tier.
 TIERS = {
     "CORP_TRIVIAL_MODEL": "claudecode:haiku",
     "CORP_NORMAL_MODEL": "claudecode:sonnet",
-    "CORP_HARD_MODEL": "claudecode:sonnet",
+    "CORP_HARD_MODEL": "claudecode:opus",
 }
 
-# What the top tier gets when free providers carry the rest. Strategy and the
-# coder are the two roles on HARD, and they are where the difference shows.
-HARD_TIER = "claudecode:sonnet"
+# What the top tier gets when free providers carry the rest.
+#
+# Opus rather than Sonnet, and the cadence is what makes that affordable. HARD
+# serves exactly two roles: strategy, every 24 hours, and the coder, on demand.
+# It is the least frequent tier in the roster, so the model that costs the most
+# per call is the one that gets called least — which is the whole point of
+# having tiers. Put Opus on `normal` and a subscription window would go on
+# drafting support replies.
+HARD_TIER = "claudecode:opus"
 
 # Flipped on by the one-press setup. Cloud is the master gate for every remote
 # provider, so it has to be on too; enabling Claude Code alone does nothing, and

@@ -34,6 +34,17 @@
   contribute a directory of them, and plugins do download. The SHA-256 allow-list
   proves what the code is, not what the prose asks for.
 
+## Unreleased — free models first, Opus for the hard work
+
+- **The hard tier gets Opus**, not Sonnet. What makes that affordable is the
+  cadence: HARD serves exactly two roles — strategy every 24 hours and the coder
+  on demand — so it is the least frequent tier in the roster. The model that
+  costs most per call is the one called least, which is what tiers are for. The
+  `--all-tiers` plan is now a full ladder: haiku, sonnet, opus.
+- The tiers name CLI aliases (`haiku`/`sonnet`/`opus`) rather than dated model
+  ids, so the CLI resolves them to the current release and nothing here rots —
+  the same rot the OpenRouter default just demonstrated.
+
 ## Unreleased — free models first, the subscription for the hard work
 
 - **`corparius claude` no longer spends a usage window on a social post.** It put

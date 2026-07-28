@@ -87,8 +87,8 @@ CORP_CLOUD_ENABLED=true                    # la porte maîtresse de tout distant
 CORP_CLAUDE_CODE=true                      # autoriser la cible claudecode:
 CORP_TRIVIAL_MODEL=local:gemma4:e4b        # Ollama si disponible
 CORP_NORMAL_MODEL=groq:llama-3.3-70b-versatile
-CORP_HARD_MODEL=claudecode:sonnet
-CORP_LLM_FALLBACK=openrouter:...,claudecode:sonnet
+CORP_HARD_MODEL=claudecode:opus
+CORP_LLM_FALLBACK=openrouter:...,claudecode:opus
 ```
 
 Il en faut quatre à la fois — mock, cloud, Claude Code, paliers — et c'est cette conjonction cachée qui rendait la chose difficile à activer à la main.
@@ -101,7 +101,11 @@ corparius claude --all-tiers
 
 et dans la console, le bouton « L'utiliser pour tous les paliers » à côté du principal.
 
-Les paliers visent des alias (`haiku`, `sonnet`) et non des identifiants datés, donc ils suivent la dernière version sans rien à remettre à jour.
+Les paliers visent des alias (`haiku`, `sonnet`, `opus`) et non des identifiants datés : c'est le CLI qui les résout vers la version courante, donc rien ici n'est à remettre à jour quand un modèle sort.
+
+**Opus sur le palier difficile.** C'est la cadence qui le rend soutenable. HARD ne sert que deux rôles — la stratégie, toutes les 24 heures, et le codeur, à la demande — c'est le palier le moins fréquent du roster. Le modèle qui coûte le plus par appel est donc celui qu'on appelle le moins, ce qui est exactement à quoi servent des paliers. Mettre Opus sur `normal` ferait partir une fenêtre d'usage dans la rédaction de réponses au support.
+
+En mode « tous les paliers » (`--all-tiers`), l'échelle est complète : haiku, sonnet, opus. Un abonnement s'y consomme nettement plus vite ; c'est le compromis assumé de ce mode.
 
 Rappel du découpage : TRIVIAL sert social, publicité, finance et concurrence ; NORMAL sert le PDG, la prospection, le support et le design ; HARD sert la stratégie et le codeur.
 

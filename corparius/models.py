@@ -39,6 +39,11 @@ class Usage:
     # means "not reported", never "free". Anything displaying it has to keep
     # those two apart, or a paid run reads as costless.
     cost: float = 0.0
+    # Local inference only: what Ollama timed for this call. Throughput is what
+    # decides whether this machine can serve a tier at all, and it arrives in
+    # every response — the same field-already-there miss as `cost`.
+    tokens_per_second: float = 0.0
+    load_seconds: float = 0.0
 
     @property
     def total(self) -> int:

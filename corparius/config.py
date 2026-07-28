@@ -47,6 +47,17 @@ class Settings:
     hard_model: str = field(
         default_factory=lambda: cfg.get("CORP_HARD_MODEL", "cloud:claude-3-5-sonnet-20241022")
     )
+    # Local inference is only worth routing work to when the machine can serve
+    # it. Below this measured throughput the trivial tier goes to a free
+    # provider instead; see corparius/hardware.py.
+    local_min_tokens_per_second: float = field(
+        default_factory=lambda: cfg.get_float("CORP_LOCAL_MIN_TOKENS_PER_SEC", 15.0)
+    )
+    # How long a measurement stays trustworthy. A machine's speed does not
+    # drift, but its free memory and its installed models do.
+    bench_max_age_days: int = field(
+        default_factory=lambda: cfg.get_int("CORP_BENCH_MAX_AGE_DAYS", 30)
+    )
     embed_model: str = field(
         default_factory=lambda: cfg.get("CORP_EMBED_MODEL", "nomic-embed-text")
     )

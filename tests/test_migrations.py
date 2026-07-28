@@ -73,6 +73,10 @@ def test_a_populated_v1_store_gains_the_rules_table_without_losing_data(tmp_path
     assert store.cost_reported("t") is False
     store.record_usage("t", "ceo", 10, 5, 0.002)
     assert store.cost_reported("t") is True
+    # v6 added the measured machine profile.
+    assert store.load_machine() is None
+    store.save_machine({"tokens_per_second": 8.6, "placement": "cpu", "model": "gemma:2b"})
+    assert store.load_machine()["placement"] == "cpu"
 
 
 def test_migration_is_idempotent(tmp_path):

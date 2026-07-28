@@ -164,3 +164,87 @@ def test_the_polled_providers_endpoint_makes_no_network_probe(server, monkeypatc
     assert d["claude_hard_tier"] == claudecli.HARD_TIER
     # Everything the card needs to say "mixed or every tier" is already here.
     assert isinstance(d["providers"], list) and "configured" in d["providers"][0]
+
+
+# --- the desktop-app trap --------------------------------------------------
+def test_the_missing_cli_message_names_the_command(monkeypatch):
+    """ "Install Claude Code" sent an operator to a product page. The command is
+    what they need; a link is a detour."""
+    monkeypatch.setattr(claudecli.shutil, "which", lambda name: None)
+    monkeypatch.setattr(claudecli, "desktop_installed", lambda: False)
+    out = claudecli.check()
+    assert out["installed"] is False and out["desktop"] is False
+    assert "npm install -g @anthropic-ai/claude-code" in out["detail"]
+    assert "claude login" in out["detail"]
+    assert "corparius claude --install" in out["detail"]
+
+
+def test_the_desktop_app_is_named_as_a_different_product(monkeypatch):
+    """The real report this came from: an operator with Claude Desktop read
+    "install Claude Code" as something they had already done, and reasonably
+    concluded corparius was broken. Desktop is the chat window; corparius drives
+    the CLI headlessly, which a GUI cannot answer."""
+    monkeypatch.setattr(claudecli.shutil, "which", lambda name: None)
+    monkeypatch.setattr(claudecli, "desktop_installed", lambda: True)
+    detail = claudecli.check()["detail"]
+    assert "Claude Desktop" in detail and "chat app" in detail
+    assert "same subscription" in detail.lower(), "nobody should think they must buy twice"
+    assert "npm install -g @anthropic-ai/claude-code" in detail
+
+
+def test_the_desktop_app_is_never_mistaken_for_the_cli(monkeypatch):
+    """Detection changes what is said, never what is run: resolve() is still the
+    only thing that decides whether the CLI can be called."""
+    monkeypatch.setattr(claudecli.shutil, "which", lambda name: None)
+    monkeypatch.setattr(claudecli, "desktop_installed", lambda: True)
+    assert claudecli.installed() is False
+    assert claudecli.check()["ok"] is False
+
+
+def test_desktop_detection_never_raises(monkeypatch):
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    assert claudecli.desktop_installed() in (True, False)
+
+
+def test_install_says_what_to_do_when_npm_is_absent(monkeypatch):
+    monkeypatch.setattr(claudecli.shutil, "which", lambda name: None)
+    out = claudecli.install()
+    assert out["ok"] is False and "Node.js" in out["detail"]
+
+
+def test_install_reports_the_npm_failure_rather_than_a_stack_trace(monkeypatch):
+    import subprocess
+
+    monkeypatch.setattr(claudecli.shutil, "which", lambda name: "/usr/bin/npm")
+    monkeypatch.setattr(
+        claudecli.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], 1, "", "EACCES: permission denied"),
+    )
+    out = claudecli.install()
+    assert out["ok"] is False and "EACCES" in out["detail"]
+
+
+def test_install_says_to_open_a_new_terminal_when_the_path_has_not_caught_up(monkeypatch):
+    """npm can succeed while `claude` is still not resolvable in this process."""
+    import subprocess
+
+    monkeypatch.setattr(claudecli.shutil, "which", lambda name: "/usr/bin/npm" if name else None)
+    monkeypatch.setattr(
+        claudecli.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a[0], 0, "", "")
+    )
+    monkeypatch.setattr(claudecli, "resolve", lambda: None)
+    out = claudecli.install()
+    assert out["ok"] is False and "new terminal" in out["detail"]
+
+
+def test_the_console_never_installs_on_a_poll(server, monkeypatch):
+    """Putting a global npm package on the operator's machine happens on a
+    button, never as a side effect of the card refreshing."""
+
+    def explode(*a, **k):
+        raise AssertionError("the polled endpoint installed something")
+
+    monkeypatch.setattr(claudecli, "install", explode)
+    status, d = _call(server, "GET", "/api/providers")
+    assert status == 200 and "claude_desktop" in d

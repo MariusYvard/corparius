@@ -222,22 +222,44 @@ def cmd_claude(args) -> None:
     who drives corparius from a terminal never sees it. Four settings have to
     agree — mock off, cloud on, Claude Code on, and the tiers pointed at
     `claudecode:` — and that hidden conjunction is most of why this was hard to
-    turn on. It is one command now, and the same plan the console applies.
+    turn on. It is one command now, and literally the same plan the console
+    applies — same connected providers, same measured local verdict.
     """
     from . import claudecli
 
+    if getattr(args, "install", False) and not claudecli.installed():
+        print(f"installing the Claude Code CLI: {claudecli.INSTALL_CMD}")
+        print("this takes a minute...")
+        done = claudecli.install()
+        print(done["detail"])
+        if not done["ok"]:
+            raise SystemExit(1)
     result = claudecli.check()
     print(result["detail"])
     if args.check:
         return
     if not result["ok"]:
-        print("nothing changed; fix the above, then run this again")
+        print("\nnothing changed; fix the above, then run this again")
         raise SystemExit(1)
-    plan = claudecli.plan()
+    # The same two inputs the console passes, or the two paths write different
+    # plans from the same decision. This called plan() with no arguments, which
+    # reads as "nothing free is connected" and puts every tier on the
+    # subscription — the expensive default plan()'s own docstring warns about,
+    # and it ignored --all-tiers into the bargain.
+    from .hardware import recommended_local
+    from .llm import connected_providers
+
     store = _store()
+    local_trivial, _why = recommended_local(store, Settings())
+    plan = claudecli.plan(connected_providers(), local_trivial, all_tiers=args.all_tiers)
     for key, value in plan.items():
         store.set_setting(key, value)
-    print("\nClaude Code is now serving every tier:")
+    every = all(v.startswith("claudecode:") for k, v in plan.items() if k.endswith("_MODEL"))
+    print(
+        "\nClaude Code is now serving every tier:"
+        if every
+        else "\nClaude Code now serves the hard tier; free providers keep the rest:"
+    )
     for key, value in plan.items():
         print(f"  {key}={value}")
     print("\nNo API key, no credits: calls go through your subscription login.")
@@ -432,9 +454,14 @@ def main(argv=None) -> None:
     sp.add_argument("--json", action="store_true", help="machine-readable output")
     sp.set_defaults(fn=cmd_bench)
 
-    sp = sub.add_parser("claude", help="use your Claude subscription for every tier")
+    sp = sub.add_parser("claude", help="use your Claude subscription, no API key")
     sp.add_argument(
         "--check", action="store_true", help="test the CLI login without changing any setting"
+    )
+    sp.add_argument(
+        "--install",
+        action="store_true",
+        help="install the Claude Code CLI first if it is missing (npm, global)",
     )
     sp.add_argument(
         "--all-tiers",

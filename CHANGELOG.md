@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — a model name that rots is now caught, not shipped
+
+- **Fixed: the shipped OpenRouter default no longer existed.**
+  `deepseek/deepseek-r1-0528:free` has been dropped from OpenRouter's catalogue
+  while its paid variant stayed, so `recommended_routing()` — the one-click
+  "coherent routing" feature — was writing a `CORP_HARD_MODEL` that 404s. It now
+  points at `openai/gpt-oss-20b:free`, which is listed today.
+- **And the durable half.** Every `default_model` in `OPENAI_COMPAT_PROVIDERS` is
+  a string frozen on the day it was written, and all fourteen rot the same way.
+  A new doctor check compares each configured tier against what the provider
+  actually advertises at `/models` and warns when the model is gone. Silent in
+  mock mode, without a key, or when the provider does not answer: an unreachable
+  catalogue is not evidence that a model has been removed.
+
 ## Unreleased — spend measured in money, not only in tokens
 
 - **Fixed: the cost was arriving and being thrown away.** OpenRouter reports what

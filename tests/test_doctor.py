@@ -87,3 +87,83 @@ def test_routing_check_is_green_when_every_tier_resolves(tmp_path, monkeypatch):
     )
     routing = {r["name"]: r for r in run_checks(s)}["routing"]
     assert routing["level"] == "ok" and "fix" not in routing
+
+
+def _doctor_settings(**over):
+    from corparius.config import Settings
+
+    s = Settings()
+    s.llm_mock = False
+    for k, v in over.items():
+        setattr(s, k, v)
+    return s
+
+
+def test_a_model_the_provider_no_longer_lists_is_flagged(monkeypatch):
+    """The failure this exists for: the shipped OpenRouter default,
+    deepseek/deepseek-r1-0528:free, stopped being listed while its paid variant
+    stayed, so recommended routing wrote a hard tier that 404s. Any hardcoded
+    model name rots the same way."""
+    from corparius import doctor
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setattr(doctor, "list_models", lambda name, **kw: ["openai/gpt-oss-20b:free"])
+    level, _, message, *fix = doctor._check_model_catalog(
+        _doctor_settings(hard_model="openrouter:deepseek/deepseek-r1-0528:free")
+    )
+    assert level == "warn"
+    assert "deepseek" in message and "hard" in message
+
+
+def test_a_live_model_passes(monkeypatch):
+    from corparius import doctor
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setattr(doctor, "list_models", lambda name, **kw: ["openai/gpt-oss-20b:free"])
+    level, _, _ = doctor._check_model_catalog(
+        _doctor_settings(hard_model="openrouter:openai/gpt-oss-20b:free")
+    )
+    assert level == "ok"
+
+
+def test_an_unreachable_catalogue_is_not_evidence(monkeypatch):
+    """Silence must not be read as "the model is gone". A provider that does not
+    answer, or answers with nothing, proves only that it did not answer."""
+    import requests
+
+    from corparius import doctor
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    for stub in (
+        lambda name, **kw: (_ for _ in ()).throw(requests.RequestException("down")),
+        lambda name, **kw: [],
+    ):
+        monkeypatch.setattr(doctor, "list_models", stub)
+        level, _, _ = doctor._check_model_catalog(
+            _doctor_settings(hard_model="openrouter:anything-at-all")
+        )
+        assert level == "ok"
+
+
+def test_mock_mode_checks_nothing(monkeypatch):
+    from corparius import doctor
+
+    monkeypatch.setattr(
+        doctor, "list_models", lambda *a, **k: (_ for _ in ()).throw(AssertionError("called"))
+    )
+    s = _doctor_settings()
+    s.llm_mock = True
+    assert doctor._check_model_catalog(s)[0] == "ok"
+
+
+def test_a_tier_with_no_key_is_not_checked(monkeypatch):
+    """Without a key there is no catalogue to compare against, and the routing
+    check already reports the missing key."""
+    from corparius import doctor
+
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(
+        doctor, "list_models", lambda *a, **k: (_ for _ in ()).throw(AssertionError("called"))
+    )
+    level, _, _ = doctor._check_model_catalog(_doctor_settings(hard_model="openrouter:whatever"))
+    assert level == "ok"

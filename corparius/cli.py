@@ -1,4 +1,4 @@
-"""Command line: init / run / status / approvals / approve / reject / rules / memory / inbox / claude."""
+"""Command line: init / run / status / approvals / approve / reject / rules / memory / inbox / claude / bench."""
 
 from __future__ import annotations
 
@@ -166,6 +166,52 @@ def cmd_board(args) -> None:
         items = [t for t in rows if t["status"] == col]
         head = ", ".join(f"#{t['id']}:{t['target']}" for t in items[:6])
         print(f"{col:12} ({len(items)}): {head}")
+
+
+def cmd_bench(args) -> None:
+    """Measure what this machine can actually run locally.
+
+    One real generation, timed by Ollama. It costs a few seconds — the load
+    alone was 6.9s on the machine this was written for — which is why it lives
+    behind a command instead of running wherever the answer is wanted.
+    """
+    from . import hardware
+
+    settings = Settings()
+    store = _store()
+    models = hardware.installed_models()
+    if not models:
+        print("No local model installed, or Ollama is not reachable. Nothing to measure.")
+        raise SystemExit(1)
+    # Measure the model that would actually be used, not the smallest one:
+    # a benchmark of something the company will never run answers nothing.
+    from .llm import _split
+
+    want = hardware.best_local_model(models, prefer=_split(settings.trivial_model)[1])
+    spec = hardware.specs()
+    result = hardware.measure(want or models[0]["name"])
+    if not result["ok"]:
+        print(result["detail"])
+        raise SystemExit(1)
+    hardware.profile_save(store, spec, result)
+    choice, why = hardware.recommended_local(store, settings, models)
+    if args.json:
+        # The verdict, not only the numbers: a script that has to re-derive
+        # "is this fast enough" from tokens_per_second will derive it
+        # differently from the router, and then the two disagree.
+        print(json.dumps({**spec, **result, "local_model": choice, "reason": why}, indent=2))
+        return
+    ram = f"{spec['ram_total'] / 1e9:.1f} GB" if spec["ram_total"] else "unknown"
+    free = f"{spec['ram_available'] / 1e9:.1f} GB free" if spec["ram_available"] else "free unknown"
+    print(f"machine: {spec['cores'] or '?'} cores, {ram} ({free})")
+    print(
+        f"{result['model']}: {result['tokens_per_second']} tokens/s "
+        f"on the {result['placement'].upper()}, {result['load_seconds']}s to load"
+    )
+    choice, why = hardware.recommended_local(store, settings)
+    print(f"\nlocal inference: {why}")
+    if not choice:
+        print("The trivial tier will go to a free provider instead.")
 
 
 def cmd_claude(args) -> None:
@@ -381,6 +427,10 @@ def main(argv=None) -> None:
         help="also stop asking about this tool for this company",
     )
     sp.set_defaults(fn=lambda a: cmd_decide(a, "approved"))
+
+    sp = sub.add_parser("bench", help="measure what this machine can run locally")
+    sp.add_argument("--json", action="store_true", help="machine-readable output")
+    sp.set_defaults(fn=cmd_bench)
 
     sp = sub.add_parser("claude", help="use your Claude subscription for every tier")
     sp.add_argument(

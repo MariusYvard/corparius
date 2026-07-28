@@ -232,3 +232,64 @@ def test_no_subcommand_is_an_error_not_a_traceback(capsys):
     with pytest.raises(SystemExit) as exc:
         cli.main([])
     assert exc.value.code != 0
+
+
+def test_bench_measures_prints_and_caches(tmp_path, monkeypatch, capsys):
+    from corparius import hardware
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(
+        hardware, "installed_models", lambda **k: [{"name": "gemma:2b", "size": 1_680_000_000}]
+    )
+    monkeypatch.setattr(
+        hardware,
+        "measure",
+        lambda model, **k: {
+            "ok": True,
+            "model": model,
+            "tokens_per_second": 8.6,
+            "load_seconds": 6.9,
+            "placement": "cpu",
+            "detail": "",
+        },
+    )
+    cli.main(["bench"])
+    out = capsys.readouterr().out
+    assert "8.6 tokens/s" in out and "CPU" in out
+    assert "512-token draft" in out, "the arithmetic, not just the threshold"
+    assert Store(str(tmp_path)).load_machine()["tokens_per_second"] == 8.6
+
+
+def test_bench_json_carries_the_verdict_not_only_the_numbers(tmp_path, monkeypatch, capsys):
+    """A script that re-derives "fast enough" from tokens_per_second will derive
+    it differently from the router, and then the two disagree."""
+    from corparius import hardware
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(hardware, "installed_models", lambda **k: [{"name": "m", "size": 1}])
+    monkeypatch.setattr(
+        hardware,
+        "measure",
+        lambda model, **k: {
+            "ok": True,
+            "model": model,
+            "tokens_per_second": 40.0,
+            "load_seconds": 1.0,
+            "placement": "gpu",
+            "detail": "",
+        },
+    )
+    cli.main(["bench", "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert data["tokens_per_second"] == 40.0 and data["local_model"] == "m"
+    assert "40.0 tokens/s" in data["reason"]
+
+
+def test_bench_exits_nonzero_when_there_is_nothing_to_measure(monkeypatch, capsys):
+    from corparius import hardware
+
+    monkeypatch.setattr(hardware, "installed_models", lambda **k: [])
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["bench"])
+    assert exc.value.code == 1
+    assert "Nothing to measure" in capsys.readouterr().out

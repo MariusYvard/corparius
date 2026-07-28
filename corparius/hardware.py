@@ -329,7 +329,21 @@ def verdict(prof: dict | None, model_size: int = 0, min_tokens_per_second: float
     }
 
 
-def recommended_local(store, settings) -> tuple[str, str]:
+def profile_save(store, spec: dict, result: dict) -> None:
+    """Persist a measurement. One place builds the row, so the CLI and the
+    console cannot store two different shapes of the same fact."""
+    store.save_machine(
+        {
+            **spec,
+            "tokens_per_second": result.get("tokens_per_second"),
+            "load_seconds": result.get("load_seconds"),
+            "placement": result.get("placement", ""),
+            "model": result.get("model", ""),
+        }
+    )
+
+
+def recommended_local(store, settings, models=None) -> tuple[str, str]:
     """The local model this machine should serve the trivial tier with, and why.
 
     Returns ("", reason) when it should serve none — the caller then routes that
@@ -338,13 +352,14 @@ def recommended_local(store, settings) -> tuple[str, str]:
 
     Reads the cached measurement and never takes one: this is called from a
     button press and from the doctor, and a probe on either would be the
-    polled-endpoint mistake again.
+    polled-endpoint mistake again. `models` lets a caller that has just listed
+    them hand the list over rather than pay a second round-trip for it.
     """
     from .llm import _split
 
     prefer = _split(getattr(settings, "trivial_model", ""))[1]
     prof = profile(store, max_age_days=getattr(settings, "bench_max_age_days", 30))
-    models = installed_models()
+    models = installed_models() if models is None else models
     if not models:
         return "", "no local model installed, or Ollama is not reachable"
     choice = best_local_model(models, prefer=prefer)

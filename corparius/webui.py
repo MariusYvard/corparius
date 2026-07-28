@@ -46,7 +46,7 @@ from .agents import ROSTER
 from .config import Settings
 from .doctor import run_checks
 from .integrations import smtp_check, stripe_check, stripe_payments
-from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, connected_providers
+from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, _split, connected_providers
 from .models import AgentRole
 from .orchestrator import Runtime
 from .store import Store
@@ -936,7 +936,30 @@ def _route_ollama_get(ctx):
     pulls = ctx.state.pulls
     if pulls.get("running"):
         result = {**result, "detail": pulls.get("progress") or "pulling...", "pulling": True}
-    return 200, {"ok": True, "result": result}
+    # The cached measurement only — this endpoint is polled while a pull runs.
+    settings = _fresh_settings()
+    prof = hardware.profile(ctx.store(), max_age_days=settings.bench_max_age_days)
+    choice, why = hardware.recommended_local(ctx.store(), settings, result.get("installed"))
+    return 200, {
+        "ok": True,
+        "result": {**result, "machine": prof, "local_model": choice, "local_reason": why},
+    }
+
+
+def _route_ollama_bench(ctx):
+    """Measure, on a button press. The one place in the console that may: it
+    costs a real generation — 93 seconds to load the configured model on the
+    machine this was written for — so it can never sit on a polled path."""
+    settings = _fresh_settings()
+    models = hardware.installed_models()
+    if not models:
+        return 200, {"ok": True, "result": {"ok": False, "detail": "no local model to measure"}}
+    want = hardware.best_local_model(models, prefer=_split(settings.trivial_model)[1])
+    spec = hardware.specs()
+    measured = hardware.measure(want or models[0]["name"])
+    if measured["ok"]:
+        hardware.profile_save(ctx.store(), spec, measured)
+    return 200, {"ok": True, "result": measured}
 
 
 def _route_site_get(ctx):
@@ -1315,6 +1338,7 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/claude/setup", _route_claude_setup),
     Route("POST", "/api/test/provider", _route_test_provider),
     Route("POST", "/api/ollama/pull", _route_ollama_pull),
+    Route("POST", "/api/ollama/bench", _route_ollama_bench),
     Route("POST", "/api/company", _route_company_post),
     Route("POST", "/api/company/delete", _route_company_delete),
     Route("POST", "/api/chat", _route_chat_post),

@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — « joignable » n'est pas « capable »
+
+- **Fixed: le routage recommandé donnait le palier trivial au local dès qu'un
+  port répondait.** Un seul bit — Ollama a-t-il répondu — décidait du palier
+  **le plus fréquent** du roster (social toutes les 2 h, publicité et finance
+  toutes les 6 h), et pouvait donc y installer un modèle de 9,6 Go sur un
+  processeur qui met une minute à écrire un brouillon. Mesuré sur la machine de
+  développement de ce dépôt : `gemma4:e4b`, le modèle que ce routage assignait,
+  tourne à **2,2 jetons/s en CPU pur** — 232,7 s pour un brouillon de 512
+  jetons. Ce n'était pas « lent », c'était cassé, et rien ne le disait.
+- **`corparius bench`** mesure ce que la machine sait faire, l'affiche et le met
+  en cache : débit, temps de chargement, placement GPU/CPU. Même bouton sur la
+  carte Ollama de la console. Ce qui est mesuré arrivait déjà dans les réponses
+  d'Ollama — `eval_count`, `eval_duration`, `load_duration` — et `OllamaProvider`
+  le jetait, exactement comme le coût OpenRouter deux jours plus tôt.
+- **Le verdict décide, et montre son calcul.** Un seuil est un jugement, donc il
+  est réglable (`CORP_LOCAL_MIN_TOKENS_PER_SEC`, 15 par défaut) et le message
+  donne l'arithmétique plutôt que de la cacher : on peut être en désaccord avec
+  un seuil, pas avec « à 2,2 jetons/s, 512 jetons prennent 232,7 s ».
+- **L'encombrement se juge sur la RAM totale, pas sur la RAM libre.** Mesurée à
+  une heure d'écart sur la même machine, la RAM libre est passée de 4,0 à 1,9 Go
+  parce qu'une suite de tests tournait. Un verdict qui change avec la météo n'en
+  est pas un. La pression du moment est dite, elle ne refuse jamais.
+- **Quand la machine ne peut rien servir**, le trivial part chez un fournisseur
+  gratuit, puis Haiku, puis Sonnet. Haiku avant Sonnet parce que la chaîne de
+  repli est partagée par tous les paliers : ce qu'on y met est ce vers quoi un
+  *post social* raté escalade. Opus n'y figure pas — il reste le modèle du
+  palier difficile, atteint parce qu'on le demande, jamais parce qu'autre chose
+  est tombé. Le local **reste** le dernier maillon dans tous les cas.
+- **Aucune mesure ne se déclenche toute seule.** Elle coûte une génération
+  réelle — 93 s de chargement sur la machine ci-dessus. `doctor`,
+  `/api/providers` et `/api/ollama` lisent le cache et ne mesurent jamais ; des
+  tests le tiennent, parce que la même erreur sur un endpoint sondé avait déjà
+  fait tomber la CI cette semaine. `/api/ollama` réutilise en plus la liste que
+  `/api/tags` vient de lui donner au lieu de la redemander.
+- **Ce qui n'est pas détectable renvoie `None`, jamais 0** : « je ne sais pas »
+  et « il n'y en a pas » sont opposés, et un consommateur qui les confond refuse
+  l'inférence locale sur une machine qui pourrait la faire tourner.
+- Nouvelle table `machine` (schéma v6), une ligne, avec sa migration.
+
 ## Unreleased — the one habit worth borrowing from a skill library
 
 - **"Label every number."** Say whether a figure is Measured, Given or Estimated,

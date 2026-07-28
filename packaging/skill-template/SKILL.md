@@ -51,3 +51,35 @@ Prefer things that are true about *your* market:
 
 Avoid restating what the agent already knows from `company.yaml` — its name, its
 offer, its price and its channels are already in every prompt.
+
+## Label every number
+
+The one rule worth writing into every skill that touches figures: **say where a
+number came from, and never present a guess as a fact.**
+
+```
+Label each figure Measured, Given or Estimated.
+- Measured: it came from the store, the mailbox or a connected account.
+- Given: the operator wrote it in company.yaml or answered it in the inbox.
+- Estimated: you worked it out. Say so, and say from what.
+Never state a number with no label. If you do not have one, say you do not.
+```
+
+This is the same discipline corparius applies to itself: a deploy that published
+nothing is not logged as a success, a day stopped at noon is not counted whole.
+An agent that reports "conversion is 4%" with nothing behind it costs the
+operator a decision, which is worse than reporting nothing.
+
+Borrowed from `aaron-he-zhu/aaron-marketing-skills`, whose skills carry this rule
+throughout; see `docs/reverse-engineering/openworker.md` for what else that
+library does and does not transfer here.
+
+## Two things not to copy from other skill libraries
+
+Public `SKILL.md` collections are written for hosts with slash commands and
+skill-to-skill handoffs. Two of their habits break here:
+
+- **A "next skill" or "handoff" section does nothing.** Corparius decides which
+  skill applies from `allowed-tools`, in code. A skill cannot call another one.
+- **Omitting `allowed-tools`** makes the skill apply to every tool of every
+  agent. `corparius doctor` warns about it, but write the list.

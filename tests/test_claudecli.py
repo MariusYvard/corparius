@@ -95,10 +95,11 @@ def test_setup_leaves_the_simple_work_on_a_free_provider(server, monkeypatch):
     assert status == 200 and d["ok"]
     assert cfg.get("CORP_HARD_MODEL") == "claudecode:opus"
     assert not cfg.get("CORP_NORMAL_MODEL").startswith("claudecode:")
-    # And the subscription is the last remote step before local, so a free
-    # provider going down escalates instead of dropping to a model that may not
-    # be installed.
-    assert cfg.get("CORP_LLM_FALLBACK").endswith("claudecode:opus")
+    # And the chain ends on Sonnet, not Opus: the chain is shared by every
+    # tier, so the most expensive model must not be what a failed social post
+    # escalates to.
+    assert cfg.get("CORP_LLM_FALLBACK").endswith("claudecode:sonnet")
+    assert "claudecode:opus" not in cfg.get("CORP_LLM_FALLBACK")
 
 
 def test_all_tiers_is_available_when_asked_for(server, monkeypatch):

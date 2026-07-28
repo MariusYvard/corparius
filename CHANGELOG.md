@@ -41,6 +41,11 @@
   on demand — so it is the least frequent tier in the roster. The model that
   costs most per call is the one called least, which is what tiers are for. The
   `--all-tiers` plan is now a full ladder: haiku, sonnet, opus.
+- **Sonnet closes the fallback chain**, so everyday work degrades to it once the
+  free providers are exhausted. Not Opus: the chain is walked by *every* tier, so
+  whatever sits at its end is what a failed social post escalates to as readily
+  as a failed strategy review. `recommended_routing()` takes `hard` and
+  `fallback_tail` as separate arguments for exactly that reason.
 - The tiers name CLI aliases (`haiku`/`sonnet`/`opus`) rather than dated model
   ids, so the CLI resolves them to the current release and nothing here rots —
   the same rot the OpenRouter default just demonstrated.

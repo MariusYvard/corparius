@@ -117,7 +117,11 @@ OPENAI_COMPAT_PROVIDERS: dict[str, dict] = {
         "base": "https://openrouter.ai/api/v1",
         "key_env": "OPENROUTER_API_KEY",
         "signup": "https://openrouter.ai/keys",
-        "default_model": "deepseek/deepseek-r1-0528:free",
+        # Checked live: the previous default, deepseek/deepseek-r1-0528:free,
+        # stopped being listed while its paid variant stayed. Any hardcoded
+        # name rots the same way, which is why doctor now compares each tier
+        # against the provider's own catalogue.
+        "default_model": "openai/gpt-oss-20b:free",
     },
     "mistral": {
         "base": "https://api.mistral.ai/v1",

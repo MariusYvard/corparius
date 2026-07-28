@@ -14,7 +14,7 @@ import requests
 
 from . import cfg, paths, permissions
 from .config import Settings
-from .llm import OPENAI_COMPAT_PROVIDERS, _split
+from .llm import OPENAI_COMPAT_PROVIDERS, _split, list_models
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -471,6 +471,56 @@ def _check_tier_coherence(s: Settings) -> tuple:
     return ("ok", "routing", "every tier resolves to a configured provider")
 
 
+def _check_model_catalog(s: Settings) -> tuple:
+    """A configured model that the provider no longer lists.
+
+    Every `default_model` in OPENAI_COMPAT_PROVIDERS is a string frozen on the
+    day it was written, and model names rot: the shipped OpenRouter default,
+    `deepseek/deepseek-r1-0528:free`, stopped existing while the paid variant
+    stayed, so recommended routing was writing a hard tier that 404s. Checking
+    the tier against what the provider actually advertises catches that class of
+    failure for all fourteen providers, now and in six months, instead of
+    catching one instance of it by hand.
+
+    Silent when it cannot know: mock mode, no key, or a provider that does not
+    answer. An unreachable catalogue is not evidence that a model is gone.
+    """
+    if s.llm_mock:
+        return ("ok", "models", "mock mode: no catalogue to check against")
+    missing, checked = [], 0
+    for tier, model in (
+        ("trivial", s.trivial_model),
+        ("normal", s.normal_model),
+        ("hard", s.hard_model),
+    ):
+        target, name = _split(model)
+        if target not in OPENAI_COMPAT_PROVIDERS or not name:
+            continue
+        spec = OPENAI_COMPAT_PROVIDERS[target]
+        if not cfg.get(spec["key_env"], "").strip() and not spec.get("key_optional"):
+            continue
+        try:
+            catalog = list_models(target)
+        except (requests.RequestException, ValueError):
+            continue
+        if not catalog:
+            continue
+        checked += 1
+        if name not in catalog:
+            missing.append(f"{tier} ({target}:{name})")
+    if missing:
+        return (
+            "warn",
+            "models",
+            f"{', '.join(missing)} is not in the provider's catalogue any more. Pick a live "
+            "model in Providers, or use recommended routing.",
+            "recommend_routing",
+        )
+    if not checked:
+        return ("ok", "models", "no reachable provider catalogue to check against")
+    return ("ok", "models", f"{checked} tier(s) name a model the provider still lists")
+
+
 def run_checks(settings: Settings | None = None) -> list[dict]:
     s = settings or Settings()
     checks = [
@@ -486,6 +536,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_ollama(s),
         _check_providers(s),
         _check_tier_coherence(s),
+        _check_model_catalog(s),
         _check_network(s),
         _check_claude_cli(s),
         _check_deploy_order(),

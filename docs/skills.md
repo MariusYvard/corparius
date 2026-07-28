@@ -67,14 +67,62 @@ Conséquence pratique: lisez une skill tierce avant de la déposer, exactement c
 
 ## Reprendre une bibliothèque écrite pour un autre hôte
 
-Le format `SKILL.md` est partagé avec plusieurs bibliothèques publiques (Claude Code et hôtes compatibles). Elles ne se déposent pas telles quelles ici, pour deux raisons mécaniques que le doctor signale désormais:
+Le format `SKILL.md` est partagé avec plusieurs bibliothèques publiques (Claude Code et hôtes compatibles). Elles ne se déposent pas telles quelles ici. Mesuré sur `anthropics/knowledge-work-plugins` — 17 plugins, 141 fichiers, Apache-2.0 avec un `LICENSE.txt` par compétence :
 
-- leurs en-têtes ne déclarent souvent **pas** de `allowed-tools`, et sans cette clé une skill s'applique à *tous* les outils de *tous* les agents. Une bibliothèque de cent fichiers devient cent documents dans chaque invite;
-- leurs corps dépassent largement `CORP_SKILL_MAX_CHARS` (4000 par défaut), donc ils sont tronqués dans chaque invite qui les utilise.
+- **aucun `allowed-tools`.** Leur en-tête est `name`, `description`, `argument-hint`, parce que leur hôte laisse le modèle réclamer une compétence d'après sa description. Ici, sans cette clé, une compétence s'applique à *tous* les outils de *tous* les agents ;
+- **la taille.** Médiane ≈ 12 Ko, maximum 26 Ko (`sales/create-an-asset`), contre 4000 caractères pour le bloc **entier**. Les compétences livrées avec corparius pèsent environ 1 Ko ;
+- **ce sont des commandes slash pour un humain présent.** `marketing/campaign-plan` dit « Gather the following from the user. If not provided, ask before proceeding ». Les agents tournent sans surveillance sur une cadence.
 
-À quoi s'ajoute une raison de fond: ces corps supposent un hôte à commandes slash, enchaînement de skills et hooks de cycle de vie, c'est-à-dire du routage par le modèle, que `docs/architecture.md` écarte.
+Ce qui se reprend, c'est la **prose**, et seulement celle qui vise un métier que les outils d'ici exercent déjà.
 
-Ce qui se reprend, c'est la discipline, pas les fichiers: nommer les outils concernés, rester court, et étiqueter les chiffres (voir plus bas).
+```bash
+corparius skills import <chemin-vers-un-SKILL.md> --dry-run
+corparius skills import <chemin> --tools draft_support_reply
+```
+
+La commande ne convertit pas. Elle copie le corps **verbatim**, remplit l'en-tête dont corparius a besoin, et annonce l'arithmétique avant d'écrire quoi que ce soit :
+
+```text
+draft-response: 14182 chars (cap 4000)
+  71.8% of it will be cut at run time. Trim it after importing.
+  allowed-tools: draft_support_reply
+```
+
+Deux refus comptent plus que la fonctionnalité elle-même. Un nom que la table de correspondance ne connaît pas ne reçoit **aucun** outil, et la commande le dit fort : une portée inventée pointe de la prose vers le mauvais agent, en silence. Et un import n'écrase jamais une compétence existante — ce qui rend un import utilisable, c'est l'élagage fait après.
+
+L'attribution (`source`, `licence`) va dans l'en-tête, où `skills.parse` l'ignore : elle ne coûte donc rien à l'exécution, et n'entre pas dans le calcul de la troncature.
+
+## Six compétences pour démarrer
+
+```bash
+corparius skills install starter              # dans skills/
+corparius skills install starter --company t  # dans companies/t/skills/
+corparius skills list                         # ce qui est chargé, et ce qui pèse sur chaque invite
+```
+
+`support-triage`, `social-cadence`, `books-hygiene`, `competitor-watch`, `design-handoff`, `ship-gate` — une par métier que le roster exerce déjà et qui n'avait aucune prose, en commençant par les deux paliers les plus fréquents (social toutes les 2 h, support toutes les 3 h). Adaptées de `anthropics/knowledge-work-plugins`, créditées dans l'en-tête, ramenées de 12–26 Ko à environ 1 Ko.
+
+Ce sont un point de départ, pas une politique : réécrivez-les pour dire ce que *votre* entreprise fait. Réinstaller ne touche pas à celles que vous avez modifiées.
+
+## Un pack de compétences n'a pas besoin de code
+
+Un plugin devait nommer un `entrypoint` module:fonction. Un pack de prose n'a pas de module à importer, donc la seule façon de distribuer des compétences était d'écrire du Python qui tourne pour n'exécuter rien.
+
+Un manifeste qui déclare `kinds: ["skills"]` peut désormais omettre `entrypoint` :
+
+```json
+{
+  "name": "vertical-knowledge",
+  "version": "1.0.0",
+  "api_version": 1,
+  "kinds": ["skills"],
+  "description": "comment ce secteur formule une objection"
+}
+```
+
+Le dossier `skills/` du plugin est alors enregistré tel quel. Rien n'est importé, `sys.path` n'est pas touché. Toute autre forme doit encore nommer du code : un plugin de code sans point d'entrée reste une erreur.
+
+**Les gardes ne bougent pas.** La liste blanche vérifiée s'applique toujours à un pack de prose, et pour une raison qui n'est pas l'exécution : ce corps entre dans l'invite système de chaque agent qu'il cadre, avec la même autorité que le prompt de rôle. `packaging/skill-pack-starter/` est l'exemple de référence de cette forme.
 
 ## Vérifier
 

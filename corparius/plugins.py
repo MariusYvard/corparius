@@ -132,15 +132,28 @@ class PluginManifest:
         name = str(d.get("name", "")).strip()
         if not name:
             raise ValueError("plugin manifest missing 'name'")
+        kinds = list(d.get("kinds", []))
         entrypoint = str(d.get("entrypoint", "")).strip()
-        if ":" not in entrypoint:
-            raise ValueError(f"plugin '{name}': entrypoint must be 'module:function'")
+        # A pack of prose has no module to import. Requiring one meant the only
+        # way to distribute skills was to write Python that runs in order to
+        # execute nothing — which is how a folder of markdown ends up carrying a
+        # `register(api)` hook. `kinds: ["skills"]` says the plugin is that
+        # folder; anything else still has to name code, because a code plugin
+        # with no entry point is a mistake, not a shape.
+        if entrypoint:
+            if ":" not in entrypoint:
+                raise ValueError(f"plugin '{name}': entrypoint must be 'module:function'")
+        elif kinds != ["skills"]:
+            raise ValueError(
+                f"plugin '{name}': entrypoint must be 'module:function' "
+                '(or declare kinds: ["skills"] for a prose-only pack)'
+            )
         return cls(
             name=name,
             version=str(d.get("version", "0.0.0")),
             api_version=int(d.get("api_version", 1)),
             entrypoint=entrypoint,
-            kinds=list(d.get("kinds", [])),
+            kinds=kinds,
             needs_network=bool(d.get("needs_network", False)),
             description=str(d.get("description", "")),
             source="dropin",
@@ -213,6 +226,14 @@ def discover() -> list[PluginManifest]:
 
 
 def _call_register(manifest: PluginManifest) -> None:
+    if not manifest.entrypoint:
+        # A prose-only pack. Nothing is imported and sys.path is not touched;
+        # the whole plugin is its skills/ folder, and the loader's own
+        # `allowed-tools` matching decides where any of it applies.
+        if manifest.path is None:
+            raise ValueError(f"plugin '{manifest.name}': a skills pack needs a directory")
+        PluginAPI().register_skill_dir(manifest.path / "skills")
+        return
     module_name, _, func_name = manifest.entrypoint.partition(":")
     if manifest.source == "dropin" and manifest.path is not None:
         # Import the plugin's module from its own directory without polluting

@@ -139,6 +139,30 @@ def cmd_deploy(args) -> None:
     print("deployed: " + deploy.deploy_site(out_dir))
 
 
+def cmd_repo(args) -> None:
+    from . import companyrepo
+
+    company = _load_company(args.company)
+    slug = company["slug"]
+    if args.status:
+        print(f"== repo: {slug}")
+        print(f"  local repository  {'yes' if companyrepo.is_repo(slug) else 'no'}")
+        print(f"  remote            {companyrepo.remote_url(slug) or '(none)'}")
+        print(f"  uncommitted       {'yes' if companyrepo.dirty(slug) else 'no'}")
+        print(f"  autocommit        {'on' if companyrepo.autocommit_enabled() else 'off'}")
+        available = [n for n, p in companyrepo.REGISTRY.items() if p.available()]
+        print(f"  providers ready   {', '.join(available) or '(none)'}")
+        return
+    if args.sync:
+        res = companyrepo.sync(slug, args.message or f"{slug}: manual sync")
+        if not res["committed"]:
+            print(res["error"] or "nothing to commit")
+            return
+        print("committed; " + ("pushed" if res["pushed"] else "not pushed: " + res["error"]))
+        return
+    print("repo: " + companyrepo.provision(slug, company.get("one_liner", "")))
+
+
 def cmd_flow(args) -> None:
     cfg = _load_company(args.company)
     store = _store()
@@ -411,6 +435,13 @@ def main(argv=None) -> None:
     sp.set_defaults(fn=cmd_site)
 
     with_company(sub.add_parser("deploy")).set_defaults(fn=cmd_deploy)
+
+    sp = with_company(sub.add_parser("repo"))
+    sp.add_argument("--status", action="store_true", help="show the repository state, change nothing")
+    sp.add_argument("--sync", action="store_true", help="commit and push the company folder now")
+    sp.add_argument("--message", default="", help="commit message for --sync")
+    sp.set_defaults(fn=cmd_repo)
+
     with_company(sub.add_parser("tasks")).set_defaults(fn=cmd_tasks)
 
     sp = with_company(sub.add_parser("task"))

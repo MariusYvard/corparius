@@ -219,6 +219,33 @@ class Runtime:
         # A rule granted "for this run" that outlived the run would be a standing
         # authorisation the operator never gave.
         self.store.clear_run_rules(slug)
+        repo = self._autocommit(slug, ran)
         # `ran`, not ticks * days: a run stopped mid-day did not play a full day,
         # and reporting that it did would be the console lying about its own work.
-        return {"ticks_run": ran, "next_tick": start, "days": days, "stopped": stopped, **last}
+        return {
+            "ticks_run": ran,
+            "next_tick": start,
+            "days": days,
+            "stopped": stopped,
+            "repo": repo,
+            **last,
+        }
+
+    def _autocommit(self, slug: str, ran: int) -> dict:
+        """Commit the company folder once the run is over, when the operator
+        asked for it. Once per run and not once per tick: an agent changes
+        company.yaml or skills/ rarely, and a commit per tick would bury the
+        real edits under dozens of empty ones.
+
+        Never raises. A repository that cannot be reached is not a reason to
+        lose a run that already happened.
+        """
+        from . import companyrepo
+
+        if not companyrepo.autocommit_enabled():
+            return {"enabled": False}
+        try:
+            res = companyrepo.sync(slug, f"{slug}: automatic commit after {ran} tick(s)")
+        except Exception as exc:  # defensive: sync already swallows its own
+            return {"enabled": True, "ok": False, "error": str(exc)}
+        return {"enabled": True, **res}

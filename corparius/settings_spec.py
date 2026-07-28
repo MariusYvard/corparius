@@ -84,6 +84,17 @@ GROUPS: list[dict] = [
         "help_en": "Where lead research and buying signals come from.",
         "help_fr": "D'où viennent la recherche de prospects et les signaux d'achat.",
     },
+    {
+        "name": "versioning",
+        "label_en": "Company versioning",
+        "label_fr": "Versionnement des companies",
+        "help_en": "Each company folder as its own private repository. Hosted repositories "
+        "are always created private: a company folder can hold prospect names and "
+        "correspondence.",
+        "help_fr": "Chaque dossier de company comme depot prive independant. Les depots "
+        "heberges sont toujours crees en prive : un dossier de company peut contenir des "
+        "noms de prospects et de la correspondance.",
+    },
 ]
 
 # Known mail providers, both directions at once: the operator picks their
@@ -961,8 +972,73 @@ SPEC: list[FieldSpec] = [
         label_fr="Fichier de signaux local",
     ),
     _f("CORP_SIGNALS_URL", "leads", label_en="Signals URL", label_fr="URL des signaux"),
+    # --- versioning ---------------------------------------------------------
+    _f(
+        "CORP_REPO_PROVIDERS",
+        "versioning",
+        default="github,gitlab,ssh,local",
+        label_en="Provider order",
+        label_fr="Ordre des providers",
+        help_en="Tried in order, first that works wins. 'local' is a bare repo on this "
+        "disk and is always available, so keep it last or nothing hosted is ever reached.",
+        help_fr="Essayes dans l'ordre, le premier qui marche gagne. 'local' est un depot "
+        "bare sur ce disque, toujours disponible : gardez-le en dernier, sinon rien "
+        "d'heberge n'est jamais atteint.",
+    ),
+    _f(
+        "CORP_REPO_AUTOCOMMIT",
+        "versioning",
+        type="bool",
+        default="false",
+        label_en="Commit after each run",
+        label_fr="Commit apres chaque run",
+        help_en="Commit and push the company folder when a run ends, if anything changed. "
+        "Once per run, not per tick. A failed push never costs the run.",
+        help_fr="Commite et pousse le dossier de la company a la fin d'un run, si quelque "
+        "chose a change. Une fois par run, pas par tick. Un push en echec ne coute jamais "
+        "le run.",
+    ),
+    _f(
+        "CORP_GITHUB_TOKEN",
+        "versioning",
+        secret=True,
+        label_en="GitHub token",
+        label_fr="Jeton GitHub",
+        help_en="Scope 'repo'. Leave empty to use the gh CLI if you are already signed in.",
+        help_fr="Portee 'repo'. Laissez vide pour utiliser le CLI gh si vous y etes deja "
+        "connecte.",
+    ),
+    _f(
+        "GITLAB_TOKEN",
+        "versioning",
+        secret=True,
+        advanced=True,
+        label_en="GitLab token",
+        label_fr="Jeton GitLab",
+        help_en="Scope 'api'. Set CORP_GITLAB_URL too for a self-hosted instance.",
+        help_fr="Portee 'api'. Renseignez aussi CORP_GITLAB_URL pour une instance auto-hebergee.",
+    ),
+    _f(
+        "CORP_REPO_SSH_TARGET",
+        "versioning",
+        advanced=True,
+        label_en="SSH target",
+        label_fr="Cible SSH",
+        help_en="A directory on a box you own, e.g. git@homelab:/srv/git. The slug is appended.",
+        help_fr="Un dossier sur une machine a vous, ex. git@homelab:/srv/git. Le slug est ajoute.",
+    ),
+    _f(
+        "CORP_REPO_LOCAL_DIR",
+        "versioning",
+        advanced=True,
+        label_en="Local bare repositories",
+        label_fr="Depots bare locaux",
+        help_en="Where the 'local' provider keeps its bare repos. Defaults to repos/ under "
+        "the writable home. Same disk, so it is a fallback, not a backup.",
+        help_fr="Ou le provider 'local' garde ses depots bare. Par defaut repos/ sous le "
+        "home inscriptible. Meme disque : c'est un repli, pas une sauvegarde.",
+    ),
 ]
-
 BY_KEY: dict[str, FieldSpec] = {f.key: f for f in SPEC}
 
 # Provider keys and routing tiers keep their own panel (Providers), so they are

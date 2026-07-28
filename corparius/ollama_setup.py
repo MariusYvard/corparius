@@ -36,7 +36,8 @@ def status(timeout: int = 4, lang="en") -> dict:
     try:
         r = requests.get(f"{_base()}/api/tags", timeout=timeout)
         r.raise_for_status()
-        have = {m.get("name", "").split(":latest")[0] for m in r.json().get("models", [])}
+        listed = r.json().get("models", [])
+        have = {m.get("name", "").split(":latest")[0] for m in listed}
     except requests.RequestException:
         return {
             "ok": False,
@@ -45,6 +46,7 @@ def status(timeout: int = 4, lang="en") -> dict:
             "wanted": want,
             "present": [],
             "missing": want,
+            "installed": [],
             "detail": p(
                 f"Ollama is not reachable at {_base()}. Install it from "
                 "ollama.com, or point CORP_OLLAMA_URL at your server.",
@@ -75,6 +77,10 @@ def status(timeout: int = 4, lang="en") -> dict:
         "wanted": want,
         "present": present,
         "missing": missing,
+        # Name and size of everything installed. /api/tags already sent the
+        # sizes and this used to drop them, so anyone who wanted to know whether
+        # a model fits in memory had to call the same endpoint a second time.
+        "installed": [{"name": m.get("name", ""), "size": m.get("size") or 0} for m in listed],
         "detail": detail,
     }
 

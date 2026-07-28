@@ -887,6 +887,10 @@ en: {
   "prov.localServer":"Local server preset…","prov.serverFilled":"Endpoint filled. Save it, then point a tier at custom:<model>.",
   "oll.title":"Local models (Ollama)","oll.desc":"Free, offline, on your machine. corparius sees what is installed and pulls what your tiers need.",
   "oll.off":"not running","oll.partial":"models missing","oll.ready":"ready",
+  "oll.measured":"{c} cores, measured at {s} tokens/s on the {p}.","oll.stale":"That measurement is old — measure again.",
+  "oll.unmeasured":"Local speed not measured yet. Reachable is not capable: measure before giving a tier to local inference.",
+  "oll.serves":"Local can serve the trivial tier —","oll.fallbackOnly":"Local stays fallback only —",
+  "oll.bench":"Measure this machine","oll.benching":"Measuring — this runs one real generation and can take a minute.",
   "oll.missing":"Missing for your tiers:","oll.pull":"Pull the missing models","oll.pulling":"Pulling…",
   "oll.starting":"Starting the pull…","oll.done":"Models pulled.","oll.allSet":"Every model your tiers need is installed.",
   "oll.install":"Not detected. Install it from",
@@ -1059,6 +1063,10 @@ fr: {
   "prov.localServer":"Préréglage serveur local…","prov.serverFilled":"Endpoint rempli. Enregistrez, puis pointez un tier sur custom:<modèle>.",
   "oll.title":"Modèles locaux (Ollama)","oll.desc":"Gratuit, hors ligne, sur votre machine. corparius voit ce qui est installé et tire ce que vos tiers exigent.",
   "oll.off":"non lancé","oll.partial":"modèles manquants","oll.ready":"prêt",
+  "oll.measured":"{c} cœurs, mesuré à {s} jetons/s sur le {p}.","oll.stale":"Cette mesure est ancienne — refaites-la.",
+  "oll.unmeasured":"Vitesse locale pas encore mesurée. Joignable n'est pas capable : mesurez avant de confier un palier à l'inférence locale.",
+  "oll.serves":"Le local peut servir le palier trivial —","oll.fallbackOnly":"Le local reste un simple repli —",
+  "oll.bench":"Mesurer cette machine","oll.benching":"Mesure en cours — une vraie génération, cela peut prendre une minute.",
   "oll.missing":"Manquants pour vos tiers :","oll.pull":"Tirer les modèles manquants","oll.pulling":"Téléchargement…",
   "oll.starting":"Démarrage du téléchargement…","oll.done":"Modèles tirés.","oll.allSet":"Tous les modèles dont vos tiers ont besoin sont installés.",
   "oll.install":"Non détecté. Installez-le depuis",
@@ -2059,6 +2067,17 @@ document.addEventListener("click", async e => {
       await api("/api/providers", {values: {ANTHROPIC_API_KEY: v}});
       $("#anthropic-key").value = "";
       toast(t("toast.keySaved")); await loadProviders();
+    } else if (b.id === "ollama-bench") {
+      const out = $("#ollama-out");
+      b.disabled = true; out.textContent = t("oll.benching");
+      try {
+        const { result } = await api("/api/ollama/bench", {});
+        out.textContent = result.ok
+          ? `${result.model}: ${result.tokens_per_second} tok/s, ${result.load_seconds}s to load`
+          : result.detail;
+        await loadOllama();
+      } catch (e) { out.textContent = e.message; }
+      b.disabled = false;
     } else if (b.id === "claude-test") {
       const out = $("#claude-out");
       b.disabled = true; out.textContent = t("cc.testing"); out.style.color = "var(--muted)";
@@ -2165,10 +2184,21 @@ function renderOllama(s) {
     : (s.reachable ? `<p class="note" style="margin-top:10px">${esc(t("oll.allSet"))}</p>` : "");
   const install = s.reachable ? "" :
     `<p class="note" style="margin-top:10px">${esc(t("oll.install"))} <a href="https://ollama.com" target="_blank" rel="noopener">ollama.com</a></p>`;
+  const m = s.machine;
+  const speed = m
+    ? `<p class="note" style="margin-top:10px">${t("oll.measured")
+        .replace("{c}", m.cores ?? "?")
+        .replace("{s}", m.tokens_per_second ?? "?")
+        .replace("{p}", (m.placement || "?").toUpperCase())}${m.stale ? " " + t("oll.stale") : ""}</p>`
+    : `<p class="note" style="margin-top:10px">${t("oll.unmeasured")}</p>`;
+  const verdict = s.local_reason
+    ? `<p class="note">${s.local_model ? t("oll.serves") : t("oll.fallbackOnly")} ${esc(s.local_reason)}</p>`
+    : "";
   $("#ollama-body").innerHTML = `
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px">${badge}
       <span class="note" style="font-size:12.5px">${esc(s.detail)}</span></div>
-    ${install}${missing}
+    ${install}${missing}${s.reachable ? speed + verdict : ""}
+    ${s.reachable ? `<button id="ollama-bench" style="margin-top:8px">${t("oll.bench")}</button>` : ""}
     <div id="ollama-out" class="note" style="font-size:12px; margin-top:8px; white-space:pre-line">${esc(pulling ? (state.ollamaProgress || "") : "")}</div>`;
 }
 

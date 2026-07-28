@@ -134,7 +134,7 @@ docker run -d -p 127.0.0.1:8600:8600 -v corparius_data:/app/data ghcr.io/mariusy
 The console walks you through creating your first company; `python -m corparius.cli
 doctor` diagnoses the installation and says what to fix. The CLI covers
 everything the console does: `run`, `status`, `tasks`, `board`, `flow`,
-`approvals`, `site`, `deploy`, `backup`. Compose profiles: `--profile loop`
+`approvals`, `site`, `deploy`, `backup`, `bench`. Compose profiles: `--profile loop`
 adds the background company loop, `--profile extras` adds Postgres and n8n.
 
 ## Operator console

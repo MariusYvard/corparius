@@ -164,3 +164,106 @@ def test_ollama_status_localized(server, monkeypatch):
     )
     status, d = _call(server, "GET", "/api/ollama?lang=fr")
     assert "injoignable" in d["result"]["detail"]
+
+
+# --- the measured machine on the ollama card -------------------------------
+def test_the_ollama_card_carries_the_cached_profile_and_lists_once(server, monkeypatch, tmp_path):
+    """The card is polled while a pull runs. It already asks /api/tags for the
+    installed models; asking again to learn their sizes would double the timeout
+    exposure on exactly the endpoint that gets hammered."""
+    from corparius import hardware
+    from corparius.store import Store
+
+    calls = []
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"models": [{"name": "gemma:2b", "size": 1_680_000_000}]}
+
+    def counted(url, *a, **k):
+        calls.append(url)
+        return Resp()
+
+    monkeypatch.setattr(ollama_setup, "wanted_models", lambda s=None: ["gemma:2b"])
+    monkeypatch.setattr(ollama_setup.requests, "get", counted)
+    Store(str(tmp_path)).save_machine(
+        {"cores": 8, "ram_total": 17_000_000_000, "tokens_per_second": 2.2, "placement": "cpu"}
+    )
+    status, d = _call(server, "GET", "/api/ollama")
+    assert status == 200
+    assert d["result"]["machine"]["tokens_per_second"] == 2.2
+    assert d["result"]["local_model"] == "" and "2.2 tokens/s" in d["result"]["local_reason"]
+    assert len([c for c in calls if "/api/tags" in c]) == 1, calls
+    assert hardware  # imported for the reader: this is its cache being read
+
+
+def test_the_ollama_card_never_measures(server, monkeypatch):
+    """A measurement is a real generation — 93 seconds to load the configured
+    model on the machine this was written for. It happens on a button, never on
+    a poll."""
+    from corparius import hardware
+
+    def explode(*a, **k):
+        raise AssertionError("the polled card measured")
+
+    monkeypatch.setattr(hardware, "measure", explode)
+    monkeypatch.setattr(ollama_setup, "wanted_models", lambda s=None: ["gemma:2b"])
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"models": [{"name": "gemma:2b", "size": 1_680_000_000}]}
+
+    monkeypatch.setattr(ollama_setup.requests, "get", lambda *a, **k: Resp())
+    status, d = _call(server, "GET", "/api/ollama")
+    assert status == 200
+
+
+def test_the_bench_button_measures_and_caches(server, monkeypatch, tmp_path):
+    from corparius import hardware
+    from corparius.store import Store
+
+    monkeypatch.setattr(
+        hardware, "installed_models", lambda **k: [{"name": "gemma:2b", "size": 1_680_000_000}]
+    )
+    monkeypatch.setattr(
+        hardware,
+        "measure",
+        lambda model, **k: {
+            "ok": True,
+            "model": model,
+            "tokens_per_second": 8.6,
+            "load_seconds": 6.9,
+            "placement": "cpu",
+        },
+    )
+    status, d = _call(server, "POST", "/api/ollama/bench", {})
+    assert status == 200 and d["result"]["ok"] and d["result"]["tokens_per_second"] == 8.6
+    assert Store(str(tmp_path)).load_machine()["tokens_per_second"] == 8.6
+
+
+def test_the_bench_button_says_so_when_there_is_nothing_to_measure(server, monkeypatch):
+    from corparius import hardware
+
+    monkeypatch.setattr(hardware, "installed_models", lambda **k: [])
+    status, d = _call(server, "POST", "/api/ollama/bench", {})
+    assert status == 200 and d["result"]["ok"] is False
+
+
+def test_a_failed_measurement_does_not_overwrite_the_cache(server, monkeypatch, tmp_path):
+    """A refused connection is not a machine that got slower."""
+    from corparius import hardware
+    from corparius.store import Store
+
+    Store(str(tmp_path)).save_machine({"tokens_per_second": 8.6, "placement": "cpu", "model": "m"})
+    monkeypatch.setattr(hardware, "installed_models", lambda **k: [{"name": "m", "size": 1}])
+    monkeypatch.setattr(
+        hardware, "measure", lambda model, **k: {"ok": False, "detail": "did not answer"}
+    )
+    _call(server, "POST", "/api/ollama/bench", {})
+    assert Store(str(tmp_path)).load_machine()["tokens_per_second"] == 8.6

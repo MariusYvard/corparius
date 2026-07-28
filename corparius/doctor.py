@@ -343,6 +343,49 @@ def _check_memory(s: Settings) -> tuple:
     )
 
 
+def _check_machine(s: Settings) -> tuple:
+    """What this machine measured, and what it implies.
+
+    Reads the cache and never measures. A measurement costs a real generation —
+    93 seconds to load the configured model on the box this was written for —
+    and the doctor is run on every launcher start and served over HTTP. Probing
+    here would be the polled-endpoint mistake with a much bigger timer.
+    """
+    from . import hardware
+
+    spec = hardware.specs()
+    cores = spec["cores"] or "?"
+    ram = f"{spec['ram_total'] / 1e9:.1f} GB" if spec["ram_total"] else "unknown RAM"
+    try:
+        from .store import Store
+
+        store = Store(s.data_path)
+    except Exception:
+        return ("ok", "machine", f"{cores} cores, {ram}; no store yet to read a measurement from")
+    prof = hardware.profile(store, max_age_days=s.bench_max_age_days)
+    if not prof:
+        return (
+            "ok",
+            "machine",
+            f"{cores} cores, {ram}. Local speed not measured yet; run `corparius bench` to "
+            "find out whether this machine should serve a tier.",
+        )
+    speed, placement = prof.get("tokens_per_second") or 0, prof.get("placement") or "?"
+    age = f", measured {prof['age_days']:.0f} day(s) ago" if prof["age_days"] >= 1 else ""
+    head = f"{cores} cores, {ram}; {speed} tokens/s on the {placement.upper()}{age}"
+    if prof["stale"]:
+        return (
+            "warn",
+            "machine",
+            f"{head}. That measurement is older than {s.bench_max_age_days} days — memory and "
+            "installed models move even when speed does not. Re-run `corparius bench`.",
+        )
+    choice, why = hardware.recommended_local(store, s)
+    if choice:
+        return ("ok", "machine", f"{head}. Local can serve the trivial tier ({why}).")
+    return ("ok", "machine", f"{head}. Local is fallback only: {why}.")
+
+
 def _check_ollama(s: Settings) -> tuple:
     tiers = [s.trivial_model, s.normal_model, s.hard_model]
     needs_local = s.llm_mock is False and (
@@ -364,6 +407,25 @@ def _check_ollama(s: Settings) -> tuple:
                 "ollama",
                 f"reachable, but missing models: {', '.join(sorted(missing))}. Run: {pulls}",
             )
+        from . import hardware
+
+        # A model bigger than the machine will never load, however reachable
+        # Ollama is. Answered from specs alone — no measurement needed.
+        for tier in tiers:
+            target, name = _split(tier)
+            if target != "local" or not name:
+                continue
+            size = next(
+                (m["size"] for m in hardware.installed_models() if m["name"].startswith(name)), 0
+            )
+            if size and hardware.fits(size) is False:
+                total = (hardware.specs()["ram_total"] or 0) / 1e9
+                return (
+                    "warn",
+                    "ollama",
+                    f"reachable, but {name} needs {size / 1e9:.1f} GB and this machine has "
+                    f"{total:.1f} GB of memory in total. Pick a smaller model.",
+                )
         return ("ok", "ollama", f"reachable at {s.ollama_url}, {len(have)} models")
     except requests.RequestException:
         level = "warn" if s.llm_mock else ("fail" if needs_local else "warn")
@@ -570,6 +632,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_store(s),
         _check_secrets_at_rest(s),
         _check_companies(),
+        _check_machine(s),
         _check_ollama(s),
         _check_providers(s),
         _check_tier_coherence(s),

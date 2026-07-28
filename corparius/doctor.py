@@ -490,16 +490,37 @@ def _check_claude_cli(s: Settings) -> tuple:
                 "off, but the `claude` CLI is installed here. `corparius claude` points every "
                 "tier at your subscription — no API key, no credits.",
             )
+        from . import claudecli
+
+        if claudecli.desktop_installed():
+            # Having Claude Desktop reads as "already installed" to anyone who
+            # has not been told they are two products. Naming it here is the
+            # difference between a one-command fix and concluding corparius is
+            # broken.
+            return (
+                "ok",
+                "claude cli",
+                "off. Claude Desktop is installed but that is the chat app; the Claude Code "
+                "CLI is a separate install on the same subscription. "
+                "`corparius claude --install` does it and turns this on.",
+            )
         return ("ok", "claude cli", "disabled (CORP_CLAUDE_CODE=false)")
     if shutil.which("claude"):
         # Whether it is logged in needs a real call, which the doctor will not
         # spend a subscription message on; the console's Test button does that.
         return ("ok", "claude cli", "found on PATH. Test the login from the console (Providers).")
+    from . import claudecli
+
+    desktop = (
+        " Claude Desktop is installed, but that is the chat app, not this CLI."
+        if claudecli.desktop_installed()
+        else ""
+    )
     return (
         "fail",
         "claude cli",
-        "CORP_CLAUDE_CODE=true but the `claude` CLI is not on PATH. Install Claude Code, "
-        "run `claude login`, or turn it off from the console (Providers).",
+        f"CORP_CLAUDE_CODE=true but the `claude` CLI is not on PATH.{desktop} Run "
+        "`corparius claude --install`, or turn it off from the console (Providers).",
     )
 
 

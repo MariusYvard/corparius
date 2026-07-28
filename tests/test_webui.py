@@ -312,3 +312,41 @@ def test_unexpected_error_is_humanized_not_a_traceback(server, monkeypatch):
     # Localized when the request says so.
     status, data = _call(server, "GET", "/api/overview?company=example&lang=fr")
     assert "journal du serveur" in data["error"]
+
+
+# --- the console's two translation tables ----------------------------------
+def _i18n_tables() -> tuple[set, set]:
+    import re
+    from pathlib import Path
+
+    page = Path("corparius/webui.html").read_text(encoding="utf-8")
+    block = page[page.index("const I18N = {") : page.index("const urlq =")]
+    english, french = block[block.index("en:") : block.index("fr:")], block[block.index("fr:") :]
+    key = r"\"([a-zA-Z]+\.[A-Za-z]+)\":"
+    return set(re.findall(key, english)), set(re.findall(key, french))
+
+
+def test_the_two_translation_tables_carry_the_same_keys():
+    """`t()` falls back to English for a key French is missing, so a gap shows
+    up as one English sentence in an otherwise French console — visible to the
+    operator and to nobody running the tests."""
+    english, french = _i18n_tables()
+    assert english - french == set(), "missing from FR"
+    assert french - english == set(), "missing from EN"
+    assert len(english) > 300
+
+
+def test_no_key_survives_the_thing_that_used_it():
+    """prov.activate and toast.activated outlived their button by five days: the
+    strings landed, the renderer never did. Four dead lines in both languages,
+    and nothing said so.
+
+    Only these two are pinned, not every key: several are reached through an
+    expression (`t(ready ? "cc.reapply" : "cc.use")`), so a general sweep would
+    call live keys dead.
+    """
+    from pathlib import Path
+
+    page = Path("corparius/webui.html").read_text(encoding="utf-8")
+    for gone in ("prov.activate", "toast.activated"):
+        assert gone not in page, f"{gone} is back without a renderer"

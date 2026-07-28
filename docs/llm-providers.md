@@ -79,7 +79,9 @@ Elle applique exactement le même plan que le bouton « Utiliser votre abonnemen
 
 Un abonnement Claude se mesure en fenêtres d'usage, pas en jetons. Le dépenser sur `draft_social_post` — palier TRIVIAL, toutes les deux heures — est l'erreur coûteuse. Donc quand un fournisseur gratuit est connecté, il garde les paliers trivial et normal, et l'abonnement ne prend que HARD, c'est-à-dire la stratégie et le codeur : les deux rôles où la différence vaut une fenêtre.
 
-L'abonnement devient aussi le dernier maillon distant de `CORP_LLM_FALLBACK`, avant le repli local. Un gratuit qui tombe escalade donc vers l'abonnement au lieu de retomber sur un modèle local qui n'est peut-être pas installé.
+L'abonnement ferme aussi la chaîne `CORP_LLM_FALLBACK`, avant le repli local : un gratuit qui tombe escalade vers l'abonnement au lieu de retomber sur un modèle local qui n'est peut-être pas installé.
+
+**C'est Sonnet en bout de chaîne, pas Opus.** La chaîne est partagée par tous les paliers : ce qui se trouve à son extrémité est aussi ce vers quoi un *post social* raté escalade, pas seulement une revue de stratégie. Y mettre Opus transformerait une panne de fournisseur en l'heure la plus chère que l'entreprise ait jamais tournée. Sonnet est ce vers quoi le travail courant doit se dégrader ; Opus reste le modèle du palier difficile, atteint parce qu'on le demande et non parce qu'autre chose est tombé.
 
 ```bash
 CORP_LLM_MOCK=false                        # sortir du mode hors ligne
@@ -88,7 +90,7 @@ CORP_CLAUDE_CODE=true                      # autoriser la cible claudecode:
 CORP_TRIVIAL_MODEL=local:gemma4:e4b        # Ollama si disponible
 CORP_NORMAL_MODEL=groq:llama-3.3-70b-versatile
 CORP_HARD_MODEL=claudecode:opus
-CORP_LLM_FALLBACK=openrouter:...,claudecode:opus
+CORP_LLM_FALLBACK=openrouter:...,claudecode:sonnet
 ```
 
 Il en faut quatre à la fois — mock, cloud, Claude Code, paliers — et c'est cette conjonction cachée qui rendait la chose difficile à activer à la main.

@@ -221,7 +221,7 @@ def connected_providers() -> list[str]:
 
 
 def recommended_routing(
-    configured: list[str], ollama_ready: bool, hard: str = ""
+    configured: list[str], ollama_ready: bool, hard: str = "", fallback_tail: str = ""
 ) -> dict[str, str] | None:
     """A coherent tier configuration from the free providers actually connected,
     so no tier resolves to something the operator has not set up.
@@ -235,11 +235,17 @@ def recommended_routing(
     fallback chain lists the remaining providers (the router always ends on local
     after it).
 
-    `hard` overrides the top tier and is appended to the fallback chain as its
-    last remote step. That is what lets a metered account — a Claude
-    subscription, in practice — take the strategy and coder work while the free
-    providers carry everything else, and still catch a free-provider outage
-    before the chain drops to a local model that may not be installed.
+    `hard` overrides the top tier — that is what lets a metered account (a Claude
+    subscription, in practice) take the strategy and coder work while the free
+    providers carry the rest.
+
+    `fallback_tail` is the last remote step of the chain, tried once every free
+    provider has failed and before the router drops to local. It is deliberately
+    separate from `hard`: the chain is shared by *every* tier, so putting the
+    top-tier model there would let a failed social post escalate to the most
+    expensive model in the roster. The tail is the mid-tier model instead —
+    what normal work should degrade to when there is no free provider left to
+    serve it.
     """
     picks = [
         p
@@ -255,8 +261,8 @@ def recommended_routing(
     normal_p = picks[0]
     hard_p = "openrouter" if "openrouter" in picks else normal_p
     chain = [model(p) for p in picks if p != normal_p]
-    if hard:
-        chain.append(hard)
+    if fallback_tail:
+        chain.append(fallback_tail)
     return {
         "CORP_TRIVIAL_MODEL": "local:gemma4:e4b" if ollama_ready else model(normal_p),
         "CORP_NORMAL_MODEL": model(normal_p),

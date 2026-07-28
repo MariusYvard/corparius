@@ -37,6 +37,17 @@ TIERS = {
 # drafting support replies.
 HARD_TIER = "claudecode:opus"
 
+# The last remote step of the fallback chain: where the everyday work goes once
+# every free provider has failed, before the router drops to local.
+#
+# Sonnet, not Opus, and not because Sonnet is the mid tier by coincidence. The
+# chain is shared by every tier, so whatever sits at its end is what a failed
+# *social post* escalates to as readily as a failed strategy review. Opus there
+# would turn a provider outage into the most expensive hour the company has
+# ever run. Sonnet is what normal work should degrade to; Opus stays the hard
+# tier's own model and is reached by being asked for, not by falling over.
+NORMAL_FALLBACK = "claudecode:sonnet"
+
 # Flipped on by the one-press setup. Cloud is the master gate for every remote
 # provider, so it has to be on too; enabling Claude Code alone does nothing, and
 # that hidden AND is most of why this was hard to turn on.
@@ -165,7 +176,9 @@ def plan(configured=None, ollama_ready: bool = False, all_tiers: bool = False) -
 
     if all_tiers:
         return {**TOGGLES, **TIERS}
-    routing = recommended_routing(list(configured or []), ollama_ready, hard=HARD_TIER)
+    routing = recommended_routing(
+        list(configured or []), ollama_ready, hard=HARD_TIER, fallback_tail=NORMAL_FALLBACK
+    )
     if routing is None:
         return {**TOGGLES, **TIERS}
     return {**TOGGLES, **routing}

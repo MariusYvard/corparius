@@ -216,14 +216,25 @@ def test_a_hard_override_keeps_the_free_providers_underneath():
     assert routing["CORP_HARD_MODEL"] == "claudecode:opus"
 
 
-def test_the_override_becomes_the_last_remote_step_of_the_chain():
+def test_the_tail_is_the_last_remote_step_of_the_chain():
     """A free provider going down should escalate to the metered account, not
     drop straight to a local model that may not be installed."""
-    chain = recommended_routing(["groq", "openrouter"], True, hard="claudecode:opus")[
-        "CORP_LLM_FALLBACK"
-    ].split(",")
-    assert chain[-1] == "claudecode:opus"
+    chain = recommended_routing(
+        ["groq", "openrouter"], True, hard="claudecode:opus", fallback_tail="claudecode:sonnet"
+    )["CORP_LLM_FALLBACK"].split(",")
+    assert chain[-1] == "claudecode:sonnet"
     assert any(step.startswith("openrouter:") for step in chain)
+
+
+def test_the_hard_tier_never_lands_in_the_shared_chain():
+    """The chain is walked by every tier, so the top-tier model must not sit in
+    it — a failed social post would escalate to the most expensive model in the
+    roster. `hard` and `fallback_tail` are separate for exactly this reason."""
+    routing = recommended_routing(
+        ["groq", "openrouter"], True, hard="claudecode:opus", fallback_tail="claudecode:sonnet"
+    )
+    assert routing["CORP_HARD_MODEL"] == "claudecode:opus"
+    assert "claudecode:opus" not in routing["CORP_LLM_FALLBACK"]
 
 
 def test_without_an_override_nothing_changes():
@@ -236,6 +247,8 @@ def test_the_claude_plan_prefers_free_and_falls_back_to_every_tier():
     mixed = claudecli.plan(["groq"], True)
     assert mixed["CORP_HARD_MODEL"] == "claudecode:opus"
     assert not mixed["CORP_NORMAL_MODEL"].startswith("claudecode:")
+    # Sonnet backs the everyday work up once the free providers are exhausted.
+    assert mixed["CORP_LLM_FALLBACK"].endswith("claudecode:sonnet")
     # Nothing free connected: there is nothing to prefer, so it serves everything.
     alone = claudecli.plan([], False)
     assert alone["CORP_NORMAL_MODEL"] == "claudecode:sonnet"

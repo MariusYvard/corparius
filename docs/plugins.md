@@ -117,3 +117,7 @@ Pour qu'un plugin devienne installable en un clic par tout le monde :
 `python -m corparius.cli doctor` (et l'onglet Réglages de la console) affiche l'état des
 plugins : activés ou non, combien d'installés et chargés, et un avertissement si
 un plugin **non vérifié** est chargé.
+
+## Un plugin qui contribue des skills
+
+`register_skill_dir` ajoute un répertoire de `SKILL.md` au chemin de recherche. Le contenu de ces fichiers entre dans l'invite système des agents concernés, avec la même autorité que leur prompt de rôle. La vérification par empreinte SHA-256 garantit que le *code* téléchargé est bien celui du registre; elle ne dit rien de ce que la prose livrée demande à l'agent de faire. Lisez les skills d'un plugin comme vous liriez son code. Voir `docs/skills.md`.

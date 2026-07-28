@@ -258,6 +258,31 @@ def _check_skills(s: Settings) -> tuple:
             f"{len(found)} loaded, but these name a tool that does not exist and so never "
             f"apply: {', '.join(unknown)}.",
         )
+    # Two silent failures, both easy to create by copying a skill written for
+    # another host: one that names no tool applies to every prompt of every
+    # agent, and one longer than the cap is cut without the operator being told.
+    unscoped = [f"{s_.name} ({len(s_.instructions)} chars)" for s_ in found.values() if s_.unscoped]
+    over = [
+        f"{s_.name} ({len(s_.instructions)} > {s.skill_max_chars})"
+        for s_ in found.values()
+        if len(s_.instructions) > s.skill_max_chars
+    ]
+    if over:
+        return (
+            "warn",
+            "skills",
+            f"{len(found)} loaded; truncated in every prompt that uses them: {', '.join(over)}. "
+            "Shorten them, or raise CORP_SKILL_MAX_CHARS.",
+        )
+    if unscoped:
+        always_on = sum(len(s_.instructions) for s_ in found.values() if s_.unscoped)
+        return (
+            "warn",
+            "skills",
+            f"{len(found)} loaded, but {', '.join(unscoped)} declare no allowed-tools, so "
+            f"{always_on} characters ride on every prompt of every agent. Name the tools they "
+            "belong to unless they really are background knowledge.",
+        )
     return ("ok", "skills", f"{len(found)} loaded across {len(slugs) or 1} company(ies)")
 
 

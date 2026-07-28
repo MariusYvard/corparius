@@ -821,6 +821,8 @@ en: {
   "sk.none":"None written yet. Copy packaging/skill-template into companies/<slug>/skills/ to teach a company its own trade.",
   "sk.off":"Skills are off. Turn them on in Settings (Company skills).",
   "sk.applies":"Applies to","sk.everyTool":"every tool","sk.chars":"chars","sk.unknown":"names no such tool: {n}",
+  "sk.unscoped":"applies to every prompt","sk.truncated":"cut short in every prompt",
+  "sk.alwaysOn":"{n} characters ride on every prompt of every agent, whatever the tool.",
   "pl.verified":"verified","pl.unverifiedTag":"UNVERIFIED","pl.disabled":"disabled","pl.loaded":"loaded",
   "pl.enable":"Enable","pl.disable":"Disable","pl.remove":"Remove","pl.install":"Install",
   "pl.saved":"Done — restart to apply","pl.confirmRemove":"Remove plugin {n}?",
@@ -988,6 +990,8 @@ fr: {
   "sk.none":"Aucune écrite pour l'instant. Copiez packaging/skill-template dans companies/<slug>/skills/ pour apprendre son métier à une entreprise.",
   "sk.off":"Les compétences sont désactivées. Activez-les dans Réglages (Compétences de l'entreprise).",
   "sk.applies":"S'applique à","sk.everyTool":"tous les outils","sk.chars":"caractères","sk.unknown":"ne nomme aucun outil existant : {n}",
+  "sk.unscoped":"s'applique à chaque invite","sk.truncated":"tronquée dans chaque invite",
+  "sk.alwaysOn":"{n} caractères partent dans chaque invite de chaque agent, quel que soit l'outil.",
   "pl.verified":"vérifié","pl.unverifiedTag":"NON VÉRIFIÉ","pl.disabled":"désactivé","pl.loaded":"chargé",
   "pl.enable":"Activer","pl.disable":"Désactiver","pl.remove":"Supprimer","pl.install":"Installer",
   "pl.saved":"Fait — redémarrez pour appliquer","pl.confirmRemove":"Supprimer le plugin {n} ?",
@@ -1424,12 +1428,19 @@ async function loadPlugins() {
           const tools = s.tools.length
             ? s.tools.map(x => `<span class="mono">${esc(x)}</span>`).join(", ")
             : t("sk.everyTool");
-          const bad = s.unknown_tools.length
-            ? `<br><span class="badge warn">${t("sk.unknown").replace("{n}", esc(s.unknown_tools.join(", ")))}</span>`
+          const flags = [];
+          if (s.unknown_tools.length) flags.push(t("sk.unknown").replace("{n}", esc(s.unknown_tools.join(", "))));
+          if (s.unscoped) flags.push(t("sk.unscoped"));
+          if (s.truncated) flags.push(t("sk.truncated"));
+          const bad = flags.length
+            ? `<br>${flags.map(f => `<span class="badge warn">${f}</span>`).join(" ")}`
             : "";
           return `<div class="kv"><span><strong>${esc(s.name)}</strong> <span class="muted">${esc(s.scope)} · ${s.chars} ${t("sk.chars")}</span>${s.description ? `<br><span class="muted">${esc(s.description)}</span>` : ""}<br><span class="muted">${t("sk.applies")} ${tools}</span>${bad}</span>
             <span class="mono muted" style="overflow-wrap:anywhere">${esc(s.path)}</span></div>`;
-        }).join("") : `<div class="empty">${t("sk.none")}</div>`);
+        }).join("") + (st.skills_always_on_chars
+            ? `<p class="note">${t("sk.alwaysOn").replace("{n}", st.skills_always_on_chars)}</p>`
+            : "")
+        : `<div class="empty">${t("sk.none")}</div>`);
   } catch (e) {}
 }
 $("#pl-goto-settings")?.addEventListener("click", () => selectTab($("#t-settings")));

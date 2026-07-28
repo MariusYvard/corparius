@@ -57,6 +57,15 @@ class Skill:
         tool. Listing tools narrows it."""
         return not self.allowed_tools or tool_name in self.allowed_tools
 
+    @property
+    def unscoped(self) -> bool:
+        """Applies to every tool of every agent. Legitimate for a short note
+        about the company, and a mistake for a long document — which is exactly
+        what a skill written for another host looks like when dropped in here.
+        Nothing showed this, so it failed silently in the direction that costs
+        the most: every prompt, every turn."""
+        return not self.allowed_tools
+
 
 def _split(text: str) -> tuple[str, str]:
     """(frontmatter, body). A file with no frontmatter is all body, which keeps
@@ -148,6 +157,37 @@ class SkillLoader:
         return [
             {"name": s.name, "description": s.description, "scope": s.scope} for s in self.skills
         ]
+
+    def always_on_chars(self) -> int:
+        """How many characters ride on *every* prompt, whatever the tool. This
+        is the number that matters and the one nothing displayed: a folder of
+        unscoped skills is a permanent tax on the token budget."""
+        return sum(len(s.instructions) for s in self.skills if s.unscoped)
+
+    def warnings(self) -> list[dict]:
+        """What the operator would want to know before wondering why their
+        budget went. Returned as data rather than logged, so the doctor and the
+        console say the same thing."""
+        out: list[dict] = []
+        for skill in self.skills:
+            if skill.unscoped:
+                out.append(
+                    {
+                        "skill": skill.name,
+                        "kind": "unscoped",
+                        "chars": len(skill.instructions),
+                    }
+                )
+            if len(skill.instructions) > self.max_chars:
+                out.append(
+                    {
+                        "skill": skill.name,
+                        "kind": "truncated",
+                        "chars": len(skill.instructions),
+                        "cap": self.max_chars,
+                    }
+                )
+        return out
 
     def for_tool(self, tool_name: str) -> list[Skill]:
         return [s for s in self.skills if s.applies_to(tool_name)]

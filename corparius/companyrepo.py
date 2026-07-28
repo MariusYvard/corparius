@@ -210,10 +210,14 @@ class GitLabProvider(RepoProvider):
             timeout=30,
         )
         if r.status_code in (400, 409):
+            # "true", not True: requests types query values as str|bytes|int|
+            # float, and a dict mixing str with bool widens to dict[str, object],
+            # which mypy refuses. GitLab reads the string form identically.
+            params: dict[str, str] = {"search": name, "membership": "true"}
             s = requests.get(
                 f"{self._base()}/api/v4/projects",
                 headers=headers,
-                params={"search": name, "membership": True},
+                params=params,
                 timeout=30,
             )
             s.raise_for_status()
@@ -301,8 +305,13 @@ def provision_result(slug: str, description: str = "") -> dict:
     deploy.deploy_result does, so a total failure is never logged as a success.
     """
     if not git_available():
-        return {"ok": False, "provider": "", "remote": "", "errors": ["git is not on PATH"],
-                "skipped": []}
+        return {
+            "ok": False,
+            "provider": "",
+            "remote": "",
+            "errors": ["git is not on PATH"],
+            "skipped": [],
+        }
     description = description or f"corparius company: {slug}"
     errors: list[str] = []
     skipped: list[str] = []
@@ -323,8 +332,13 @@ def provision_result(slug: str, description: str = "") -> dict:
             url = provider.create(slug, description)
             _set_remote(slug, url)
             _git(["push", "-u", "origin", "main"], repo_dir(slug))
-            return {"ok": True, "provider": name, "remote": url, "errors": errors,
-                    "skipped": skipped}
+            return {
+                "ok": True,
+                "provider": name,
+                "remote": url,
+                "errors": errors,
+                "skipped": skipped,
+            }
         except Exception as exc:  # fall through to the next provider on failure
             errors.append(f"{name}: {exc}")
     return {"ok": False, "provider": "", "remote": "", "errors": errors, "skipped": skipped}
@@ -361,8 +375,12 @@ def sync(slug: str, message: str) -> dict:
         return {"ok": True, "committed": True, "pushed": False, "error": "no remote"}
     out = _git(["push", "origin", "main"], repo_dir(slug), check=False)
     if out.returncode != 0:
-        return {"ok": True, "committed": True, "pushed": False,
-                "error": (out.stderr or out.stdout).strip()[:200]}
+        return {
+            "ok": True,
+            "committed": True,
+            "pushed": False,
+            "error": (out.stderr or out.stdout).strip()[:200],
+        }
     return {"ok": True, "committed": True, "pushed": True, "error": ""}
 
 

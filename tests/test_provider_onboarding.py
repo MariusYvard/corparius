@@ -5,6 +5,8 @@ well-formed and reaches the payload the page renders from. The routing helpers
 that turn a connected key into a working full configuration are covered too.
 """
 
+import types
+
 from corparius.llm import OPENAI_COMPAT_PROVIDERS, list_models, recommended_routing
 from corparius.settings_spec import LLM_SERVER_PRESETS
 from corparius.webui import _providers_payload
@@ -127,3 +129,80 @@ def test_omniroute_is_a_server_preset_with_the_real_endpoint():
     assert omni is not None, "OmniRoute should be offered as a custom-target preset"
     assert omni["url"] == "http://localhost:20128/v1"
     assert "docker run" in omni["note_en"] and "docker run" in omni["note_fr"]
+
+
+def test_the_doctor_offers_the_claude_path_when_the_cli_is_there(monkeypatch):
+    """The discovery case: someone with a subscription and the CLI installed is
+    paying for inference they could get from a login they already have. The old
+    message just said "disabled"."""
+    from corparius import doctor
+    from corparius.config import Settings
+
+    s = Settings()
+    s.claude_code_enabled = False
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: "/usr/bin/claude")
+    level, _, message = doctor._check_claude_cli(s)
+    assert level == "ok"
+    assert "corparius claude" in message
+
+
+def test_the_doctor_says_nothing_when_the_cli_is_absent(monkeypatch):
+    from corparius import doctor
+    from corparius.config import Settings
+
+    s = Settings()
+    s.claude_code_enabled = False
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
+    assert "corparius claude" not in doctor._check_claude_cli(s)[2]
+
+
+def test_the_one_command_writes_exactly_the_console_plan(tmp_path, monkeypatch, capsys):
+    """The CLI and the console must apply the same four-way change. Two paths
+    that drift is how an operator ends up half-configured."""
+    from corparius import claudecli
+    from corparius.cli import cmd_claude
+    from corparius.store import Store
+
+    monkeypatch.setattr(claudecli, "check", lambda *a, **k: {"ok": True, "detail": "ready"})
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    cmd_claude(types.SimpleNamespace(check=False))
+    assert Store(str(tmp_path)).all_settings() == claudecli.plan()
+
+
+def test_the_cli_store_honours_the_redirected_data_path(tmp_path, monkeypatch):
+    """cli._store() used the import-time settings snapshot, which is taken at
+    collection — before the hermetic fixture redirects CORP_DATA_PATH. A test
+    calling any cmd_* function therefore wrote to the developer's own store."""
+    from corparius.cli import _store
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "elsewhere"))
+    assert str(tmp_path / "elsewhere") in _store().path
+
+
+def test_check_only_changes_nothing(tmp_path, monkeypatch, capsys):
+    from corparius import claudecli
+    from corparius.cli import cmd_claude
+    from corparius.store import Store
+
+    monkeypatch.setattr(claudecli, "check", lambda *a, **k: {"ok": True, "detail": "ready"})
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    cmd_claude(types.SimpleNamespace(check=True))
+    assert Store(str(tmp_path)).all_settings() == {}
+
+
+def test_a_failed_check_refuses_to_half_configure(tmp_path, monkeypatch):
+    """Writing "cloud on, mock off" against a CLI that cannot answer would leave
+    the operator worse off than before they ran anything."""
+    import pytest
+
+    from corparius import claudecli
+    from corparius.cli import cmd_claude
+    from corparius.store import Store
+
+    monkeypatch.setattr(
+        claudecli, "check", lambda *a, **k: {"ok": False, "detail": "not logged in"}
+    )
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    with pytest.raises(SystemExit):
+        cmd_claude(types.SimpleNamespace(check=False))
+    assert Store(str(tmp_path)).all_settings() == {}

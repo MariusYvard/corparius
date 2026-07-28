@@ -62,12 +62,33 @@ CEREBRAS_API_KEY=csk-...
 MISTRAL_API_KEY=...
 ```
 
-Un abonnement Claude (Pro ou Max) s'utilise sans crédits API via le CLI Claude Code :
+## Abonnement Claude
+
+Un abonnement Claude (Pro ou Max) fait tourner corparius sans clé API et sans crédits, en passant par la connexion que le CLI Claude Code détient déjà. Deux prérequis, une fois : installer Claude Code, puis `claude login`.
+
+Ensuite, une commande :
 
 ```bash
-CORP_CLAUDE_CODE=true
+corparius claude            # teste la connexion, puis bascule tous les paliers
+corparius claude --check    # teste seulement, ne modifie rien
+```
+
+Elle applique exactement le même plan que le bouton « Utiliser votre abonnement Claude » de la console (onglet Providers), et refuse d'écrire quoi que ce soit si le test échoue : laisser « cloud activé, mock désactivé » sur un CLI qui ne répond pas mettrait l'exploitant dans un état pire qu'avant.
+
+Ce qu'elle écrit, et pourquoi il en faut quatre à la fois — c'est cette conjonction cachée qui rendait la chose difficile à activer à la main :
+
+```bash
+CORP_LLM_MOCK=false         # sortir du mode hors ligne
+CORP_CLOUD_ENABLED=true     # la porte maîtresse de tout fournisseur distant
+CORP_CLAUDE_CODE=true       # autoriser la cible claudecode:
+CORP_TRIVIAL_MODEL=claudecode:haiku
+CORP_NORMAL_MODEL=claudecode:sonnet
 CORP_HARD_MODEL=claudecode:sonnet
 ```
+
+Les paliers visent des alias (`haiku`, `sonnet`) et non des identifiants datés, donc ils suivent la dernière version sans rien à remettre à jour.
+
+Si le CLI est installé mais la cible inactive, `corparius doctor` le signale et donne la commande : quelqu'un qui a déjà l'abonnement paie sinon une inférence qu'il pourrait obtenir d'une connexion qu'il possède. Le lanceur `start.py` le dit aussi au premier démarrage.
 
 ## Confidentialité et conformité
 

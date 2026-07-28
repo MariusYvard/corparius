@@ -98,6 +98,14 @@ def main() -> int:
     subprocess.run([PY, "-m", "corparius.cli", "doctor", "--quiet"], cwd=ROOT)
     info = resolved()
     step(mode_line(info))
+    # The one thing worth saying unprompted on a first run: someone holding a
+    # Claude subscription and the CLI is one command away from running every
+    # tier on a login they already have, and would otherwise never find out.
+    if shutil.which("claude") and not info.get("claude_code"):
+        step(
+            "you have the `claude` CLI: `corparius claude` runs every tier on your "
+            "subscription, no API key"
+        )
     port = info.get("port", 8600)
     url = f"http://127.0.0.1:{port}"
     step(f"console starting on {url} (Ctrl+C to stop)")

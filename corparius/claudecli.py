@@ -37,16 +37,20 @@ TIERS = {
 # drafting support replies.
 HARD_TIER = "claudecode:opus"
 
-# The last remote step of the fallback chain: where the everyday work goes once
-# every free provider has failed, before the router drops to local.
+# The remote ladder walked once every free provider has failed, before the
+# router drops to local. Cheapest rung first.
 #
-# Sonnet, not Opus, and not because Sonnet is the mid tier by coincidence. The
-# chain is shared by every tier, so whatever sits at its end is what a failed
-# *social post* escalates to as readily as a failed strategy review. Opus there
-# would turn a provider outage into the most expensive hour the company has
-# ever run. Sonnet is what normal work should degrade to; Opus stays the hard
-# tier's own model and is reached by being asked for, not by falling over.
-NORMAL_FALLBACK = "claudecode:sonnet"
+# Haiku comes before Sonnet because this chain is shared by every tier: what
+# sits on it is what a failed *social post* escalates to as readily as a failed
+# strategy review. A machine that cannot run local inference sends trivial work
+# to a free provider, and when that goes down Haiku is the right next rung —
+# Sonnet only if Haiku is down too.
+#
+# Opus is not on the ladder at all. It stays the hard tier's own model, reached
+# because a HARD task asked for it, never because something else fell over.
+# Putting it here would turn a provider outage into the most expensive hour the
+# company has ever run.
+FALLBACK_LADDER = ("claudecode:haiku", "claudecode:sonnet")
 
 # Flipped on by the one-press setup. Cloud is the master gate for every remote
 # provider, so it has to be on too; enabling Claude Code alone does nothing, and
@@ -155,18 +159,21 @@ def check(timeout: int = 60, lang="en") -> dict:
     }
 
 
-def plan(configured=None, ollama_ready: bool = False, all_tiers: bool = False) -> dict:
+def plan(configured=None, local_trivial: str = "", all_tiers: bool = False) -> dict:
     """What the one-press setup would write, for a preview and for the payload.
 
     A Claude subscription is metered in usage windows, not in tokens, so
     spending it on `draft_social_post` — TRIVIAL, every two hours — is the
-    expensive mistake. When free providers are connected they take the trivial
-    and normal tiers and Claude takes only HARD, which is strategy and the
-    coder: the two roles where the difference is worth a window.
+    expensive mistake. Claude takes only HARD, which is strategy and the coder:
+    the two roles where the difference is worth a window.
 
-    Claude also becomes the last remote step of the fallback chain, so a free
-    provider going down escalates to the subscription instead of dropping
-    straight to a local model that may not be installed.
+    `local_trivial` is the local model this machine was measured to be able to
+    serve, or "" when it cannot serve one — in which case the trivial tier goes
+    to a free provider like everything else. See corparius/hardware.py.
+
+    Claude also closes the fallback chain, cheapest rung first, so a free
+    provider going down escalates to Haiku and only then to Sonnet, instead of
+    dropping straight to a local model that may not be installed.
 
     With nothing free connected there is nothing to prefer, so Claude serves
     every tier — the behaviour this had before. `all_tiers` asks for that
@@ -177,7 +184,7 @@ def plan(configured=None, ollama_ready: bool = False, all_tiers: bool = False) -
     if all_tiers:
         return {**TOGGLES, **TIERS}
     routing = recommended_routing(
-        list(configured or []), ollama_ready, hard=HARD_TIER, fallback_tail=NORMAL_FALLBACK
+        list(configured or []), local_trivial, hard=HARD_TIER, fallback_tail=FALLBACK_LADDER
     )
     if routing is None:
         return {**TOGGLES, **TIERS}

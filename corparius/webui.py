@@ -30,6 +30,7 @@ from . import (
     cfg,
     claudecli,
     deploy,
+    hardware,
     i18n,
     mailbox,
     ollama_setup,
@@ -728,11 +729,8 @@ def _claude_setup(state: UiState, all_tiers: bool = False) -> dict:
     # One probe, reused. _providers_payload() below used to run a second one,
     # and two four-second connect timeouts on a machine with no Ollama exceeded
     # the console client's own timeout.
-    applied = claudecli.plan(
-        connected_providers(),
-        bool(ollama_setup.status(timeout=2).get("reachable")),
-        all_tiers=all_tiers,
-    )
+    local_trivial, _why = hardware.recommended_local(state.store(), _fresh_settings())
+    applied = claudecli.plan(connected_providers(), local_trivial, all_tiers=all_tiers)
     _persist(state, applied)
     payload = _providers_payload()
     return {**payload, "check": result, "applied": applied}
@@ -1156,8 +1154,12 @@ def _route_tiers_recommend(ctx):
     # an unconfigured provider (the trap the defaults leave after a single key).
     from .llm import recommended_routing
 
+    local_trivial, _why = hardware.recommended_local(ctx.store(), _fresh_settings())
     routing = recommended_routing(
-        connected_providers(), bool(ollama_setup.status().get("reachable"))
+        connected_providers(),
+        local_trivial,
+        hard=claudecli.HARD_TIER if claudecli.already_on() else "",
+        fallback_tail=claudecli.FALLBACK_LADDER if claudecli.already_on() else (),
     )
     if routing is None:
         return 400, {

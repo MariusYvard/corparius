@@ -68,15 +68,15 @@ def test_payload_surfaces_the_onboarding_metadata(monkeypatch, tmp_path):
 
 
 def test_recommended_routing_is_none_without_a_usable_provider():
-    assert recommended_routing([], ollama_ready=False) is None
+    assert recommended_routing([]) is None
     # gemini is connectable but has no default_model, so it cannot be auto-routed.
-    assert recommended_routing(["gemini"], ollama_ready=False) is None
+    assert recommended_routing(["gemini"]) is None
 
 
 def test_recommended_routing_fills_every_tier_from_one_provider():
     """The gap this closes: one free key must leave no tier pointing at something
     unconfigured. With only Groq and no Ollama, all three land on Groq."""
-    r = recommended_routing(["groq"], ollama_ready=False)
+    r = recommended_routing(["groq"])
     assert r["CORP_NORMAL_MODEL"] == "groq:llama-3.3-70b-versatile"
     assert r["CORP_HARD_MODEL"] == "groq:llama-3.3-70b-versatile"
     assert r["CORP_TRIVIAL_MODEL"] == "groq:llama-3.3-70b-versatile"
@@ -84,10 +84,11 @@ def test_recommended_routing_fills_every_tier_from_one_provider():
 
 
 def test_recommended_routing_uses_reasoning_for_hard_and_local_for_trivial():
-    r = recommended_routing(["groq", "cerebras", "openrouter"], ollama_ready=True)
+    r = recommended_routing(["groq", "cerebras", "openrouter"], local_trivial="gemma:2b")
     assert r["CORP_NORMAL_MODEL"].startswith("groq:")  # fast general first
     assert r["CORP_HARD_MODEL"].startswith("openrouter:")  # reasoning model on hard
-    assert r["CORP_TRIVIAL_MODEL"] == "local:gemma4:e4b"  # Ollama up -> keep it local
+    # The caller measured the machine and named the model it can actually serve.
+    assert r["CORP_TRIVIAL_MODEL"] == "local:gemma:2b"
     fb = r["CORP_LLM_FALLBACK"]
     assert "cerebras:" in fb and "openrouter:" in fb and "groq:" not in fb
 
@@ -95,7 +96,7 @@ def test_recommended_routing_uses_reasoning_for_hard_and_local_for_trivial():
 def test_recommended_routing_ignores_providers_without_a_default_model():
     """github is connectable but carries no default_model, so it never appears in
     the routing even when 'configured'."""
-    r = recommended_routing(["github", "cerebras"], ollama_ready=False)
+    r = recommended_routing(["github", "cerebras"])
     assert "github:" not in "".join(r.values())
     assert r["CORP_NORMAL_MODEL"].startswith("cerebras:")
 
@@ -210,7 +211,7 @@ def test_a_failed_check_refuses_to_half_configure(tmp_path, monkeypatch):
 
 def test_a_hard_override_keeps_the_free_providers_underneath():
     """What "free first, subscription for the hard work" resolves to."""
-    routing = recommended_routing(["groq", "openrouter"], True, hard="claudecode:opus")
+    routing = recommended_routing(["groq", "openrouter"], "gemma:2b", hard="claudecode:opus")
     assert routing["CORP_TRIVIAL_MODEL"].startswith("local:")
     assert routing["CORP_NORMAL_MODEL"].startswith("groq:")
     assert routing["CORP_HARD_MODEL"] == "claudecode:opus"
@@ -220,9 +221,13 @@ def test_the_tail_is_the_last_remote_step_of_the_chain():
     """A free provider going down should escalate to the metered account, not
     drop straight to a local model that may not be installed."""
     chain = recommended_routing(
-        ["groq", "openrouter"], True, hard="claudecode:opus", fallback_tail="claudecode:sonnet"
+        ["groq", "openrouter"],
+        "gemma:2b",
+        hard="claudecode:opus",
+        fallback_tail=("claudecode:haiku", "claudecode:sonnet"),
     )["CORP_LLM_FALLBACK"].split(",")
-    assert chain[-1] == "claudecode:sonnet"
+    # Cheapest rung first: a failed free provider tries Haiku before Sonnet.
+    assert chain[-2:] == ["claudecode:haiku", "claudecode:sonnet"]
     assert any(step.startswith("openrouter:") for step in chain)
 
 
@@ -231,26 +236,29 @@ def test_the_hard_tier_never_lands_in_the_shared_chain():
     it — a failed social post would escalate to the most expensive model in the
     roster. `hard` and `fallback_tail` are separate for exactly this reason."""
     routing = recommended_routing(
-        ["groq", "openrouter"], True, hard="claudecode:opus", fallback_tail="claudecode:sonnet"
+        ["groq", "openrouter"],
+        "gemma:2b",
+        hard="claudecode:opus",
+        fallback_tail=("claudecode:haiku", "claudecode:sonnet"),
     )
     assert routing["CORP_HARD_MODEL"] == "claudecode:opus"
     assert "claudecode:opus" not in routing["CORP_LLM_FALLBACK"]
 
 
 def test_without_an_override_nothing_changes():
-    assert "claudecode" not in str(recommended_routing(["groq"], True))
+    assert "claudecode" not in str(recommended_routing(["groq"], "gemma:2b"))
 
 
 def test_the_claude_plan_prefers_free_and_falls_back_to_every_tier():
     from corparius import claudecli
 
-    mixed = claudecli.plan(["groq"], True)
+    mixed = claudecli.plan(["groq"], "gemma:2b")
     assert mixed["CORP_HARD_MODEL"] == "claudecode:opus"
     assert not mixed["CORP_NORMAL_MODEL"].startswith("claudecode:")
     # Sonnet backs the everyday work up once the free providers are exhausted.
     assert mixed["CORP_LLM_FALLBACK"].endswith("claudecode:sonnet")
     # Nothing free connected: there is nothing to prefer, so it serves everything.
-    alone = claudecli.plan([], False)
+    alone = claudecli.plan([], "")
     assert alone["CORP_NORMAL_MODEL"] == "claudecode:sonnet"
     assert alone["CORP_TRIVIAL_MODEL"] == "claudecode:haiku"
 
@@ -278,3 +286,73 @@ def test_opus_sits_on_the_least_frequent_tier():
     cadences = [ROSTER[r].cadence_hours for r in ROSTER if ROSTER[r].difficulty is Difficulty.HARD]
     # 24h, and None for the on-demand coder: the rarest tier in the roster.
     assert all(c is None or c >= 24 for c in cadences)
+
+
+def test_an_incapable_machine_sends_the_trivial_tier_to_a_free_provider():
+    """The behaviour the measurement exists for. `ollama_ready=True` used to be
+    enough to hand this tier a 9.6 GB model on a box that runs at 8.6 tokens
+    per second."""
+    r = recommended_routing(["groq"], local_trivial="")
+    assert not r["CORP_TRIVIAL_MODEL"].startswith("local:")
+    assert r["CORP_TRIVIAL_MODEL"] == r["CORP_NORMAL_MODEL"]
+
+
+def test_local_still_ends_the_chain_even_when_it_cannot_serve_a_tier():
+    """Not serving a tier and not being the last resort are different things.
+    The router always falls through to local after the chain — that safety net
+    must survive a negative verdict."""
+    from corparius.config import Settings
+    from corparius.llm import HybridRouter
+
+    s = Settings()
+    s.llm_mock = False
+    s.llm_fallback = ["groq:x", "claudecode:haiku"]
+    chain = HybridRouter(s)._chain("groq", "x")
+    assert all(target != "local" for target, _ in chain)  # local is not *in* the chain
+    assert s.local_model, "the router's final local fallback is still configured"
+
+
+def test_the_ladder_climbs_cheapest_first():
+    from corparius import claudecli
+
+    assert claudecli.FALLBACK_LADDER == ("claudecode:haiku", "claudecode:sonnet")
+    assert claudecli.HARD_TIER not in claudecli.FALLBACK_LADDER
+
+
+def test_recommended_local_is_the_single_decider(tmp_path, monkeypatch):
+    """The console button, the CLI and the doctor all ask this one function, so
+    they cannot drift into three different answers."""
+    from corparius import hardware
+    from corparius.config import Settings
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    monkeypatch.setattr(
+        hardware, "installed_models", lambda **k: [{"name": "gemma:2b", "size": 1_000_000_000}]
+    )
+    s = Settings()
+    s.trivial_model = "local:gemma:2b"
+
+    # Nothing measured: no local tier, and the reason says what to run.
+    choice, why = hardware.recommended_local(store, s)
+    assert choice == "" and "corparius bench" in why
+
+    # Measured slow: still no local tier, and the reason shows the arithmetic.
+    store.save_machine({"tokens_per_second": 8.6, "placement": "cpu", "model": "gemma:2b"})
+    choice, why = hardware.recommended_local(store, s)
+    assert choice == "" and "8.6 tokens/s" in why
+
+    # Measured fast: the model it can serve, named.
+    store.save_machine({"tokens_per_second": 40.0, "placement": "gpu", "model": "gemma:2b"})
+    choice, why = hardware.recommended_local(store, s)
+    assert choice == "gemma:2b" and "40.0 tokens/s" in why
+
+
+def test_no_ollama_at_all_is_reported_as_such(tmp_path, monkeypatch):
+    from corparius import hardware
+    from corparius.config import Settings
+    from corparius.store import Store
+
+    monkeypatch.setattr(hardware, "installed_models", lambda **k: [])
+    choice, why = hardware.recommended_local(Store(str(tmp_path)), Settings())
+    assert choice == "" and "not reachable" in why

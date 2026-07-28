@@ -329,6 +329,37 @@ def verdict(prof: dict | None, model_size: int = 0, min_tokens_per_second: float
     }
 
 
+def recommended_local(store, settings) -> tuple[str, str]:
+    """The local model this machine should serve the trivial tier with, and why.
+
+    Returns ("", reason) when it should serve none — the caller then routes that
+    tier to a free provider. One place decides it, so the console button, the
+    CLI and the doctor cannot drift into three different answers.
+
+    Reads the cached measurement and never takes one: this is called from a
+    button press and from the doctor, and a probe on either would be the
+    polled-endpoint mistake again.
+    """
+    from .llm import _split
+
+    prefer = _split(getattr(settings, "trivial_model", ""))[1]
+    prof = profile(store, max_age_days=getattr(settings, "bench_max_age_days", 30))
+    models = installed_models()
+    if not models:
+        return "", "no local model installed, or Ollama is not reachable"
+    choice = best_local_model(models, prefer=prefer)
+    if not choice:
+        return "", "no installed model fits this machine's memory"
+    size = next((m["size"] for m in models if m["name"] == choice), 0)
+    call = verdict(prof, size, float(getattr(settings, "local_min_tokens_per_second", 15.0)))
+    if not call["ok"]:
+        return "", call["reason"]
+    note = f"{choice}: {call['reason']}"
+    if tight(size, specs()):
+        note += " (it will have to evict cache to load right now)"
+    return choice, note
+
+
 def best_local_model(candidates=None, prefer: str = "", spec: dict | None = None) -> str:
     """The largest installed model that fits, preferring the configured one.
 

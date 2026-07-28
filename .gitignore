@@ -22,3 +22,10 @@ backups/
 htmlcov/
 .ruff_cache/
 .mypy_cache/
+
+# Companies reelles : configuration, skills, leads, dossiers de migration.
+# Le depot est public. Ces dossiers contiennent du positionnement commercial et des
+# adresses email de personnes identifiables, ils ne doivent jamais y arriver.
+# Seule companies/example/ reste versionnee, cest le gabarit livre avec le framework.
+companies/*
+!companies/example/

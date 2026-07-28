@@ -55,8 +55,17 @@ jobs:
         run: ruff format --check .
       # All of corparius/ at the default level. The next ratchet is strictness
       # (disallow_untyped_defs), scoped per-module in pyproject.toml.
+      #
+      # Both platforms, because mypy analyses only the branches that apply to
+      # the one it targets. corparius reads memory through ctypes.windll on
+      # Windows and os.sysconf elsewhere, and each attribute exists in exactly
+      # one set of stubs: a Linux-only run passes code that fails on a
+      # developer's Windows machine, and this runner had been letting the
+      # reverse through until it did not.
       - name: Types
         run: mypy corparius/
+      - name: Types (windows stubs)
+        run: mypy --platform win32 corparius/
       - name: Coverage
         run: |
           coverage run -m pytest -q

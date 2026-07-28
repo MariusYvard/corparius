@@ -210,19 +210,19 @@ def test_a_failed_check_refuses_to_half_configure(tmp_path, monkeypatch):
 
 def test_a_hard_override_keeps_the_free_providers_underneath():
     """What "free first, subscription for the hard work" resolves to."""
-    routing = recommended_routing(["groq", "openrouter"], True, hard="claudecode:sonnet")
+    routing = recommended_routing(["groq", "openrouter"], True, hard="claudecode:opus")
     assert routing["CORP_TRIVIAL_MODEL"].startswith("local:")
     assert routing["CORP_NORMAL_MODEL"].startswith("groq:")
-    assert routing["CORP_HARD_MODEL"] == "claudecode:sonnet"
+    assert routing["CORP_HARD_MODEL"] == "claudecode:opus"
 
 
 def test_the_override_becomes_the_last_remote_step_of_the_chain():
     """A free provider going down should escalate to the metered account, not
     drop straight to a local model that may not be installed."""
-    chain = recommended_routing(["groq", "openrouter"], True, hard="claudecode:sonnet")[
+    chain = recommended_routing(["groq", "openrouter"], True, hard="claudecode:opus")[
         "CORP_LLM_FALLBACK"
     ].split(",")
-    assert chain[-1] == "claudecode:sonnet"
+    assert chain[-1] == "claudecode:opus"
     assert any(step.startswith("openrouter:") for step in chain)
 
 
@@ -234,9 +234,34 @@ def test_the_claude_plan_prefers_free_and_falls_back_to_every_tier():
     from corparius import claudecli
 
     mixed = claudecli.plan(["groq"], True)
-    assert mixed["CORP_HARD_MODEL"] == "claudecode:sonnet"
+    assert mixed["CORP_HARD_MODEL"] == "claudecode:opus"
     assert not mixed["CORP_NORMAL_MODEL"].startswith("claudecode:")
     # Nothing free connected: there is nothing to prefer, so it serves everything.
     alone = claudecli.plan([], False)
     assert alone["CORP_NORMAL_MODEL"] == "claudecode:sonnet"
     assert alone["CORP_TRIVIAL_MODEL"] == "claudecode:haiku"
+
+
+def test_the_tier_ladder_is_one_model_per_tier():
+    """haiku / sonnet / opus, cheapest to most capable. A tier that repeats a
+    model is a tier that isn't buying anything."""
+    from corparius import claudecli
+
+    ladder = [
+        claudecli.TIERS[k] for k in ("CORP_TRIVIAL_MODEL", "CORP_NORMAL_MODEL", "CORP_HARD_MODEL")
+    ]
+    assert ladder == ["claudecode:haiku", "claudecode:sonnet", "claudecode:opus"]
+    assert claudecli.HARD_TIER == claudecli.TIERS["CORP_HARD_MODEL"]
+
+
+def test_opus_sits_on_the_least_frequent_tier():
+    """The expensive model belongs where it is called least. HARD serves
+    strategy (every 24h) and the coder (on demand) — nothing else."""
+    from corparius.agents import ROSTER
+    from corparius.models import Difficulty
+
+    hard_roles = {r.value for r, spec in ROSTER.items() if spec.difficulty is Difficulty.HARD}
+    assert hard_roles == {"strategy", "coder"}
+    cadences = [ROSTER[r].cadence_hours for r in ROSTER if ROSTER[r].difficulty is Difficulty.HARD]
+    # 24h, and None for the on-demand coder: the rarest tier in the roster.
+    assert all(c is None or c >= 24 for c in cadences)

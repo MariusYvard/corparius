@@ -74,10 +74,17 @@ def _windows_memory() -> tuple[int | None, int | None]:
             ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
         ]
 
+    # getattr, not ctypes.windll: the attribute exists only in the Windows
+    # stubs, so a direct reference fails mypy on Linux — the same asymmetry as
+    # os.sysconf in _posix_memory below, in the other direction. The runtime
+    # guard has to be one mypy can check on every platform it runs on.
+    windll = getattr(ctypes, "windll", None)
+    if windll is None:
+        return None, None
     try:
         status = _Status()
         status.dwLength = ctypes.sizeof(_Status)
-        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+        if not windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
             return None, None
         return int(status.ullTotalPhys), int(status.ullAvailPhys)
     except (OSError, AttributeError, ValueError):

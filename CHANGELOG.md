@@ -36,6 +36,15 @@
 
 ## Unreleased — free models first, Opus for the hard work
 
+- **Fixed before it shipped: a polled console endpoint started probing the
+  network.** Building the Claude plan needs to know whether Ollama answers, and
+  putting that in `/api/providers` charged every operator without Ollama a
+  connect timeout on every poll — and on a CI runner where 127.0.0.1:11434 is
+  filtered rather than refused, two four-second probes in one request outlived
+  the client's own timeout and failed the tests. The endpoint now carries only
+  what costs nothing to compute; the console derives the same note from
+  `providers[].configured`. A test asserts the endpoint never probes.
+
 - **The hard tier gets Opus**, not Sonnet. What makes that affordable is the
   cadence: HARD serves exactly two roles — strategy every 24 hours and the coder
   on demand — so it is the least frequent tier in the roster. The model that

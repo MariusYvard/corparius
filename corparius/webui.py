@@ -272,11 +272,13 @@ def _providers_payload() -> dict:
         "claude_code": s.claude_code_enabled,
         "claude_installed": claudecli.installed(),
         "claude_ready": claudecli.already_on(),
-        # What the button would write, so the card can say which tiers Claude
-        # would take rather than making the operator press to find out.
-        "claude_plan": claudecli.plan(
-            connected_providers(), bool(ollama_setup.status().get("reachable"))
-        ),
+        # Deliberately not the full plan. Building it needs to know whether
+        # Ollama answers, and this endpoint is polled — a probe here charged
+        # every operator without Ollama a connect timeout per poll, and on a
+        # runner where the port is filtered rather than refused it blocked long
+        # enough to fail the tests. The page derives the same "mixed vs every
+        # tier" note from `providers[].configured`, which costs nothing.
+        "claude_hard_tier": claudecli.HARD_TIER,
         "server_presets": settings_spec.LLM_SERVER_PRESETS,
         "cloud_enabled": s.cloud_enabled,
         "llm_mock": s.llm_mock,
@@ -723,9 +725,12 @@ def _claude_setup(state: UiState, all_tiers: bool = False) -> dict:
     if not result["ok"]:
         # Do not switch a company to a provider that will not answer.
         return {"ok": False, "error": result["detail"], "check": result}
+    # One probe, reused. _providers_payload() below used to run a second one,
+    # and two four-second connect timeouts on a machine with no Ollama exceeded
+    # the console client's own timeout.
     applied = claudecli.plan(
         connected_providers(),
-        bool(ollama_setup.status().get("reachable")),
+        bool(ollama_setup.status(timeout=2).get("reachable")),
         all_tiers=all_tiers,
     )
     _persist(state, applied)

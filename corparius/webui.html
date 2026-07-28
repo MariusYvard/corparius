@@ -2124,11 +2124,12 @@ function renderClaudeCard(d) {
   // and the action, not with configuration.
   const ready = d.claude_ready;
   const installed = d.claude_installed;
-  const plan = d.claude_plan || {};
   // A subscription is metered in usage windows, so the default plan leaves the
-  // simple and everyday work on free providers when any are connected.
-  const mixed = (plan.CORP_HARD_MODEL || "").startsWith("claudecode:")
-             && !(plan.CORP_NORMAL_MODEL || "").startsWith("claudecode:");
+  // simple and everyday work on free providers when any are connected. Derived
+  // from the provider list rather than from a server-side plan: building that
+  // plan needs an Ollama probe, and this payload is polled.
+  const freeProviders = (d.providers || []).filter(p => p.configured).map(p => p.name);
+  const mixed = freeProviders.length > 0;
   const status = ready
     ? `<span class="badge ok">${t("cc.on")}</span>`
     : installed ? `<span class="badge">${t("cc.found")}</span>`
@@ -2146,7 +2147,7 @@ function renderClaudeCard(d) {
       <button id="claude-setup-all">${t("cc.useAll")}</button>
       <button id="claude-test">${t("cc.test")}</button>
     </div>
-    <p class="note" style="margin:10px 0 0">${esc(mixed ? t("cc.mixed").replace("{n}", plan.CORP_NORMAL_MODEL || "") : t("cc.everyTier"))}</p>
+    <p class="note" style="margin:10px 0 0">${esc(mixed ? t("cc.mixed").replace("{n}", freeProviders.join(", ")) : t("cc.everyTier"))}</p>
     ${steps}
     <div id="claude-out" class="note" style="font-size:12.5px; margin-top:10px; white-space:pre-line"></div>`;
 }

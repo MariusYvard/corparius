@@ -206,3 +206,37 @@ def test_a_failed_check_refuses_to_half_configure(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         cmd_claude(types.SimpleNamespace(check=False))
     assert Store(str(tmp_path)).all_settings() == {}
+
+
+def test_a_hard_override_keeps_the_free_providers_underneath():
+    """What "free first, subscription for the hard work" resolves to."""
+    routing = recommended_routing(["groq", "openrouter"], True, hard="claudecode:sonnet")
+    assert routing["CORP_TRIVIAL_MODEL"].startswith("local:")
+    assert routing["CORP_NORMAL_MODEL"].startswith("groq:")
+    assert routing["CORP_HARD_MODEL"] == "claudecode:sonnet"
+
+
+def test_the_override_becomes_the_last_remote_step_of_the_chain():
+    """A free provider going down should escalate to the metered account, not
+    drop straight to a local model that may not be installed."""
+    chain = recommended_routing(["groq", "openrouter"], True, hard="claudecode:sonnet")[
+        "CORP_LLM_FALLBACK"
+    ].split(",")
+    assert chain[-1] == "claudecode:sonnet"
+    assert any(step.startswith("openrouter:") for step in chain)
+
+
+def test_without_an_override_nothing_changes():
+    assert "claudecode" not in str(recommended_routing(["groq"], True))
+
+
+def test_the_claude_plan_prefers_free_and_falls_back_to_every_tier():
+    from corparius import claudecli
+
+    mixed = claudecli.plan(["groq"], True)
+    assert mixed["CORP_HARD_MODEL"] == "claudecode:sonnet"
+    assert not mixed["CORP_NORMAL_MODEL"].startswith("claudecode:")
+    # Nothing free connected: there is nothing to prefer, so it serves everything.
+    alone = claudecli.plan([], False)
+    assert alone["CORP_NORMAL_MODEL"] == "claudecode:sonnet"
+    assert alone["CORP_TRIVIAL_MODEL"] == "claudecode:haiku"

@@ -873,6 +873,9 @@ en: {
   "prov.runtime":"Runtime","prov.mock":"Mock mode","prov.mockHint":"offline, deterministic, no keys needed",
   "prov.cloud":"Cloud enabled","prov.cloudHint":"master gate for every remote provider",
   "prov.cc":"Claude Code CLI","prov.ccHint":"claudecode: target, subscription auth, no API credits",
+  "cc.useAll":"Use it for every tier",
+  "cc.mixed":"Free providers keep the simple and everyday work ({n}); your subscription takes the hard tier, and backs the rest up if a free provider fails.",
+  "cc.everyTier":"No free provider is connected, so your subscription would serve every tier. Connect one in the list below to keep the simple work off your usage window.",
   "cc.title":"Use your Claude subscription","cc.desc":"The simplest way to run on Claude: no API key, no credits, just your Claude Code login. One press sets everything up.",
   "cc.on":"set up and in use","cc.found":"CLI found","cc.missing":"CLI not installed",
   "cc.readyNote":"The tiers already route to your subscription.",
@@ -1042,6 +1045,9 @@ fr: {
   "prov.runtime":"Exécution","prov.mock":"Mode mock","prov.mockHint":"hors ligne, déterministe, aucune clé requise",
   "prov.cloud":"Cloud activé","prov.cloudHint":"interrupteur général de tous les providers distants",
   "prov.cc":"CLI Claude Code","prov.ccHint":"cible claudecode:, auth abonnement, zéro crédit API",
+  "cc.useAll":"L'utiliser pour tous les paliers",
+  "cc.mixed":"Les fournisseurs gratuits gardent le travail simple et courant ({n}) ; votre abonnement prend le palier difficile, et rattrape les autres si un gratuit tombe.",
+  "cc.everyTier":"Aucun fournisseur gratuit n'est connecté, donc votre abonnement servirait tous les paliers. Connectez-en un dans la liste ci-dessous pour garder le travail simple hors de votre fenêtre d'usage.",
   "cc.title":"Utiliser votre abonnement Claude","cc.desc":"La façon la plus simple de tourner sur Claude : pas de clé API, pas de crédits, juste votre connexion Claude Code. Un bouton configure tout.",
   "cc.on":"configuré et actif","cc.found":"CLI détecté","cc.missing":"CLI non installé",
   "cc.readyNote":"Les tiers routent déjà vers votre abonnement.",
@@ -2061,7 +2067,7 @@ document.addEventListener("click", async e => {
         out.textContent = result.detail;
         out.style.color = result.ok ? "var(--ok)" : "var(--warn)";
       } finally { b.disabled = false; }
-    } else if (b.id === "claude-setup") {
+    } else if (b.id === "claude-setup" || b.id === "claude-setup-all") {
       const out = $("#claude-out");
       b.disabled = true; out.textContent = t("cc.applying"); out.style.color = "var(--muted)";
       try {
@@ -2069,7 +2075,7 @@ document.addEventListener("click", async e => {
         // tiers. It refuses to switch if the CLI will not answer. On success the
         // toast and the re-rendered "in use" badge carry the news; the inline
         // line is wiped by the re-render, so we only keep it for the failure.
-        const d = await api("/api/claude/setup", {});
+        const d = await api("/api/claude/setup", {all_tiers: b.id === "claude-setup-all"});
         toast(t("cc.done"));
         renderProviders(d); refresh();
       } catch (err) {
@@ -2118,6 +2124,11 @@ function renderClaudeCard(d) {
   // and the action, not with configuration.
   const ready = d.claude_ready;
   const installed = d.claude_installed;
+  const plan = d.claude_plan || {};
+  // A subscription is metered in usage windows, so the default plan leaves the
+  // simple and everyday work on free providers when any are connected.
+  const mixed = (plan.CORP_HARD_MODEL || "").startsWith("claudecode:")
+             && !(plan.CORP_NORMAL_MODEL || "").startsWith("claudecode:");
   const status = ready
     ? `<span class="badge ok">${t("cc.on")}</span>`
     : installed ? `<span class="badge">${t("cc.found")}</span>`
@@ -2132,8 +2143,10 @@ function renderClaudeCard(d) {
       ${ready ? `<span class="note">${esc(t("cc.readyNote"))}</span>` : ""}</div>
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
       <button class="primary" id="claude-setup">${t(ready ? "cc.reapply" : "cc.use")}</button>
+      <button id="claude-setup-all">${t("cc.useAll")}</button>
       <button id="claude-test">${t("cc.test")}</button>
     </div>
+    <p class="note" style="margin:10px 0 0">${esc(mixed ? t("cc.mixed").replace("{n}", plan.CORP_NORMAL_MODEL || "") : t("cc.everyTier"))}</p>
     ${steps}
     <div id="claude-out" class="note" style="font-size:12.5px; margin-top:10px; white-space:pre-line"></div>`;
 }

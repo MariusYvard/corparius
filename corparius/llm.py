@@ -204,7 +204,25 @@ def _split(model_str: str) -> tuple[str, str]:
 _ROUTING_ORDER = ["groq", "cerebras", "mistral", "ovh", "openrouter"]
 
 
-def recommended_routing(configured: list[str], ollama_ready: bool) -> dict[str, str] | None:
+def connected_providers() -> list[str]:
+    """The OpenAI-compatible providers that actually have what they need to
+    answer: a key, or a base URL for the ones that take none. The console and
+    the CLI both decide routing from this, so it lives here rather than being
+    computed twice and drifting."""
+    return [
+        name
+        for name, spec in OPENAI_COMPAT_PROVIDERS.items()
+        if cfg.get(spec["key_env"], "").strip()
+        or (
+            spec.get("key_optional")
+            and (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base"))
+        )
+    ]
+
+
+def recommended_routing(
+    configured: list[str], ollama_ready: bool, hard: str = ""
+) -> dict[str, str] | None:
     """A coherent tier configuration from the free providers actually connected,
     so no tier resolves to something the operator has not set up.
 
@@ -215,7 +233,14 @@ def recommended_routing(configured: list[str], ollama_ready: bool) -> dict[str, 
     connected provider - a reasoning model on hard when OpenRouter is in the mix,
     fast general models elsewhere, local on trivial when Ollama is up - and the
     fallback chain lists the remaining providers (the router always ends on local
-    after it)."""
+    after it).
+
+    `hard` overrides the top tier and is appended to the fallback chain as its
+    last remote step. That is what lets a metered account — a Claude
+    subscription, in practice — take the strategy and coder work while the free
+    providers carry everything else, and still catch a free-provider outage
+    before the chain drops to a local model that may not be installed.
+    """
     picks = [
         p
         for p in _ROUTING_ORDER
@@ -229,11 +254,14 @@ def recommended_routing(configured: list[str], ollama_ready: bool) -> dict[str, 
 
     normal_p = picks[0]
     hard_p = "openrouter" if "openrouter" in picks else normal_p
+    chain = [model(p) for p in picks if p != normal_p]
+    if hard:
+        chain.append(hard)
     return {
         "CORP_TRIVIAL_MODEL": "local:gemma4:e4b" if ollama_ready else model(normal_p),
         "CORP_NORMAL_MODEL": model(normal_p),
-        "CORP_HARD_MODEL": model(hard_p),
-        "CORP_LLM_FALLBACK": ",".join(model(p) for p in picks if p != normal_p),
+        "CORP_HARD_MODEL": hard or model(hard_p),
+        "CORP_LLM_FALLBACK": ",".join(chain),
     }
 
 

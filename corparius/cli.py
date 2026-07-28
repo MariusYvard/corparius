@@ -522,9 +522,10 @@ def main(argv=None) -> None:
     sp.add_argument("--note", default="")
     sp.set_defaults(fn=lambda a: cmd_decide(a, "rejected"))
 
-    from . import plugincli
+    from . import plugincli, skillcli
 
     plugincli.add_parser(sub)
+    skillcli.add_parser(sub)
 
     args = p.parse_args(argv)
     args.fn(args)

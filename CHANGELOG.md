@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased — 141 compétences qu'on ne peut pas déposer
+
+- **`corparius skills import`** adapte un `SKILL.md` écrit pour un autre hôte.
+  Mesuré sur `anthropics/knowledge-work-plugins` (17 plugins, 141 compétences,
+  Apache-2.0), pas sur la présentation qui en est faite : leur en-tête est
+  `name`/`description`/`argument-hint` et ne déclare **aucun** `allowed-tools`,
+  leur médiane est ≈ 12 Ko contre un plafond de 4000 caractères pour le bloc
+  entier, et leurs corps demandent à un humain de répondre en cours de route.
+  Déposées telles quelles, les 141 entreraient dans **chaque** invite de
+  **chaque** agent — la panne que le chargeur venait d'être durci à exposer.
+- **La commande ne convertit pas.** Elle copie le corps verbatim et annonce
+  l'arithmétique avant d'écrire : « 14182 caractères, plafond 4000, 71,8 % sera
+  coupé à l'exécution ». Vérifié contre le fichier réel : le chargeur en a gardé
+  3999 sur 14182. Un import silencieux aurait refait la panne qu'il documente.
+- **Deux refus valent plus que la fonction.** Un nom que la table ne connaît pas
+  ne reçoit **aucun** outil et la commande le dit fort : une portée inventée
+  pointe de la prose vers le mauvais agent, en silence. Et un import n'écrase
+  jamais une compétence — ce qui rend un import utilisable, c'est l'élagage fait
+  après.
+- **`corparius skills list`** montre enfin depuis un terminal ce que seuls le
+  doctor et la console savaient : ce qui est chargé, et combien de caractères
+  pèsent sur chaque invite.
+- **Six compétences pour démarrer** (`corparius skills install starter`) :
+  support, social, finance, concurrence, design, code — les métiers que le
+  roster exerce et qui n'avaient aucune prose, en commençant par les deux
+  paliers les plus fréquents. Adaptées de la bibliothèque ci-dessus, créditées
+  dans l'en-tête où l'attribution ne coûte rien à l'exécution, ramenées de
+  12–26 Ko à environ 1 Ko. Un test les tient à la barre qu'elles enseignent.
+- **Un pack de compétences n'a plus besoin de code.** `PluginManifest` exigeait
+  un `entrypoint` module:fonction, donc la seule façon de distribuer de la prose
+  était d'écrire du Python qui tourne pour n'exécuter rien. Un manifeste
+  `kinds: ["skills"]` peut l'omettre ; tout le reste doit encore nommer du code.
+  La liste blanche vérifiée continue de s'appliquer, pour une raison qui n'est
+  pas l'exécution : ce corps entre dans l'invite système avec l'autorité du
+  prompt de rôle.
+- **Fixed: les tests pouvaient écrire dans le dépôt.** L'arbre `skills/` pend à
+  `CORP_HOME`, pas à `CORP_DATA_PATH` que la fixture hermétique épingle, et une
+  source checkout résout `CORP_HOME` vers la racine du dépôt. Un import de test
+  y a atterri. `/skills/` et les dossiers de plugins installés sont désormais
+  ignorés par git.
+- Dossier `docs/reverse-engineering/knowledge-work-plugins.md` : les mesures, ce
+  qui a été repris, et ce qui a été écarté — la sélection par `description`
+  (routage par le modèle), `argument-hint`, les connecteurs MCP par pack, et les
+  treize plugins dont le métier n'existe pas ici.
+
 ## Unreleased — l'abonnement Claude, sans le piège
 
 - **Fixed: `corparius claude` et la console écrivaient deux plans différents.**

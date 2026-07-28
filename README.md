@@ -134,7 +134,7 @@ docker run -d -p 127.0.0.1:8600:8600 -v corparius_data:/app/data ghcr.io/mariusy
 The console walks you through creating your first company; `python -m corparius.cli
 doctor` diagnoses the installation and says what to fix. The CLI covers
 everything the console does: `run`, `status`, `tasks`, `board`, `flow`,
-`approvals`, `site`, `deploy`, `backup`, `bench`. Compose profiles: `--profile loop`
+`approvals`, `site`, `deploy`, `backup`, `bench`, `skills`. Compose profiles: `--profile loop`
 adds the background company loop, `--profile extras` adds Postgres and n8n.
 
 ## Operator console
@@ -355,7 +355,7 @@ ships one. Full guide: [`docs/skills.md`](docs/skills.md).
 | `docs/memoire.md` | yesterday vs what stays true: durable memory |
 | `docs/install.md` | download/run per OS, data locations, updates |
 | `docs/roadmap-90j.md` | the 90-day build cycle |
-| `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia, Uclic and OpenWorker |
+| `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia, Uclic, OpenWorker and knowledge-work-plugins |
 
 ## Support
 

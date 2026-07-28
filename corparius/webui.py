@@ -272,6 +272,11 @@ def _providers_payload() -> dict:
         "anthropic_key_set": bool(cfg.get("ANTHROPIC_API_KEY", "").strip()),
         "claude_code": s.claude_code_enabled,
         "claude_installed": claudecli.installed(),
+        # Filesystem checks only, no probe: the card has to be able to say
+        # "that is the chat app, not the CLI" without costing this polled
+        # endpoint anything.
+        "claude_desktop": claudecli.desktop_installed(),
+        "claude_install_cmd": claudecli.INSTALL_CMD,
         "claude_ready": claudecli.already_on(),
         # Deliberately not the full plan. Building it needs to know whether
         # Ollama answers, and this endpoint is polled — a probe here charged
@@ -1240,6 +1245,18 @@ def _route_test_claude(ctx):
     return 200, {"ok": True, "result": claudecli.check(lang=ctx.lang)}
 
 
+def _route_claude_install(ctx):
+    """Install the CLI, on a button press.
+
+    It puts a global npm package on the operator's machine, so it never happens
+    as a side effect of a status check — only here, and only from this console,
+    which is bound to localhost behind a token.
+    """
+    if claudecli.installed():
+        return 200, {"ok": True, "result": {"ok": True, "detail": "already installed"}}
+    return 200, {"ok": True, "result": claudecli.install()}
+
+
 def _route_claude_setup(ctx):
     result = _claude_setup(ctx.state, all_tiers=bool(ctx.body.get("all_tiers")))
     return (200 if result.get("ok") else 400), result
@@ -1336,6 +1353,7 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/test/payments", _route_test_payments),
     Route("POST", "/api/test/claude", _route_test_claude),
     Route("POST", "/api/claude/setup", _route_claude_setup),
+    Route("POST", "/api/claude/install", _route_claude_install),
     Route("POST", "/api/test/provider", _route_test_provider),
     Route("POST", "/api/ollama/pull", _route_ollama_pull),
     Route("POST", "/api/ollama/bench", _route_ollama_bench),

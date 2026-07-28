@@ -883,6 +883,9 @@ en: {
   "cc.testing":"Asking the CLI…","cc.applying":"Checking the CLI, then switching over…",
   "cc.done":"Done. Mock off, cloud on, and the tiers now run on your Claude subscription.",
   "cc.step1":"Install Claude Code from","cc.step2":"then pick your subscription",
+  "cc.desktop":"Claude Desktop is installed on this machine, but that is the chat app. corparius drives the Claude Code CLI, a separate install on the same subscription — nothing more to buy.",
+  "cc.install":"Install the CLI for me","cc.installing":"Installing — this takes a minute…",
+  "cc.installed":"CLI installed. Run `claude login` in a terminal once, then press Use your Claude subscription.",
   "prov.test":"Test","prov.testing":"Testing…",
   "prov.localServer":"Local server preset…","prov.serverFilled":"Endpoint filled. Save it, then point a tier at custom:<model>.",
   "oll.title":"Local models (Ollama)","oll.desc":"Free, offline, on your machine. corparius sees what is installed and pulls what your tiers need.",
@@ -1059,6 +1062,9 @@ fr: {
   "cc.testing":"Interrogation du CLI…","cc.applying":"Vérification du CLI, puis bascule…",
   "cc.done":"C'est fait. Mock coupé, cloud activé, et les tiers tournent sur votre abonnement Claude.",
   "cc.step1":"Installez Claude Code depuis","cc.step2":"puis choisissez votre abonnement",
+  "cc.desktop":"Claude Desktop est installé sur cette machine, mais c'est l'application de discussion. corparius pilote le CLI Claude Code, qui s'installe à part, sur le même abonnement — rien de plus à souscrire.",
+  "cc.install":"Installer le CLI pour moi","cc.installing":"Installation — cela prend une minute…",
+  "cc.installed":"CLI installé. Lancez `claude login` une fois dans un terminal, puis pressez Utiliser votre abonnement Claude.",
   "prov.test":"Tester","prov.testing":"Test…",
   "prov.localServer":"Préréglage serveur local…","prov.serverFilled":"Endpoint rempli. Enregistrez, puis pointez un tier sur custom:<modèle>.",
   "oll.title":"Modèles locaux (Ollama)","oll.desc":"Gratuit, hors ligne, sur votre machine. corparius voit ce qui est installé et tire ce que vos tiers exigent.",
@@ -2078,6 +2084,16 @@ document.addEventListener("click", async e => {
         await loadOllama();
       } catch (e) { out.textContent = e.message; }
       b.disabled = false;
+    } else if (b.id === "claude-install") {
+      const out = $("#claude-out");
+      b.disabled = true; out.textContent = t("cc.installing"); out.style.color = "var(--muted)";
+      try {
+        const { result } = await api("/api/claude/install", {});
+        out.textContent = result.ok ? t("cc.installed") : result.detail;
+        out.style.color = result.ok ? "var(--ok)" : "var(--warn)";
+        if (result.ok) await loadProviders();
+      } catch (e) { out.textContent = e.message; out.style.color = "var(--warn)"; }
+      b.disabled = false;
     } else if (b.id === "claude-test") {
       const out = $("#claude-out");
       b.disabled = true; out.textContent = t("cc.testing"); out.style.color = "var(--muted)";
@@ -2153,16 +2169,22 @@ function renderClaudeCard(d) {
     ? `<span class="badge ok">${t("cc.on")}</span>`
     : installed ? `<span class="badge">${t("cc.found")}</span>`
                 : `<span class="badge warn">${t("cc.missing")}</span>`;
+  // "Install Claude Code" reads as already done to anyone holding Claude
+  // Desktop. Say which product this is before listing a step they think they
+  // have taken.
   const steps = installed ? "" :
-    `<ol class="note" style="margin:12px 0 0; padding-left:18px; line-height:1.7">
-       <li>${esc(t("cc.step1"))} <a href="https://www.claude.com/product/claude-code" target="_blank" rel="noopener">claude.com</a></li>
+    `${d.claude_desktop ? `<p class="note" style="margin:12px 0 0">${esc(t("cc.desktop"))}</p>` : ""}
+     <ol class="note" style="margin:8px 0 0; padding-left:18px; line-height:1.7">
+       <li><code>${esc(d.claude_install_cmd || "npm install -g @anthropic-ai/claude-code")}</code>
+           — <a href="https://www.claude.com/product/claude-code" target="_blank" rel="noopener">claude.com</a></li>
        <li><code>claude login</code> ${esc(t("cc.step2"))}</li>
      </ol>`;
   $("#claude-body").innerHTML = `
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px">${status}
       ${ready ? `<span class="note">${esc(t("cc.readyNote"))}</span>` : ""}</div>
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
-      <button class="primary" id="claude-setup">${t(ready ? "cc.reapply" : "cc.use")}</button>
+      ${installed ? "" : `<button class="primary" id="claude-install">${t("cc.install")}</button>`}
+      <button class="${installed ? "primary" : ""}" id="claude-setup">${t(ready ? "cc.reapply" : "cc.use")}</button>
       <button id="claude-setup-all">${t("cc.useAll")}</button>
       <button id="claude-test">${t("cc.test")}</button>
     </div>

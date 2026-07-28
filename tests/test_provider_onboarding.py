@@ -147,27 +147,76 @@ def test_the_doctor_offers_the_claude_path_when_the_cli_is_there(monkeypatch):
     assert "corparius claude" in message
 
 
-def test_the_doctor_says_nothing_when_the_cli_is_absent(monkeypatch):
-    from corparius import doctor
+def test_the_doctor_says_nothing_when_neither_is_installed(monkeypatch):
+    """No subscription in evidence, no advice: the doctor lists what is wrong,
+    not what could be bought."""
+    from corparius import claudecli, doctor
     from corparius.config import Settings
 
     s = Settings()
     s.claude_code_enabled = False
     monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
+    monkeypatch.setattr(claudecli, "desktop_installed", lambda: False)
     assert "corparius claude" not in doctor._check_claude_cli(s)[2]
 
 
 def test_the_one_command_writes_exactly_the_console_plan(tmp_path, monkeypatch, capsys):
     """The CLI and the console must apply the same four-way change. Two paths
-    that drift is how an operator ends up half-configured."""
-    from corparius import claudecli
+    that drift is how an operator ends up half-configured.
+
+    This once compared the CLI's result against `plan()` — also called with no
+    arguments — so it agreed with the bug instead of catching it: with no
+    connected providers and no local verdict passed in, `plan()` reads the
+    machine as having nothing free and puts *every* tier on the subscription.
+    The inputs are what has to match, not just the function.
+    """
+    from corparius import claudecli, hardware, llm
     from corparius.cli import cmd_claude
     from corparius.store import Store
 
     monkeypatch.setattr(claudecli, "check", lambda *a, **k: {"ok": True, "detail": "ready"})
+    monkeypatch.setattr(llm, "connected_providers", lambda: ["groq", "openrouter"])
+    monkeypatch.setattr(hardware, "recommended_local", lambda *a, **k: ("", "too slow"))
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
-    cmd_claude(types.SimpleNamespace(check=False))
-    assert Store(str(tmp_path)).all_settings() == claudecli.plan()
+    cmd_claude(types.SimpleNamespace(check=False, all_tiers=False))
+    written = Store(str(tmp_path)).all_settings()
+    assert written == claudecli.plan(["groq", "openrouter"], "")
+    assert not written["CORP_TRIVIAL_MODEL"].startswith("claudecode:"), (
+        "the most frequent tier must stay on a free provider"
+    )
+    assert written["CORP_HARD_MODEL"] == "claudecode:opus"
+    assert "haiku" in written["CORP_LLM_FALLBACK"]
+
+
+def test_the_one_command_honours_all_tiers(tmp_path, monkeypatch, capsys):
+    """--all-tiers was parsed and then never read."""
+    from corparius import claudecli, hardware, llm
+    from corparius.cli import cmd_claude
+    from corparius.store import Store
+
+    monkeypatch.setattr(claudecli, "check", lambda *a, **k: {"ok": True, "detail": "ready"})
+    monkeypatch.setattr(llm, "connected_providers", lambda: ["groq"])
+    monkeypatch.setattr(hardware, "recommended_local", lambda *a, **k: ("", "too slow"))
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    cmd_claude(types.SimpleNamespace(check=False, all_tiers=True))
+    written = Store(str(tmp_path)).all_settings()
+    assert written["CORP_TRIVIAL_MODEL"] == "claudecode:haiku"
+    assert "serving every tier" in capsys.readouterr().out
+
+
+def test_the_one_command_puts_a_capable_machine_on_local(tmp_path, monkeypatch, capsys):
+    """The measured verdict has to reach the CLI too, or `corparius bench` says
+    the machine can serve a tier and `corparius claude` ignores it."""
+    from corparius import claudecli, hardware, llm
+    from corparius.cli import cmd_claude
+    from corparius.store import Store
+
+    monkeypatch.setattr(claudecli, "check", lambda *a, **k: {"ok": True, "detail": "ready"})
+    monkeypatch.setattr(llm, "connected_providers", lambda: ["groq"])
+    monkeypatch.setattr(hardware, "recommended_local", lambda *a, **k: ("gemma:2b", "40/s"))
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    cmd_claude(types.SimpleNamespace(check=False, all_tiers=False))
+    assert Store(str(tmp_path)).all_settings()["CORP_TRIVIAL_MODEL"] == "local:gemma:2b"
 
 
 def test_the_cli_store_honours_the_redirected_data_path(tmp_path, monkeypatch):
@@ -356,3 +405,72 @@ def test_no_ollama_at_all_is_reported_as_such(tmp_path, monkeypatch):
     monkeypatch.setattr(hardware, "installed_models", lambda **k: [])
     choice, why = hardware.recommended_local(Store(str(tmp_path)), Settings())
     assert choice == "" and "not reachable" in why
+
+
+def test_the_doctor_names_the_desktop_app_when_the_cli_is_missing(monkeypatch):
+    """Same trap as the CLI message: someone holding Claude Desktop reads
+    "install Claude Code" as done."""
+    from corparius import claudecli, doctor
+    from corparius.config import Settings
+
+    s = Settings()
+    s.claude_code_enabled = False
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
+    monkeypatch.setattr(claudecli, "desktop_installed", lambda: True)
+    level, _, message = doctor._check_claude_cli(s)
+    assert level == "ok" and "Claude Desktop" in message
+    assert "corparius claude --install" in message
+
+
+def test_the_doctor_fails_loudly_when_the_target_is_on_without_the_cli(monkeypatch):
+    from corparius import claudecli, doctor
+    from corparius.config import Settings
+
+    s = Settings()
+    s.claude_code_enabled = True
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
+    monkeypatch.setattr(claudecli, "desktop_installed", lambda: True)
+    level, _, message = doctor._check_claude_cli(s)
+    assert level == "fail" and "not the chat app" not in message
+    assert "chat app" in message and "corparius claude --install" in message
+
+
+def test_the_command_installs_only_when_asked(tmp_path, monkeypatch, capsys):
+    """--install is the whole authorisation: a global npm package is not
+    something a status check gets to decide."""
+    import pytest
+
+    from corparius import claudecli
+    from corparius.cli import cmd_claude
+
+    monkeypatch.setattr(claudecli, "installed", lambda: False)
+    monkeypatch.setattr(
+        claudecli, "check", lambda *a, **k: {"ok": False, "detail": "not installed"}
+    )
+
+    def explode(*a, **k):
+        raise AssertionError("installed without --install")
+
+    monkeypatch.setattr(claudecli, "install", explode)
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    with pytest.raises(SystemExit):
+        cmd_claude(types.SimpleNamespace(check=False, all_tiers=False, install=False))
+
+
+def test_the_command_installs_then_configures(tmp_path, monkeypatch, capsys):
+    from corparius import claudecli, hardware, llm
+    from corparius.cli import cmd_claude
+    from corparius.store import Store
+
+    calls = []
+    monkeypatch.setattr(claudecli, "installed", lambda: False)
+    monkeypatch.setattr(
+        claudecli, "install", lambda *a, **k: (calls.append("npm"), {"ok": True, "detail": "in"})[1]
+    )
+    monkeypatch.setattr(claudecli, "check", lambda *a, **k: {"ok": True, "detail": "ready"})
+    monkeypatch.setattr(llm, "connected_providers", lambda: ["groq"])
+    monkeypatch.setattr(hardware, "recommended_local", lambda *a, **k: ("", "too slow"))
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    cmd_claude(types.SimpleNamespace(check=False, all_tiers=False, install=True))
+    assert calls == ["npm"]
+    assert Store(str(tmp_path)).all_settings()["CORP_HARD_MODEL"] == "claudecode:opus"

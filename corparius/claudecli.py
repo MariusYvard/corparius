@@ -61,16 +61,99 @@ TOGGLES = {
     "CORP_CLAUDE_CODE": "true",
 }
 
+INSTALL_CMD = "npm install -g @anthropic-ai/claude-code"
+
 INSTALL_EN = (
-    "The `claude` CLI is not on this machine's PATH. Install Claude Code "
-    "(claude.com/product/claude-code), then run `claude login` and pick "
-    "your subscription."
+    "The `claude` CLI is not on this machine's PATH. Two steps, once:\n"
+    f"  1. {INSTALL_CMD}\n"
+    "  2. claude login   (pick your subscription)\n"
+    "Then run `corparius claude` again. Or let corparius do step 1 for you: "
+    "`corparius claude --install`."
 )
 INSTALL_FR = (
-    "Le CLI `claude` n'est pas sur le PATH de cette machine. Installez "
-    "Claude Code (claude.com/product/claude-code), puis lancez "
-    "`claude login` et choisissez votre abonnement."
+    "Le CLI `claude` n'est pas sur le PATH de cette machine. Deux étapes, "
+    "une fois :\n"
+    f"  1. {INSTALL_CMD}\n"
+    "  2. claude login   (choisissez votre abonnement)\n"
+    "Puis relancez `corparius claude`. Ou laissez corparius faire l'étape 1 : "
+    "`corparius claude --install`."
 )
+
+# The trap this exists for: someone who has Claude Desktop reasonably reads
+# "install Claude Code" as "you already did that". They are two products —
+# Desktop is the chat window, and corparius drives the CLI headlessly
+# (`claude -p ... --output-format json`), which a GUI cannot answer. Saying so
+# costs three lines and saves an operator from concluding corparius is broken.
+DESKTOP_EN = (
+    "Claude Desktop is installed on this machine, but that is the chat app — "
+    "corparius needs the Claude Code CLI, which is a separate install. Same "
+    "subscription, no second one to buy.\n"
+)
+DESKTOP_FR = (
+    "Claude Desktop est installé sur cette machine, mais c'est l'application "
+    "de discussion — corparius a besoin du CLI Claude Code, qui s'installe à "
+    "part. Même abonnement, rien de plus à souscrire.\n"
+)
+
+
+def desktop_installed() -> bool:
+    """Is the Claude *desktop app* here? It is not the CLI and cannot stand in
+    for it; knowing it is present only changes what we say, never what we do."""
+    import glob
+    import os
+    import sys
+    from pathlib import Path
+
+    candidates: list[str] = []
+    if sys.platform == "win32":
+        local = os.environ.get("LOCALAPPDATA", "")
+        candidates += [f"{local}\\AnthropicClaude", f"{local}\\Claude"]
+        candidates += glob.glob("C:\\Program Files\\WindowsApps\\Claude_*")
+    elif sys.platform == "darwin":
+        candidates += ["/Applications/Claude.app", str(Path.home() / "Applications/Claude.app")]
+    else:
+        candidates += ["/opt/Claude", str(Path.home() / ".local/share/applications/claude.desktop")]
+    return any(c and Path(c).exists() for c in candidates)
+
+
+def install(timeout: int = 600) -> dict:
+    """Run the npm install, on an explicit `--install`.
+
+    Never implicit: this puts a global package on the operator's machine, which
+    is not something a status check gets to decide.
+    """
+    npm = shutil.which("npm")
+    if not npm:
+        return {
+            "ok": False,
+            "detail": (
+                "npm is not on this machine's PATH, and the CLI installs through "
+                "it. Install Node.js (nodejs.org), then run this again — or "
+                "follow claude.com/product/claude-code for the native installer."
+            ),
+        }
+    try:
+        proc = subprocess.run(
+            [npm, "install", "-g", "@anthropic-ai/claude-code"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return {"ok": False, "detail": f"The install did not finish: {exc}"}
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "").strip()[-400:]
+        return {"ok": False, "detail": f"npm exited {proc.returncode}:\n{tail}"}
+    if not resolve():
+        return {
+            "ok": False,
+            "detail": (
+                "npm reported success but `claude` is still not on the PATH. "
+                "Open a new terminal — the npm global directory is added to the "
+                "PATH at shell start — then run `corparius claude` again."
+            ),
+        }
+    return {"ok": True, "detail": "The Claude Code CLI is installed."}
 
 
 def resolve() -> str | None:
@@ -95,7 +178,14 @@ def check(timeout: int = 60, lang="en") -> dict:
     p = lambda en, fr: i18n.pick(lang, en, fr)
     exe = resolve()
     if not exe:
-        return {"ok": False, "installed": False, "detail": p(INSTALL_EN, INSTALL_FR)}
+        desktop = desktop_installed()
+        prefix = p(DESKTOP_EN, DESKTOP_FR) if desktop else ""
+        return {
+            "ok": False,
+            "installed": False,
+            "desktop": desktop,
+            "detail": prefix + p(INSTALL_EN, INSTALL_FR),
+        }
     try:
         proc = subprocess.run(
             [exe, "-p", "Reply with the single word: ready", "--output-format", "json"],

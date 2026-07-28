@@ -75,18 +75,35 @@ corparius claude --check    # teste seulement, ne modifie rien
 
 Elle applique exactement le même plan que le bouton « Utiliser votre abonnement Claude » de la console (onglet Providers), et refuse d'écrire quoi que ce soit si le test échoue : laisser « cloud activé, mock désactivé » sur un CLI qui ne répond pas mettrait l'exploitant dans un état pire qu'avant.
 
-Ce qu'elle écrit, et pourquoi il en faut quatre à la fois — c'est cette conjonction cachée qui rendait la chose difficile à activer à la main :
+### Le gratuit d'abord, l'abonnement pour le difficile
+
+Un abonnement Claude se mesure en fenêtres d'usage, pas en jetons. Le dépenser sur `draft_social_post` — palier TRIVIAL, toutes les deux heures — est l'erreur coûteuse. Donc quand un fournisseur gratuit est connecté, il garde les paliers trivial et normal, et l'abonnement ne prend que HARD, c'est-à-dire la stratégie et le codeur : les deux rôles où la différence vaut une fenêtre.
+
+L'abonnement devient aussi le dernier maillon distant de `CORP_LLM_FALLBACK`, avant le repli local. Un gratuit qui tombe escalade donc vers l'abonnement au lieu de retomber sur un modèle local qui n'est peut-être pas installé.
 
 ```bash
-CORP_LLM_MOCK=false         # sortir du mode hors ligne
-CORP_CLOUD_ENABLED=true     # la porte maîtresse de tout fournisseur distant
-CORP_CLAUDE_CODE=true       # autoriser la cible claudecode:
-CORP_TRIVIAL_MODEL=claudecode:haiku
-CORP_NORMAL_MODEL=claudecode:sonnet
+CORP_LLM_MOCK=false                        # sortir du mode hors ligne
+CORP_CLOUD_ENABLED=true                    # la porte maîtresse de tout distant
+CORP_CLAUDE_CODE=true                      # autoriser la cible claudecode:
+CORP_TRIVIAL_MODEL=local:gemma4:e4b        # Ollama si disponible
+CORP_NORMAL_MODEL=groq:llama-3.3-70b-versatile
 CORP_HARD_MODEL=claudecode:sonnet
+CORP_LLM_FALLBACK=openrouter:...,claudecode:sonnet
 ```
 
+Il en faut quatre à la fois — mock, cloud, Claude Code, paliers — et c'est cette conjonction cachée qui rendait la chose difficile à activer à la main.
+
+Sans aucun gratuit connecté il n'y a rien à préférer : l'abonnement sert alors tous les paliers. Pour l'imposer malgré tout :
+
+```bash
+corparius claude --all-tiers
+```
+
+et dans la console, le bouton « L'utiliser pour tous les paliers » à côté du principal.
+
 Les paliers visent des alias (`haiku`, `sonnet`) et non des identifiants datés, donc ils suivent la dernière version sans rien à remettre à jour.
+
+Rappel du découpage : TRIVIAL sert social, publicité, finance et concurrence ; NORMAL sert le PDG, la prospection, le support et le design ; HARD sert la stratégie et le codeur.
 
 Si le CLI est installé mais la cible inactive, `corparius doctor` le signale et donne la commande : quelqu'un qui a déjà l'abonnement paie sinon une inférence qu'il pourrait obtenir d'une connexion qu'il possède. Le lanceur `start.py` le dit aussi au premier démarrage.
 

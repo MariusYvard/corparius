@@ -386,6 +386,11 @@ def main(argv=None) -> None:
     sp.add_argument(
         "--check", action="store_true", help="test the CLI login without changing any setting"
     )
+    sp.add_argument(
+        "--all-tiers",
+        action="store_true",
+        help="put every tier on the subscription, instead of only the hard one",
+    )
     sp.set_defaults(fn=cmd_claude)
 
     sp = with_company(sub.add_parser("inbox"))

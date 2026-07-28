@@ -71,16 +71,47 @@ def test_one_press_setup_flips_everything_and_survives_restart(server, monkeypat
     assert cfg.get_bool("CORP_LLM_MOCK", "true") is True
     status, d = _call(server, "POST", "/api/claude/setup", {})
     assert status == 200 and d["ok"]
-    # Every gate is now open and the tiers route to the subscription.
+    # Every gate is now open and the hard tier routes to the subscription.
     assert cfg.get_bool("CORP_LLM_MOCK", "true") is False
     assert cfg.get_bool("CORP_CLOUD_ENABLED") is True
     assert cfg.get_bool("CORP_CLAUDE_CODE") is True
-    assert cfg.get("CORP_NORMAL_MODEL") == "claudecode:sonnet"
-    assert cfg.get("CORP_TRIVIAL_MODEL") == "claudecode:haiku"
+    assert cfg.get("CORP_HARD_MODEL") == "claudecode:sonnet"
     assert claudecli.already_on() is True
     # Stored, not just in-process: a restart keeps it.
     cfg.invalidate()
     assert claudecli.already_on() is True
+
+
+def test_setup_leaves_the_simple_work_on_a_free_provider(server, monkeypatch):
+    """A subscription is metered in usage windows, not tokens, so spending one
+    on draft_social_post — TRIVIAL, every two hours — is the expensive mistake.
+    OVH answers without a key, so there is always something free to prefer."""
+    monkeypatch.setattr(claudecli.shutil, "which", lambda _: "/usr/bin/claude")
+    monkeypatch.setattr(claudecli.subprocess, "run", _fake_run())
+    for k in ("CORP_LLM_MOCK", "CORP_CLOUD_ENABLED", "CORP_CLAUDE_CODE"):
+        monkeypatch.delenv(k, raising=False)
+    cfg.invalidate()
+    status, d = _call(server, "POST", "/api/claude/setup", {})
+    assert status == 200 and d["ok"]
+    assert cfg.get("CORP_HARD_MODEL") == "claudecode:sonnet"
+    assert not cfg.get("CORP_NORMAL_MODEL").startswith("claudecode:")
+    # And the subscription is the last remote step before local, so a free
+    # provider going down escalates instead of dropping to a model that may not
+    # be installed.
+    assert cfg.get("CORP_LLM_FALLBACK").endswith("claudecode:sonnet")
+
+
+def test_all_tiers_is_available_when_asked_for(server, monkeypatch):
+    monkeypatch.setattr(claudecli.shutil, "which", lambda _: "/usr/bin/claude")
+    monkeypatch.setattr(claudecli.subprocess, "run", _fake_run())
+    for k in ("CORP_LLM_MOCK", "CORP_CLOUD_ENABLED", "CORP_CLAUDE_CODE"):
+        monkeypatch.delenv(k, raising=False)
+    cfg.invalidate()
+    status, d = _call(server, "POST", "/api/claude/setup", {"all_tiers": True})
+    assert status == 200 and d["ok"]
+    assert cfg.get("CORP_TRIVIAL_MODEL") == "claudecode:haiku"
+    assert cfg.get("CORP_NORMAL_MODEL") == "claudecode:sonnet"
+    assert cfg.get("CORP_HARD_MODEL") == "claudecode:sonnet"
 
 
 def test_setup_refuses_when_the_cli_will_not_answer(server, monkeypatch):

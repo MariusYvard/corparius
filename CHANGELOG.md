@@ -34,6 +34,22 @@
   contribute a directory of them, and plugins do download. The SHA-256 allow-list
   proves what the code is, not what the prose asks for.
 
+## Unreleased — free models first, the subscription for the hard work
+
+- **`corparius claude` no longer spends a usage window on a social post.** It put
+  all three tiers on the subscription, so TRIVIAL work — a post every two hours,
+  an ad review every six — burned the same metered account as strategy. When a
+  free provider is connected it now keeps the trivial and normal tiers and the
+  subscription takes only HARD, which is strategy and the coder: the two roles
+  where the difference is worth a window.
+- **And it catches the outage.** The subscription becomes the last remote step of
+  `CORP_LLM_FALLBACK`, so a free provider going down escalates to Claude instead
+  of dropping straight to a local model that may not be installed.
+- With nothing free connected there is nothing to prefer, so it serves every tier
+  as before. `--all-tiers` (and a second console button) asks for that on purpose.
+- `recommended_routing()` takes a `hard` override, and `connected_providers()`
+  now lives in `llm.py` instead of being computed inline in the console.
+
 ## Unreleased — a Claude subscription is one command
 
 - **`corparius claude`.** Running every tier on a Claude subscription needs four

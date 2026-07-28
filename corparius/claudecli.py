@@ -26,6 +26,10 @@ TIERS = {
     "CORP_HARD_MODEL": "claudecode:sonnet",
 }
 
+# What the top tier gets when free providers carry the rest. Strategy and the
+# coder are the two roles on HARD, and they are where the difference shows.
+HARD_TIER = "claudecode:sonnet"
+
 # Flipped on by the one-press setup. Cloud is the master gate for every remote
 # provider, so it has to be on too; enabling Claude Code alone does nothing, and
 # that hidden AND is most of why this was hard to turn on.
@@ -133,9 +137,31 @@ def check(timeout: int = 60, lang="en") -> dict:
     }
 
 
-def plan() -> dict:
-    """What the one-press setup would write, for a preview and for the payload."""
-    return {**TOGGLES, **TIERS}
+def plan(configured=None, ollama_ready: bool = False, all_tiers: bool = False) -> dict:
+    """What the one-press setup would write, for a preview and for the payload.
+
+    A Claude subscription is metered in usage windows, not in tokens, so
+    spending it on `draft_social_post` — TRIVIAL, every two hours — is the
+    expensive mistake. When free providers are connected they take the trivial
+    and normal tiers and Claude takes only HARD, which is strategy and the
+    coder: the two roles where the difference is worth a window.
+
+    Claude also becomes the last remote step of the fallback chain, so a free
+    provider going down escalates to the subscription instead of dropping
+    straight to a local model that may not be installed.
+
+    With nothing free connected there is nothing to prefer, so Claude serves
+    every tier — the behaviour this had before. `all_tiers` asks for that
+    deliberately.
+    """
+    from .llm import recommended_routing
+
+    if all_tiers:
+        return {**TOGGLES, **TIERS}
+    routing = recommended_routing(list(configured or []), ollama_ready, hard=HARD_TIER)
+    if routing is None:
+        return {**TOGGLES, **TIERS}
+    return {**TOGGLES, **routing}
 
 
 def already_on() -> bool:

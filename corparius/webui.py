@@ -45,7 +45,7 @@ from .agents import ROSTER
 from .config import Settings
 from .doctor import run_checks
 from .integrations import smtp_check, stripe_check, stripe_payments
-from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter
+from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, connected_providers
 from .models import AgentRole
 from .orchestrator import Runtime
 from .store import Store
@@ -272,6 +272,11 @@ def _providers_payload() -> dict:
         "claude_code": s.claude_code_enabled,
         "claude_installed": claudecli.installed(),
         "claude_ready": claudecli.already_on(),
+        # What the button would write, so the card can say which tiers Claude
+        # would take rather than making the operator press to find out.
+        "claude_plan": claudecli.plan(
+            connected_providers(), bool(ollama_setup.status().get("reachable"))
+        ),
         "server_presets": settings_spec.LLM_SERVER_PRESETS,
         "cloud_enabled": s.cloud_enabled,
         "llm_mock": s.llm_mock,
@@ -706,17 +711,26 @@ def _ollama_pull(state: UiState, models: list) -> dict:
     return {"ok": True, "pulling": models}
 
 
-def _claude_setup(state: UiState) -> dict:
+def _claude_setup(state: UiState, all_tiers: bool = False) -> dict:
     """One press: prove the CLI works, then flip mock off, cloud on, Claude Code
     on, and point the tiers at claudecode. The four scattered settings and the
-    hand-edited tier strings were most of the friction."""
+    hand-edited tier strings were most of the friction.
+
+    Free providers, when connected, keep the trivial and normal tiers: a
+    subscription is metered in usage windows, and a social post every two hours
+    is not what those windows are for."""
     result = claudecli.check()
     if not result["ok"]:
         # Do not switch a company to a provider that will not answer.
         return {"ok": False, "error": result["detail"], "check": result}
-    _persist(state, claudecli.plan())
+    applied = claudecli.plan(
+        connected_providers(),
+        bool(ollama_setup.status().get("reachable")),
+        all_tiers=all_tiers,
+    )
+    _persist(state, applied)
     payload = _providers_payload()
-    return {**payload, "check": result, "applied": claudecli.plan()}
+    return {**payload, "check": result, "applied": applied}
 
 
 def _oops(lang: str = "en") -> str:
@@ -1137,16 +1151,9 @@ def _route_tiers_recommend(ctx):
     # an unconfigured provider (the trap the defaults leave after a single key).
     from .llm import recommended_routing
 
-    configured = [
-        name
-        for name, spec in OPENAI_COMPAT_PROVIDERS.items()
-        if cfg.get(spec["key_env"], "").strip()
-        or (
-            spec.get("key_optional")
-            and (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base"))
-        )
-    ]
-    routing = recommended_routing(configured, bool(ollama_setup.status().get("reachable")))
+    routing = recommended_routing(
+        connected_providers(), bool(ollama_setup.status().get("reachable"))
+    )
     if routing is None:
         return 400, {
             "ok": False,
@@ -1204,7 +1211,7 @@ def _route_test_claude(ctx):
 
 
 def _route_claude_setup(ctx):
-    result = _claude_setup(ctx.state)
+    result = _claude_setup(ctx.state, all_tiers=bool(ctx.body.get("all_tiers")))
     return (200 if result.get("ok") else 400), result
 
 

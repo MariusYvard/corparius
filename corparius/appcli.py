@@ -132,6 +132,30 @@ def cmd_serve(args) -> None:
     sys.exit(appserver.serve(host=args.host, port=args.port))
 
 
+def cmd_export(args) -> None:
+    from . import appexport, paths
+    from .config import Settings
+
+    if args.target != "netlify":
+        _fail(f"unknown export target '{args.target}'; only 'netlify' is supported")
+    slug = _slug(args)
+    settings = Settings()
+    out = paths.site_dir(settings.data_path, slug)
+    try:
+        done = appexport.export(slug, args.name, out, settings)
+    except appexport.ExportError as exc:
+        _fail(str(exc))
+    print(f"written: {done['path']}")
+    print(f"  calls  {done['provider']}:{done['model']}")
+    print(f"  needs  {done['key_env']} in the site's environment variables")
+    print(
+        "\nFrom here corparius no longer sees these calls. The key lives at the host,\n"
+        "so the app's daily ceiling, its rate limit and its line in the company's cost\n"
+        "breakdown do not apply to what this function spends. That is the price of a\n"
+        "site that answers with nothing of yours left running."
+    )
+
+
 def add_parser(sub) -> None:
     """Wire the `apps` command and its sub-actions into the CLI."""
     pp = sub.add_parser("apps", help="the company's own LLM apps")
@@ -162,3 +186,9 @@ def add_parser(sub) -> None:
     sp.add_argument("--host", default=None)
     sp.add_argument("--port", type=int, default=None)
     sp.set_defaults(fn=cmd_serve)
+
+    sp = psub.add_parser("export", help="write the app as a function deployed with the site")
+    sp.add_argument("target", nargs="?", default="netlify", choices=["netlify"])
+    sp.add_argument("--app", dest="name", required=True)
+    sp.add_argument("--company", default="")
+    sp.set_defaults(fn=cmd_export)

@@ -9,6 +9,8 @@ Installer la dépendance optionnelle puis démarrer le serveur en transport stdi
     pip install -r requirements-mcp.txt
     python -m corparius.mcp_server
 
+Le serveur MCP est la **seule** partie de corparius que le binaire téléchargeable ne contient pas : il demande une dépendance que le projet garde optionnelle, et le binaire n'a pas de `pip`. Tout le reste — la console, les 23 commandes, les apps, les compétences — fonctionne à l'identique depuis le binaire et depuis le lanceur source. Pour MCP, partez d'une installation Python (`start.py`, ou `pip install corparius[mcp]`).
+
 ## Outils exposés
 
 run pour lancer la boucle, status pour l'état, tasks pour lire le backlog, task pour arbitrer une tâche (le CEO valide, modifie ou refuse), approvals et approve pour la validation humaine des actions sensibles, inbox et answer pour les questions qu'un agent bloqué a posées et les avis qu'une session gelée a déposés, site et deploy pour la page de vente. Les garde-fous, la mémoire et le stockage local restent en place derrière chaque appel.

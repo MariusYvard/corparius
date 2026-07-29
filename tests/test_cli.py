@@ -501,3 +501,43 @@ def test_the_frozen_launcher_still_serves_the_console_with_no_command(monkeypatc
         monkeypatch.setattr(_sys, "argv", argv)
         launcher.main()
         assert served.get("served"), argv
+
+
+def test_the_frozen_launcher_survives_a_codepage_that_cannot_encode_its_output(monkeypatch):
+    """A frozen build writes stdout in the machine's ANSI encoding, and the
+    bootloader starts Python before PYTHONUTF8 or PYTHONIOENCODING could change
+    that — both were verified ignored. Every character corparius prints encodes
+    on a Western Windows, but the em dash and the accented French strings do
+    not exist in a Cyrillic codepage: a redirected `doctor --lang fr` would die
+    with UnicodeEncodeError instead of printing.
+    """
+    import io
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packaging"))
+    try:
+        import launcher
+    finally:
+        sys.path.pop(0)
+
+    hostile = io.TextIOWrapper(io.BytesIO(), encoding="cp1251", errors="strict")
+    monkeypatch.setattr(sys, "stdout", hostile)
+    monkeypatch.setattr(sys, "stderr", hostile)
+    with pytest.raises(UnicodeEncodeError):
+        print("faq — réponse", file=hostile)
+    launcher._never_crash_on_a_character()
+    print("faq — réponse", file=hostile)  # no raise: the point of the guard
+    hostile.flush()
+
+
+def test_hardening_the_streams_never_raises_on_something_that_is_not_a_stream(monkeypatch):
+    """It runs first, before anything else, so it has to be the one line that
+    cannot be the reason a launch fails."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packaging"))
+    try:
+        import launcher
+    finally:
+        sys.path.pop(0)
+
+    monkeypatch.setattr(sys, "stdout", object())
+    monkeypatch.setattr(sys, "stderr", None)
+    launcher._never_crash_on_a_character()

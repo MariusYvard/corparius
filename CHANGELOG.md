@@ -12,10 +12,24 @@
   puisse le demander. Un premier argument qui n'est pas un drapeau part
   maintenant au CLI ; rien, ou seulement des drapeaux, sert la console comme
   avant.
-- Vérifié sur l'artefact, pas seulement en test : binaire PyInstaller construit
-  depuis `packaging/corparius.spec` — que la CI n'exerce jamais — puis
-  `skills install starter` (6 compétences), `doctor` (22 contrôles),
-  `apps list`, `apps run`, et un lancement nu qui ouvre toujours la console.
+- **Parité mesurée, pas supposée.** Les 23 sous-commandes ont été passées dans
+  deux dossiers identiques, une fois par le CLI source et une fois par le
+  binaire : **28 invocations, aucune différence** — mêmes sorties, mêmes codes
+  de sortie. Plus les chemins que le balayage ne couvre pas : `ui`,
+  `apps serve`, `bench` (une vraie mesure via Ollama) et `claude --check`, qui
+  prouve la résolution du `.cmd` Windows depuis un binaire figé.
+- **Fixed: une sortie que la page de code de la machine ne sait pas encoder
+  faisait planter le binaire.** Un build figé écrit stdout dans l'encodage ANSI
+  de la machine, et le bootloader initialise Python avant que `PYTHONUTF8` ou
+  `PYTHONIOENCODING` puissent y changer quoi que ce soit — les deux sont
+  ignorés, vérifié. Sur un Windows occidental tout passe, mais le tiret cadratin
+  et les chaînes françaises n'existent pas dans une page cyrillique : un
+  `doctor --lang fr` redirigé y mourait sur un `UnicodeEncodeError`. Il dégrade
+  en `?` désormais. Une commande de diagnostic qui ne survit pas à une
+  redirection n'est pas une commande de diagnostic.
+- Le serveur MCP est la seule chose que le binaire ne contient pas — dépendance
+  optionnelle, et pas de `pip` dans un exécutable figé. `docs/mcp.md` le dit
+  maintenant au lieu de le laisser découvrir.
 
 ## Unreleased — les LLM de l'entreprise, utilisables par ses applications
 

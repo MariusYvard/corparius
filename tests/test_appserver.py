@@ -24,17 +24,28 @@ KEY = "test-key-not-a-secret"
 
 
 def _call(server, method, path, body=None, headers=None):
+    """Returns (status, json, response-headers).
+
+    The headers are copied out rather than the response object returned: a
+    caller reading `resp.getheader(...)` after `conn.close()` kept the socket
+    reachable, and on Windows the collector then raised an unclosed-socket
+    ResourceWarning inside whichever test happened to be running. With
+    `filterwarnings = ["error"]` that fails a test that did nothing wrong.
+    """
     conn = HTTPConnection("127.0.0.1", server.server_address[1], timeout=5)
     payload = json.dumps(body) if body is not None else None
     head = {"Content-Type": "application/json", **(headers or {})}
-    conn.request(method, path, body=payload, headers=head)
-    resp = conn.getresponse()
-    raw = resp.read()
-    conn.close()
     try:
-        return resp.status, json.loads(raw or b"{}"), resp
+        conn.request(method, path, body=payload, headers=head)
+        resp = conn.getresponse()
+        raw = resp.read()
+        status, got = resp.status, dict(resp.getheaders())
+    finally:
+        conn.close()
+    try:
+        return status, json.loads(raw or b"{}"), got
     except json.JSONDecodeError:
-        return resp.status, {}, resp
+        return status, {}, got
 
 
 @pytest.fixture()
@@ -204,8 +215,8 @@ def test_a_listed_origin_is_answered_and_echoed_back(server, home):
     _app(home)
     status, _, resp = _post(server, Origin="https://site.test")
     assert status == 200
-    assert resp.getheader("Access-Control-Allow-Origin") == "https://site.test"
-    assert resp.getheader("Vary") == "Origin"
+    assert resp.get("Access-Control-Allow-Origin") == "https://site.test"
+    assert resp.get("Vary") == "Origin"
 
 
 def test_an_empty_origin_list_allows_no_browser_at_all(server, home):
@@ -228,8 +239,8 @@ def test_the_preflight_answers_for_a_listed_origin(server, home):
         server, "OPTIONS", "/v1/apps/t/faq", None, {"Origin": "https://site.test"}
     )
     assert status == 204
-    assert resp.getheader("Access-Control-Allow-Origin") == "https://site.test"
-    assert "X-Corp-App-Key" in (resp.getheader("Access-Control-Allow-Headers") or "")
+    assert resp.get("Access-Control-Allow-Origin") == "https://site.test"
+    assert "X-Corp-App-Key" in resp.get("Access-Control-Allow-Headers", "")
 
 
 def test_the_preflight_refuses_an_unlisted_origin(server, home):

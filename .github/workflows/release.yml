@@ -139,9 +139,17 @@ jobs:
         include:
           - os: windows-latest
             asset: corparius-windows-x64.exe
+          # Kept on macos-14 rather than a newer image: PyInstaller stamps the
+          # runner's macOS as the minimum, and a binary built on an older one
+          # runs on newer ones, never the reverse. Deprecated but alive; when it
+          # goes, moving up raises the floor for every Apple Silicon user.
           - os: macos-14          # Apple Silicon
             asset: corparius-macos-arm64.zip
-          - os: macos-13          # Intel
+          # macos-13 was the Intel image and GitHub has retired it: the job did
+          # not fail, it queued for a runner that no longer exists and held the
+          # release behind it. macos-15-intel is the oldest Intel image left,
+          # so this asset now needs macOS 15 on an Intel Mac.
+          - os: macos-15-intel    # Intel
             asset: corparius-macos-x64.zip
           - os: ubuntu-latest
             asset: corparius-linux-x64

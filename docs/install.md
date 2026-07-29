@@ -17,7 +17,7 @@ Récupérez le fichier de votre système depuis la [dernière release](https://g
 | --- | --- | --- |
 | Windows x64 | `corparius-windows-x64.exe` | double-cliquez |
 | macOS (Apple Silicon) | `corparius-macos-arm64.zip` | décompressez, puis clic-droit sur `corparius.app` → Ouvrir |
-| macOS (Intel) | `corparius-macos-x64.zip` | décompressez, puis clic-droit sur `corparius.app` → Ouvrir |
+| macOS (Intel, 15+) | `corparius-macos-x64.zip` | décompressez, puis clic-droit sur `corparius.app` → Ouvrir |
 | Linux x64 | `corparius-linux-x64` | `chmod +x corparius-linux-x64 && ./corparius-linux-x64` |
 
 Au premier lancement, corparius prépare son dossier de données, crée la société

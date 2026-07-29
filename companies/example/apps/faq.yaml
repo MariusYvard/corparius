@@ -1,0 +1,32 @@
+# An app is the company's own use of the LLM providers corparius already has:
+# no second API key, no key copied into a web page. This one answers a visitor's
+# question about the offer. `corparius apps run faq --company example --input "..."`
+# works offline in mock mode, which is where you write it.
+name: faq
+description: Answers one question about the offer, or says it does not know.
+
+# TRIVIAL is the cheapest tier and the right one here: a FAQ answer is short and
+# the question is narrow. A tier is a cost decision, so make it deliberately.
+tier: trivial
+
+system: |
+  You answer questions from visitors about this company's offer, in their own
+  language, in at most four sentences.
+
+  Never invent a price, a date, a feature or a guarantee. Anything you were not
+  told, you do not know: say so and point them at the contact link. A confident
+  wrong answer to a prospect costs more than an unanswered question.
+
+  Do not negotiate, do not promise a discount, and do not take a commitment on
+  the company's behalf.
+
+# Ceilings, not decoration. An endpoint that calls a model on behalf of whoever
+# asks is a way to spend someone else's subscription.
+max_tokens: 300
+daily_tokens: 20000
+rate_per_minute: 6
+
+# Which pages may call this app. An empty list means no browser may: the endpoint
+# refuses a request whose Origin it was not told about, rather than defaulting to
+# everyone.
+origins: []

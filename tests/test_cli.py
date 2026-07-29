@@ -8,6 +8,8 @@ would not move it.
 """
 
 import json
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -447,3 +449,55 @@ def test_apps_commands_need_a_company(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     with pytest.raises(SystemExit):
         cli.main(["apps", "list"])
+
+
+# --- the frozen binary is also the CLI -------------------------------------
+def test_the_frozen_launcher_hands_a_subcommand_to_the_cli(monkeypatch, tmp_path):
+    """It looked at argv for exactly one string, `--no-browser`, and served the
+    console whatever else was there. So `corparius doctor` started the console,
+    and every command the docs tell an operator to run did not exist for anyone
+    who downloaded the binary — which is the install path the README puts
+    first. The starter skill pack even rides inside the executable, with
+    nothing able to ask for it.
+    """
+    import sys as _sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packaging"))
+    try:
+        import launcher
+    finally:
+        sys.path.pop(0)
+
+    seen = {}
+    monkeypatch.setattr(launcher, "_prepare_home", lambda: None)
+    monkeypatch.setattr("corparius.cli.main", lambda argv: seen.setdefault("argv", argv))
+    monkeypatch.setattr(_sys, "argv", ["corparius", "skills", "list"])
+    assert launcher.main() == 0
+    assert seen["argv"] == ["skills", "list"]
+
+
+def test_the_frozen_launcher_still_serves_the_console_with_no_command(monkeypatch):
+    """No argument, or only flags: the turnkey path the binary exists for."""
+    import sys as _sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packaging"))
+    try:
+        import launcher
+    finally:
+        sys.path.pop(0)
+
+    served = {}
+    monkeypatch.setattr(launcher, "_prepare_home", lambda: None)
+    monkeypatch.setattr(launcher, "_announce_update", lambda: None)
+    monkeypatch.setattr("corparius.doctor.main", lambda quiet=False: 0)
+    monkeypatch.setattr("corparius.webui.serve", lambda s: served.setdefault("served", True) or 0)
+
+    def explode(argv):
+        raise AssertionError("a bare launch went to the CLI")
+
+    monkeypatch.setattr("corparius.cli.main", explode)
+    for argv in (["corparius"], ["corparius", "--no-browser"]):
+        served.clear()
+        monkeypatch.setattr(_sys, "argv", argv)
+        launcher.main()
+        assert served.get("served"), argv

@@ -53,6 +53,22 @@ def _announce_update() -> None:
 
 def main() -> int:
     _prepare_home()
+    # A subcommand runs the CLI; nothing, or only flags, serves the console.
+    #
+    # This used to look at argv for exactly one string, `--no-browser`, and
+    # serve the console whatever else was there. So `corparius doctor` started
+    # the console, and every command the docs tell an operator to run — `apps
+    # serve`, `skills install starter`, `bench`, `claude` — did not exist for
+    # anyone who downloaded the binary, which is the install path the README
+    # puts first. The files were even bundled: the starter skill pack rides
+    # inside the executable with nothing able to ask for it.
+    argv = sys.argv[1:]
+    if argv and not argv[0].startswith("-"):
+        from corparius.cli import main as cli_main
+
+        cli_main(argv)  # commands that fail raise SystemExit themselves
+        return 0
+
     from corparius.config import Settings
     from corparius.doctor import main as doctor_main
     from corparius.webui import serve

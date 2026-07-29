@@ -109,16 +109,16 @@ def answer_inbox(company: str, item_id: str, answer: str = "") -> dict:
 
 
 def build_site(company: str) -> dict:
-    cfg, _ = _open(company)
+    cfg, store = _open(company)
     out = str(paths.site_dir(settings.data_path, cfg["slug"]))
-    return {"path": sitegen.build_site(cfg, out)}
+    return {"path": sitegen.build_site(cfg, out, store=store)}
 
 
 def publish_site(company: str) -> dict:
-    cfg, _ = _open(company)
+    cfg, store = _open(company)
     out = str(paths.site_dir(settings.data_path, cfg["slug"]))
     if not os.path.exists(os.path.join(out, "index.html")):
-        sitegen.build_site(cfg, out)
+        sitegen.build_site(cfg, out, store=store)
     return {"result": deploy_mod.deploy_site(out)}
 
 

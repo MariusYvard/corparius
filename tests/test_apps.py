@@ -192,3 +192,48 @@ def test_another_apps_spending_does_not_count_against_this_one(tmp_path):
     store.record_usage("t", "app:other", 5000, 5000)
     store.record_usage("t", "ceo", 5000, 5000)
     assert apps.spent_today(store, "t", apps.App(name="faq", system="s")) == 0
+
+
+# --- the site block on company.yaml ---------------------------------------
+
+
+def test_the_site_block_survives_company_load(tmp_path):
+    """It used to be dropped: `load` rebuilds a normalised dict, so a key that
+    is not named there disappears no matter what the YAML said."""
+    from corparius import company as company_mod
+
+    path = tmp_path / "company.yaml"
+    path.write_text(
+        "slug: t\nname: T\nsite:\n  faq_app: faq\n  faq: ['How much?']\n", encoding="utf-8"
+    )
+    cfg = company_mod.load(path)
+    assert cfg["site"] == {"faq_app": "faq", "faq": ["How much?"]}
+
+
+def test_a_company_with_no_site_block_carries_no_empty_one(tmp_path):
+    from corparius import company as company_mod
+
+    path = tmp_path / "company.yaml"
+    path.write_text("slug: t\nname: T\n", encoding="utf-8")
+    assert "site" not in company_mod.load(path)
+
+
+def test_half_a_site_block_is_warned_about_not_silently_ignored():
+    """An app named with no questions produces nothing, and looks configured."""
+    from corparius import company as company_mod
+
+    _cfg, _errors, warnings = company_mod.validate(
+        {"slug": "t", "name": "T", "site": {"faq_app": "faq"}}
+    )
+    assert any("lists no question" in w for w in warnings)
+    _cfg, _errors, warnings = company_mod.validate(
+        {"slug": "t", "name": "T", "site": {"faq": ["q"]}}
+    )
+    assert any("names no app" in w for w in warnings)
+
+
+def test_a_site_block_that_is_not_a_mapping_is_an_error():
+    from corparius import company as company_mod
+
+    _cfg, errors, _warnings = company_mod.validate({"slug": "t", "name": "T", "site": "yes"})
+    assert any("expected a mapping" in e for e in errors)

@@ -121,6 +121,17 @@ def cmd_key(args) -> None:
     )
 
 
+def cmd_serve(args) -> None:
+    from . import appserver, cfg
+
+    if not cfg.get_bool("CORP_APPS_ENABLED"):
+        _fail(
+            "apps are off. Read docs/apps.md, then set CORP_APPS_ENABLED=true — this "
+            "serves your LLM providers to whoever can reach the port."
+        )
+    sys.exit(appserver.serve(host=args.host, port=args.port))
+
+
 def add_parser(sub) -> None:
     """Wire the `apps` command and its sub-actions into the CLI."""
     pp = sub.add_parser("apps", help="the company's own LLM apps")
@@ -146,3 +157,8 @@ def add_parser(sub) -> None:
     sp.add_argument("name")
     sp.add_argument("--company", default="")
     sp.set_defaults(fn=cmd_key)
+
+    sp = psub.add_parser("serve", help="serve the apps endpoint (127.0.0.1 by default)")
+    sp.add_argument("--host", default=None)
+    sp.add_argument("--port", type=int, default=None)
+    sp.set_defaults(fn=cmd_serve)

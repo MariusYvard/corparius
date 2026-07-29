@@ -317,6 +317,39 @@ SPEC: list[FieldSpec] = [
     ),
     _f("CORP_UI_PORT", "access", type="int", default="8600", label_en="Port", label_fr="Port"),
     _f(
+        "CORP_APPS_ENABLED",
+        "access",
+        type="bool",
+        default="false",
+        label_en="Company apps endpoint",
+        label_fr="Point d'accès des apps",
+        help_en="Off by default. On, `corparius apps serve` lets your company's apps call "
+        "your LLM providers. Read docs/apps.md first: this serves models to whoever "
+        "can reach the port.",
+        help_fr="Coupé par défaut. Activé, `corparius apps serve` laisse les apps de "
+        "l'entreprise appeler vos fournisseurs LLM. Lisez docs/apps.md d'abord : cela "
+        "sert des modèles à quiconque atteint le port.",
+    ),
+    _f(
+        "CORP_APPS_HOST",
+        "access",
+        default="127.0.0.1",
+        label_en="Apps bind address",
+        label_fr="Adresse d'écoute des apps",
+        help_en="127.0.0.1 keeps the endpoint on this machine. Publish it with a tunnel "
+        "or a reverse proxy rather than by opening this.",
+        help_fr="127.0.0.1 garde le point d'accès sur cette machine. Publiez-le par un "
+        "tunnel ou un reverse proxy plutôt qu'en ouvrant ceci.",
+    ),
+    _f(
+        "CORP_APPS_PORT",
+        "access",
+        type="int",
+        default="8610",
+        label_en="Apps port",
+        label_fr="Port des apps",
+    ),
+    _f(
         "CORP_UI_TOKEN",
         "access",
         type="password",

@@ -226,6 +226,44 @@ def _check_permissions(s: Settings) -> tuple:
     return ("ok", "permissions", f"{mode}, asks above {s.ask_above}; gated by name: {gated}")
 
 
+def _check_apps(s: Settings) -> tuple:
+    """What the company would serve, and to whom.
+
+    The failure worth naming is an app with no key set: it is defined, it looks
+    ready, and every call to it is refused. The next one is an app with no
+    origin list, which no browser can call — correct as a default and the
+    likeliest thing to be mistaken for a bug.
+    """
+    from . import apps as apps_mod
+    from . import cfg
+    from .appserver import key_env
+
+    base = paths.companies_dir()
+    slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
+    defined = [(slug, app) for slug in slugs for app in apps_mod.load(slug)]
+    if not defined:
+        return ("ok", "apps", "none defined")
+    on = cfg.get_bool("CORP_APPS_ENABLED")
+    head = f"{len(defined)} app(s) across {len({s for s, _ in defined})} company(ies)"
+    if not on:
+        return ("ok", "apps", f"{head}; the endpoint is off (CORP_APPS_ENABLED=false)")
+    keyless = [f"{slug}/{a.name}" for slug, a in defined if not cfg.get(key_env(slug, a.name), "")]
+    if keyless:
+        return (
+            "warn",
+            "apps",
+            f"{head}, served on {cfg.get('CORP_APPS_HOST', '127.0.0.1')}. No key set for "
+            f"{', '.join(keyless)} — every call to those is refused. "
+            "Run `corparius apps key <name> --company <slug>`.",
+        )
+    browserless = [f"{slug}/{a.name}" for slug, a in defined if not a.origins]
+    where = cfg.get("CORP_APPS_HOST", "127.0.0.1")
+    note = f"{head}, served on {where}"
+    if browserless:
+        note += f". No origin listed for {', '.join(browserless)}, so no browser can call them"
+    return ("ok", "apps", note)
+
+
 def _check_skills(s: Settings) -> tuple:
     """A skill that names a tool nobody has never applies, and does so silently:
     it is read, parsed and then matched against a name that does not exist. That
@@ -663,6 +701,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_deploy_order(),
         _check_plugins(s),
         _check_skills(s),
+        _check_apps(s),
         _check_memory(s),
         _check_inbox(s),
     ]

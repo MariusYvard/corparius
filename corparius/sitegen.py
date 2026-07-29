@@ -8,9 +8,12 @@ with a checkout CTA wired to a Stripe payment link.
 from __future__ import annotations
 
 import html as _html
+import logging
 import os
 
 from . import cfg
+
+log = logging.getLogger("corparius.sitegen")
 
 CSS = """
 :root{--bg:#0b0f17;--panel:#121826;--fg:#e6e9ef;--muted:#9aa4b2;--brand:#5b8cff;--brand2:#7b5bff;--line:#1f2937;--radius:14px}
@@ -46,8 +49,53 @@ def _esc(value) -> str:
     return _html.escape(str(value))
 
 
-def build_site(company: dict, out_dir: str, headline: str | None = None) -> str:
-    """Render a single-file sales page for `company` into out_dir/index.html."""
+def faq_html(company: dict, store) -> str:
+    """A FAQ written once, at build time, by one of the company's own apps.
+
+    The page stays a single static file: the answers are baked in, so there is
+    no JavaScript on it, no endpoint for it to reach, and nothing to leave
+    running. That is the property this generator has defended from the start,
+    and a chat widget would have traded it away for a feature nobody asked for.
+
+    Opt-in through company.yaml:
+
+        site:
+          faq_app: faq
+          faq: ["How much is it?", "Who is it for?"]
+
+    A model that cannot be reached returns "" and the section is simply absent.
+    A page that fails to build because a free provider hiccuped would be a bad
+    trade for a FAQ.
+    """
+    from . import apps as apps_mod
+
+    site = company.get("site") or {}
+    name, questions = site.get("faq_app"), [q for q in (site.get("faq") or []) if str(q).strip()]
+    if not name or not questions or store is None:
+        return ""
+    slug = company.get("slug", "")
+    app = apps_mod.get(slug, str(name))
+    if app is None:
+        log.warning("site FAQ names app '%s', which %s does not have", name, slug or "this company")
+        return ""
+    pairs = []
+    for question in questions:
+        result = apps_mod.run(app, slug, store, str(question), company)
+        if not result["ok"]:
+            log.warning("site FAQ: no model answered '%s'; section omitted", question)
+            return ""
+        pairs.append((str(question), result["text"]))
+    cards = "".join(f'<div class="card"><h3>{_esc(q)}</h3><p>{_esc(a)}</p></div>' for q, a in pairs)
+    return f'<section class="section" id="faq"><h2>Questions</h2><div class="grid">{cards}</div></section>'
+
+
+def build_site(company: dict, out_dir: str, headline: str | None = None, store=None) -> str:
+    """Render a single-file sales page for `company` into out_dir/index.html.
+
+    `store` is only needed for the generated FAQ (see `faq_html`); without it
+    the page is exactly what it was before, which is what every caller that has
+    no store should get.
+    """
     name = company.get("name", "Your product")
     offer = company.get("offer", {}) or {}
     icp = company.get("icp", {}) or {}
@@ -88,6 +136,7 @@ def build_site(company: dict, out_dir: str, headline: str | None = None) -> str:
         for i in [product or "Full access", "Cancel anytime", "Instant onboarding"]
     )
     cta = f'<a class="btn" href="{_esc(pay)}">Get {_esc(name)}</a>'
+    faq = faq_html(company, store)
 
     doc = f"""<!doctype html>
 <html lang="en">
@@ -126,6 +175,7 @@ def build_site(company: dict, out_dir: str, headline: str | None = None) -> str:
       {cta}
     </div>
   </section>
+  {faq}
   <footer>{_esc(name)} · built with corparius</footer>
 </div>
 </body>

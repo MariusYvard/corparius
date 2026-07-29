@@ -21,11 +21,16 @@ def no_ollama_probe(monkeypatch):
     filtered rather than refused, the connect timeout outlived the test
     client's own and these tests failed with a socket timeout rather than an
     assertion. Answer "not reachable" without leaving the process."""
-    from corparius import ollama_setup
+    from corparius import hardware, ollama_setup
 
     monkeypatch.setattr(
         ollama_setup, "status", lambda *a, **k: {"ok": False, "reachable": False, "missing": []}
     )
+    # Its neighbour, missed the first time: the handler also asks which models
+    # are installed, to decide which one the machine could serve. That is a
+    # second real socket to the same filtered port, and patching one of the two
+    # only made this fail less often.
+    monkeypatch.setattr(hardware, "installed_models", lambda *a, **k: [])
 
 
 @pytest.fixture()

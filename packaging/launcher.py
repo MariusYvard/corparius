@@ -19,6 +19,28 @@ import sys
 import webbrowser
 
 
+def _never_crash_on_a_character() -> None:
+    """Let output degrade to `?` rather than raise on the machine's codepage.
+
+    A frozen build writes to stdout in the platform's ANSI encoding, and the
+    bootloader initialises Python before PYTHONUTF8 or PYTHONIOENCODING could
+    change that — verified: both are ignored. On a Western Windows every
+    character corparius prints happens to encode, but the em dash and the
+    accented French strings do not exist in a Cyrillic or a Japanese codepage,
+    and a redirected `corparius doctor --lang fr` would die there with a
+    UnicodeEncodeError instead of printing.
+
+    `errors="replace"` changes nothing where encoding already succeeds; it only
+    replaces a crash with a question mark. A diagnostic command that cannot
+    survive being redirected to a file is not a diagnostic command.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError, OSError):
+            pass  # not a text stream, or already closed: nothing to harden
+
+
 def _log(msg: str) -> None:
     print(f"[corparius] {msg}")
 
@@ -52,6 +74,7 @@ def _announce_update() -> None:
 
 
 def main() -> int:
+    _never_crash_on_a_character()
     _prepare_home()
     # A subcommand runs the CLI; nothing, or only flags, serves the console.
     #

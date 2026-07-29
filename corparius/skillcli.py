@@ -109,12 +109,16 @@ def cmd_install(args) -> None:
 
 
 def _starter_dir() -> Path | None:
-    """Where the shipped pack lives, source checkout or frozen binary alike."""
-    candidates = [
-        Path(__file__).resolve().parent.parent / "packaging" / "skill-pack-starter" / "skills",
-        Path(getattr(sys, "_MEIPASS", "")) / "skill-pack-starter" / "skills",
-    ]
-    return next((c for c in candidates if c.is_dir()), None)
+    """Where the shipped pack lives, in all three distribution modes.
+
+    This hand-rolled its own lookup and found the pack only in a source
+    checkout, so `skills install starter` answered "not in this install" to
+    everyone on a wheel or a frozen binary — that is, to everyone who did not
+    clone the repository. paths._resource is the one place that knows the three
+    layouts; using anything else is how a shipped file goes missing.
+    """
+    found = paths._resource("packaging", "skill-pack-starter", "skills")
+    return found if found.is_dir() else None
 
 
 def _tool_names() -> set[str]:

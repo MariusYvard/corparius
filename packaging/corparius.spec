@@ -29,6 +29,8 @@ datas = [
     (str(ROOT / "corparius" / "webui.html"), "corparius"),
     (str(ROOT / "companies" / "example"), "companies/example"),
     (str(ROOT / "plugins" / "registry.json"), "plugins"),
+    # `corparius skills install starter` copies out of this one.
+    (str(ROOT / "packaging" / "skill-pack-starter"), "packaging/skill-pack-starter"),
     (str(ROOT / ".env.example"), "."),
 ]
 

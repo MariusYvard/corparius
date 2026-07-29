@@ -277,3 +277,34 @@ def test_the_starter_pack_credits_where_it_came_from():
         head = path.read_text(encoding="utf-8")
         assert "knowledge-work-plugins" in head, path
         assert "Apache-2.0" in head, path
+
+
+def test_the_starter_pack_is_found_through_the_one_resource_resolver():
+    """It shipped only to people who had cloned the repository.
+
+    `skills install starter` rolled its own lookup — repo root, then _MEIPASS —
+    and a wheel has neither: the files ride inside the package under _data/.
+    Everyone on a wheel got "the starter pack is not in this install". Going
+    through paths._resource is what makes the three layouts one question.
+    """
+    from pathlib import Path
+
+    from corparius import paths, skillcli
+
+    found = skillcli._starter_dir()
+    assert found is not None, "the pack must be found from a source checkout"
+    assert (found / "support-triage" / "SKILL.md").is_file()
+    assert found == paths._resource("packaging", "skill-pack-starter", "skills")
+    assert Path("packaging/skill-pack-starter/skills").resolve() == found.resolve()
+
+
+def test_the_wheel_and_the_frozen_build_are_told_to_carry_it():
+    """A resolver that looks in the right place finds nothing if the build does
+    not put it there. Both manifests name it."""
+    from pathlib import Path
+
+    pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+    assert '"packaging/skill-pack-starter" = "corparius/_data/' in pyproject
+    assert '"/packaging/skill-pack-starter",' in pyproject
+    spec = Path("packaging/corparius.spec").read_text(encoding="utf-8")
+    assert "skill-pack-starter" in spec

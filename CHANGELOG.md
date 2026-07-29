@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — le binaire est aussi le CLI
+
+- **Fixed: aucune commande n'existait pour qui télécharge le binaire.** Le
+  lanceur figé cherchait dans `argv` exactement une chaîne, `--no-browser`, et
+  servait la console quoi qu'il y ait d'autre. Donc `corparius doctor` ouvrait
+  la console, et `apps serve`, `skills install starter`, `bench`, `claude` —
+  toutes les commandes que la documentation dit de lancer — n'existaient pas
+  sur le chemin d'installation que le README met en premier. Le pack de
+  compétences de départ voyageait même *dans* l'exécutable sans que rien ne
+  puisse le demander. Un premier argument qui n'est pas un drapeau part
+  maintenant au CLI ; rien, ou seulement des drapeaux, sert la console comme
+  avant.
+- Vérifié sur l'artefact, pas seulement en test : binaire PyInstaller construit
+  depuis `packaging/corparius.spec` — que la CI n'exerce jamais — puis
+  `skills install starter` (6 compétences), `doctor` (22 contrôles),
+  `apps list`, `apps run`, et un lancement nu qui ouvre toujours la console.
+
 ## Unreleased — les LLM de l'entreprise, utilisables par ses applications
 
 - **Une app est un fichier YAML** dans `companies/<slug>/apps/`, à côté des

@@ -92,7 +92,7 @@ build for your system from the [latest release](https://github.com/MariusYvard/c
 | --- | --- | --- |
 | Windows x64 | `corparius-windows-x64.exe` | double-click (SmartScreen: More info → Run anyway) |
 | macOS (Apple Silicon) | `corparius-macos-arm64.zip` | unzip, then right-click `corparius.app` → Open |
-| macOS (Intel) | `corparius-macos-x64.zip` | unzip, then right-click `corparius.app` → Open |
+| macOS (Intel, 15+) | `corparius-macos-x64.zip` | unzip, then right-click `corparius.app` → Open |
 | Linux x64 | `corparius-linux-x64` | `chmod +x corparius-linux-x64 && ./corparius-linux-x64` |
 
 The builds are unsigned, so the OS shows a first-run warning; the steps above get

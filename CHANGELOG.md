@@ -48,6 +48,14 @@
   sans clé — elle a l'air prête et chacun de ses appels est refusé.
 - `CORP_APPS_ENABLED` est **coupé par défaut**, comme les plugins et pour la
   même raison. `docs/apps.md` couvre le tunnel plutôt que d'ouvrir l'écoute.
+- **Fixed: le pack de compétences de départ n'arrivait qu'à ceux qui avaient
+  cloné le dépôt.** `skills install starter` s'était écrit sa propre recherche —
+  racine du dépôt, puis `_MEIPASS` — et un wheel n'a ni l'une ni l'autre : les
+  fichiers voyagent *dans* le paquet, sous `_data/`. Tout le monde recevait « le
+  pack de départ n'est pas dans cette installation ». Il passe par
+  `paths._resource`, seul endroit qui connaît les trois dispositions, et les
+  deux manifestes d'empaquetage le nomment enfin. Vérifié en construisant un
+  wheel, en l'installant, et en lançant la commande.
 
 ## Unreleased — 141 compétences qu'on ne peut pas déposer
 

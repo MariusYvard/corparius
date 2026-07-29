@@ -223,6 +223,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dl
+          # Only the assets. Without a pattern this also pulls the buildx build
+          # record that docker/build-push-action uploads on its own — an
+          # artifact this job never reads, and the one whose download failed
+          # after five retries and took the whole release down with it.
+          pattern: corparius-*
       - name: Collect assets and checksums
         run: |
           set -euo pipefail

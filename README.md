@@ -134,7 +134,7 @@ docker run -d -p 127.0.0.1:8600:8600 -v corparius_data:/app/data ghcr.io/mariusy
 The console walks you through creating your first company; `python -m corparius.cli
 doctor` diagnoses the installation and says what to fix. The CLI covers
 everything the console does: `run`, `status`, `tasks`, `board`, `flow`,
-`approvals`, `site`, `deploy`, `backup`, `bench`, `skills`. Compose profiles: `--profile loop`
+`approvals`, `site`, `deploy`, `backup`, `bench`, `skills`, `apps`. Compose profiles: `--profile loop`
 adds the background company loop, `--profile extras` adds Postgres and n8n.
 
 ## Operator console
@@ -335,6 +335,18 @@ skills that apply to it and nothing else. Start from
 [`packaging/skill-template/`](packaging/skill-template/); the example company
 ships one. Full guide: [`docs/skills.md`](docs/skills.md).
 
+## Company apps
+
+The providers corparius already talks to, used for something other than the
+roster: a FAQ on the sales site, a form that understands what a visitor wrote.
+An app is a YAML file in `companies/<slug>/apps/` carrying its own token
+ceiling, rate limit and origin list, and its spend shows up in the console under
+`app:<name>`. No second API key, and none copied into a web page.
+
+It runs in two places from one definition: baked into the static site at build
+time, or on request through `corparius apps serve` (off by default, bound to
+127.0.0.1, published with a tunnel). Full guide: [`docs/apps.md`](docs/apps.md).
+
 ## Documentation
 
 | Doc | Covers |
@@ -352,6 +364,7 @@ ships one. Full guide: [`docs/skills.md`](docs/skills.md).
 | `docs/mcp.md` | driving corparius from any MCP host |
 | `docs/plugins.md` | writing, installing and proposing plugins |
 | `docs/skills.md` | teaching a company its trade in prose (SKILL.md) |
+| `docs/apps.md` | the company's own apps on its own providers |
 | `docs/memoire.md` | yesterday vs what stays true: durable memory |
 | `docs/install.md` | download/run per OS, data locations, updates |
 | `docs/roadmap-90j.md` | the 90-day build cycle |

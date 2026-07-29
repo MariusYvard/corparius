@@ -1,5 +1,62 @@
 # Changelog
 
+## Unreleased — les LLM de l'entreprise, utilisables par ses applications
+
+- **Une app est un fichier YAML** dans `companies/<slug>/apps/`, à côté des
+  skills : un nom, une invite système, un palier et ses plafonds. Elle passe par
+  `HybridRouter` comme tout le reste, donc elle hérite des paliers, de la chaîne
+  de repli et de la comptabilité des coûts que les agents ont déjà. Jusqu'ici,
+  donner une FAQ à son site voulait dire recopier une clé API ailleurs — et dans
+  une page web, une clé recopiée est lisible par quiconque ouvre l'inspecteur.
+- **La dépense est enregistrée sous `app:<nom>`**, ce que la ventilation par
+  agent de la console affiche déjà : aucune ligne de reporting nouvelle.
+- **`corparius apps run` fonctionne en mode mock**, donc une app s'écrit et se
+  mesure hors ligne avant d'être exposée à quoi que ce soit.
+- **Le point d'accès est un second serveur, délibérément pas la console.** La
+  console est le plan de contrôle derrière un jeton sur `127.0.0.1` ; un seul
+  processus pour les deux ferait d'un contrôle qui cède l'exposition des deux.
+  Un test demande `/api/settings` au port des apps et exige un 404.
+- **Quatre gardes avant tout appel, du moins cher au plus cher** : débit,
+  origine, clé, plafond du jour. Cet ordre n'est pas celui d'une check-list. Le
+  plafond est une lecture SQLite : le placer avant la limite de débit laisserait
+  une inondation faire un aller-retour en base par requête. Et une requête
+  refusée consomme quand même son quota, sinon deviner des clés serait gratuit.
+- **Une liste d'origines vide n'autorise aucun navigateur, pas tous.** Un défaut
+  « n'importe quelle page peut appeler » est la façon dont un point d'accès
+  finit intégré à un site dont son propriétaire n'a jamais entendu parler.
+- **La clé n'est pas un secret et la commande le dit.** Ce qu'une page web
+  envoie est lisible dans l'inspecteur ; la clé identifie une app pour lui
+  attribuer une dépense et pouvoir la révoquer. Ce qui protège est ailleurs.
+- **La même app, figée dans le site.** `site.faq_app` dans `company.yaml` :
+  l'app tourne une fois à la construction et ses réponses sont écrites dans le
+  HTML. **La page reste un seul fichier statique** — pas de JavaScript, aucun
+  point d'accès à joindre, rien à laisser allumé — et un test le tient. Un
+  modèle injoignable omet la section et construit la page quand même.
+- **Fixed: `company.load` jetait silencieusement toute clé qu'il ne nommait
+  pas.** Il reconstruit un dict normalisé, donc le bloc `site:` disparaissait
+  quoi qu'en dise le YAML. Nommé désormais, avec un avertissement pour un demi-
+  bloc — une app sans questions a l'air configurée et ne produit rien.
+- **`corparius apps export netlify`** écrit la fonction à côté du site, pour un
+  site qui répond sans machine allumée. **À partir de là corparius ne voit plus
+  la dépense** : la commande le dit, et l'avertissement est répété en tête du
+  fichier généré, là où l'exploitant le lit au moment de le choisir. L'export
+  refuse ce qui ne pourrait échouer que plus tard : un palier `local:`,
+  `claudecode:` ou `cloud:`, et une app sans origines. `node --check` valide le
+  fichier généré dans les tests, quand node est là — rien d'autre ici ne
+  vérifie du JavaScript.
+- Contrôle `apps` du doctor : combien, servies où, et surtout une app définie
+  sans clé — elle a l'air prête et chacun de ses appels est refusé.
+- `CORP_APPS_ENABLED` est **coupé par défaut**, comme les plugins et pour la
+  même raison. `docs/apps.md` couvre le tunnel plutôt que d'ouvrir l'écoute.
+- **Fixed: le pack de compétences de départ n'arrivait qu'à ceux qui avaient
+  cloné le dépôt.** `skills install starter` s'était écrit sa propre recherche —
+  racine du dépôt, puis `_MEIPASS` — et un wheel n'a ni l'une ni l'autre : les
+  fichiers voyagent *dans* le paquet, sous `_data/`. Tout le monde recevait « le
+  pack de départ n'est pas dans cette installation ». Il passe par
+  `paths._resource`, seul endroit qui connaît les trois dispositions, et les
+  deux manifestes d'empaquetage le nomment enfin. Vérifié en construisant un
+  wheel, en l'installant, et en lançant la commande.
+
 ## Unreleased — 141 compétences qu'on ne peut pas déposer
 
 - **`corparius skills import`** adapte un `SKILL.md` écrit pour un autre hôte.

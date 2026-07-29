@@ -56,12 +56,14 @@ artifacts = ["corparius/webui.html"]
 # location is absent, i.e. only when installed.
 [tool.hatch.build.targets.wheel.force-include]
 "companies/example" = "corparius/_data/companies/example"
+"packaging/skill-pack-starter" = "corparius/_data/packaging/skill-pack-starter"
 "plugins/registry.json" = "corparius/_data/plugins/registry.json"
 
 [tool.hatch.build.targets.sdist]
 include = [
     "/corparius",
     "/companies/example",
+    "/packaging/skill-pack-starter",
     "/plugins/registry.json",
     "/README.md",
     "/LICENSE",

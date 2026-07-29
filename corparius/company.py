@@ -347,6 +347,27 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             )
         perms["auto_allow"] = allow
 
+    # The sales site's own block. `faq_app` names one of the company's apps
+    # (companies/<slug>/apps/) run once at build time, its answers baked into
+    # the static page. Normalised here rather than read raw in sitegen, because
+    # a key that survives `load` only by accident is a key that disappears the
+    # next time this dict is rebuilt.
+    site_in = raw.get("site") or {}
+    site: dict = {}
+    if isinstance(site_in, dict):
+        faq_app = str(site_in.get("faq_app", "")).strip()
+        faq = [str(q).strip() for q in (site_in.get("faq") or []) if str(q).strip()]
+        if faq_app and not faq:
+            warnings.append("site.faq_app names an app but site.faq lists no question")
+        if faq and not faq_app:
+            warnings.append("site.faq lists questions but site.faq_app names no app")
+        if faq_app:
+            site["faq_app"] = faq_app
+        if faq:
+            site["faq"] = faq
+    elif site_in:
+        errors.append("site: expected a mapping")
+
     cfg = {
         "slug": slug,
         "name": name,
@@ -370,6 +391,7 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             **({"cost_budget": cost_budget} if cost_budget is not None else {}),
         },
         "hitl_tools": hitl,
+        **({"site": site} if site else {}),
         **perms,
     }
     return cfg, errors, warnings

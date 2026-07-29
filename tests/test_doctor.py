@@ -167,3 +167,72 @@ def test_a_tier_with_no_key_is_not_checked(monkeypatch):
     )
     level, _, _ = doctor._check_model_catalog(_doctor_settings(hard_model="openrouter:whatever"))
     assert level == "ok"
+
+
+# --- apps ------------------------------------------------------------------
+def _seed_app(home, slug="t", name="faq", **over):
+    import yaml
+
+    company = home / "companies" / slug
+    (company / "apps").mkdir(parents=True, exist_ok=True)
+    (company / "company.yaml").write_text("slug: t\nname: T\n", encoding="utf-8")
+    body = {"name": name, "system": "s", **over}
+    (company / "apps" / f"{name}.yaml").write_text(yaml.safe_dump(body), encoding="utf-8")
+
+
+def test_the_doctor_is_quiet_when_no_app_is_defined(tmp_path, monkeypatch):
+    from corparius import doctor
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    level, name, message = doctor._check_apps(Settings())
+    assert (level, name) == ("ok", "apps") and "none defined" in message
+
+
+def test_the_doctor_says_the_endpoint_is_off(tmp_path, monkeypatch):
+    from corparius import cfg, doctor
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    monkeypatch.setenv("CORP_APPS_ENABLED", "false")
+    cfg.invalidate()
+    _seed_app(tmp_path)
+    level, _, message = doctor._check_apps(Settings())
+    assert level == "ok" and "endpoint is off" in message
+
+
+def test_the_doctor_names_an_app_that_can_never_answer(tmp_path, monkeypatch):
+    """Defined, looks ready, and every call to it is refused for want of a key.
+    Nothing else would say so."""
+    from corparius import cfg, doctor
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    monkeypatch.setenv("CORP_APPS_ENABLED", "true")
+    monkeypatch.delenv("CORP_APP_KEY_T_FAQ", raising=False)
+    cfg.invalidate()
+    _seed_app(tmp_path)
+    level, _, message = doctor._check_apps(Settings())
+    assert level == "warn" and "t/faq" in message and "corparius apps key" in message
+
+
+def test_the_doctor_flags_an_app_no_browser_can_call(tmp_path, monkeypatch):
+    """The right default, and the likeliest thing to be mistaken for a bug."""
+    from corparius import cfg, doctor
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    monkeypatch.setenv("CORP_APPS_ENABLED", "true")
+    monkeypatch.setenv("CORP_APP_KEY_T_FAQ", "k")
+    cfg.invalidate()
+    _seed_app(tmp_path, origins=[])
+    level, _, message = doctor._check_apps(Settings())
+    assert level == "ok" and "no browser can call them" in message
+
+
+def test_the_doctor_is_content_with_a_fully_wired_app(tmp_path, monkeypatch):
+    from corparius import cfg, doctor
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    monkeypatch.setenv("CORP_APPS_ENABLED", "true")
+    monkeypatch.setenv("CORP_APP_KEY_T_FAQ", "k")
+    cfg.invalidate()
+    _seed_app(tmp_path, origins=["https://site.test"])
+    level, _, message = doctor._check_apps(Settings())
+    assert level == "ok" and "browser" not in message

@@ -644,7 +644,7 @@ def _deploy(state: UiState, slug: str) -> tuple[int, dict]:
     data_path = _fresh_settings().data_path
     out_dir = paths.site_dir(data_path, slug)
     if not paths.site_index(data_path, slug).exists():
-        sitegen.build_site(company, str(out_dir))
+        sitegen.build_site(company, str(out_dir), store=state.store())
     res = deploy.deploy_result(str(out_dir))
     if res["ok"]:
         # Remember where it went, so the "go live" card can show the live URL
@@ -1139,7 +1139,7 @@ def _route_site_post(ctx):
         return 404, {"ok": False, "error": f"unknown company '{ctx.slug}'"}
     out_dir = paths.site_dir(_fresh_settings().data_path, ctx.slug)
     headline = str(ctx.body.get("headline", "")).strip()
-    sitegen.build_site(company, str(out_dir), headline=headline or None)
+    sitegen.build_site(company, str(out_dir), headline=headline or None, store=ctx.state.store())
     return 200, {"ok": True, "built": True}
 
 

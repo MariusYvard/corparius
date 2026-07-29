@@ -90,7 +90,7 @@ def cmd_site(args) -> None:
 
     cfg = _load_company(args.company)
     out_dir = str(paths.site_dir(settings.data_path, cfg["slug"]))
-    path = sitegen.build_site(cfg, out_dir, headline=args.headline or None)
+    path = sitegen.build_site(cfg, out_dir, headline=args.headline or None, store=_store())
     print(f"sales site built: {path}")
 
 
@@ -135,7 +135,7 @@ def cmd_deploy(args) -> None:
     cfg = _load_company(args.company)
     out_dir = str(paths.site_dir(settings.data_path, cfg["slug"]))
     if not os.path.exists(os.path.join(out_dir, "index.html")):
-        sitegen.build_site(cfg, out_dir)
+        sitegen.build_site(cfg, out_dir, store=_store())
     print("deployed: " + deploy.deploy_site(out_dir))
 
 

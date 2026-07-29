@@ -11,6 +11,15 @@ offer:
   billing: stripe
   payment_link: ""   # Stripe Payment Link URL; the sales-site CTA points here
 
+# The sales site. `faq_app` names an app from companies/example/apps/, run once
+# at build time; its answers are written into the HTML. The page stays a single
+# static file with no JavaScript and nothing to leave running.
+site:
+  faq_app: faq
+  faq:
+    - How much does it cost?
+    - Will it work for a career change?
+
 # Ideal customer profile. Agents use this to target outreach and content.
 icp:
   segment: Job seekers switching industries, and career coaches

@@ -158,7 +158,7 @@ def _build_site(ctx, draft: str) -> str:
     headline: str | None = draft.strip()
     if not headline or headline.startswith("[mock:"):
         headline = None
-    path = sitegen.build_site(company, str(out_dir), headline=headline)
+    path = sitegen.build_site(company, str(out_dir), headline=headline, store=ctx.store)
     return f"Sales site built at {path}"
 
 
@@ -169,7 +169,7 @@ def _deploy_site(ctx) -> ToolResult:
     slug = company.get("slug", "company")
     out_dir = paths.site_dir(ctx.data_path, slug)
     if not paths.site_index(ctx.data_path, slug).exists():
-        sitegen.build_site(company, str(out_dir))
+        sitegen.build_site(company, str(out_dir), store=ctx.store)
     res = deploy.deploy_result(str(out_dir))
     if res["ok"]:
         return _ok(f"Site published: {res['provider']} -> {res['result']}")

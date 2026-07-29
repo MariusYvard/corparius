@@ -371,3 +371,79 @@ def test_skills_install_refuses_a_pack_that_does_not_ship(tmp_path, monkeypatch)
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     with pytest.raises(SystemExit):
         cli.main(["skills", "install", "nope"])
+
+
+# --- corparius apps --------------------------------------------------------
+def _seed_app(home, name="faq", **over):
+    import yaml
+
+    d = home / "companies" / "t" / "apps"
+    d.mkdir(parents=True, exist_ok=True)
+    body = {"name": name, "system": "Answer questions.", "tier": "trivial", **over}
+    (d / f"{name}.yaml").write_text(yaml.safe_dump(body), encoding="utf-8")
+
+
+def test_apps_list_shows_the_ceilings_and_flags_a_missing_origin_list(
+    tmp_path, monkeypatch, capsys
+):
+    """An app with no origins cannot be called from a browser at all, which is
+    the safe default and the one most likely to look like a bug later."""
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    _seed_app(tmp_path, daily_tokens=20000, rate_per_minute=6)
+    cli.main(["apps", "list", "--company", "t"])
+    out = capsys.readouterr().out
+    assert "faq" in out and "20000 tok/day" in out and "NO origin list" in out
+
+
+def test_apps_list_says_where_to_write_one_when_there_are_none(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    cli.main(["apps", "list", "--company", "t"])
+    assert "companies/t/apps/" in capsys.readouterr().out
+
+
+def test_apps_run_prints_the_answer_and_what_it_spent(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
+    _seed_app(tmp_path)
+    cli.main(["apps", "run", "faq", "--company", "t", "--input", "how much?"])
+    out = capsys.readouterr().out
+    assert "how much?" in out, "mock mode echoes, which is enough to prove the wiring"
+    assert "/50000 today" in out, "the day's ceiling has to be visible while trying it"
+
+
+def test_apps_run_refuses_past_the_daily_ceiling_without_calling_a_model(
+    tmp_path, monkeypatch, capsys
+):
+    """The ceiling has to hold before the call, not after: refusing afterwards
+    would already have spent the tokens it was there to protect."""
+    from corparius import apps as apps_mod
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
+    _seed_app(tmp_path, daily_tokens=100)
+
+    def explode(*a, **k):
+        raise AssertionError("the model was called past the ceiling")
+
+    monkeypatch.setattr(apps_mod, "run", explode)
+    Store(str(tmp_path / "data")).record_usage("t", "app:faq", 90, 20)
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["apps", "run", "faq", "--company", "t", "--input", "hi"])
+    assert "110/100" in str(exc.value)
+
+
+def test_apps_key_says_it_is_not_a_secret(tmp_path, monkeypatch, capsys):
+    """A key a web page sends is readable in the inspector. Printing it without
+    saying so would sell it as protection it does not provide."""
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    _seed_app(tmp_path)
+    cli.main(["apps", "key", "faq", "--company", "t"])
+    out = capsys.readouterr().out
+    assert "CORP_APP_KEY_T_FAQ=" in out
+    assert "NOT a secret" in out and "origin list" in out
+
+
+def test_apps_commands_need_a_company(tmp_path, monkeypatch):
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    with pytest.raises(SystemExit):
+        cli.main(["apps", "list"])

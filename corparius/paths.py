@@ -135,6 +135,13 @@ def company_skills_dir(slug: str) -> Path:
     return companies_dir() / (slug or "company") / "skills"
 
 
+def company_apps_dir(slug: str) -> Path:
+    """Apps that use the company's LLM providers for something other than the
+    roster. Next to its skills and its config, for the same reason: an operator
+    writes them, versions them, and expects them where the company lives."""
+    return companies_dir() / (slug or "company") / "apps"
+
+
 def dotenv_file() -> Path:
     """The .env the console writes and corparius/cfg.py reads as its lowest layer."""
     return user_home() / ".env"

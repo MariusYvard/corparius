@@ -125,3 +125,9 @@ def test_seed_examples_is_idempotent(tmp_path):
     # A second call must not raise or duplicate.
     slugs = company_mod.seed_examples(root=tmp_path)
     assert slugs.count("example") == 1
+
+
+def test_company_apps_dir_sits_next_to_the_config_it_belongs_to(monkeypatch, tmp_path):
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    assert paths.company_apps_dir("t") == tmp_path / "companies" / "t" / "apps"
+    assert paths.company_apps_dir("t").parent == paths.company_skills_dir("t").parent

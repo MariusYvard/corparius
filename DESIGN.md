@@ -85,3 +85,35 @@ state must be legible without them.
 ## Bans (project-level)
 
 No gradients, no glassmorphism, no side-stripe borders, no modals (inline confirmation), no emoji in UI; icons are the owner's pixel-art set on ivory chips (image-rendering: pixelated), inline SVG (1.5px stroke, currentColor) for the rare glyph the set lacks, no spinners mid-content (skeletons).
+
+## The generated sales site (sitegen.py)
+
+This section is **not** the console's design system — the page corparius generates for a
+customer is somebody else's brand, not this one. It gets its own rules because it has
+failed twice, and both failures shipped.
+
+**A page must never be flat.** Owner's words, on the first attempt at a fix: *"le site
+manque cruellement d'âme, on dirait une page blanche avec du texte."* Removing a bad
+template and putting nothing in its place is not restraint, it is an unfinished page.
+Every generated page commits somewhere — it changes ground at least twice (washed hero,
+plain body, inverted pricing band), sets one number loud, and carries a graphic that is
+not a paragraph. `tests/test_sitegen_contract.py` holds this shut; do not "simplify" the
+bands out.
+
+**Never a centred stack of icon-title-subtitle cards.** That is the shape every template
+has, and it is what the first version generated. Left-aligned, asymmetric, real type
+scale (≥1.25).
+
+**Presence with zero assets.** No webfont, no CDN, no external image, no script, ever —
+the page is one file that opens from a folder forever. The graphic is `signature()`:
+bars whose heights come from a hash of the company name, different per company, identical
+across rebuilds.
+
+**Nothing on the page that the config did not say.** No invented terms of sale, no
+testimonial, no customer count. An empty section is deleted, never filled with a template.
+
+**The furniture follows `company.language`,** not English by default.
+
+The long form, and the reasoning, is the shipped skill
+`packaging/skill-pack-starter/skills/landing-craft/`, which the design agent reads before
+it drafts.

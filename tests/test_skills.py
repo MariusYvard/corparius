@@ -8,7 +8,7 @@ not become the largest line in the token budget.
 
 import types
 
-from corparius.agents import ROSTER, _messages
+from corparius.agents import ROSTER, _messages, language_line
 from corparius.models import AgentRole
 from corparius.skills import Skill, SkillLoader, parse
 from corparius.tools import TOOLS
@@ -113,7 +113,11 @@ def test_the_prompt_is_unchanged_when_no_skill_applies(tmp_path):
     )
     spec = ROSTER[AgentRole.SOCIAL]
     system = _messages(spec, ctx, TOOLS["draft_social_post"])[0]["content"]
-    assert system == spec.system_prompt
+    # Still exact equality, against a baseline that now includes the one
+    # unconditional line every prompt carries: the company's language. The
+    # property under test is that nothing *else* is added, so weakening this
+    # to a substring check would have retired the test rather than updated it.
+    assert system == f"{spec.system_prompt}\n\n{language_line(ctx.company)}"
 
 
 def test_an_applicable_skill_reaches_the_system_prompt(tmp_path):
@@ -132,7 +136,13 @@ def test_an_agent_with_no_loader_is_unaffected():
     that builds a context by hand leaves it unset."""
     ctx = types.SimpleNamespace(company={"name": "T", "offer": {}}, memory=[])
     spec = ROSTER[AgentRole.SOCIAL]
-    assert _messages(spec, ctx, TOOLS["draft_social_post"])[0]["content"] == spec.system_prompt
+    # Still exact equality, against a baseline that now includes the one
+    # unconditional line every prompt carries: the company's language. The
+    # property under test is that nothing *else* is added, so weakening this
+    # to a substring check would have retired the test rather than updated it.
+    assert _messages(spec, ctx, TOOLS["draft_social_post"])[0]["content"] == (
+        f"{spec.system_prompt}\n\n{language_line(ctx.company)}"
+    )
 
 
 def test_the_shipped_example_skill_names_real_tools():
@@ -239,7 +249,7 @@ def test_the_starter_pack_passes_the_bar_it_teaches():
     if not base.is_dir():  # a wheel install without packaging/
         return
     loader = SkillLoader([(base, "starter")])
-    assert len(loader.skills) == 6
+    assert len(loader.skills) == 7
     for skill in loader.skills:
         assert skill.allowed_tools, f"{skill.name} declares no allowed-tools"
         assert [t for t in skill.allowed_tools if t not in TOOLS] == [], skill.name
@@ -267,7 +277,12 @@ def test_the_starter_pack_covers_jobs_that_had_nothing():
 
 def test_the_starter_pack_credits_where_it_came_from():
     """Apache-2.0 with a LICENSE.txt per skill upstream. Adapted prose is still
-    derived prose, and the frontmatter is where it costs nothing to say so."""
+    derived prose, and the frontmatter is where it costs nothing to say so.
+
+    This used to require one upstream by name. It no longer does, because the
+    pack no longer has one: `landing-craft` is adapted from the owner's own
+    NullToHero plugin. What has to hold is that every skill names *a* source and
+    a licence, not that they all name the same one."""
     from pathlib import Path
 
     base = Path("packaging/skill-pack-starter/skills")
@@ -275,7 +290,8 @@ def test_the_starter_pack_credits_where_it_came_from():
         return
     for path in base.glob("*/SKILL.md"):
         head = path.read_text(encoding="utf-8")
-        assert "knowledge-work-plugins" in head, path
+        source = next((ln for ln in head.splitlines() if ln.startswith("source:")), "")
+        assert source.removeprefix("source:").strip(), f"{path} credits nobody"
         assert "Apache-2.0" in head, path
 
 

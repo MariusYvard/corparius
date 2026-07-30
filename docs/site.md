@@ -14,7 +14,52 @@ Dans la boucle autonome, l'agent design rédige une accroche puis régénère la
 
 ## Contenu
 
-La page tire son texte de la config: nom, accroche (one_liner ou offer.product), douleurs de l'ICP, prix et facturation. Rien n'est inventé, un champ absent prend une valeur neutre. Les valeurs sont échappées avant insertion dans le HTML.
+La page tire son texte de la config : nom, accroche (one_liner ou offer.product), douleurs de l'ICP, prix et facturation. Les valeurs sont échappées avant insertion dans le HTML.
+
+**Rien n'est inventé, et une section vide disparaît.** Un champ absent ne prend plus une valeur neutre : la section n'est pas rendue. La version précédente imprimait « Cancel anytime » et « Instant onboarding » dans l'encadré de prix de *chaque* page produite — des conditions de vente que personne n'avait acceptées, sur le site commercial de quelqu'un d'autre. Ce qui figure dans « Ce que vous obtenez » vient de `offer.includes`, ou la section n'existe pas.
+
+```yaml
+offer:
+  product: Check-in anonyme du moral
+  price_eur: 9
+  billing: stripe
+  includes:                       # facultatif ; rien n'est ajouté d'office
+    - Anonyme par conception
+    - Export CSV
+```
+
+## Le contrat de contenu
+
+Une page a été publiée avec ceci en H1, à 4 rem :
+
+> « Check-in, anonyme, en 90 secondes. » Alternatively, a more punchy version: « Mental Check-in en 90s »
+
+C'est le modèle en train de délibérer, affiché sur un site en ligne. `sitegen.clean_headline` refuse désormais le méta-commentaire (`Alternatively`, `Here is a headline:`, `Option 1 / Option 2`, les guillemets encadrants, deux variantes séparées par deux points) et, quand le bon titre est là entre guillemets, il le récupère. À défaut, il retombe sur la proposition de valeur écrite par un humain dans la config.
+
+## La langue
+
+`company.yaml` a un champ `language`. Il est déduit de ce que l'exploitant a écrit à la création, puis inscrit dans le fichier pour qu'il puisse le voir et le corriger :
+
+```yaml
+language: fr
+```
+
+Il fixe l'attribut `lang` de la page, les titres de sections, le libellé du bouton et la mention de facturation. Sept langues sont traduites (`en`, `fr`, `es`, `de`, `it`, `pt`, `nl`) ; une autre garde le mobilier en anglais autour d'un contenu qui reste dans la langue de l'entreprise — un mélange honnête plutôt qu'un titre traduit par personne. Le champ part aussi dans l'invite de chaque agent, ce qui règle les réponses support en anglais chez une entreprise française.
+
+## L'apparence
+
+Trois réglages, chacun facultatif :
+
+```yaml
+site:
+  theme: light        # light | dark
+  font: serif         # serif | sans
+  accent: "#c2410c"   # #rrggbb
+```
+
+La page change de fond trois fois — héros teinté, corps neutre, bloc de prix inversé — et porte une **signature** : une bande de barres dont les hauteurs viennent d'une empreinte du nom de l'entreprise. Différente pour chaque entreprise, identique d'une construction à l'autre, environ 4 ko de SVG en ligne. Aucun fichier, aucune requête.
+
+Ces règles sont écrites dans [`DESIGN.md`](../DESIGN.md) et dans la compétence livrée `packaging/skill-pack-starter/skills/landing-craft/`, que l'agent design lit avant de rédiger. Elles existent parce que le générateur a échoué deux fois : d'abord un gabarit centré avec sa grille de cartes, puis, une fois le gabarit retiré, une page plate — « on dirait une page blanche avec du texte ». Retirer un gabarit n'est que la moitié du travail.
 
 ## Une FAQ écrite à la construction
 

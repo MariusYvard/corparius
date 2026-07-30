@@ -355,7 +355,7 @@ def test_skills_install_starter_lands_scoped_and_is_idempotent(tmp_path, monkeyp
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     cli.main(["skills", "install", "starter"])
     first = capsys.readouterr().out
-    assert "6 skill(s)" in first
+    assert "7 skill(s)" in first
     cli.main(["skills", "list"])
     listed = capsys.readouterr().out
     assert "EVERY TOOL" not in listed, "a shipped skill must never be unscoped"

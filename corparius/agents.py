@@ -271,6 +271,14 @@ class Executor:
                     ),
                     False,
                 )
+        # Before anything is spent. A needs_draft tool otherwise pays for a real
+        # model call and only then discovers there was nothing to do — support
+        # drafted a reply to nobody every three hours on a company with no
+        # mailbox, and the log read as if it had done some work.
+        skip = tool.skip_reason(ctx)
+        if skip:
+            self.store.record_action(company, spec.role.value, tool_name, {}, skip, True)
+            return ToolResult(ok=True, output=skip), False
         draft = ""
         ctx.structured = None
         if tool.needs_draft and tool.schema:

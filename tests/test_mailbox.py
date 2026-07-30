@@ -20,13 +20,17 @@ def test_unconfigured_mailbox_is_an_empty_layer_not_a_crash(monkeypatch):
     assert "mock" in result["detail"]
 
 
-def test_triage_says_it_is_using_samples_when_no_mailbox(monkeypatch):
+def test_triage_reports_no_mailbox_and_no_numbers(monkeypatch):
+    """It used to claim "3 support, 1 sales, 0 urgent" as if it had looked, and
+    then kept the numbers while calling them "sample counts" — a labelled
+    fabrication is still a fabrication, and these went into the action log the
+    flow metrics read."""
     monkeypatch.delenv("CORP_IMAP_HOST", raising=False)
     cfg.invalidate()
     ctx = types.SimpleNamespace(company={"name": "X", "slug": "x"})
     out = tools._triage_inbox(ctx)
-    # The old version claimed "3 support, 1 sales, 0 urgent" as if it had looked.
-    assert "no mailbox connected" in out and "sample" in out
+    assert "No mailbox connected" in out
+    assert not any(ch.isdigit() for ch in out)
 
 
 def test_triage_reads_a_real_inbox(monkeypatch):

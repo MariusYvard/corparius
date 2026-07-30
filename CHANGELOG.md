@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased — une revue adverse, et deux trous qu'elle a trouvés
+Versions are the git tags, and the sections under each are the changes that
+shipped in it. Everything below 0.1.0 said "Unreleased" when 0.1.0 shipped —
+there had never been a release to mark them against, and marking them after
+the fact is more honest than leaving a released changelog claiming nothing
+was released.
+
+## 0.2.0 — une revue adverse, et deux trous qu'elle a trouvés
 
 - **Fixed (HIGH) : le tag de mise à jour sortait du dépôt.** La route de la
   console lisait le tag dans le corps de la requête et l'interpolait dans l'URL
@@ -29,7 +35,7 @@
 - Ce que ça ne couvre pas est dit dans `docs/securite.md` : une injection
   réussie peut encore faire écrire une mauvaise phrase.
 
-## Unreleased — le chiffrement fait enfin ce qu'il annonce, et on peut restaurer
+## 0.2.0 — le chiffrement fait enfin ce qu'il annonce, et on peut restaurer
 
 - **Fixed: activer le chiffrement au repos ne chiffrait que la prochaine
   écriture.** Écrire `CORP_SECRET_KEY` laissait toutes les clés déjà stockées en
@@ -60,7 +66,7 @@
   restauration — la clé revient, l'archive ne contient nulle part le texte en
   clair, et `REDACTED.txt` annonce « No secret had to be blanked ».
 
-## Unreleased — revenir en arrière ne peut plus se faire en silence
+## 0.2.0 — revenir en arrière ne peut plus se faire en silence
 
 - **Fixed: un ancien build rouvrant un store déjà migré ne disait rien.**
   `_migrate` ne marche que vers l'avant, donc `PRAGMA user_version = 99` face à
@@ -73,7 +79,7 @@
   Un vieux build qui écrit là où un schéma plus récent veut dire autre chose,
   c'est la façon dont des données deviennent fausses sans bruit.
 
-## Unreleased — une sauvegarde qu'on ose garder quelque part
+## 0.2.0 — une sauvegarde qu'on ose garder quelque part
 
 - **Une sauvegarde n'écrit plus jamais un secret en clair.** Elle en portait
   tous : le store contient les clés enregistrées depuis la console, et le module
@@ -113,7 +119,7 @@
   comme un fichier : une base vivante et son `-wal` ne forment pas une paire
   cohérente, et le but de ce module est de produire quelque chose qui restaure.
 
-## Unreleased — mettre à jour depuis la console
+## 0.2.0 — mettre à jour depuis la console
 
 - **`corparius update`, et un bouton dans la bannière.** Jusqu'ici la console
   savait dire qu'une version existait et rien de plus — et même ça ne marchait
@@ -160,7 +166,7 @@
   serveur dit pouvoir agir : le proposer ailleurs serait une promesse que le
   clic suivant casse.
 
-## Unreleased — le binaire est aussi le CLI
+## 0.1.0 — le binaire est aussi le CLI
 
 - **Fixed: aucune commande n'existait pour qui télécharge le binaire.** Le
   lanceur figé cherchait dans `argv` exactement une chaîne, `--no-browser`, et
@@ -191,7 +197,7 @@
   optionnelle, et pas de `pip` dans un exécutable figé. `docs/mcp.md` le dit
   maintenant au lieu de le laisser découvrir.
 
-## Unreleased — les LLM de l'entreprise, utilisables par ses applications
+## 0.1.0 — les LLM de l'entreprise, utilisables par ses applications
 
 - **Une app est un fichier YAML** dans `companies/<slug>/apps/`, à côté des
   skills : un nom, une invite système, un palier et ses plafonds. Elle passe par
@@ -248,7 +254,7 @@
   deux manifestes d'empaquetage le nomment enfin. Vérifié en construisant un
   wheel, en l'installant, et en lançant la commande.
 
-## Unreleased — 141 compétences qu'on ne peut pas déposer
+## 0.1.0 — 141 compétences qu'on ne peut pas déposer
 
 - **`corparius skills import`** adapte un `SKILL.md` écrit pour un autre hôte.
   Mesuré sur `anthropics/knowledge-work-plugins` (17 plugins, 141 compétences,
@@ -293,7 +299,7 @@
   (routage par le modèle), `argument-hint`, les connecteurs MCP par pack, et les
   treize plugins dont le métier n'existe pas ici.
 
-## Unreleased — l'abonnement Claude, sans le piège
+## 0.1.0 — l'abonnement Claude, sans le piège
 
 - **Fixed: `corparius claude` et la console écrivaient deux plans différents.**
   Le terminal appelait `claudecli.plan()` sans argument, ce qui se lit comme
@@ -322,7 +328,7 @@
   un contrôle d'état. Même bouton sur la carte de la console, et un test tient
   que l'endpoint sondé n'installe jamais rien.
 
-## Unreleased — « joignable » n'est pas « capable »
+## 0.1.0 — « joignable » n'est pas « capable »
 
 - **Fixed: le routage recommandé donnait le palier trivial au local dès qu'un
   port répondait.** Un seul bit — Ollama a-t-il répondu — décidait du palier
@@ -362,7 +368,7 @@
   l'inférence locale sur une machine qui pourrait la faire tourner.
 - Nouvelle table `machine` (schéma v6), une ligne, avec sa migration.
 
-## Unreleased — the one habit worth borrowing from a skill library
+## 0.1.0 — the one habit worth borrowing from a skill library
 
 - **"Label every number."** Say whether a figure is Measured, Given or Estimated,
   and never state one with no label. It is the single transferable idea from
@@ -379,7 +385,7 @@
   read it — selection is by `allowed-tools`), and the "Handoff Summary" /
   "Next Best Skill" sections, which are model-side routing.
 
-## Unreleased — the skill loader stops failing silently
+## 0.1.0 — the skill loader stops failing silently
 
 - **Fixed: a skill with no `allowed-tools` applied to everything, and said
   nothing.** An empty list means "background knowledge about the company", which
@@ -396,7 +402,7 @@
   contribute a directory of them, and plugins do download. The SHA-256 allow-list
   proves what the code is, not what the prose asks for.
 
-## Unreleased — free models first, Opus for the hard work
+## 0.1.0 — free models first, Opus for the hard work
 
 - **Fixed before it shipped: a polled console endpoint started probing the
   network.** Building the Claude plan needs to know whether Ollama answers, and
@@ -421,7 +427,7 @@
   ids, so the CLI resolves them to the current release and nothing here rots —
   the same rot the OpenRouter default just demonstrated.
 
-## Unreleased — free models first, the subscription for the hard work
+## 0.1.0 — free models first, the subscription for the hard work
 
 - **`corparius claude` no longer spends a usage window on a social post.** It put
   all three tiers on the subscription, so TRIVIAL work — a post every two hours,
@@ -437,7 +443,7 @@
 - `recommended_routing()` takes a `hard` override, and `connected_providers()`
   now lives in `llm.py` instead of being computed inline in the console.
 
-## Unreleased — a Claude subscription is one command
+## 0.1.0 — a Claude subscription is one command
 
 - **`corparius claude`.** Running every tier on a Claude subscription needs four
   settings to agree — mock off, cloud on, Claude Code on, tiers pointed at
@@ -458,7 +464,7 @@
   developer's own store. It resolves `Settings()` at call time now, which is what
   every other surface already does.
 
-## Unreleased — a model name that rots is now caught, not shipped
+## 0.1.0 — a model name that rots is now caught, not shipped
 
 - **Fixed: the shipped OpenRouter default no longer existed.**
   `deepseek/deepseek-r1-0528:free` has been dropped from OpenRouter's catalogue
@@ -472,7 +478,7 @@
   mock mode, without a key, or when the provider does not answer: an unreachable
   catalogue is not evidence that a model has been removed.
 
-## Unreleased — spend measured in money, not only in tokens
+## 0.1.0 — spend measured in money, not only in tokens
 
 - **Fixed: the cost was arriving and being thrown away.** OpenRouter reports what
   a call cost in the same `usage` block corparius already parsed for token
@@ -491,7 +497,7 @@
   a second way for a run to stop has to be asked for, not inherited.
 - Store schema v5, migrated in place; existing usage rows keep 0.
 
-## Unreleased — an agent that does not know can now ask
+## 0.1.0 — an agent that does not know can now ask
 
 - **A typed inbox beside the approvals.** Approvals answer "may I". Two things
   had nowhere to go. An agent lacking a fact could not ask for it: a deploy with
@@ -518,7 +524,7 @@
   (Operations, counted in the "needs you" badge), `corparius inbox`, and the MCP
   tools `inbox` and `answer`. Store schema v4, migrated in place.
 
-## Unreleased — what a company learns now outlives three days
+## 0.1.0 — what a company learns now outlives three days
 
 - **Durable memory.** A company remembered exactly the last three end-of-day
   summaries. That guard is right — a `--loop` company that never re-read them
@@ -559,7 +565,7 @@
   (10000) is unchanged, and it is the one to reason about for a company that is
   actually spending.
 
-## Unreleased — a company can be taught its own trade
+## 0.1.0 — a company can be taught its own trade
 
 - **Skills.** A `SKILL.md` folder under `companies/<slug>/skills/` or the shared
   `skills/` directory carries what a company knows, in prose: the objection its
@@ -590,7 +596,7 @@
   code executed in this process, so the supply-chain reason to ship it off does
   not apply. `CORP_SKILLS_ENABLED=false` turns it off.
 
-## Unreleased — the gate says why, and stops idling the company
+## 0.1.0 — the gate says why, and stops idling the company
 
 - **Permissions are decided, not flagged.** `corparius/permissions.py` replaces
   `tool.hitl or name in hitl_tools` with a resolution over three inputs: a risk
@@ -630,7 +636,7 @@
   parameters exactly, so an approved 12 EUR payment still cannot authorise a
   12000 EUR one.
 
-## Unreleased — what corparius takes from OpenWorker
+## 0.1.0 — what corparius takes from OpenWorker
 
 - **A teardown of OpenWorker**, Andrew Ng's MIT-licensed desktop agent, in
   `docs/reverse-engineering/openworker.md`. It is the only comparable that shares
@@ -640,7 +646,7 @@
   ReAct loop, its subagents or its OAuth connector fleet. The rule throughout:
   take the data model and the semantics, never the agency it grants the model.
 
-## Unreleased — installable, formatted, and renamed to its own name
+## 0.1.0 — installable, formatted, and renamed to its own name
 
 - **`pip install corparius`.** The package is now a proper distribution:
   `pyproject.toml` carries `[build-system]` (hatchling) and `[project]` metadata,
@@ -660,7 +666,7 @@
 - **`ruff format` and import sorting** are adopted across the tree and checked in
   CI, and `mypy corparius/` is clean at the default level.
 
-## Unreleased — the console holds up under load and under a hostile tab
+## 0.1.0 — the console holds up under load and under a hostile tab
 
 - **Fixed: concurrent writes lost rows.** The console built a new SQLite
   connection per HTTP request and never closed it, while the run loop wrote from
@@ -700,7 +706,7 @@
   tests for the previously untested toolbox, roster, approval gate and backups.
   171 tests → 243.
 
-## Unreleased — a double-click start, accessible, no raw tracebacks
+## 0.1.0 — a double-click start, accessible, no raw tracebacks
 
 - **Double-click launchers.** `start-windows.bat`, `start-macos.command` and
   `start-linux.sh` bootstrap everything without a terminal, and say plainly what
@@ -717,7 +723,7 @@
   handlers and the background run worker now show a localized "something went
   wrong, see the server log" rather than `str(exc)`; the full detail is logged.
 
-## Unreleased — works on a phone, and a friendlier first launch
+## 0.1.0 — works on a phone, and a friendlier first launch
 
 - **The console is usable on a phone.** Operations and Providers overflowed a
   390px screen because `.stack` was an implicit-`auto` grid: one wide card (the
@@ -730,7 +736,7 @@
   unreliable, especially on Windows) and say plainly that another console is
   likely running, with how to pick a free port. `ui` exits non-zero cleanly.
 
-## Unreleased — fewer papercuts, and a CEO that can act
+## 0.1.0 — fewer papercuts, and a CEO that can act
 
 - **The CEO chat can do things, not only answer.** When the operator asks to run
   a day, publish the site, back up, or switch to their Claude subscription, the
@@ -749,7 +755,7 @@
   pointer to the console and docs. The console sets everything else, so the file
   is no longer a wall to read.
 
-## Unreleased — starter templates
+## 0.1.0 — starter templates
 
 - **The wizard offers a business to start from.** SaaS, online shop, agency,
   newsletter — each prefills the ICP, channels, price and the right agents, so a
@@ -757,7 +763,7 @@
   typed name and product still win over the template's examples. Blank is still
   an option. Templates live in `corparius/company.py`, one source for the console.
 
-## Unreleased — a guided first run
+## 0.1.0 — a guided first run
 
 - **A "Getting started" thread on the overview.** A blank powerful tool is now a
   path: connect a model (or stay in mock), run a day, make a decision. Each step
@@ -771,7 +777,7 @@
   draft is the echoed prompt; feeding it as the site's H1 made the product look
   broken on first use. It now falls back to the company's own tagline.
 
-## Unreleased — plug in any LLM, get the same shape out
+## 0.1.0 — plug in any LLM, get the same shape out
 
 ### Same structure, whatever the model
 

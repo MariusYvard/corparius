@@ -340,9 +340,9 @@ def cmd_doctor(args) -> None:
 def cmd_backup(args) -> None:
     from . import backup
 
-    path = backup.make_backup(settings.data_path, args.out)
+    path = backup.make_backup(settings.data_path, args.out, with_secrets=args.with_secrets)
     print(f"backup written: {path}")
-    print(backup.WARNING_EN)
+    print(backup.describe(path, with_secrets=args.with_secrets))
 
 
 def cmd_ui(args) -> None:
@@ -506,7 +506,12 @@ def main(argv=None) -> None:
     sp.add_argument("--quiet", action="store_true")
     sp.set_defaults(fn=cmd_doctor)
 
-    sp = sub.add_parser("backup", help="zip the store and company configs")
+    sp = sub.add_parser("backup", help="zip the store, companies and settings")
+    sp.add_argument(
+        "--with-secrets",
+        action="store_true",
+        help="keep API keys in plaintext (a disaster-recovery copy; treat it like a password)",
+    )
     sp.add_argument("--out", default=None)
     sp.set_defaults(fn=cmd_backup)
 

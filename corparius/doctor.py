@@ -117,13 +117,15 @@ def _check_secrets_at_rest(s: Settings) -> tuple:
         return (
             "ok",
             "secrets",
-            "encrypted at rest (CORP_SECRET_KEY set). Keep the passphrase safe: "
+            "encrypted at rest (CORP_SECRET_KEY set). Backups carry them as "
+            "ciphertext, so they restore in full. Keep the passphrase safe: "
             "lose it and the stored secrets cannot be recovered.",
         )
     note = (
         "API keys saved from the console are stored in the clear in "
-        f"{db}, and `cli.py backup` includes them in the zip. Set CORP_SECRET_KEY "
-        "to encrypt them at rest (see docs/securite.md)."
+        f"{db}. Backups blank them rather than carry them, so a restore needs "
+        "them typed back in; set CORP_SECRET_KEY to encrypt them at rest and "
+        "have backups restore in full (see docs/securite.md)."
     )
     if os.name != "nt":
         mode = db.stat().st_mode & 0o077

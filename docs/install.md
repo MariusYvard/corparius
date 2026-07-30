@@ -125,6 +125,10 @@ fichier comme un mot de passe. Le doctor le rappelle et vérifie les permissions
   **vérifie son empreinte contre le `SHA256SUMS` publié**, prend une sauvegarde,
   puis remplace le programme. Fermez la fenêtre et relancez. En ligne de
   commande : `corparius update`.
+- **La sauvegarde prise avant l'échange ne contient aucune clé en clair** : les
+  secrets y sont soit chiffrés (`CORP_SECRET_KEY`), soit vidés, avec un
+  `REDACTED.txt` qui nomme ce qu'il faudrait ressaisir. Elle inclut aussi `.env`,
+  ce qui n'était pas le cas avant.
 - **Vos fournisseurs LLM restent connectés.** Les clés et les paliers vivent sur
   deux couches — `.env` dans le dossier de données, et la table `settings` du
   store — toutes deux hors d'atteinte d'une mise à jour. Vérifié de bout en bout

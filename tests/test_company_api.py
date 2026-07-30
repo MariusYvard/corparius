@@ -232,4 +232,7 @@ def test_site_takes_a_headline_and_deploy_says_what_happened(server, monkeypatch
 def test_backup_writes_a_zip_and_says_it_holds_the_keys(server):
     status, d = _call(server, "POST", "/api/backup", {})
     assert status == 200 and d["ok"] and d["name"].endswith(".zip") and d["size"] > 0
-    assert "clear" in d["warning"]["en"] and "clair" in d["warning"]["fr"]
+    # The console's button takes the safe archive, always: a browser click must
+    # not be able to produce a file that is a password.
+    assert "no API key in plaintext" in d["warning"]["en"]
+    assert "aucune clé API en clair" in d["warning"]["fr"]

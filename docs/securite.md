@@ -76,9 +76,15 @@ L'agent est informé de ces barrières dans son invite système. En cas de rejet
 
 Par défaut, les clés API et jetons enregistrés depuis la console sont stockés en clair dans la base SQLite (`data/corparius.sqlite`), et le doctor le signale. Sur les systèmes POSIX, corparius pose des permissions propriétaire-seul (dossier `0700`, base `0600`) ; sous Windows, `%LOCALAPPDATA%` est déjà propre au compte. Traitez ce fichier comme un mot de passe.
 
+**Les sauvegardes, elles, n'en contiennent jamais.** `corparius backup` archive une *copie* du store dans laquelle chaque secret en clair a été vidé, et un `.env` dont les valeurs secrètes le sont aussi ; `REDACTED.txt` en liste les **noms** pour dire quoi ressaisir. Le store vivant n'est pas touché. Une archive peut donc aller sur un NAS, dans un mail ou dans un dépôt privé — un dépôt devient public par accident plus souvent qu'un portable ne meurt.
+
+`corparius backup --with-secrets` conserve les clés en clair, pour une copie de reprise sur disque chiffré. Il faut le demander explicitement, et la commande annonce ce qu'elle vient de produire. La console, elle, ne propose que l'archive sûre : un clic dans un navigateur ne doit pas pouvoir fabriquer un fichier qui est un mot de passe.
+
 Pour chiffrer ces secrets au repos, définissez `CORP_SECRET_KEY` (une phrase secrète). Les réglages marqués secrets sont alors chiffrés dans la base et dans les sauvegardes, via le paquet `cryptography` (`pip install -r requirements-secrets.txt`). Le chiffrement est **désactivé par défaut** pour que le mode mock hors-ligne n'exige aucune dépendance. La clé est dérivée de la phrase secrète par scrypt ; les valeurs chiffrées portent un préfixe `enc:v1:`, et les valeurs en clair déjà présentes restent lisibles jusqu'à leur prochaine écriture.
 
-Propriété importante : `CORP_SECRET_KEY` est une clé de démarrage, écrite dans `.env` (ou l'environnement), **jamais dans la base** — sinon il faudrait la base pour se déchiffrer elle-même. Comme `corparius/backup.py` archive `data/` et `companies/` mais **pas** `.env`, une sauvegarde volée ne contient que des secrets chiffrés, pas la phrase qui les ouvre. En contrepartie : perdez la phrase et les secrets chiffrés sont irrécupérables. Effectif au redémarrage.
+Propriété importante : `CORP_SECRET_KEY` est une clé de démarrage, écrite dans `.env` (ou l'environnement), **jamais dans la base** — sinon il faudrait la base pour se déchiffrer elle-même. `.env` **est** désormais archivé, mais `CORP_SECRET_KEY` fait partie des valeurs vidées : une sauvegarde volée contient donc le coffre chiffré et jamais la phrase qui l'ouvre. C'est la première chose à vérifier après avoir mis `.env` dans l'archive, pas la dernière, et un test la tient. En contrepartie : perdez la phrase et les secrets chiffrés sont irrécupérables. Effectif au redémarrage.
+
+C'est aussi ce que `CORP_SECRET_KEY` **achète** : avec le chiffrement au repos, les secrets voyagent chiffrés au lieu d'être vidés, donc la sauvegarde restaure l'installation entière. Sans lui, elle restaure tout sauf les clés.
 
 ## Sources
 

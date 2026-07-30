@@ -126,7 +126,42 @@ def _messages(spec: AgentSpec, ctx, tool) -> list[dict]:
     learned = _recall(ctx, tool)
     if learned:
         system = f"{system}\n\nWhat this company has learned:\n{learned}"
+    # The company's language, in the one place every drafting tool passes
+    # through. A French company was drafting `Reply drafted: "Thank you for
+    # contacting us…"` to its French customers, because nothing in the prompt
+    # had ever said which language it speaks.
+    #
+    # Phrased as the language of the *output*, never as "write 'reply' in
+    # French" — that wording is what made the CEO chat answer with the word
+    # "Réponse". Naming the field and naming the language in the same clause is
+    # an instruction a model can read as a translation request.
+    system = f"{system}\n\n{language_line(ctx.company)}"
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def language_line(company: dict) -> str:
+    """One sentence naming the language everything drafted must be written in."""
+    code = str(company.get("language") or "en").strip().lower()
+    name = LANGUAGE_NAMES.get(code.split("-")[0], code)
+    return (
+        f"Write everything you produce in {name} ({code}) — this company's customers "
+        f"read {name}. This applies to the text itself, never to field names or "
+        f"JSON keys, which stay exactly as given."
+    )
+
+
+# Endonyms would be better manners, but the model is being told which language to
+# use and English names are what it was trained to resolve reliably. A language
+# not listed is passed through as its code, which every current model handles.
+LANGUAGE_NAMES = {
+    "en": "English",
+    "fr": "French",
+    "es": "Spanish",
+    "de": "German",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "nl": "Dutch",
+}
 
 
 def _recall(ctx, tool) -> str:

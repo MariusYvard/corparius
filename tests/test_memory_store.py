@@ -9,7 +9,7 @@ read positionally by set_daily_plan.
 
 import types
 
-from corparius.agents import ROSTER, _messages
+from corparius.agents import ROSTER, _messages, language_line
 from corparius.models import AgentRole
 from corparius.store import Store
 from corparius.tools import TOOLS
@@ -126,7 +126,13 @@ def test_recall_off_costs_nothing(tmp_path):
         company={"slug": "t", "name": "T", "offer": {}}, memory=[], leads=[], store=store
     )
     spec = ROSTER[AgentRole.OUTREACH]
-    assert _messages(spec, ctx, TOOLS["send_outreach"])[0]["content"] == spec.system_prompt
+    # Still exact equality, against a baseline that now includes the one
+    # unconditional line every prompt carries: the company's language. The
+    # property under test is that nothing *else* is added, so weakening this
+    # to a substring check would have retired the test rather than updated it.
+    assert _messages(spec, ctx, TOOLS["send_outreach"])[0]["content"] == (
+        f"{spec.system_prompt}\n\n{language_line(ctx.company)}"
+    )
 
 
 def test_daily_plan_still_reads_yesterday_not_a_recalled_fact(tmp_path):

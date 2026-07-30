@@ -24,8 +24,16 @@ was released.
 - **Added : `language` sur `company.yaml`.** Déduit de ce que l'exploitant a
   écrit, puis inscrit dans le fichier pour qu'il le voie et le corrige. Il fixe
   l'attribut `lang`, les titres de sections, le bouton et la mention de
-  facturation — sept langues traduites. C'est ce qui manquait quand une
-  entreprise française rédigeait « Thank you for contacting us ».
+  facturation — sept langues traduites.
+- **Fixed : les agents rédigeaient en anglais chez une entreprise française.**
+  `Reply drafted: "Thank you for contacting us…"`, dans le journal d'une
+  entreprise dont chaque champ de config est en français : aucune invite n'avait
+  jamais nommé de langue, donc le modèle prenait celle de l'invite système.
+  `agents._messages` — le point de passage unique de tous les outils qui
+  rédigent — porte désormais la langue de l'entreprise. Formulée comme la langue
+  de la *sortie*, jamais « écris *reply* en français », ce qui est exactement la
+  tournure qui avait fait répondre « Réponse » au chat CEO. Vérifié par un appel
+  réel : le modèle répond en français.
 - **Changed : la page a une présence.** Le premier correctif retirait le gabarit
   centré et sa grille de cartes sans rien mettre à la place — verdict du
   propriétaire, « on dirait une page blanche avec du texte ». La page engage

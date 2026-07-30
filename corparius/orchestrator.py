@@ -182,8 +182,12 @@ class Runtime:
                             slug,
                             "system",
                             "The session froze: token velocity hit the ceiling",
-                            "The circuit breaker reached SECURISE and stopped the day. Raise "
-                            "CORP_TOKENS_PER_MINUTE_LIMIT, or find what is spending.",
+                            "The circuit breaker reached SECURISE and stopped the day. The "
+                            "ceiling that tripped is this company's own "
+                            "`budgets.tokens_per_minute` in company.yaml — raise that, not "
+                            "CORP_TOKENS_PER_MINUTE_LIMIT, which only applies when the "
+                            "company sets none. Or open the spend breakdown and find what "
+                            "is spending.",
                         )
                         frozen = True
                         break

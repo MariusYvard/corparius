@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased — une sauvegarde qu'on ose garder quelque part
+
+- **Une sauvegarde n'écrit plus jamais un secret en clair.** Elle en portait
+  tous : le store contient les clés enregistrées depuis la console, et le module
+  le disait en demandant de « traiter le fichier comme un mot de passe ». Ce qui
+  faisait du seul endroit sûr pour une sauvegarde : nulle part. Pas un NAS, pas
+  un mail à soi-même, pas un dépôt privé — un dépôt devient public par accident
+  plus souvent qu'un portable ne meurt.
+- **La règle est plate.** Un réglage déjà chiffré au repos voyage tel quel, en
+  texte chiffré. Tout autre secret est vidé, et son **nom** est écrit dans
+  `REDACTED.txt` pour dire quoi ressaisir. La redaction se fait sur une *copie* :
+  le store vivant n'est jamais modifié, et un test le tient.
+- **`CORP_SECRET_KEY` achète enfin quelque chose.** Avec le chiffrement au
+  repos, la sauvegarde restaure l'installation entière ; sans lui, tout sauf les
+  clés. C'est un meilleur argument que n'importe quel avertissement.
+- **`.env` entre dans l'archive**, ce qui n'était pas le cas : un restore
+  perdait tous les réglages de démarrage. Valeurs secrètes vidées, commentaires
+  et lignes non secrètes conservés verbatim — c'est un fichier édité à la main.
+- **Vérifié que la phrase secrète ne voyage jamais avec le coffre qu'elle
+  ouvre.** `CORP_SECRET_KEY` vit dans `.env`, et `.env` est maintenant dans
+  l'archive : sans redaction, une sauvegarde volée aurait contenu la serrure et
+  la clé. Elle est dans l'ensemble vidé, et c'est la première chose qu'un test
+  vérifie.
+- **Les tests cherchaient dans les octets du zip**, ce qui ne prouve rien : la
+  compression peut cacher une chaîne bel et bien présente. Ils décompressent
+  chaque membre désormais — c'est ainsi qu'un test « la clé ne fuit pas » passe
+  pendant que la clé fuit.
+- **`--with-secrets`** garde les clés en clair pour une copie de reprise sur
+  disque chiffré, et annonce ce qu'elle est. La console ne propose que l'archive
+  sûre : un clic dans un navigateur ne doit pas pouvoir fabriquer un mot de passe.
+- **Fixed: un test archivait les vraies entreprises du développeur.** Le dossier
+  personnel était capturé à l'import, avant toute redirection par une fixture,
+  donc un test de console zippait 139 fichiers réels et y passait 33 secondes.
+  Résolu à l'appel — la leçon que `cli._store()` avait déjà apprise : un
+  instantané au niveau module d'un réglage en couches est l'instantané de la
+  mauvaise couche.
+- Le store est désormais copié par l'API de sauvegarde de SQLite plutôt que
+  comme un fichier : une base vivante et son `-wal` ne forment pas une paire
+  cohérente, et le but de ce module est de produire quelque chose qui restaure.
+
 ## Unreleased — mettre à jour depuis la console
 
 - **`corparius update`, et un bouton dans la bannière.** Jusqu'ici la console

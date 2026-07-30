@@ -308,6 +308,30 @@ def _send_outreach(ctx, draft: str) -> str:
     )
 
 
+def _no_mailbox(ctx, consequence: str) -> str:
+    """Say it once, where it can be acted on, instead of every tick forever.
+
+    Three tools reached this state and each returned its own sentence to the
+    action log. Correct, repeated on every run, and pointing at nothing the
+    operator could click — the log line was the whole remedy. `add_inbox` is
+    idempotent on a deterministic id, so filing it from a tick that runs every
+    three hours leaves exactly one item, and the console renders `fix` as a
+    button that opens the mail settings.
+    """
+    store = getattr(ctx, "store", None)
+    if store is not None:
+        inbox.notify(
+            store,
+            ctx.company.get("slug", "company"),
+            getattr(ctx, "role", "") or "system",
+            "No mailbox connected",
+            "Outreach replies, inbox triage and support drafts all need one. "
+            "Settings, then Mail: pick your provider and follow the steps.",
+            fix="mail",
+        )
+    return f"No mailbox connected, so {consequence} (filed in the inbox)"
+
+
 def _scan_replies(ctx) -> str:
     """Match unread mail against the addresses this company wrote to. This is
     the return leg of prospecting: without it the company emails people and
@@ -317,7 +341,7 @@ def _scan_replies(ctx) -> str:
         return "Reply tracking unavailable"
     slug = ctx.company.get("slug", "company")
     if not mailbox.configured():
-        return "No mailbox connected, so replies cannot be seen (Settings, Inbox)"
+        return _no_mailbox(ctx, "replies cannot be seen")
     pending = store.pending_outreach(slug)
     if not pending:
         return "No outreach awaiting a reply"
@@ -352,7 +376,7 @@ def _triage_inbox(ctx) -> str:
     Measured, Given or Estimated; these were none of the three.
     """
     if not mailbox.configured():
-        return "No mailbox connected, so there is nothing to triage (Settings, Mail)"
+        return _no_mailbox(ctx, "there is nothing to triage")
     messages = mailbox.fetch(limit=40)
     if not messages:
         return "Inbox read: nothing unread"
@@ -613,9 +637,7 @@ _ALL = [
         needs_draft=True,
         prompt=lambda c: f"Draft a one-line support reply for a {_name(c)} user.",
         skip_when=lambda c: (
-            ""
-            if mailbox.configured()
-            else "no mailbox connected, so there is no ticket to reply to (Settings, Mail)"
+            "" if mailbox.configured() else _no_mailbox(c, "there is no ticket to reply to")
         ),
         effect=lambda c, d: _ok(f"Reply drafted: {d[:110]}"),
     ),

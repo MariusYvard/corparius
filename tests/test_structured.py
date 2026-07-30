@@ -101,3 +101,56 @@ def test_the_mock_provider_answers_structured_offline():
     r = structured.ask(router, [{"role": "user", "content": "draft a post"}], SCHEMA)
     assert r.ok and not r.fell_back
     assert r.data["headline"] and isinstance(r.data["hashtags"], list)
+
+
+def test_an_empty_reply_never_becomes_the_field_name():
+    """`or key` sat in the salvage path, so a model that answered nothing at all
+    produced the field's own name as its value — the console showed a CEO whose
+    reply was the word "reply". A caller receiving the schema back as content
+    cannot tell it apart from an answer."""
+
+    class _Silent:
+        def generate(self, messages, difficulty=None, model=None, max_tokens=512):
+            from corparius.models import LLMResult, Usage
+
+            return LLMResult(text="", usage=Usage(1, 1), model="m", provider="p")
+
+    schema = {"reply": {"type": "str", "required": True, "max_len": 800}}
+    result = structured.ask(_Silent(), [{"role": "user", "content": "hi"}], schema, retries=0)
+    assert result.ok is False
+    # Absent or empty, never the name. validate() drops a required field it
+    # cannot fill, which is the same answer said a different way.
+    assert result.data.get("reply", "") in ("", None)
+
+
+def test_prose_is_still_salvaged_rather_than_thrown_away():
+    """The salvage exists for a reason: a model that answered well but without
+    JSON should not lose its answer."""
+
+    class _Prose:
+        def generate(self, messages, difficulty=None, model=None, max_tokens=512):
+            from corparius.models import LLMResult, Usage
+
+            return LLMResult(text="Oui, presque prêt.", usage=Usage(1, 1), model="m", provider="p")
+
+    schema = {"reply": {"type": "str", "required": True, "max_len": 800}}
+    result = structured.ask(_Prose(), [{"role": "user", "content": "hi"}], schema, retries=0)
+    assert result.ok is False and result.data["reply"].startswith("Oui, presque")
+
+
+def test_no_schema_can_produce_its_own_key_as_a_value():
+    """Across every field name, not just `reply`."""
+
+    class _Silent:
+        def generate(self, messages, difficulty=None, model=None, max_tokens=512):
+            from corparius.models import LLMResult, Usage
+
+            return LLMResult(text="   ", usage=Usage(1, 1), model="m", provider="p")
+
+    schema = {
+        "headline": {"type": "str", "required": True, "max_len": 80},
+        "body": {"type": "str", "required": True, "max_len": 200},
+    }
+    result = structured.ask(_Silent(), [{"role": "user", "content": "x"}], schema, retries=0)
+    assert result.data.get("headline") != "headline"
+    assert result.data.get("body") != "body"

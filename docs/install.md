@@ -117,8 +117,36 @@ fichier comme un mot de passe. Le doctor le rappelle et vérifie les permissions
 
 ## Mettre à jour
 
-- **Binaire** : téléchargez la nouvelle version et remplacez l'ancien fichier. Vos
-  données (dossier par OS ci-dessus) sont conservées telles quelles.
+- **Le premier saut se fait à la main.** La v0.1.0 publiée ne contient pas encore
+  le bouton — il est arrivé après elle. Téléchargez la version suivante une fois
+  comme ci-dessous ; à partir de là, la console met à jour toute seule.
+- **Depuis la console** : quand une version plus récente existe, la bannière
+  propose « Mettre à jour ». corparius télécharge le fichier de votre plateforme,
+  **vérifie son empreinte contre le `SHA256SUMS` publié**, prend une sauvegarde,
+  puis remplace le programme. Fermez la fenêtre et relancez. En ligne de
+  commande : `corparius update`.
+- **Vos entreprises ne sont jamais touchées.** Le binaire et les données vivent
+  dans deux endroits différents (dossier par OS ci-dessus), et les seuls chemins
+  qu'une mise à jour écrit sont le nom du binaire suivi d'un suffixe. Un test
+  fait tourner une vraie mise à jour au-dessus d'un dossier plein d'entreprises
+  et exige que chaque octet soit identique après. Par-dessus, une sauvegarde est
+  prise avant l'échange, et la mise à jour **refuse** si le fichier qu'elle
+  remplacerait contenait votre dossier de données.
+- **Si quelque chose tourne mal** : la version que vous faisiez tourner est
+  conservée à côté, sous `corparius.exe.old` (ou `corparius.app.old`), jusqu'à ce
+  que la nouvelle démarre une fois. Renommez-la pour revenir en arrière. (Le
+  ménage automatique n'existe qu'à partir de la version qui suit la 0.1.0 :
+  c'est le build **installé** qui l'efface, donc un build antérieur laisse le
+  `.old` derrière lui. Le supprimer à la main est sans risque.) La
+  fenêtre où aucun binaire n'existe fait deux renommages de large : le nouveau
+  est écrit à côté de l'ancien avant tout échange.
+- **Ce que l'empreinte prouve, et ce qu'elle ne prouve pas** : elle prouve que
+  les octets reçus sont bien ceux que GitHub sert. Elle ne prouve pas qui les a
+  construits — le fichier de sommes vit dans la même release. Une vraie preuve
+  d'origine demande une clé de signature, que ces binaires n'ont pas ; l'image
+  Docker est le chemin signé (attestation SLSA sur GHCR).
+- **À la main** : téléchargez la nouvelle version et remplacez l'ancien fichier.
+  Vos données sont conservées telles quelles.
 - **Notification** : la vérification de version est **désactivée par défaut**. Vous
   pouvez l'activer dans la console (Réglages → « Vérifier les mises à jour », clé
   `CORP_UPDATE_CHECK`). Activée, corparius demande une fois à GitHub, au démarrage,

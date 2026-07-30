@@ -997,9 +997,29 @@ def _route_doctor(ctx):
 def _route_update(ctx):
     # Off unless CORP_UPDATE_CHECK is on; when off this makes no network call.
     # See corparius/update_check.py.
-    from . import update_check
+    from . import selfupdate, update_check
 
-    return 200, {"ok": True, **update_check.check()}
+    return 200, {"ok": True, **update_check.check(), "can_apply": not selfupdate.why_not()}
+
+
+def _route_update_apply(ctx):
+    """Download the newest release and swap the binary, on a button press.
+
+    A POST, never the polled GET beside it: this one downloads tens of
+    megabytes and then replaces the program. The route exists on every build so
+    the refusal is explainable — from source or Docker it says what to do
+    instead rather than pretending the button is missing.
+    """
+    from . import selfupdate, update_check
+
+    info = update_check.check()
+    tag = str(ctx.body.get("tag") or "").strip() or f"v{info.get('latest', '')}"
+    if not info.get("update_available"):
+        return 200, {"ok": False, "error": "already up to date"}
+    try:
+        return 200, {"ok": True, "result": selfupdate.apply(tag)}
+    except selfupdate.UpdateError as exc:
+        return 200, {"ok": False, "error": str(exc)}
 
 
 def _route_plugins_get(ctx):
@@ -1329,6 +1349,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/payments", _route_payments_get),
     Route("GET", "/api/doctor", _route_doctor),
     Route("GET", "/api/update", _route_update),
+    Route("POST", "/api/update/apply", _route_update_apply),
     Route("GET", "/api/plugins", _route_plugins_get),
     Route("GET", "/api/theme", _route_theme_get),
     Route("GET", "/api/chat", _route_chat_get, needs_slug=True),

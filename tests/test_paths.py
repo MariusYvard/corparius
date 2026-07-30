@@ -131,3 +131,13 @@ def test_company_apps_dir_sits_next_to_the_config_it_belongs_to(monkeypatch, tmp
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     assert paths.company_apps_dir("t") == tmp_path / "companies" / "t" / "apps"
     assert paths.company_apps_dir("t").parent == paths.company_skills_dir("t").parent
+
+
+def test_the_suite_is_hermetic_against_a_developer_who_runs_corparius():
+    """CORP_HOME is what companies/, skills/ and .env hang off, and it is set on
+    the machine of anyone actually using corparius. Left alone, three tests here
+    failed on such a machine and any test writing under user_home() reached into
+    a real installation — someone's actual companies."""
+    import os
+
+    assert "CORP_HOME" not in os.environ, "the hermetic fixture must remove it"

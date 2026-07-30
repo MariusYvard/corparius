@@ -289,6 +289,48 @@ def cmd_claude(args) -> None:
     print("\nNo API key, no credits: calls go through your subscription login.")
 
 
+def cmd_update(args) -> None:
+    """Replace this build with the newest release.
+
+    Only from the downloadable binary; from source or Docker it says what to do
+    instead. The download is checked against the published SHA256SUMS before
+    anything moves, and a backup of the store and the companies is taken first
+    even though an update cannot reach them.
+    """
+    from . import selfupdate, update_check
+
+    blocked = selfupdate.why_not()
+    if blocked:
+        sys.exit(f"cannot update here: {blocked}")
+    info = update_check.check()
+    if not info.get("enabled"):
+        print("The version check is off. Set CORP_UPDATE_CHECK=true to let corparius ask")
+        print("GitHub once whether a newer release exists.")
+        raise SystemExit(1)
+    if not info.get("reachable"):
+        sys.exit("could not reach GitHub to ask what the latest release is")
+    if not info.get("update_available"):
+        print(f"already on the newest release ({info['current']})")
+        return
+    tag = f"v{info['latest']}"
+    if not args.yes:
+        print(f"{info['current']} -> {info['latest']}")
+        print("This downloads the new build, checks it against the published checksum")
+        print("and replaces this program. Your companies and settings live in a separate")
+        print("folder and are not touched; a backup is taken first anyway.")
+        if input("continue? [y/N] ").strip().lower() not in ("y", "yes"):
+            sys.exit("nothing was changed")
+    try:
+        done = selfupdate.apply(tag)
+    except selfupdate.UpdateError as exc:
+        sys.exit(str(exc))
+    print(f"installed {done['installed']} at {done['path']}")
+    if done["backup"]:
+        print(f"backup: {done['backup']}")
+    print(f"the build you were running is kept at {done['previous']} until the new one starts")
+    print("start corparius again to run it")
+
+
 def cmd_doctor(args) -> None:
     from .doctor import main as doctor_main
 
@@ -482,6 +524,10 @@ def main(argv=None) -> None:
         help="also stop asking about this tool for this company",
     )
     sp.set_defaults(fn=lambda a: cmd_decide(a, "approved"))
+
+    sp = sub.add_parser("update", help="replace this build with the newest release")
+    sp.add_argument("--yes", action="store_true", help="do not ask for confirmation")
+    sp.set_defaults(fn=cmd_update)
 
     sp = sub.add_parser("bench", help="measure what this machine can run locally")
     sp.add_argument("--json", action="store_true", help="machine-readable output")

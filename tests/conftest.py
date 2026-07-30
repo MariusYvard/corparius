@@ -50,6 +50,13 @@ def hermetic_settings(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_LLM_MOCK", "true")
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
     monkeypatch.delenv("CORP_UI_TOKEN", raising=False)
+    # Removed, not pinned. CORP_HOME is what `companies/`, `skills/` and .env
+    # hang off, and it is set on the machine of anyone actually running
+    # corparius — so on a developer's own box three tests failed and any test
+    # writing under user_home() reached into their real installation. Deleting
+    # it gives every test the same answer a clean checkout gives; the tests that
+    # need a home set their own, which still wins over this.
+    monkeypatch.delenv("CORP_HOME", raising=False)
     cfg.set_dotenv_path(tmp_path / "absent.env")
     cfg.invalidate()
     yield

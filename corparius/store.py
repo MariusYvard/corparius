@@ -779,6 +779,21 @@ class Store:
         return int(row["n"])
 
     @_locked
+    def count_unpublished(self, company) -> int:
+        """Everything written and not yet out: `draft` and `queued` together.
+
+        Counting only `queued` let the operator publish the newest post — which
+        is usually still in `draft`, written after the last schedule_post — and
+        watch the queue not move. The agent stayed stood down and nothing they
+        did released it.
+        """
+        row = self.db.execute(
+            "SELECT COUNT(*) n FROM drafts WHERE company=? AND state IN ('draft','queued')",
+            (company,),
+        ).fetchone()
+        return int(row["n"])
+
+    @_locked
     def set_draft_state(self, draft_id: int, state: str, note: str = "") -> bool:
         cur = self.db.execute(
             "UPDATE drafts SET state=?, note=COALESCE(NULLIF(?,''), note),"

@@ -624,6 +624,11 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <div id="approvals" class="stack" style="gap:12px"></div>
     </div>
     <div class="card">
+      <h2 data-i18n="dft.title">Written, not published</h2>
+      <p class="desc" data-i18n="dft.desc">Posts the social agent wrote. Nothing in corparius publishes to a social channel, so they wait here. Copy one out, then mark it published so it stops counting.</p>
+      <div id="drafts" class="stack" style="gap:12px"></div>
+    </div>
+    <div class="card">
       <h2 data-i18n="ops.rules">Standing rules</h2>
       <p class="desc" data-i18n="ops.rulesDesc">Tools you told the gate to stop asking about. Money and production tools cannot be listed here.</p>
       <div id="perm-rules" class="stack" style="gap:8px"></div>
@@ -641,7 +646,7 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
     <div class="card" style="max-width:560px">
       <h2 data-i18n="bk.title">Backup</h2>
       <p class="desc" data-i18n="bk.desc">Zips the store and every company config.</p>
-      <div class="banner warn" style="margin:0 0 12px" data-i18n="bk.warn">This archive holds the API keys saved from the console, in the clear. Treat the file like a password.</div>
+      <div class="banner" style="margin:0 0 12px" data-i18n="bk.warn">No API key leaves in plaintext: secrets are encrypted or blanked, and REDACTED.txt names what to re-enter. It still holds your companies and your journal.</div>
       <button id="do-backup" data-i18n="bk.run">Back up now</button>
       <div id="backup-out" class="note" style="font-size:12.5px; margin-top:10px"></div>
     </div>
@@ -997,7 +1002,11 @@ en: {
   "site.publishFailed":"Nothing was published. Every provider failed:",
   "site.publishNoProvider":"Nothing was published: no provider is configured. Set one under Configuration, Publishing.",
   "bk.title":"Backup","bk.desc":"Zips the store and every company config.",
-  "bk.warn":"This archive holds the API keys saved from the console, in the clear. Treat the file like a password.",
+  "bk.warn":"No API key leaves in plaintext: secrets are encrypted or blanked, and REDACTED.txt names what to re-enter. It still holds your companies and your journal, so keep it private.",
+  "dft.title":"Written, not published","dft.desc":"Posts the social agent wrote. Nothing in corparius publishes to a social channel, so they wait here. Copy one out, then mark it published so it stops counting.",
+  "dft.none":"Nothing written yet.","dft.copy":"Copy","dft.copied":"Copied","dft.published":"Mark published","dft.discard":"Discard",
+  "dft.queued":"{n} of {cap} waiting","dft.full":"The queue is full, so the social agent has stopped writing until you clear some.",
+  "dft.state.draft":"draft","dft.state.queued":"waiting","dft.state.published":"published","dft.state.discarded":"discarded",
   "bk.run":"Back up now","bk.running":"Zipping…","bk.done":"Backup written",
   "task.edit":"Edit","task.save":"Save","task.cancel":"Cancel","task.saved":"Task updated",
   "token.needed":"This console requires an access token.","token.placeholder":"CORP_UI_TOKEN",
@@ -1161,7 +1170,11 @@ fr: {
   "site.publishFailed":"Rien n'a été publié. Tous les providers ont échoué :",
   "site.publishNoProvider":"Rien n'a été publié : aucun provider configuré. Réglez-en un dans Configuration, Publication.",
   "bk.title":"Sauvegarde","bk.desc":"Zippe la base et toutes les configs de sociétés.",
-  "bk.warn":"Cette archive contient en clair les clés API enregistrées depuis la console. Traitez le fichier comme un mot de passe.",
+  "bk.warn":"Aucune clé API n’en sort en clair : les secrets sont chiffrés ou vidés, et REDACTED.txt nomme ce qu’il faudra ressaisir. Elle contient vos entreprises et votre journal : gardez-la privée.",
+  "dft.title":"Écrits, pas publiés","dft.desc":"Les posts rédigés par l’agent social. Rien dans corparius ne publie sur un réseau, ils attendent donc ici. Copiez-en un, puis marquez-le publié pour qu’il cesse de compter.",
+  "dft.none":"Rien d’écrit pour l’instant.","dft.copy":"Copier","dft.copied":"Copié","dft.published":"Marquer publié","dft.discard":"Jeter",
+  "dft.queued":"{n} sur {cap} en attente","dft.full":"La file est pleine : l’agent social a cessé d’écrire en attendant que vous en libériez.",
+  "dft.state.draft":"brouillon","dft.state.queued":"en attente","dft.state.published":"publié","dft.state.discarded":"jeté",
   "bk.run":"Sauvegarder maintenant","bk.running":"Compression…","bk.done":"Sauvegarde écrite",
   "task.edit":"Modifier","task.save":"Enregistrer","task.cancel":"Annuler","task.saved":"Tâche modifiée",
   "token.needed":"Cette console exige un token d'accès.","token.placeholder":"CORP_UI_TOKEN",
@@ -1896,10 +1909,58 @@ function render(d) {
       </div>`).join("")
       : `<div class="empty">${t("mem.none")}</div>`);
 
+  loadDrafts();
+
   // The 5s poll must not delete what the operator is typing.
   if (!$("#kanban [data-f=title]")) renderKanban(d);
   renderLog(d);
 }
+
+/* Posts the social agent wrote and nothing published. They used to be produced
+   and thrown away — the largest line in one company's spend, leaving nothing
+   behind. Keeping them was half the fix; showing them is the other half. */
+function renderDrafts(d) {
+  const live = (d.drafts || []).filter(x => x.state !== "discarded");
+  const head = `<p class="note" style="margin:0 0 4px">${
+    t("dft.queued").replace("{n}", d.queued).replace("{cap}", d.cap)
+  }${d.queued >= d.cap ? " — " + t("dft.full") : ""}</p>`;
+  $("#drafts").innerHTML = live.length
+    ? head + live.map(x => `
+      <div class="approval">
+        <div class="head"><span class="badge dim">${t("dft.state." + x.state)}</span>
+          <strong>${esc(x.channel)}</strong></div>
+        <div class="approval-draft" data-draft-body="${x.id}">${esc(x.body)}</div>
+        <div class="actions">
+          <button data-draft-copy="${x.id}">${t("dft.copy")}</button>
+          ${x.state !== "published"
+            ? `<button class="primary" data-draft-state="published" data-draft-id="${x.id}">${t("dft.published")}</button>` : ""}
+          <button class="quiet-danger" data-draft-state="discarded" data-draft-id="${x.id}">${t("dft.discard")}</button>
+        </div>
+      </div>`).join("")
+    : `<div class="empty">${t("dft.none")}</div>`;
+}
+async function loadDrafts() {
+  if (!state.company) return;
+  try { renderDrafts(await api(`/api/drafts?company=${encodeURIComponent(state.company)}`)); } catch (e) {}
+}
+document.addEventListener("click", async (e) => {
+  const copy = e.target.closest("[data-draft-copy]");
+  if (copy) {
+    const body = $(`[data-draft-body="${copy.dataset.draftCopy}"]`);
+    try { await navigator.clipboard.writeText(body.textContent); } catch (err) {}
+    const was = copy.textContent; copy.textContent = t("dft.copied");
+    setTimeout(() => { copy.textContent = was; }, 1200);
+    return;
+  }
+  const act = e.target.closest("[data-draft-state]");
+  if (!act) return;
+  act.disabled = true;
+  try {
+    renderDrafts(await api("/api/drafts", {
+      company: state.company, id: Number(act.dataset.draftId), state: act.dataset.draftState,
+    }));
+  } finally { act.disabled = false; }
+});
 
 function renderKanban(d) {
   $("#kanban").innerHTML = ["proposed", "approved", "in_progress", "waiting", "done"].map(key => {

@@ -193,3 +193,69 @@ def test_the_freeze_notice_names_the_setting_that_actually_tripped():
 
     source = inspect.getsource(orchestrator)
     assert "budgets.tokens_per_minute" in source
+
+
+# --- reading them, and clearing them ---------------------------------------
+
+
+def test_publishing_one_actually_releases_the_agent(tmp_path, monkeypatch):
+    """Found by using it: the operator marks the newest post published, and the
+    queue does not move. The newest is usually still `draft` — written after the
+    last schedule_post — so counting only `queued` meant nothing they did could
+    release the agent."""
+    monkeypatch.setenv("CORP_SOCIAL_QUEUE_MAX", "2")
+    cfg.invalidate()
+    store = Store(str(tmp_path))
+    store.add_draft("t", "social", "linkedin", "queued one", state="queued")
+    newest = store.add_draft("t", "social", "linkedin", "still a draft", state="draft")
+    assert _Exec(store)._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], []) is True
+
+    store.set_draft_state(newest, "published")
+    assert _Exec(store)._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], []) is False
+    store.close()
+
+
+def test_discarding_releases_it_too(tmp_path, monkeypatch):
+    """Not every draft is worth publishing. Throwing one away has to count."""
+    monkeypatch.setenv("CORP_SOCIAL_QUEUE_MAX", "1")
+    cfg.invalidate()
+    store = Store(str(tmp_path))
+    draft_id = store.add_draft("t", "social", "linkedin", "not good enough", state="queued")
+    assert _Exec(store)._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], []) is True
+    store.set_draft_state(draft_id, "discarded")
+    assert _Exec(store)._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], []) is False
+    store.close()
+
+
+def test_the_console_lists_what_was_written(tmp_path, monkeypatch):
+    from corparius import webui
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    (tmp_path / "companies" / "t").mkdir(parents=True)
+    (tmp_path / "companies" / "t" / "company.yaml").write_text(
+        "slug: t\nname: T\n", encoding="utf-8"
+    )
+    store = Store(str(tmp_path))
+    store.add_draft("t", "social", "linkedin", "Vigil : 90s pour voir venir", state="queued")
+    store.close()
+
+    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    ctx = type("Ctx", (), {"slug": "t", "store": state.store, "body": {}})()
+    _status, payload = webui._route_drafts_get(ctx)
+    state.close()
+    assert payload["queued"] == 1
+    assert payload["drafts"][0]["body"].startswith("Vigil")
+    assert payload["cap"] >= 1
+
+
+def test_the_console_refuses_a_state_that_is_not_one(tmp_path, monkeypatch):
+    from corparius import webui
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    ctx = type("Ctx", (), {"slug": "t", "store": state.store, "body": {"id": 1, "state": "sent"}})()
+    status, payload = webui._route_drafts_post(ctx)
+    state.close()
+    assert status == 400 and payload["ok"] is False

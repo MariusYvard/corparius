@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 import os
 import sqlite3
 import threading
 import time
 
 from .safety import cosine, hash_embed
+
+log = logging.getLogger("corparius.store")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS actions (
@@ -236,6 +239,22 @@ class Store:
         """Bring the store from its recorded version up to SCHEMA_VERSION, one
         step at a time, recording progress so an interrupted upgrade resumes."""
         current = self.db.execute("PRAGMA user_version").fetchone()[0]
+        if current > SCHEMA_VERSION:
+            # An older build opening a store a newer one migrated. The loop
+            # below is a no-op here, so this used to open, run and write in
+            # complete silence — and silence is the one thing this store does
+            # not do. It stays openable on purpose: rolling back to the
+            # previous build is the recovery path when an update goes wrong,
+            # and refusing would strand exactly the person who needs it. But an
+            # old build writing to a column a later version repurposed is how
+            # data gets quietly wrong, so it says so, and the doctor fails on it.
+            log.warning(
+                "this store was written by a newer corparius (schema %s, this build knows %s). "
+                "Update again, or restore the backup taken before the update. Running an older "
+                "build against it can write values a newer schema means differently.",
+                current,
+                SCHEMA_VERSION,
+            )
         for version in range(current + 1, SCHEMA_VERSION + 1):
             MIGRATIONS[version](self.db)
             self.db.execute(f"PRAGMA user_version = {int(version)}")

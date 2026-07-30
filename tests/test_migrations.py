@@ -84,3 +84,55 @@ def test_migration_is_idempotent(tmp_path):
     # Reopening an already-current store must not raise or change the version.
     store = Store(str(tmp_path))
     assert store.schema_version() == SCHEMA_VERSION
+
+
+def test_an_older_build_opening_a_newer_store_says_so(tmp_path, caplog):
+    """`_migrate` only walks forward, so a store a newer corparius migrated was
+    opened, run and written to in complete silence. Rolling back to the previous
+    build is the recovery path when an update goes wrong, so it still opens —
+    but an old build writing where a later schema means something else is how
+    data gets quietly wrong, and quiet is the one thing this store does not do.
+    """
+    import logging
+    import sqlite3
+
+    Store(str(tmp_path)).close()
+    db = sqlite3.connect(tmp_path / "corparius.sqlite")
+    db.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 3}")
+    db.commit()
+    db.close()
+
+    with caplog.at_level(logging.WARNING, logger="corparius.store"):
+        store = Store(str(tmp_path))
+    assert store.schema_version() == SCHEMA_VERSION + 3, "it still opens: rollback needs that"
+    store.close()
+    said = caplog.text
+    assert "newer corparius" in said
+    assert "restore the backup" in said
+
+
+def test_the_doctor_fails_on_a_store_from_the_future(tmp_path, monkeypatch):
+    import sqlite3
+
+    from corparius import doctor
+    from corparius.config import Settings
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    Store(str(tmp_path)).close()
+    db = sqlite3.connect(tmp_path / "corparius.sqlite")
+    db.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
+    db.commit()
+    db.close()
+    level, name, message = doctor._check_store(Settings())
+    assert (level, name) == ("fail", "store")
+    assert "newer corparius" in message and "restore the backup" in message
+
+
+def test_the_doctor_is_quiet_about_a_store_at_the_right_version(tmp_path, monkeypatch):
+    from corparius import doctor
+    from corparius.config import Settings
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    Store(str(tmp_path)).close()
+    level, _, message = doctor._check_store(Settings())
+    assert level == "ok" and "writable" in message

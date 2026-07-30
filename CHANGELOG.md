@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — revenir en arrière ne peut plus se faire en silence
+
+- **Fixed: un ancien build rouvrant un store déjà migré ne disait rien.**
+  `_migrate` ne marche que vers l'avant, donc `PRAGMA user_version = 99` face à
+  un build qui en connaît 6 donnait une boucle vide : ouvert, lancé, et écrit
+  sans un mot. Vérifié en le faisant. C'est le conseil de reprise après une
+  mise à jour ratée — renommer le `.old` — qui rendait ce trou concret.
+- **Il s'ouvre toujours**, délibérément : refuser bloquerait exactement la
+  personne qui en a besoin. Mais il le dit, et le doctor **échoue** dessus en
+  nommant la sortie : remettre à jour, ou restaurer la sauvegarde prise avant.
+  Un vieux build qui écrit là où un schéma plus récent veut dire autre chose,
+  c'est la façon dont des données deviennent fausses sans bruit.
+
 ## Unreleased — une sauvegarde qu'on ose garder quelque part
 
 - **Une sauvegarde n'écrit plus jamais un secret en clair.** Elle en portait

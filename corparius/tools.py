@@ -35,6 +35,7 @@ class Tool:
         needs_draft: bool = False,
         prompt: Callable | None = None,
         schema: dict | None = None,
+        skip_when: Callable | None = None,
     ):
         self.name = name
         self.description = description
@@ -52,6 +53,15 @@ class Tool:
         self.schema = schema
         self._prompt = prompt
         self._effect = effect
+        # Checked before the model is called, and it returns the reason rather
+        # than a boolean so the log says why nothing happened. Without it, a
+        # needs_draft tool spends a real call before its effect can discover
+        # there was nothing to do: `draft_support_reply` wrote a reply to
+        # nobody every three hours on a company with no mailbox connected.
+        self._skip_when = skip_when
+
+    def skip_reason(self, ctx) -> str:
+        return self._skip_when(ctx) if self._skip_when else ""
 
     def draft_prompt(self, ctx) -> str:
         return self._prompt(ctx) if self._prompt else ""
@@ -332,10 +342,17 @@ def _scan_replies(ctx) -> str:
 
 
 def _triage_inbox(ctx) -> str:
-    """Read the real inbox when one is connected. The old fixed string claimed
-    '3 support, 1 sales, 0 urgent' for every company, configured or not."""
+    """Read the real inbox when one is connected, and say nothing when not.
+
+    Half of this was fixed once: the old fixed string claimed '3 support, 1
+    sales, 0 urgent' for every company. The replacement kept the numbers and
+    called them "sample counts", which is the same three fabricated figures with
+    a label on them — and they went into the action log every three hours, where
+    the flow metrics read the log. The repo's own rule is to label every number
+    Measured, Given or Estimated; these were none of the three.
+    """
     if not mailbox.configured():
-        return "Inbox triaged: no mailbox connected, using sample counts (3 support, 1 sales, 0 urgent)"
+        return "No mailbox connected, so there is nothing to triage (Settings, Mail)"
     messages = mailbox.fetch(limit=40)
     if not messages:
         return "Inbox read: nothing unread"
@@ -429,12 +446,27 @@ def _review_proposals(ctx) -> str:
 
 
 def _propose_task(ctx) -> str:
+    """One open idea per role, not one per turn.
+
+    Support runs every three hours and filed "Idea from support" each time —
+    five identical rows in one measured session, none carrying a tool, all
+    completed "(symbolic)". A backlog nobody can read is a backlog nobody uses,
+    and the CEO's review had to walk past them to find anything real.
+    """
     store = getattr(ctx, "store", None)
     if store is None:
         return "Backlog unavailable"
     slug = ctx.company.get("slug", "company")
     role = getattr(ctx, "role", "agent")
-    store.add_task(slug, f"Idea from {role}", role, priority=1, status="proposed", created_by=role)
+    title = f"Idea from {role}"
+    already = [
+        t
+        for t in store.list_tasks(slug, "proposed")
+        if t["title"] == title and t["created_by"] == role
+    ]
+    if already:
+        return f"{role} already has an idea waiting with the CEO"
+    store.add_task(slug, title, role, priority=1, status="proposed", created_by=role)
     return f"{role} proposed a task to the CEO"
 
 
@@ -580,6 +612,11 @@ _ALL = [
         "Draft a reply to the top ticket",
         needs_draft=True,
         prompt=lambda c: f"Draft a one-line support reply for a {_name(c)} user.",
+        skip_when=lambda c: (
+            ""
+            if mailbox.configured()
+            else "no mailbox connected, so there is no ticket to reply to (Settings, Mail)"
+        ),
         effect=lambda c, d: _ok(f"Reply drafted: {d[:110]}"),
     ),
     Tool(

@@ -488,3 +488,30 @@ def test_a_real_answer_is_not_flagged_as_unanswered(server, monkeypatch):
     monkeypatch.setattr(mod, "HybridRouter", lambda s: object())
     _status, d = _call(server, "POST", "/api/chat", {"company": "t", "message": "le site ?"})
     assert d["unanswered"] is False and d["reply"] == "Oui, presque prêt."
+
+
+def test_the_consoles_javascript_parses():
+    """Nothing else checks it, and it is a single 180 000-character inline
+    script edited by hand. One stray brace makes the whole console a blank page
+    with an error only the browser sees — no test, no lint and no type checker
+    in this repo would say a word.
+
+    Skipped where node is absent, like the generated Netlify function's check.
+    """
+    import re
+    import shutil
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    html = Path("corparius/webui.html").read_text(encoding="utf-8")
+    blocks = re.findall(r"<script[^>]*>(.*?)</script>", html, re.S)
+    assert blocks, "the console has no script block; this test is watching nothing"
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "console.mjs"
+        path.write_text("\n".join(blocks), encoding="utf-8")
+        proc = subprocess.run([node, "--check", str(path)], capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr

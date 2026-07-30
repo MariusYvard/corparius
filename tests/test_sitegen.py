@@ -88,13 +88,26 @@ def test_the_faq_is_baked_into_the_page(tmp_path, monkeypatch, faq_app):
 
 def test_the_page_stays_one_static_file_with_no_script(tmp_path, monkeypatch, faq_app):
     """The whole point of baking it: no JavaScript, no endpoint to reach, and
-    nothing to leave running. A chat widget would have traded that away."""
+    nothing to leave running. A chat widget would have traded that away.
+
+    Narrowed from "no <script> at all" when structured data arrived: a
+    `application/ld+json` block is data a crawler reads, never code a browser
+    runs. So the rule is now that every script element on the page is one of
+    those — which still refuses the widget, and refuses it by name rather than
+    by hoping nobody adds one.
+    """
+    import re
+
     from corparius.store import Store
 
     _model(monkeypatch)
     path = sitegen.build_site(_faq_company(), str(tmp_path / "site"), store=Store(str(tmp_path)))
     html = Path(path).read_text(encoding="utf-8")
-    assert "<script" not in html and "fetch(" not in html
+    scripts = re.findall(r"<script([^>]*)>", html, re.I)
+    assert scripts, "the structured data block is missing"
+    assert all('type="application/ld+json"' in attrs for attrs in scripts), scripts
+    assert "fetch(" not in html and "onclick" not in html and "javascript:" not in html
+    # No site.url, so no companion files are invented either.
     assert sorted(p.name for p in Path(path).parent.iterdir()) == ["index.html"]
 
 

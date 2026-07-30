@@ -6,87 +6,78 @@ source: adapted from the owner's NullToHero plugin, skills/siteasy
 licence: Apache-2.0
 ---
 
+Every rule here is one this generator already broke on a live page.
+
 ## Never publish yourself thinking
 
-A page shipped from this repo with this as its H1, at 4rem, on a live site:
+A page shipped with this H1, at 4rem: `"Check-in, anonyme, en 90 secondes."
+Alternatively, a more punchy version: "Mental Check-in en 90s"`.
 
-> "Check-in, anonyme, en 90 secondes." Alternatively, a more punchy version:
-> "Mental Check-in en 90s"
+Write the line; do not write *about* the line. No `Alternatively`, no `Here is a
+headline:`, no `Option 1 / Option 2`, no wrapping quotes, no two variants for
+someone else to choose between. If you have two candidates, pick one — choosing
+is the work.
 
-Write the line. Do not write about the line. No `Alternatively`, no `Here is a
-headline:`, no `Option 1 / Option 2`, no wrapping quotation marks, no two
-variants separated by a colon for the operator to choose between. If you have
-two candidates, pick one — choosing is the work.
+## Never claim what the company did not
 
-`sitegen.clean_headline` refuses all of these and falls back to the company's
-own one-liner, so a page will not carry your deliberation. It will carry a
-weaker headline instead, which is the cost of not deciding.
+Every page printed "Cancel anytime" and "Instant onboarding". Nobody had agreed
+to either, on somebody else's commercial site. Everything comes from
+`company.yaml`. A section with nothing real in it is omitted, never templated.
+No invented testimonial, customer count, percentage or guarantee.
 
-## Never write a claim the company did not make
-
-The generator used to print "Cancel anytime" and "Instant onboarding" in the
-pricing box of every page. Nobody had agreed to either. Those are terms of sale,
-and inventing them on someone's commercial site is not a design shortcut, it is
-a liability with their name on it.
-
-Everything on the page comes from `company.yaml`: the price, the segment, the
-pains, `offer.includes`. If a section has no real content, it does not appear —
-an empty section is better than a filled template. Never invent a testimonial, a
-customer count, a logo, a percentage, or a guarantee.
+This holds double for structured data, where a lie is invisible on screen and
+still shows in the search result: never `aggregateRating`, `reviewCount` or a
+`Review`. No price means no `Offer` — not `"price": "0"`, which advertises a
+free product.
 
 ## Flat is not restrained, it is unfinished
 
-The second failure, after the template was removed:
+Second failure, after the template came out: *"on dirait une page blanche avec du
+texte"*. Restraint without intent reads as mediocre. Commit somewhere:
 
-> "le site manque cruellement d'âme, on dirait une page blanche avec du texte"
+- **Change ground.** One colour top to bottom reads as a document.
+- **One number is the loudest thing on the page.** Usually the price.
+- **Spend the boldness once**, then keep everything around it quiet.
+- **Never centre everything.** A centred hero over a grid of
+  icon-title-subtitle cards is the shape every template has.
 
-Restraint without intent reads as mediocre, not refined. AI-generated landing
-pages have flooded the internet and average is no longer findable, so a page
-needs a point of view. Commit somewhere:
+## Contrast is a number, not an impression
 
-- **Change ground.** A page that is one colour top to bottom reads as a
-  document. The generator uses three bands — a washed hero, plain sections, an
-  inverted pricing block — and each change lands on a section boundary.
-- **One number is the loudest thing on the page.** Usually the price. A sales
-  page that sets its price at body weight has hidden its own argument.
-- **Spend the boldness once.** One saturated accent, used on the hero ground,
-  the button, the rules above headings, and nothing else. Keep everything
-  around it quiet.
-- **Never centre everything.** A centred hero over a grid of icon-title-subtitle
-  cards is the shape every template has. When all of it is in the middle, none
-  of it is anywhere.
+The dark pricing band shipped at **1.16:1**. WCAG AA is 4.5:1 for body text,
+3.0:1 for large text and controls. Measure; never assume a colour that works on
+one ground works on another. Two traps that both shipped:
 
-## The type carries the page
+- **`#fff` is not a button label.** 1.74:1 on a mid green. The label is
+  whichever of white and near-black wins against the chosen accent.
+- **A value that resolves in the browser cannot be checked.** No `color-mix`, no
+  alpha on text — their own reference calls alpha a design smell for this
+  reason. Resolve colours before writing them.
 
-Modular scale, ratio ≥ 1.25 — a flat scale reads as uncommitted. Headline large
-enough to be the first thing, `text-wrap: balance`, running text near 62
-characters. Light type on a dark ground gets more line-height, because it reads
-lighter than it is.
+Decoration is exempt: the signature band is `aria-hidden`.
 
-Weight and size have to carry the hierarchy on their own: turn the colour off
-and the page should still have a shape.
+## Findable
 
-## Write for the language the company speaks
+`<title>` leads with the promise, not the company name — a reader scanning ten
+results does not know yet what the company is. Under ~60 characters, description
+under ~155, one H1, `header`/`main`/`footer` as real landmarks.
 
-`company.yaml` has a `language` field. Section headings, the button and the
-billing note follow it. Do not draft English copy for a French company because
-English is what you reached for first.
+## Type, language, buttons
 
-Translations are longer: German +30%, French +20%. Nothing that holds text gets
+Modular scale, ratio ≥ 1.25; a flat scale reads as uncommitted. Weight and size
+carry the hierarchy — turn the colour off and the page should still have shape.
+Light type on dark gets more line-height.
+
+Write in `company.language`, never in whatever you reached for first.
+Translations run longer (German +30%, French +20%), so nothing holding text gets
 a fixed width.
 
-## The button says what it does
-
 A button that opens Stripe and a button that scrolls to a price are not the same
-button and must not carry the same word. Never `OK`, `Submit`, `Click here`.
-Verb, and what happens.
+button. Never `OK`, `Submit`, `Click here`. Verb, and what happens.
 
-## What the page must not need
+## What the page must never need
 
-One file. No script, no webfont, no CDN, no external image, no build step. It
-has to open from a folder, on a plane, forever. A design that reaches for a
-font URL has traded the only property this page is guaranteed to have.
-
-The graphic that gives the page presence is generated: a band of bars whose
-heights come from a hash of the company name, so every company gets a different
-one and every rebuild gives the same one. Distinctiveness with zero assets.
+One file. No script, no webfont, no CDN, no external image, no build step — it
+opens from a folder, on a plane, forever. A font URL trades away the only
+property this page is guaranteed to have. The graphic that gives it presence is
+generated from a hash of the company name: different per company, identical
+across rebuilds, zero assets.

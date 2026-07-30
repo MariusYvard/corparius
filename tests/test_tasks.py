@@ -30,9 +30,11 @@ def test_store_task_lifecycle(tmp_path):
 
 def test_agents_propose_and_ceo_decides(tmp_path, monkeypatch):
     store = Store(str(tmp_path))
-    agent_ctx = types.SimpleNamespace(company={"slug": "t"}, store=store, role="support")
-    tools._propose_task(agent_ctx)
-    tools._propose_task(agent_ctx)
+    # Two roles, not one role twice: a role keeps a single open idea with the
+    # CEO now. Support ran every three hours and filed five identical "Idea from
+    # support" rows in one measured session, none carrying a tool.
+    for role in ("support", "design"):
+        tools._propose_task(types.SimpleNamespace(company={"slug": "t"}, store=store, role=role))
     assert len(store.list_tasks("t", "proposed")) == 2
     monkeypatch.setenv("CORP_CEO_APPROVE_CAP", "1")
     ceo_ctx = types.SimpleNamespace(company={"slug": "t"}, store=store)

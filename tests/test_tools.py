@@ -151,3 +151,72 @@ def test_site_build_ignores_a_mock_draft_as_a_headline(tmp_path):
     assert result.ok
     index = (tmp_path / "data" / "sites" / "t" / "index.html").read_text(encoding="utf-8")
     assert "[mock:" not in index
+
+
+# --- what the log used to claim --------------------------------------------
+def test_triage_invents_no_numbers_without_a_mailbox(monkeypatch):
+    """It reported "3 support, 1 sales, 0 urgent" every three hours, for every
+    company, connected or not. Calling them "sample counts" made them a labelled
+    fabrication, not a fact — and they went into the action log, which the flow
+    metrics read."""
+    from corparius import mailbox
+
+    monkeypatch.setattr(mailbox, "configured", lambda: False)
+    out = TOOLS["triage_inbox"].run(
+        type("Ctx", (), {"company": {"slug": "t", "name": "T"}})(), draft=""
+    )
+    assert "No mailbox connected" in out.output
+    assert not any(ch.isdigit() for ch in out.output)
+
+
+def test_support_does_not_pay_for_a_reply_to_nobody(monkeypatch):
+    """needs_draft means the model is called before the effect can discover
+    there is nothing to do. The skip has to happen first or the call is spent."""
+    from corparius import mailbox
+
+    monkeypatch.setattr(mailbox, "configured", lambda: False)
+    ctx = type("Ctx", (), {"company": {"slug": "t", "name": "T"}})()
+    assert "no mailbox connected" in TOOLS["draft_support_reply"].skip_reason(ctx)
+
+
+def test_a_tool_with_a_mailbox_is_not_skipped(monkeypatch):
+    from corparius import mailbox
+
+    monkeypatch.setattr(mailbox, "configured", lambda: True)
+    ctx = type("Ctx", (), {"company": {"slug": "t", "name": "T"}})()
+    assert TOOLS["draft_support_reply"].skip_reason(ctx) == ""
+
+
+def test_most_tools_declare_no_skip_condition():
+    """The predicate is opt-in. A tool that never skips must not grow one by
+    accident, because a silently skipped tool looks exactly like a working one."""
+    ctx = type("Ctx", (), {"company": {"slug": "t", "name": "T"}})()
+    assert TOOLS["draft_social_post"].skip_reason(ctx) == ""
+    assert TOOLS["set_daily_plan"].skip_reason(ctx) == ""
+
+
+def test_a_role_keeps_one_idea_with_the_ceo_not_one_per_turn(tmp_path):
+    """Five identical "Idea from support" rows in one measured session, none
+    carrying a tool, all completed "(symbolic)"."""
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    ctx = type("Ctx", (), {"store": store, "company": {"slug": "t"}, "role": "support"})()
+    first = TOOLS["propose_task"].run(ctx, draft="")
+    for _ in range(4):
+        again = TOOLS["propose_task"].run(ctx, draft="")
+    assert "proposed a task" in first.output
+    assert "already has an idea waiting" in again.output
+    assert len(store.list_tasks("t", "proposed")) == 1
+    store.close()
+
+
+def test_another_role_can_still_propose(tmp_path):
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    for role in ("support", "design"):
+        ctx = type("Ctx", (), {"store": store, "company": {"slug": "t"}, "role": role})()
+        TOOLS["propose_task"].run(ctx, draft="")
+    assert len(store.list_tasks("t", "proposed")) == 2
+    store.close()

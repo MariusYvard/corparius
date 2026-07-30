@@ -216,6 +216,27 @@ def _overview(state: UiState, slug: str) -> dict:
         # A tool gated by name can never be silenced by a standing rule, so the
         # console must not offer a button that would do nothing.
         a["can_remember"] = bool(tool) and engine.evaluate(tool, slug).rule != "hitl"
+        # Everything the "learn more" panel needs, resolved here rather than in
+        # the page: what the tool does, why this one stopped, what the agent
+        # actually wrote, and what saying yes will do. An approval that shows a
+        # tool name and 80 characters of JSON is a decision made blind.
+        detail = a.get("detail")
+        if isinstance(detail, str):
+            try:
+                detail = json.loads(detail)
+            except json.JSONDecodeError:
+                detail = {}
+        detail = detail or {}
+        a["detail"] = {
+            "draft": detail.get("draft", ""),
+            "does": detail.get("does") or (tool.description if tool else ""),
+            "why": detail.get("why", ""),
+            "risk_means": permissions.explain(a["risk"]),
+            "on_approve": (
+                f"{a.get('tool', 'the tool')} runs once, now, with exactly what you see here."
+            ),
+            "on_reject": "Nothing runs, and the agent moves on to the rest of its playbook.",
+        }
     run = state.runs.get(slug, {})
     by_status: dict[str, list] = {
         "proposed": [],

@@ -32,6 +32,23 @@ CODE = "code"  # ships code to a place that runs it
 MONEY = "money"  # moves the operator's money
 
 ORDER: dict[str, int] = {READ: 0, WRITE_LOCAL: 1, EXTERNAL: 2, CODE: 3, MONEY: 4}
+
+# What a class means, in the words an operator deciding on one needs. The
+# console shows the badge either way; this is what the badge is short for.
+MEANS: dict[str, str] = {
+    READ: "Reads, drafts or computes. Nothing leaves this machine.",
+    WRITE_LOCAL: "Writes a file under your data folder. Nothing leaves this machine.",
+    EXTERNAL: "Someone outside receives something, or a third party is called. "
+    "It cannot be taken back.",
+    CODE: "Ships code somewhere that will run it.",
+    MONEY: "Moves your money.",
+}
+
+
+def explain(risk: str) -> str:
+    return MEANS.get(risk, MEANS[READ])
+
+
 RISK_CLASSES: tuple[str, ...] = tuple(ORDER)
 
 # Modes.

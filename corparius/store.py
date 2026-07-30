@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS token_usage (
 CREATE TABLE IF NOT EXISTS approvals (
     id TEXT PRIMARY KEY,
     company TEXT, agent TEXT, tool TEXT, parameters TEXT,
-    status TEXT, note TEXT, ts REAL
+    status TEXT, note TEXT, ts REAL, detail TEXT
 );
 CREATE TABLE IF NOT EXISTS state (
     company TEXT PRIMARY KEY, data TEXT
@@ -80,7 +80,7 @@ CREATE INDEX IF NOT EXISTS drafts_by_company ON drafts (company, state, ts);
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -167,6 +167,21 @@ def _migration_7(db: sqlite3.Connection) -> None:
     db.execute("CREATE INDEX IF NOT EXISTS drafts_by_company ON drafts (company, state, ts)")
 
 
+def _migration_8(db: sqlite3.Connection) -> None:
+    """What the operator is actually being asked to approve.
+
+    An approval carried `parameters`, and `parameters` carried the draft cut to
+    80 characters — because the id is a hash of them, and a longer draft would
+    have made the same request look like a new one every time. So approving
+    `send_outreach` meant approving an email nobody could read. The full text
+    goes here instead, where nothing hashes it.
+    """
+    try:
+        db.execute("ALTER TABLE approvals ADD COLUMN detail TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 MIGRATIONS = {
     1: _migration_1,
@@ -176,6 +191,7 @@ MIGRATIONS = {
     5: _migration_5,
     6: _migration_6,
     7: _migration_7,
+    8: _migration_8,
 }
 
 
@@ -371,7 +387,8 @@ class Store:
     def add_approval(self, req) -> None:
         self.db.execute(
             "INSERT OR REPLACE INTO approvals"
-            " (id, company, agent, tool, parameters, status, note, ts) VALUES (?,?,?,?,?,?,?,?)",
+            " (id, company, agent, tool, parameters, status, note, ts, detail)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 req.id,
                 req.company,
@@ -381,6 +398,7 @@ class Store:
                 req.status,
                 req.note,
                 req.ts,
+                json.dumps(getattr(req, "detail", None) or {}, ensure_ascii=False),
             ),
         )
         self.db.commit()

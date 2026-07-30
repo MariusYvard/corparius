@@ -8,7 +8,7 @@ not become the largest line in the token budget.
 
 import types
 
-from corparius.agents import ROSTER, _messages
+from corparius.agents import ROSTER, _messages, language_line
 from corparius.models import AgentRole
 from corparius.skills import Skill, SkillLoader, parse
 from corparius.tools import TOOLS
@@ -113,7 +113,11 @@ def test_the_prompt_is_unchanged_when_no_skill_applies(tmp_path):
     )
     spec = ROSTER[AgentRole.SOCIAL]
     system = _messages(spec, ctx, TOOLS["draft_social_post"])[0]["content"]
-    assert system == spec.system_prompt
+    # Still exact equality, against a baseline that now includes the one
+    # unconditional line every prompt carries: the company's language. The
+    # property under test is that nothing *else* is added, so weakening this
+    # to a substring check would have retired the test rather than updated it.
+    assert system == f"{spec.system_prompt}\n\n{language_line(ctx.company)}"
 
 
 def test_an_applicable_skill_reaches_the_system_prompt(tmp_path):
@@ -132,7 +136,13 @@ def test_an_agent_with_no_loader_is_unaffected():
     that builds a context by hand leaves it unset."""
     ctx = types.SimpleNamespace(company={"name": "T", "offer": {}}, memory=[])
     spec = ROSTER[AgentRole.SOCIAL]
-    assert _messages(spec, ctx, TOOLS["draft_social_post"])[0]["content"] == spec.system_prompt
+    # Still exact equality, against a baseline that now includes the one
+    # unconditional line every prompt carries: the company's language. The
+    # property under test is that nothing *else* is added, so weakening this
+    # to a substring check would have retired the test rather than updated it.
+    assert _messages(spec, ctx, TOOLS["draft_social_post"])[0]["content"] == (
+        f"{spec.system_prompt}\n\n{language_line(ctx.company)}"
+    )
 
 
 def test_the_shipped_example_skill_names_real_tools():

@@ -19,8 +19,18 @@ Source of truth for how corparius is packaged and distributed.
 
 These manifests point at the GitHub Release assets. They are the upstream copy;
 to actually distribute, submit each to its ecosystem (or host your own tap/bucket).
-After a release, replace the `REPLACE_WITH_..._SHA256` placeholders with the
-values from that release's `SHA256SUMS`.
+
+**You do not fill these in by hand.** The `stamp-manifests` job in
+`.github/workflows/release.yml` rewrites the version, the checksums and WinGet's
+`ReleaseDate` from the release's own `SHA256SUMS`, then commits them back — and
+`tests/test_packaging_manifests.py` fails CI on a placeholder or a version that
+disagrees with `corparius.__version__`.
+
+That exists because the manual instructions that used to be here were not
+followed: after v0.2.0 shipped, all three manifests still said `0.1.0` and two
+still carried the literal `REPLACE_WITH_..._SHA256` where a checksum belongs, so
+`brew install corparius` could not have worked. Documentation asking a human to
+remember something before every release is a step that will be skipped.
 
 | Manager | File | Notes |
 | --- | --- | --- |

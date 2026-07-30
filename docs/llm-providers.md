@@ -25,6 +25,8 @@ Limites relevées en juin et juillet 2026. Elles évoluent, la documentation du 
 | cerebras | api.cerebras.ai/v1 | CEREBRAS_API_KEY | 30 req/min, 1 M tokens/jour, contexte plafonné à 8K | Sans carte bancaire. Inférence très rapide |
 | openrouter | openrouter.ai/api/v1 | OPENROUTER_API_KEY | modèles suffixés ":free", 20 req/min, 50 req/jour (1 000 req/jour après un versement unique de 10 $) | Agrégateur, large choix de modèles ouverts |
 | mistral | api.mistral.ai/v1 | MISTRAL_API_KEY | plan Experiment, 1 req/s, 500 000 tokens/min, environ 1 milliard tokens/mois | Hébergeur français. Le plan gratuit implique l'usage des prompts pour l'entraînement |
+| openai | api.openai.com/v1 | OPENAI_API_KEY | aucun ; facturation à l'usage dès le premier appel | Aucun modèle par défaut n'est épinglé ici : OpenAI renomme et retire vite, et la console lit le vrai catalogue via `/models` dès qu'une clé est posée |
+| alibaba | dashscope-intl.aliyuncs.com/compatible-mode/v1 | DASHSCOPE_API_KEY | quota d'essai offert à l'inscription, variable selon le modèle | Model Studio (Qwen). Région internationale par défaut ; `DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1` pour un compte Pékin — ce sont deux comptes distincts, une clé de l'un est refusée par l'autre |
 | gemini | generativelanguage.googleapis.com/v1beta/openai | GEMINI_API_KEY | 5 à 15 req/min, 100 à 1 000 req/jour selon le modèle | Free tier indisponible dans l'UE, au Royaume-Uni et en Suisse |
 | nvidia | integrate.api.nvidia.com/v1 | NVIDIA_API_KEY | environ 40 req/min, plus de 100 modèles ouverts | Vérification téléphonique demandée |
 | github | models.github.ai/inference | GITHUB_TOKEN | 10 à 15 req/min, 50 à 150 req/jour selon le modèle, entrées 8K et sorties 4K max | Un compte GitHub suffit (token classique) |
@@ -40,7 +42,7 @@ Limites relevées en juin et juillet 2026. Elles évoluent, la documentation du 
 
 ## Obtenir les clés
 
-groq : console.groq.com/keys. cerebras : cloud.cerebras.ai. openrouter : openrouter.ai/keys. mistral : console.mistral.ai/api-keys. gemini : aistudio.google.com/app/apikey. nvidia : build.nvidia.com/settings/api-keys. github : github.com/settings/tokens (modèles sur github.com/marketplace/models). cohere : dashboard.cohere.com/api-keys. huggingface : huggingface.co/settings/tokens. ovh : endpoints.ai.cloud.ovh.net. zhipu : open.bigmodel.cn/usercenter/apikeys. siliconflow : cloud.siliconflow.cn/account/ak. cloudflare : dash.cloudflare.com/profile/api-tokens.
+groq : console.groq.com/keys. cerebras : cloud.cerebras.ai. openrouter : openrouter.ai/keys. mistral : console.mistral.ai/api-keys. gemini : aistudio.google.com/app/apikey. nvidia : build.nvidia.com/settings/api-keys. github : github.com/settings/tokens (modèles sur github.com/marketplace/models). cohere : dashboard.cohere.com/api-keys. huggingface : huggingface.co/settings/tokens. ovh : endpoints.ai.cloud.ovh.net. zhipu : open.bigmodel.cn/usercenter/apikeys. siliconflow : cloud.siliconflow.cn/account/ak. cloudflare : dash.cloudflare.com/profile/api-tokens. openai : platform.openai.com/api-keys. alibaba : modelstudio.console.alibabacloud.com (onglet API-KEY).
 
 ## Exemple de configuration
 

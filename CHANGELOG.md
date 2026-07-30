@@ -8,6 +8,26 @@ was released.
 
 ## Non publié
 
+### Fournisseurs
+
+- **Added : `openai` et `alibaba`.** OpenAI sur `api.openai.com/v1`
+  (`OPENAI_API_KEY`) ; Alibaba Cloud Model Studio — Qwen — sur l'endpoint
+  compatible OpenAI, région internationale par défaut et
+  `DASHSCOPE_BASE_URL` pour un compte Pékin, les deux régions étant des comptes
+  distincts. Les trois points d'accès ont été vérifiés en direct : chacun répond
+  401 sans clé, ce qui est un vrai endpoint qui refuse une clé manquante et non
+  une URL fausse. Aucun `default_model` n'est épinglé pour OpenAI : un nom de
+  modèle écrit en dur est une affirmation avec une date de péremption, et celui
+  d'openrouter avait déjà pourri. Ni l'un ni l'autre n'entre dans l'ordre de
+  routage automatique — ils facturent dès le premier appel, et y atterrir par
+  défaut dépenserait l'argent de l'exploitant sans qu'il l'ait choisi.
+- **Added : `tests/test_provider_registry.py`.** Le registre est la source de
+  vérité pour les réglages, la console et le routeur ; la table de
+  `docs/llm-providers.md` est écrite à la main, donc c'est le même danger que
+  les manifestes d'installation. Elle est désormais confrontée au registre :
+  fournisseur absent, mauvaise variable de clé, mauvais endpoint, lien de clé
+  manquant. Vérifié en retirant une ligne pour voir le test échouer.
+
 ### Le site généré, repris deux fois
 
 - **Fixed : le générateur publiait le modèle en train de réfléchir.** Une page
@@ -42,7 +62,28 @@ was released.
   du nom de l'entreprise, différente par entreprise et stable d'une
   construction à l'autre. Toujours un seul fichier, sans script, sans police
   distante, sans requête sortante.
-- **Added : `site.theme`, `site.font`, `site.accent`.**
+- **Fixed : le bandeau de prix du thème sombre était illisible.** Texte à
+  **1,16:1** contre son propre fond — quasi-noir sur quasi-noir. Une ligne
+  supposait que la couleur de fond de la page fait un bon texte sur le bandeau
+  inversé : vrai en clair (18:1), faux en sombre. Trouvé sur une capture
+  d'écran, parce que rien ici ne savait ce qu'était un contraste. `palette_for()`
+  dérive désormais chaque couleur de ce sur quoi elle se pose, et
+  `tests/test_sitegen_contrast.py` parcourt les deux thèmes contre six accents.
+  Le libellé du bouton passe du même coup de 1,74:1 à 11,4:1 sur un accent
+  clair : `#fff` n'est plus écrit en dur. Aucune couleur n'arrive plus par
+  `color-mix` — une valeur qui se résout dans le navigateur est une valeur
+  qu'aucun test ne peut mesurer.
+- **Added : le site est fait pour être trouvé.** `canonical`, Open Graph, carte
+  Twitter, données structurées JSON-LD (`Product` + `Offer`, et `FAQPage` quand
+  la FAQ existe — demandée une seule fois et servie aux deux), `robots.txt` et
+  `sitemap.xml` écrits à côté de la page, repères `header`/`main`/`footer`. Rien
+  d'inventé là non plus : jamais de note ni de nombre d'avis, et pas de prix
+  signifie pas d'`Offer` plutôt que `"price": "0"`. Tout ce qui est absolu
+  demande `site.url` ; sans lui c'est omis, jamais deviné, et le doctor le dit.
+- **Security : les réponses de modèle qui entrent dans le bloc JSON-LD** ont
+  chaque `<`, `>` et `&` échappés en `<`. N'échapper que `</script>` est le
+  conseil habituel, mais c'est raisonner sur des états d'analyse HTML.
+- **Added : `site.theme`, `site.font`, `site.accent`, `site.url`.**
 - **Added : la compétence livrée `landing-craft`,** adaptée du greffon
   NullToHero du propriétaire, cadrée sur `build_sales_site` et
   `draft_design_brief` — zéro coût sur les autres invites. Les mêmes règles sont

@@ -428,6 +428,18 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             font = ""
         if font:
             site["font"] = font
+        # Where the page will live once it is hosted. Everything a search engine
+        # wants that is not on the page itself — the canonical link, sitemap.xml,
+        # robots.txt, the og:url — needs an absolute address, and this generator
+        # will not guess one. Absent, those are omitted rather than faked; the
+        # doctor says so.
+        url = str(site_in.get("url", "")).strip().rstrip("/")
+        if url and not re.match(r"https?://[^\s/]+\.[^\s/]", url):
+            warnings.append(f"site.url '{url}' is not an absolute http(s) address; ignored")
+            url = ""
+        if url:
+            site["url"] = url
+
         accent = str(site_in.get("accent", "")).strip()
         if accent and not re.fullmatch(r"#[0-9a-fA-F]{6}", accent):
             warnings.append(f"site.accent '{accent}' is not a #rrggbb colour; using the default")

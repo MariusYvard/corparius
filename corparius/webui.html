@@ -503,6 +503,7 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
   <div id="update-bar" class="banner" hidden role="status">
     <span id="update-bar-text"></span>
     <span style="display:inline-flex; gap:8px; margin-left:auto">
+      <button id="update-bar-apply" class="link-quiet" hidden data-i18n="up.apply">Update now</button>
       <a id="update-bar-get" class="link-quiet" target="_blank" rel="noopener noreferrer"
          data-i18n="up.get">Download</a>
       <button id="update-bar-hide" class="link-quiet" data-i18n="ob.dismiss">Hide</button>
@@ -939,6 +940,10 @@ en: {
   "doc.run":"Run diagnostics","footer.support":"Support the project",
   "doc.barFail":"{n} check(s) need a fix:","doc.barOpen":"See diagnostics",
   "up.avail":"corparius {v} is available (you run {c}).","up.get":"Download",
+  "up.apply":"Update now","up.working":"Downloading and checking the release…",
+  "up.confirm":"Download the new build, check it against the published checksum and replace this program? Your companies and settings are in a separate folder and are not touched — a backup is taken first anyway.",
+  "up.done":"corparius {v} is installed. Close this window and start corparius again to run it.",
+  "up.backup":"A backup was written to {p}.",
   "cfg.title":"Configuration","cfg.desc":"Everything corparius reads. Saved here, applied without touching a file. A field the process environment defines is shown read-only.",
   "cfg.save":"Save","cfg.saved":"Saved.","cfg.isSet":"set — type to replace","cfg.notSet":"not set",
   "cfg.env":"from the environment","cfg.envTip":"This value comes from the process environment, which outranks the console. Unset it in your shell or compose file to edit it here.",
@@ -1159,6 +1164,10 @@ fr: {
   "doc.title":"Diagnostics","doc.desc":"Vérifie Python, le store, Ollama, les providers et le réseau, et dit quoi corriger.",
   "doc.barFail":"{n} vérification(s) à corriger :","doc.barOpen":"Voir le diagnostic",
   "up.avail":"corparius {v} est disponible (vous utilisez {c}).","up.get":"Télécharger",
+  "up.apply":"Mettre à jour","up.working":"Téléchargement et vérification de la release…",
+  "up.confirm":"Télécharger la nouvelle version, vérifier son empreinte publiée et remplacer ce programme ? Vos entreprises et vos réglages sont dans un dossier séparé et ne sont pas touchés — une sauvegarde est prise avant, malgré tout.",
+  "up.done":"corparius {v} est installé. Fermez cette fenêtre et relancez corparius pour l'utiliser.",
+  "up.backup":"Une sauvegarde a été écrite dans {p}.",
   "doc.run":"Lancer le diagnostic","footer.support":"Soutenir le projet",
   "conn.error":"Impossible de joindre le serveur corparius :",
   "footer":"console opérateur corparius · sert sur localhost · l'état est lu depuis le store SQLite local"
@@ -1410,9 +1419,27 @@ async function checkUpdate() {
     $("#update-bar-text").textContent =
       t("up.avail").replace("{v}", r.latest).replace("{c}", r.current);
     $("#update-bar-get").href = r.url;
+    // Shown only on the downloadable build: from source or Docker the server
+    // says it cannot apply one, and offering the button anyway would be a
+    // promise the next click breaks.
+    $("#update-bar-apply").hidden = !r.can_apply;
+    $("#update-bar-apply").dataset.tag = "v" + r.latest;
     $("#update-bar").hidden = false;
   } catch (e) {}
 }
+$("#update-bar-apply").addEventListener("click", async (e) => {
+  const b = e.currentTarget, out = $("#update-bar-text");
+  if (!confirm(t("up.confirm"))) return;
+  b.disabled = true; out.textContent = t("up.working");
+  try {
+    const r = await api("/api/update/apply", {tag: b.dataset.tag});
+    if (!r.ok) { out.textContent = r.error; b.disabled = false; return; }
+    // The binary on disk is the new one; this process is still the old one.
+    out.textContent = t("up.done").replace("{v}", r.result.installed)
+      + (r.result.backup ? " " + t("up.backup").replace("{p}", r.result.backup) : "");
+    b.hidden = true;
+  } catch (err) { out.textContent = err.message; b.disabled = false; }
+});
 $("#update-bar-hide").addEventListener("click", () => {
   sessionStorage.setItem("corparius-update-hid", "1"); $("#update-bar").hidden = true;
 });

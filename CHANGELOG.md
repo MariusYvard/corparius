@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased — mettre à jour depuis la console
+
+- **`corparius update`, et un bouton dans la bannière.** Jusqu'ici la console
+  savait dire qu'une version existait et rien de plus — et même ça ne marchait
+  pas : sans release publiée, l'API GitHub ne renvoyait rien, donc la bannière
+  ne pouvait jamais apparaître. Elle télécharge maintenant, vérifie et remplace.
+- **Aucune entreprise ne peut être perdue par une mise à jour**, et ce n'est pas
+  une affirmation : le binaire et les données vivent dans deux endroits
+  différents, les seuls chemins écrits sont le nom du binaire plus un suffixe,
+  et un test fait tourner une vraie mise à jour au-dessus d'un dossier plein
+  d'entreprises en exigeant que **chaque octet** soit identique après. Une
+  sauvegarde est prise avant l'échange malgré tout, et l'opération refuse si le
+  fichier à remplacer contenait le dossier de données. Sur seize tests, treize
+  sont des refus.
+- **Deux renommages, pas une réécriture.** Le nouveau build est écrit à côté de
+  l'ancien pendant que celui-ci tourne encore, puis deux `os.replace` sur le
+  même système de fichiers. La fenêtre où aucun corparius n'existe à ce chemin
+  fait deux appels système de large au lieu d'un téléchargement entier, et si le
+  second échoue le premier est défait.
+- **L'ancien build est conservé, pas supprimé**, jusqu'à ce que le nouveau
+  démarre une fois — c'est le démarrage lui-même qui l'efface, donc sa présence
+  est exactement le signal « le nouveau n'a jamais tourné ».
+- **Une empreinte qui ne correspond pas est un refus, jamais un avertissement.**
+  C'est le seul endroit de corparius qui télécharge du code pour l'exécuter. Le
+  module dit aussi ce que la vérification **ne** prouve pas : les sommes vivent
+  dans la même release que le binaire, donc c'est de l'intégrité de transport,
+  pas de la provenance. L'image Docker reste le chemin signé (SLSA).
+- **Vérifié contre la vraie release.** Un binaire construit exprès en 0.0.9 a
+  téléchargé la v0.1.0 publiée, vérifié son empreinte, échangé le fichier : le
+  binaire obtenu est **octet pour octet** celui de la release, l'entreprise
+  `acme` créée avant est intacte (les neuf fichiers stables comparés avant/après
+  sont identiques, elle répond toujours dans le store), et le `.new` a disparu.
+- **Le premier saut reste manuel** : la v0.1.0 publiée ne contient pas le bouton,
+  puisqu'il arrive après elle. Idem pour le ménage du `.old`, que fait le build
+  installé. Dit dans `docs/install.md` plutôt que laissé à découvrir.
+- Refuse hors du binaire téléchargeable en disant quoi faire à la place
+  (`git pull`, `docker pull`), sur une plateforme sans release publiée, et quand
+  le dossier n'est pas accessible en écriture. Le bouton n'apparaît que là où le
+  serveur dit pouvoir agir : le proposer ailleurs serait une promesse que le
+  clic suivant casse.
+
 ## Unreleased — le binaire est aussi le CLI
 
 - **Fixed: aucune commande n'existait pour qui télécharge le binaire.** Le

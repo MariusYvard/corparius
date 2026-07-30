@@ -350,3 +350,79 @@ def test_no_key_survives_the_thing_that_used_it():
     page = Path("corparius/webui.html").read_text(encoding="utf-8")
     for gone in ("prov.activate", "toast.activated"):
         assert gone not in page, f"{gone} is back without a renderer"
+
+
+# --- the update button -----------------------------------------------------
+def test_the_polled_update_endpoint_says_whether_a_button_makes_sense(server, monkeypatch):
+    """The page hides the button when the server cannot apply an update.
+    Offering it from a source checkout would be a promise the next click
+    breaks."""
+    from corparius import selfupdate
+
+    monkeypatch.setattr(selfupdate, "why_not", lambda: "")
+    status, d = _call(server, "GET", "/api/update")
+    assert status == 200 and d["can_apply"] is True
+    monkeypatch.setattr(selfupdate, "why_not", lambda: "not the downloadable build")
+    assert _call(server, "GET", "/api/update")[1]["can_apply"] is False
+
+
+def test_applying_an_update_is_a_post_not_the_polled_get(server, monkeypatch):
+    """It downloads tens of megabytes and then replaces the program. A poll
+    must never be able to trigger that."""
+    from corparius import selfupdate
+
+    def explode(*a, **k):
+        raise AssertionError("a GET applied an update")
+
+    monkeypatch.setattr(selfupdate, "apply", explode)
+    assert _call(server, "GET", "/api/update")[0] == 200
+
+
+def test_an_update_is_refused_when_there_is_nothing_newer(server, monkeypatch):
+    from corparius import selfupdate, update_check
+
+    monkeypatch.setattr(
+        update_check, "check", lambda *a, **k: {"enabled": True, "update_available": False}
+    )
+
+    def explode(*a, **k):
+        raise AssertionError("downloaded a build we already run")
+
+    monkeypatch.setattr(selfupdate, "apply", explode)
+    status, d = _call(server, "POST", "/api/update/apply", {})
+    assert status == 200 and d["ok"] is False and "up to date" in d["error"]
+
+
+def test_a_refusal_reaches_the_operator_as_a_sentence(server, monkeypatch):
+    """Not a 500 and not a traceback: the reasons this refuses are all things
+    an operator can act on."""
+    from corparius import selfupdate, update_check
+
+    monkeypatch.setattr(
+        update_check,
+        "check",
+        lambda *a, **k: {"enabled": True, "update_available": True, "latest": "9.9.9"},
+    )
+
+    def refuse(tag):
+        raise selfupdate.UpdateError("checksum mismatch. Nothing was installed.")
+
+    monkeypatch.setattr(selfupdate, "apply", refuse)
+    status, d = _call(server, "POST", "/api/update/apply", {})
+    assert status == 200 and d["ok"] is False and "Nothing was installed" in d["error"]
+
+
+def test_the_tag_applied_is_the_one_the_check_reported(server, monkeypatch):
+    from corparius import selfupdate, update_check
+
+    seen = {}
+    monkeypatch.setattr(
+        update_check,
+        "check",
+        lambda *a, **k: {"enabled": True, "update_available": True, "latest": "0.2.0"},
+    )
+    monkeypatch.setattr(
+        selfupdate, "apply", lambda tag: seen.setdefault("tag", tag) or {"ok": True, "backup": ""}
+    )
+    _call(server, "POST", "/api/update/apply", {})
+    assert seen["tag"] == "v0.2.0"

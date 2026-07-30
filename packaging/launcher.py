@@ -41,6 +41,22 @@ def _never_crash_on_a_character() -> None:
             pass  # not a text stream, or already closed: nothing to harden
 
 
+def _sweep_previous_build() -> None:
+    """Clear what an update left beside this executable.
+
+    It runs here and nowhere else because reaching this line is the proof the
+    swap worked: the new build starts. Until then the one it replaced is still
+    on disk under `.old`, which is what an operator renames back if it does
+    not. Never a reason a launch fails.
+    """
+    try:
+        from corparius import selfupdate
+
+        selfupdate.sweep_previous()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _log(msg: str) -> None:
     print(f"[corparius] {msg}")
 
@@ -75,6 +91,7 @@ def _announce_update() -> None:
 
 def main() -> int:
     _never_crash_on_a_character()
+    _sweep_previous_build()
     _prepare_home()
     # A subcommand runs the CLI; nothing, or only flags, serves the console.
     #

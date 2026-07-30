@@ -12,7 +12,7 @@ import json
 import logging
 from dataclasses import dataclass
 
-from . import structured
+from . import cfg, structured
 from .models import AgentRole, Difficulty, ToolResult
 from .permissions import risk_of
 from .safety import BudgetExceeded, LoopGuard
@@ -168,6 +168,8 @@ class Executor:
             task = self.store.claim_next_task(company, spec.role.value)
             if task and self._work_task(company, spec, ctx, task, loop, done):
                 return done
+        if self._stood_down(company, spec, done):
+            return done
         for tool_name in spec.playbook:
             result, stop = self._invoke(company, spec, ctx, tool_name, loop)
             if result is not None:
@@ -180,6 +182,38 @@ class Executor:
             if stop:
                 break
         return done
+
+    def _stood_down(self, company, spec, done) -> bool:
+        """Skip this turn when what the role produces is piling up unread.
+
+        The social agent was the largest line in one company's spend — 29 065
+        tokens — writing posts nothing published, then writing more. An agent
+        producing what nobody consumes should stop, not accelerate.
+
+        The notice goes to the inbox once, not once per tick: a warning repeated
+        every two hours is a warning nobody reads.
+        """
+        from . import inbox
+
+        if spec.role is not AgentRole.SOCIAL:
+            return False
+        cap = cfg.get_int("CORP_SOCIAL_QUEUE_MAX", 5)
+        waiting = self.store.count_drafts(company, "queued")
+        if waiting < cap:
+            return False
+        done.append(f"social stood down: {waiting} post(s) queued and nothing publishes them")
+        inbox.notify(
+            self.store,
+            company,
+            "social",
+            "Posts are piling up unpublished",
+            f"{waiting} posts are written and none is published. Nothing in corparius "
+            "publishes to a social channel yet, so the social agent "
+            "has stopped writing rather than keep spending on drafts nobody reads. Read or "
+            "export them from the console, then they stop counting. Raise "
+            "CORP_SOCIAL_QUEUE_MAX if you want a deeper queue.",
+        )
+        return True
 
     def _work_task(self, company, spec, ctx, task, loop, done) -> bool:
         """Run a backlog task's tool for real. Returns True if a guard tripped."""

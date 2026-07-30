@@ -278,3 +278,47 @@ def test_the_asset_is_named_from_the_machine_it_runs_on(monkeypatch):
     monkeypatch.setattr(selfupdate.sys, "platform", "win32")
     monkeypatch.setattr(selfupdate.platform, "machine", lambda: "ARM64")
     assert selfupdate.asset_name() is None, "we publish no Windows arm64 build"
+
+
+def test_the_providers_stay_connected_across_an_update(frozen, monkeypatch):
+    """Keys and tiers live on two layers — `.env` in the home, and the settings
+    table in the store — and both are in the data folder, not beside the binary.
+    An operator who has connected providers should not have to reconnect them,
+    and should certainly not discover that at the next tick."""
+    from corparius import cfg
+    from corparius.store import Store
+
+    home = frozen["home"]
+    (home / ".env").write_text(
+        "CORP_LLM_MOCK=false\nCORP_CLOUD_ENABLED=true\n"
+        "OPENROUTER_API_KEY=sk-or-test\nCORP_TRIVIAL_MODEL=openrouter:free-model\n",
+        encoding="utf-8",
+    )
+    # The fixture writes a placeholder there; this test needs a real database.
+    (home / "data" / "corparius.sqlite").unlink()
+    store = Store(str(home / "data"))
+    store.set_setting("GROQ_API_KEY", "gsk-saved-from-the-console")
+    store.set_setting("CORP_HARD_MODEL", "groq:llama")
+    store.close()
+
+    def resolve():
+        cfg.set_dotenv_path(home / ".env")
+        cfg.invalidate()
+        from corparius.llm import connected_providers
+
+        return {
+            "providers": sorted(connected_providers()),
+            "trivial": cfg.get("CORP_TRIVIAL_MODEL"),
+            "hard": cfg.get("CORP_HARD_MODEL"),
+            "env_key": cfg.get("OPENROUTER_API_KEY"),
+            "store_key": cfg.get("GROQ_API_KEY"),
+        }
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(home / "data"))
+    before = resolve()
+    assert "groq" in before["providers"] and "openrouter" in before["providers"]
+
+    _serve(monkeypatch)
+    selfupdate.apply("v9.9.9")
+
+    assert resolve() == before

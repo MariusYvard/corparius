@@ -27,6 +27,12 @@
   module dit aussi ce que la vérification **ne** prouve pas : les sommes vivent
   dans la même release que le binaire, donc c'est de l'intégrité de transport,
   pas de la provenance. L'image Docker reste le chemin signé (SLSA).
+- **Les fournisseurs restent connectés.** Clés et paliers vivent sur deux
+  couches, `.env` et la table `settings` du store, toutes deux dans le dossier
+  de données. Éprouvé avec une clé sur chacune, sur une vraie mise à jour :
+  `connected_providers()`, les paliers et les deux clés sont identiques des deux
+  côtés. Un test le tient désormais, parce que « ça devrait marcher » n'est pas
+  ce qu'on veut découvrir au tick suivant.
 - **Vérifié contre la vraie release.** Un binaire construit exprès en 0.0.9 a
   téléchargé la v0.1.0 publiée, vérifié son empreinte, échangé le fichier : le
   binaire obtenu est **octet pour octet** celui de la release, l'entreprise

@@ -1047,6 +1047,51 @@ def _route_ollama_bench(ctx):
     return 200, {"ok": True, "result": measured}
 
 
+def _route_drafts_get(ctx):
+    """What the agents wrote and nothing has published.
+
+    They were being written and thrown away — the social agent was the largest
+    line in one company's spend and left nothing behind. Keeping them was half
+    the fix; this is the half that lets someone read them.
+    """
+    store = ctx.store()
+    return 200, {
+        "ok": True,
+        "drafts": store.list_drafts(ctx.slug, limit=100),
+        # What actually gates the agent: `draft` and `queued` together.
+        "queued": store.count_unpublished(ctx.slug),
+        "published": store.count_drafts(ctx.slug, "published"),
+        "cap": cfg.get_int("CORP_SOCIAL_QUEUE_MAX", 5),
+    }
+
+
+def _route_drafts_post(ctx):
+    """Mark one published or discarded.
+
+    `published` is the operator's word for "this went out", not a claim that
+    corparius sent it — nothing here publishes to a social channel. It stops the
+    post counting against the queue, which is what lets the agent resume.
+    """
+    try:
+        draft_id = int(ctx.body.get("id"))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 400, {"ok": False, "error": "a draft id is required"}
+    state = str(ctx.body.get("state", "")).strip()
+    if state not in ("published", "discarded", "queued"):
+        return 400, {"ok": False, "error": "state must be published, discarded or queued"}
+    store = ctx.store()
+    if not store.set_draft_state(draft_id, state):
+        return 404, {"ok": False, "error": "no such draft"}
+    return 200, {
+        "ok": True,
+        "drafts": store.list_drafts(ctx.slug, limit=100),
+        # What actually gates the agent: `draft` and `queued` together.
+        "queued": store.count_unpublished(ctx.slug),
+        "published": store.count_drafts(ctx.slug, "published"),
+        "cap": cfg.get_int("CORP_SOCIAL_QUEUE_MAX", 5),
+    }
+
+
 def _route_site_get(ctx):
     site = paths.site_index(_fresh_settings().data_path, ctx.slug)
     return 200, {
@@ -1433,6 +1478,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/settings", _route_settings_get),
     Route("GET", "/api/company", _route_company_get, needs_slug=True),
     Route("GET", "/api/ollama", _route_ollama_get),
+    Route("GET", "/api/drafts", _route_drafts_get, needs_slug=True),
     Route("GET", "/api/site", _route_site_get, needs_slug=True),
     Route("GET", "/api/payments", _route_payments_get),
     Route("GET", "/api/doctor", _route_doctor),
@@ -1443,6 +1489,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/chat", _route_chat_get, needs_slug=True),
     Route("POST", "/api/companies", _route_companies_post),
     Route("POST", "/api/approvals", _route_approvals_post),
+    Route("POST", "/api/drafts", _route_drafts_post, needs_slug=True),
     Route("POST", "/api/rules", _route_rules_post, needs_slug=True),
     Route("POST", "/api/memory", _route_memory_post),
     Route("POST", "/api/inbox", _route_inbox_post),

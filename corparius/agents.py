@@ -198,7 +198,7 @@ class Executor:
         if spec.role is not AgentRole.SOCIAL:
             return False
         cap = cfg.get_int("CORP_SOCIAL_QUEUE_MAX", 5)
-        waiting = self.store.count_drafts(company, "queued")
+        waiting = self.store.count_unpublished(company)
         if waiting < cap:
             return False
         done.append(f"social stood down: {waiting} post(s) queued and nothing publishes them")

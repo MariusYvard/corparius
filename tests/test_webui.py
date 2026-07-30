@@ -262,6 +262,7 @@ def test_company_wizard_creates_and_lists(server, tmp_path, monkeypatch):
     assert set(cfg) == {
         "slug",
         "name",
+        "language",
         "one_liner",
         "offer",
         "icp",
@@ -269,6 +270,9 @@ def test_company_wizard_creates_and_lists(server, tmp_path, monkeypatch):
         "budgets",
         "hitl_tools",
     }
+    # Guessed from what the operator typed and written down, so they can see the
+    # guess and correct it. This wizard was filled in English.
+    assert cfg["language"] == "en"
     assert cfg["offer"]["billing"] == "stripe" and cfg["icp"]["channels"] == ["linkedin"]
     status, data = _call(
         server, "POST", "/api/companies", {"name": "Atelier Brumaire", "product": "dup"}

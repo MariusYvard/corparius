@@ -239,7 +239,7 @@ def test_the_starter_pack_passes_the_bar_it_teaches():
     if not base.is_dir():  # a wheel install without packaging/
         return
     loader = SkillLoader([(base, "starter")])
-    assert len(loader.skills) == 6
+    assert len(loader.skills) == 7
     for skill in loader.skills:
         assert skill.allowed_tools, f"{skill.name} declares no allowed-tools"
         assert [t for t in skill.allowed_tools if t not in TOOLS] == [], skill.name
@@ -267,7 +267,12 @@ def test_the_starter_pack_covers_jobs_that_had_nothing():
 
 def test_the_starter_pack_credits_where_it_came_from():
     """Apache-2.0 with a LICENSE.txt per skill upstream. Adapted prose is still
-    derived prose, and the frontmatter is where it costs nothing to say so."""
+    derived prose, and the frontmatter is where it costs nothing to say so.
+
+    This used to require one upstream by name. It no longer does, because the
+    pack no longer has one: `landing-craft` is adapted from the owner's own
+    NullToHero plugin. What has to hold is that every skill names *a* source and
+    a licence, not that they all name the same one."""
     from pathlib import Path
 
     base = Path("packaging/skill-pack-starter/skills")
@@ -275,7 +280,8 @@ def test_the_starter_pack_credits_where_it_came_from():
         return
     for path in base.glob("*/SKILL.md"):
         head = path.read_text(encoding="utf-8")
-        assert "knowledge-work-plugins" in head, path
+        source = next((ln for ln in head.splitlines() if ln.startswith("source:")), "")
+        assert source.removeprefix("source:").strip(), f"{path} credits nobody"
         assert "Apache-2.0" in head, path
 
 

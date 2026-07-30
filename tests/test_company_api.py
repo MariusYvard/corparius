@@ -76,6 +76,7 @@ def test_reads_a_company_with_every_field_filled_in(server):
     assert set(c) == {
         "slug",
         "name",
+        "language",
         "one_liner",
         "offer",
         "icp",
@@ -83,6 +84,10 @@ def test_reads_a_company_with_every_field_filled_in(server):
         "budgets",
         "hitl_tools",
     }
+    # `language` is supplied even when the file never mentioned it, guessed from
+    # what the operator wrote. It has to be in the dict the editor opens, or the
+    # operator can never see the guess to correct it.
+    assert c["language"]
     assert c["offer"]["billing"] == "stripe" and c["icp"]["channels"] == ["linkedin"]
     assert d["roles"] and d["channels"] and d["tools"]
 

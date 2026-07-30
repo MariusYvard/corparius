@@ -67,6 +67,45 @@ TOKENS_MIN, TOKENS_MAX = 1000, 5_000_000
 
 DEFAULT_HITL = ["send_financial_transaction", "publish_production_code", "deploy_site"]
 
+# The languages this build can write a sales page in. A company may declare any
+# language it likes — the field is free text and every agent prompt honours it —
+# but the page's own furniture (section headings, the CTA, the billing note) is
+# only translated for these, and anything else falls back to English furniture
+# around content that is still in the company's language. Better an honest
+# mixture than a French heading invented by nobody.
+LANGUAGES = ("en", "fr", "es", "de", "it", "pt", "nl")
+
+# Function words that do not travel. Each of these is common in its own language
+# and absent or rare in the others, which is all a default needs to be: the field
+# is written into company.yaml at creation, so the operator sees the guess and
+# can correct it once, rather than the guess running on every load.
+_MARKERS = {
+    "fr": ("le", "la", "les", "des", "une", "vous", "pour", "avec", "sans", "votre", "qui", "est"),
+    "es": ("el", "los", "las", "una", "para", "con", "sin", "que", "sus", "por", "más", "tu"),
+    "de": ("der", "die", "das", "und", "für", "mit", "ohne", "ihre", "sie", "ein", "eine", "nicht"),
+    "it": ("il", "lo", "gli", "una", "per", "con", "senza", "che", "sono", "tuo", "più", "del"),
+    "pt": ("os", "as", "uma", "para", "com", "sem", "que", "seu", "sua", "mais", "não", "você"),
+    "nl": ("de", "het", "een", "voor", "met", "zonder", "uw", "jouw", "niet", "van", "zijn", "je"),
+    "en": ("the", "a", "an", "for", "with", "without", "your", "you", "that", "of", "is", "to"),
+}
+_WORD_RE = re.compile(r"[a-zà-öø-ÿ]+")
+
+
+def detect_language(text: str) -> str:
+    """Guess a language from the words the operator wrote. Falls back to `en`.
+
+    Deliberately crude — no dependency, no model call, and the answer is only a
+    default that gets written down for review. It exists because a French
+    company drafted English support replies for want of anybody ever saying
+    which language it speaks.
+    """
+    words = _WORD_RE.findall(str(text or "").lower())
+    if not words:
+        return "en"
+    counts = {lang: sum(w in marks for w in words) for lang, marks in _MARKERS.items()}
+    best = max(counts, key=lambda lang: (counts[lang], lang == "en"))
+    return best if counts[best] else "en"
+
 
 # Starter templates. The blank page at creation is real friction: a newcomer
 # knows their business but not what to put for ICP, channels or which agents.
@@ -230,6 +269,12 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             errors.append(f"offer.price_eur: expected a number, got {offer_in['price_eur']!r}")
             price = None
 
+    # What the buyer actually gets. Optional, and empty is a fine answer: the
+    # generator used to print "Cancel anytime" and "Instant onboarding" on every
+    # page it made, which are terms of sale nobody had agreed to. A short list
+    # the operator wrote, or no list at all.
+    includes = [str(i).strip() for i in (offer_in.get("includes") or []) if str(i).strip()]
+
     billing = str(offer_in.get("billing", "stripe")).strip().lower() or "stripe"
     if billing not in BILLING:
         warnings.append(
@@ -367,6 +412,28 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     site_in = raw.get("site") or {}
     site: dict = {}
     if isinstance(site_in, dict):
+        # Look. NullToHero's brand register puts it plainly: a centred stack of
+        # icon-title-subtitle cards reads as template, and a generator with one
+        # hard-coded look converges on exactly that. These two turn the page
+        # without touching the copy.
+        theme = str(site_in.get("theme", "")).strip().lower()
+        if theme and theme not in ("light", "dark"):
+            warnings.append(f"site.theme '{theme}' is not light or dark; using light")
+            theme = ""
+        if theme:
+            site["theme"] = theme
+        font = str(site_in.get("font", "")).strip().lower()
+        if font and font not in ("serif", "sans"):
+            warnings.append(f"site.font '{font}' is not serif or sans; using serif")
+            font = ""
+        if font:
+            site["font"] = font
+        accent = str(site_in.get("accent", "")).strip()
+        if accent and not re.fullmatch(r"#[0-9a-fA-F]{6}", accent):
+            warnings.append(f"site.accent '{accent}' is not a #rrggbb colour; using the default")
+            accent = ""
+        if accent:
+            site["accent"] = accent
         faq_app = str(site_in.get("faq_app", "")).strip()
         faq = [str(q).strip() for q in (site_in.get("faq") or []) if str(q).strip()]
         if faq_app and not faq:
@@ -380,15 +447,33 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     elif site_in:
         errors.append("site: expected a mapping")
 
+    # The language the company speaks. Not a display preference: it is written
+    # into every agent's prompt and into the sales page, because a company whose
+    # config is in French drafted "Thank you for contacting us" to its French
+    # customers for want of anyone ever saying so. Declared wins; otherwise
+    # guessed from what the operator typed, and the guess is written down where
+    # they can see and fix it.
+    declared = str(raw.get("language", "")).strip().lower()[:16]
+    if declared and not re.fullmatch(r"[a-z]{2,3}(-[a-z0-9]{2,8})?", declared):
+        warnings.append(f"language '{declared}' is not a language code like 'fr'; guessed instead")
+        declared = ""
+    language = declared or detect_language(
+        " ".join(
+            [name, str(raw.get("one_liner", "")), product, str(icp_in.get("segment", ""))] + pains
+        )
+    )
+
     cfg = {
         "slug": slug,
         "name": name,
+        "language": language,
         "one_liner": str(raw.get("one_liner", "")).strip() or product,
         "offer": {
             "product": product,
             "price_eur": price,
             "billing": billing,
             "payment_link": str(offer_in.get("payment_link", "")).strip(),
+            **({"includes": includes} if includes else {}),
         },
         "icp": {
             "segment": str(icp_in.get("segment", "")).strip() or "To be defined",

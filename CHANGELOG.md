@@ -6,6 +6,44 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
+## Non publié
+
+### Le site généré, repris deux fois
+
+- **Fixed : le générateur publiait le modèle en train de réfléchir.** Une page
+  est partie en ligne avec `« Check-in, anonyme, en 90 secondes. »
+  Alternatively, a more punchy version: « Mental Check-in en 90s »` en H1, à
+  4 rem. `sitegen.clean_headline` refuse désormais le méta-commentaire et
+  récupère le bon titre quand il est là entre guillemets ; à défaut, la page
+  retombe sur la proposition de valeur écrite par un humain.
+- **Fixed : le générateur inventait des conditions de vente.** « Cancel
+  anytime » et « Instant onboarding » étaient imprimés dans l'encadré de prix de
+  *chaque* page produite, sans que personne les ait promises. Ce qui figure dans
+  la liste vient de `offer.includes`, ou la section n'existe pas. Une section
+  sans contenu réel disparaît au lieu d'afficher un gabarit.
+- **Added : `language` sur `company.yaml`.** Déduit de ce que l'exploitant a
+  écrit, puis inscrit dans le fichier pour qu'il le voie et le corrige. Il fixe
+  l'attribut `lang`, les titres de sections, le bouton et la mention de
+  facturation — sept langues traduites. C'est ce qui manquait quand une
+  entreprise française rédigeait « Thank you for contacting us ».
+- **Changed : la page a une présence.** Le premier correctif retirait le gabarit
+  centré et sa grille de cartes sans rien mettre à la place — verdict du
+  propriétaire, « on dirait une page blanche avec du texte ». La page engage
+  maintenant sa couleur : trois changements de fond, le prix comme nombre le
+  plus fort de la page, et une **signature** de barres dérivée d'une empreinte
+  du nom de l'entreprise, différente par entreprise et stable d'une
+  construction à l'autre. Toujours un seul fichier, sans script, sans police
+  distante, sans requête sortante.
+- **Added : `site.theme`, `site.font`, `site.accent`.**
+- **Added : la compétence livrée `landing-craft`,** adaptée du greffon
+  NullToHero du propriétaire, cadrée sur `build_sales_site` et
+  `draft_design_brief` — zéro coût sur les autres invites. Les mêmes règles sont
+  dans `DESIGN.md`, tenues par `tests/test_sitegen_contract.py`.
+- **Added : un test qui vérifie que le JavaScript de la console se parse.**
+  180 000 caractères de script en ligne, édités à la main, que ni ruff, ni mypy,
+  ni aucun test Python ne regardait ; une accolade en trop donnait une page
+  blanche que seul le navigateur signalait.
+
 ## 0.2.0 — une revue adverse, et deux trous qu'elle a trouvés
 
 - **Fixed (HIGH) : le tag de mise à jour sortait du dépôt.** La route de la

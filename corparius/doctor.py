@@ -249,6 +249,40 @@ def _check_permissions(s: Settings) -> tuple:
     return ("ok", "permissions", f"{mode}, asks above {s.ask_above}; gated by name: {gated}")
 
 
+def _check_budgets(s: Settings) -> tuple:
+    """A per-minute ceiling too low to run a turn freezes the day, every day.
+
+    Measured: a company declaring 8000 froze six times in one session, and the
+    log said the circuit breaker tripped without saying which ceiling. The value
+    is the operator's to choose — two tests set a tiny one deliberately to trip
+    the breaker — so it is reported here rather than overridden. One real turn of
+    one agent is three or four calls of about a thousand tokens, and several
+    agents land in the same wall-clock minute.
+    """
+    from . import company as company_mod
+
+    base = paths.companies_dir()
+    slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
+    thin = []
+    for slug in slugs:
+        try:
+            cfg_c = company_mod.load(base / slug / "company.yaml", slug)
+        except (FileNotFoundError, ValueError):
+            continue
+        tpm = int((cfg_c.get("budgets") or {}).get("tokens_per_minute", 0) or 0)
+        if 0 < tpm < 20_000:
+            thin.append(f"{slug} ({tpm})")
+    if not thin:
+        return ("ok", "budgets", f"{len(slugs)} company(ies), none with a ceiling too low to run")
+    return (
+        "warn",
+        "budgets",
+        f"budgets.tokens_per_minute is too low to run a real turn in: {', '.join(thin)}. "
+        "The circuit breaker will freeze the day. Raise it to 20000 or more in "
+        "company.yaml, or from the console's company editor.",
+    )
+
+
 def _check_apps(s: Settings) -> tuple:
     """What the company would serve, and to whom.
 
@@ -725,6 +759,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_plugins(s),
         _check_skills(s),
         _check_apps(s),
+        _check_budgets(s),
         _check_memory(s),
         _check_inbox(s),
     ]

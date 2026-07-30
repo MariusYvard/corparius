@@ -8,6 +8,26 @@ was released.
 
 ## Non publié
 
+### Fournisseurs
+
+- **Added : `openai` et `alibaba`.** OpenAI sur `api.openai.com/v1`
+  (`OPENAI_API_KEY`) ; Alibaba Cloud Model Studio — Qwen — sur l'endpoint
+  compatible OpenAI, région internationale par défaut et
+  `DASHSCOPE_BASE_URL` pour un compte Pékin, les deux régions étant des comptes
+  distincts. Les trois points d'accès ont été vérifiés en direct : chacun répond
+  401 sans clé, ce qui est un vrai endpoint qui refuse une clé manquante et non
+  une URL fausse. Aucun `default_model` n'est épinglé pour OpenAI : un nom de
+  modèle écrit en dur est une affirmation avec une date de péremption, et celui
+  d'openrouter avait déjà pourri. Ni l'un ni l'autre n'entre dans l'ordre de
+  routage automatique — ils facturent dès le premier appel, et y atterrir par
+  défaut dépenserait l'argent de l'exploitant sans qu'il l'ait choisi.
+- **Added : `tests/test_provider_registry.py`.** Le registre est la source de
+  vérité pour les réglages, la console et le routeur ; la table de
+  `docs/llm-providers.md` est écrite à la main, donc c'est le même danger que
+  les manifestes d'installation. Elle est désormais confrontée au registre :
+  fournisseur absent, mauvaise variable de clé, mauvais endpoint, lien de clé
+  manquant. Vérifié en retirant une ligne pour voir le test échouer.
+
 ### Le site généré, repris deux fois
 
 - **Fixed : le générateur publiait le modèle en train de réfléchir.** Une page

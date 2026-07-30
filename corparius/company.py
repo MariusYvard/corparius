@@ -269,10 +269,22 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     if clamped != session:
         warnings.append(f"budgets.session_tokens clamped to {clamped}")
     session = clamped
-    tpm = _int(
-        budgets_in.get("tokens_per_minute", max(1000, session // 10)), max(1000, session // 10)
-    )
+    # A tenth of the session budget was calibrated against mock runs, where a
+    # turn costs a few hundred tokens. Against real providers one turn of one
+    # agent runs three or four calls of a thousand tokens each, and the ticks of
+    # several agents land in the same wall-clock minute — so a company created
+    # with the old default froze on the circuit breaker six times in a single
+    # session, measured. Half the session budget is the number that lets a real
+    # quarter-day run; the session ceiling is still the thing that stops a
+    # runaway, and it has not moved.
+    default_tpm = max(20_000, session // 2)
+    tpm = _int(budgets_in.get("tokens_per_minute", default_tpm), default_tpm)
     tpm = max(100, min(tpm, session))
+    if tpm < 20_000 and "tokens_per_minute" in budgets_in:
+        warnings.append(
+            f"budgets.tokens_per_minute is {tpm}; a real provider spends that in one turn, "
+            "so the circuit breaker will freeze the day. 20000 or more is a working floor."
+        )
     # Opt-in, like the permission keys: emitting it always would pin every
     # company to whatever the global setting said the day it was created.
     cost_budget = None

@@ -37,6 +37,24 @@ KINDS = (QUESTION, NOTIFICATION)
 
 PENDING, RESOLVED = "pending", "resolved"
 
+# Where in the console a notice is fixed. A closed set, because the console
+# renders a button per value and an unknown one would render nothing — the
+# failure this is meant to end.
+#
+# The failure: `scan_replies` and `triage_inbox` returned "No mailbox connected"
+# on every tick of every run. True, correct, and useless — a line in the action
+# log, repeated forever, pointing at nothing anyone could click. Naming the
+# remedy turns it into one item with a button.
+# The value is the console tab that opens; only tabs that exist are listed,
+# because a notice pointing at a tab nobody built renders a button that does
+# nothing, which is worse than the log line it replaced.
+FIXES = {
+    "mail": "settings",  # Settings tab; the console also opens the mail group
+    "payments": "settings",
+    "providers": "providers",
+    "plugins": "plugins",
+}
+
 
 def item_id(company: str, kind: str, agent: str, title: str) -> str:
     """Deterministic, so the same question asked again *is* the same question.
@@ -79,10 +97,18 @@ def answer_to(ctx, title: str) -> str:
     return str(row["resolution"]) if row else ""
 
 
-def notify(store, company: str, agent: str, title: str, body: str = "") -> str:
+def notify(store, company: str, agent: str, title: str, body: str = "", fix: str = "") -> str:
     """Something the operator should see, blocking nothing. Idempotent on the
     title, so a breaker that trips on three consecutive days leaves one live
-    notice rather than a wall of them."""
+    notice rather than a wall of them.
+
+    `fix` is one of FIXES: the console turns it into a button that opens the
+    place this is settled, instead of leaving the operator to work out that
+    "no mailbox connected" means the Mail group of the Settings tab.
+    """
     if store is None:
         return ""
-    return store.add_inbox(company, agent, NOTIFICATION, title, body, ())
+    if fix and fix not in FIXES:
+        log.warning("inbox notice %r names an unknown fix %r; no button will show", title, fix)
+        fix = ""
+    return store.add_inbox(company, agent, NOTIFICATION, title, body, (), fix)

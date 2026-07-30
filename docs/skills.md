@@ -41,6 +41,19 @@ C'est ici que corparius s'écarte d'OpenWorker, dont le sous-système est par ai
 
 Cela rend le catalogue inutile dans l'invite: le modèle n'a aucun moyen de réclamer une compétence qu'on ne lui a pas donnée, donc lui énumérer les autres serait des jetons dépensés pour une offre que rien ne peut saisir. Le catalogue est tout de même construit, pour la console. Le résultat est moins cher que la divulgation progressive, et pas seulement aussi peu cher: un tour paie les compétences qui s'y appliquent et rien d'autre.
 
+## Cadrer une compétence depuis la console
+
+Une compétence sans `allowed-tools` part dans **chaque** invite de **chaque** agent. Sur l'entreprise `vigil` du propriétaire, `promesse-clinique` pesait ainsi 3 815 caractères sur chaque appel, indéfiniment. La console le signalait déjà ; elle ne proposait rien pour y remédier, et le remède était d'aller trouver le fichier et d'éditer du YAML à la main.
+
+Le panneau Compétences offre désormais, sur toute compétence non cadrée, un sélecteur des outils réels. Valider écrit `allowed-tools` dans le SKILL.md. Mesuré sur ces vraies données : la taxe permanente passe de 3 815 à 0.
+
+C'est la seule écriture que la console fait sur un fichier de compétence, et elle est prudente :
+
+- le corps est réécrit **à l'octet près** — c'est la prose de l'exploitant, pas la nôtre ;
+- la description n'est pas repliée sur deux lignes par le sérialiseur YAML ;
+- un outil qui n'existe pas est refusé, parce qu'une compétence cadrée sur un nom que personne n'a ne s'applique jamais, en silence — pire que la taxe qu'on voulait supprimer ;
+- le fichier réécrit est relu **avant** d'atteindre le disque, et l'écriture est atomique.
+
 ## Écrire un corps utile
 
 Tout ce qui suit l'en-tête part dans l'invite système de l'agent. Écrivez ce que vous diriez à une nouvelle recrue son premier jour, pas ce que vous mettriez dans une plaquette.

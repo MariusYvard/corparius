@@ -8,6 +8,32 @@ was released.
 
 ## Non publié
 
+### Ce que l'exploitant doit faire lui-même
+
+- **Added : la configuration du courrier est guidée, fournisseur par
+  fournisseur.** Le préréglage remplissait quatre noms d'hôte, ce qui est la
+  moitié facile ; la moitié difficile se passe sur le site de quelqu'un d'autre,
+  derrière une authentification à deux facteurs, et la console n'en disait rien.
+  Chaque fournisseur a désormais ses étapes numérotées avec le lien direct, et
+  **l'état de chacune** déduit des réglages plutôt que cochée à la main. Une
+  étape que corparius ne peut pas vérifier (installer Proton Bridge, relever un
+  mot de passe sur un tableau de bord) le dit, au lieu d'afficher une case qui
+  ne pourra jamais devenir verte.
+- **Fixed : « No mailbox connected » revenait à chaque tour, pour rien.** Trois
+  outils renvoyaient chacun leur phrase dans le journal d'actions : vrai,
+  correct, répété indéfiniment, et ne pointant vers rien de cliquable. C'est
+  maintenant **une** notice dans l'inbox (`add_inbox` est idempotent sur un id
+  déterministe) qui nomme l'endroit où ça se règle, et la console en fait un
+  bouton qui ouvre le groupe Courrier des réglages. Schéma 9 : `inbox.fix`.
+- **Added : cadrer une compétence depuis la console.** `promesse-clinique`
+  pesait **3 815 caractères sur chaque invite de chaque agent** — la console le
+  disait déjà, sans rien offrir pour y remédier. Un sélecteur d'outils écrit
+  `allowed-tools` dans le SKILL.md : mesuré sur les vraies données, la taxe
+  passe de 3 815 à 0. Le corps du fichier est réécrit **à l'octet près**, la
+  description n'est pas repliée, l'écriture est atomique, un outil inexistant
+  est refusé (une compétence cadrée sur un nom que personne n'a ne s'applique
+  jamais, en silence), et la réécriture est relue avant d'atteindre le disque.
+
 ### Fournisseurs
 
 - **Added : `openai` et `alibaba`.** OpenAI sur `api.openai.com/v1`

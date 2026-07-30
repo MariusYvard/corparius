@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased — le chiffrement fait enfin ce qu'il annonce, et on peut restaurer
+
+- **Fixed: activer le chiffrement au repos ne chiffrait que la prochaine
+  écriture.** Écrire `CORP_SECRET_KEY` laissait toutes les clés déjà stockées en
+  clair, donc les sauvegardes continuaient à les vider : un réglage qui avait
+  l'air fait et ne l'était pas. `corparius secrets on` écrit la phrase **et**
+  rechiffre l'existant ; la console fait la même migration quand on y écrit le
+  champ, au lieu de tendre le même piège en plus joli.
+- **`corparius secrets off` existe**, parce qu'une porte à sens unique est une
+  porte que personne n'ouvre. La phrase générée n'est montrée qu'une fois, avec
+  ce qu'elle implique : c'est la seule copie, et aucune sauvegarde ne la porte.
+- **Fixed: rien ne savait consommer une sauvegarde.** On en produisait, on les
+  avait durcies, on les décrivait — et aucun chemin de code n'en restaurait une.
+  « Ça restaure » était une affirmation sur un processus que personne n'avait
+  écrit. `corparius restore <zip>` le fait.
+- **La seule opération qui détruit volontairement**, donc bâtie autour du refus :
+  elle valide l'archive avant de toucher quoi que ce soit, **sauvegarde ce
+  qu'elle va remplacer**, et refuse une archive qui n'est pas une sauvegarde
+  corparius comme un chemin qui sortirait de sa zone de décompression (zip-slip).
+- **Fixed, trouvé au premier essai réel : une restauration pouvait mourir à
+  mi-chemin.** Un `rmtree` a échoué sous Windows *après* qu'une entreprise ait
+  déjà été remplacée — une demi-restauration sans rien à défaire. Chaque étape
+  met de côté par renommage désormais, un appel atomique, et toute erreur défait
+  ce qui précède.
+- **Le `.env` de l'archive est fusionné, jamais recopié.** Ses valeurs secrètes
+  sont vides par construction ; les écraser effacerait la phrase qui ouvre le
+  texte chiffré qu'on restaure.
+- Vérifié de bout en bout : chiffrement activé, sauvegarde, données détruites,
+  restauration — la clé revient, l'archive ne contient nulle part le texte en
+  clair, et `REDACTED.txt` annonce « No secret had to be blanked ».
+
 ## Unreleased — revenir en arrière ne peut plus se faire en silence
 
 - **Fixed: un ancien build rouvrant un store déjà migré ne disait rien.**

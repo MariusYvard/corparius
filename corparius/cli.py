@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 from . import company, paths
 from .config import Settings, settings, setup_logging
@@ -345,6 +346,45 @@ def cmd_backup(args) -> None:
     print(backup.describe(path, with_secrets=args.with_secrets))
 
 
+def cmd_restore(args) -> None:
+    """Put a backup back, after backing up what it replaces.
+
+    The destructive one. It validates the archive before touching anything,
+    snapshots what is about to be overwritten, and says what it could not
+    restore — a redacted key is not an error, but discovering it at the next
+    tick would be.
+    """
+    from . import backup
+
+    archive = Path(args.archive)
+    try:
+        found = backup.inspect(archive)
+    except backup.RestoreError as exc:
+        sys.exit(str(exc))
+    print(f"{archive.name} holds:")
+    print(f"  companies : {', '.join(found['companies']) or 'none'}")
+    print(f"  store     : {'yes' if found['has_store'] else 'no'}")
+    print(f"  .env      : {'yes' if found['has_env'] else 'no'}")
+    if not args.yes:
+        print()
+        print("This replaces those companies and the store on this machine.")
+        print("What it replaces is backed up first.")
+        if input("continue? [y/N] ").strip().lower() not in ("y", "yes"):
+            sys.exit("nothing was changed")
+    try:
+        done = backup.restore(archive, Settings().data_path)
+    except backup.RestoreError as exc:
+        sys.exit(str(exc))
+    print("restored: " + ", ".join(done["replaced"]))
+    if done["safety_backup"]:
+        print(f"what it replaced: {done['safety_backup']}")
+    if done["blanked"]:
+        print()
+        print("These were blanked in that archive and have to be entered again:")
+        for name in done["blanked"]:
+            print(f"  {name}")
+
+
 def cmd_ui(args) -> None:
     from .webui import serve
 
@@ -530,6 +570,11 @@ def main(argv=None) -> None:
     )
     sp.set_defaults(fn=lambda a: cmd_decide(a, "approved"))
 
+    sp = sub.add_parser("restore", help="put a backup back (replaces companies and the store)")
+    sp.add_argument("archive", help="path to a corparius-backup-*.zip")
+    sp.add_argument("--yes", action="store_true", help="do not ask for confirmation")
+    sp.set_defaults(fn=cmd_restore)
+
     sp = sub.add_parser("update", help="replace this build with the newest release")
     sp.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     sp.set_defaults(fn=cmd_update)
@@ -573,11 +618,12 @@ def main(argv=None) -> None:
     sp.add_argument("--note", default="")
     sp.set_defaults(fn=lambda a: cmd_decide(a, "rejected"))
 
-    from . import appcli, plugincli, skillcli
+    from . import appcli, plugincli, secretscli, skillcli
 
     plugincli.add_parser(sub)
     skillcli.add_parser(sub)
     appcli.add_parser(sub)
+    secretscli.add_parser(sub)
 
     args = p.parse_args(argv)
     args.fn(args)

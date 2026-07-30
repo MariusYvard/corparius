@@ -80,11 +80,33 @@ Par défaut, les clés API et jetons enregistrés depuis la console sont stocké
 
 `corparius backup --with-secrets` conserve les clés en clair, pour une copie de reprise sur disque chiffré. Il faut le demander explicitement, et la commande annonce ce qu'elle vient de produire. La console, elle, ne propose que l'archive sûre : un clic dans un navigateur ne doit pas pouvoir fabriquer un fichier qui est un mot de passe.
 
+Pour chiffrer ces secrets au repos :
+
+```bash
+corparius secrets status   # ce qui est stocké, et ce qui est chiffré
+corparius secrets on       # génère la phrase, l'écrit, et rechiffre l'existant
+corparius secrets off      # redéchiffre : ce n'est pas une porte à sens unique
+```
+
+`on` fait la chose que définir la variable à la main ne faisait pas : **rechiffrer ce qui est déjà stocké**. Sans ça, `CORP_SECRET_KEY` ne protégeait que la prochaine écriture, donc quelqu'un qui croyait l'avoir activé gardait toutes ses clés en clair — et ses sauvegardes continuaient à les vider. La console fait la même migration quand on y écrit le champ.
+
+La phrase générée n'est affichée **qu'une fois**. Mettez-la dans un gestionnaire de mots de passe : c'est la seule copie qui ouvre vos secrets chiffrés, et une sauvegarde ne la contient jamais.
+
 Pour chiffrer ces secrets au repos, définissez `CORP_SECRET_KEY` (une phrase secrète). Les réglages marqués secrets sont alors chiffrés dans la base et dans les sauvegardes, via le paquet `cryptography` (`pip install -r requirements-secrets.txt`). Le chiffrement est **désactivé par défaut** pour que le mode mock hors-ligne n'exige aucune dépendance. La clé est dérivée de la phrase secrète par scrypt ; les valeurs chiffrées portent un préfixe `enc:v1:`, et les valeurs en clair déjà présentes restent lisibles jusqu'à leur prochaine écriture.
 
 Propriété importante : `CORP_SECRET_KEY` est une clé de démarrage, écrite dans `.env` (ou l'environnement), **jamais dans la base** — sinon il faudrait la base pour se déchiffrer elle-même. `.env` **est** désormais archivé, mais `CORP_SECRET_KEY` fait partie des valeurs vidées : une sauvegarde volée contient donc le coffre chiffré et jamais la phrase qui l'ouvre. C'est la première chose à vérifier après avoir mis `.env` dans l'archive, pas la dernière, et un test la tient. En contrepartie : perdez la phrase et les secrets chiffrés sont irrécupérables. Effectif au redémarrage.
 
-C'est aussi ce que `CORP_SECRET_KEY` **achète** : avec le chiffrement au repos, les secrets voyagent chiffrés au lieu d'être vidés, donc la sauvegarde restaure l'installation entière. Sans lui, elle restaure tout sauf les clés.
+C'est aussi ce que `CORP_SECRET_KEY` **achète** : avec le chiffrement au repos, les secrets voyagent chiffrés au lieu d'être vidés, donc la sauvegarde restaure l'installation entière. Sans lui, elle restaure tout sauf les clés. Vérifié de bout en bout : chiffrement activé, sauvegarde, données détruites, `corparius restore` — la clé revient, et `REDACTED.txt` annonce « No secret had to be blanked ».
+
+## Restaurer
+
+```bash
+corparius restore <corparius-backup-*.zip>
+```
+
+L'unique opération de corparius qui détruit quelque chose volontairement, donc elle est bâtie autour du refus : elle valide l'archive avant de toucher à quoi que ce soit, **sauvegarde ce qu'elle va remplacer**, met de côté par renommage plutôt que par suppression — un seul appel atomique, donc chaque étape est réversible — et défait tout si une étape échoue. Elle refuse une archive qui n'est pas une sauvegarde corparius, et un chemin qui tenterait d'écrire hors de sa zone de décompression.
+
+Le `.env` de l'archive est **fusionné**, jamais recopié tel quel : ses valeurs secrètes sont vides par construction, et les écraser effacerait précisément la phrase qui ouvre le texte chiffré qu'on est en train de restaurer. Ce qu'elle n'a pas pu restaurer, elle le nomme.
 
 ## Sources
 

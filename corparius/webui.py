@@ -576,6 +576,22 @@ def _persist(state: UiState, values: dict[str, str], unset: list[str] | None = N
             _merge_env_file(state.env_file, {k: "" for k in unset if k in cfg.BOOTSTRAP})
     cfg.invalidate()
     meta: dict = {}
+    # Setting or clearing the passphrase from the page has to rewrite what is
+    # already stored, exactly as `corparius secrets on` does. Without this the
+    # field looked like it encrypted the operator's keys and only affected the
+    # next write — the trap that made the setting mean less than it said.
+    if "CORP_SECRET_KEY" in values or "CORP_SECRET_KEY" in unset:
+        from . import secretbox
+
+        try:
+            changed = state.store().rewrite_secrets(to_encrypted=secretbox.enabled())
+        except Exception:  # noqa: BLE001 - a wrong passphrase must not 500 the page
+            meta["secrets_error"] = (
+                "The stored secrets could not be rewritten with that passphrase. "
+                "It has to be the one they were encrypted with."
+            )
+        else:
+            meta["secrets_rewritten"] = sorted(changed)
     shadowed = [k for k in list(values) + unset if os.environ.get(k) is not None]
     if shadowed:
         meta["shadowed"] = sorted(shadowed)

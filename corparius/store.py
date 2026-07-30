@@ -705,6 +705,65 @@ class Store:
         self.db.commit()
         return cur.rowcount > 0
 
+    @_locked
+    def secret_rows(self) -> list[dict]:
+        """Every stored secret, with whether it is currently ciphertext.
+
+        The count is the honest answer to "is encryption actually on here?" —
+        turning it on only affects the next write, so a store can have the
+        passphrase set and still hold plaintext keys.
+        """
+        from . import secretbox
+
+        rows = self.db.execute("SELECT key, value, secret FROM settings").fetchall()
+        from .settings_spec import SECRETS
+
+        out = []
+        for row in rows:
+            if not (row["secret"] or row["key"] in SECRETS):
+                continue
+            out.append(
+                {
+                    "key": row["key"],
+                    "encrypted": secretbox.is_encrypted(row["value"] or ""),
+                    "empty": not (row["value"] or ""),
+                }
+            )
+        return out
+
+    @_locked
+    def rewrite_secrets(self, to_encrypted: bool) -> list[str]:
+        """Bring every stored secret to ciphertext, or back to plaintext.
+
+        Without this, `CORP_SECRET_KEY` only ever protected the *next* write:
+        an operator who turned encryption on still had every existing key in
+        the clear, and a backup still had to blank them. Which made the setting
+        look like it did something it did not do yet.
+
+        Returns the names it changed. Empty values are skipped — there is
+        nothing to protect, and encrypting "" would only make it unreadable.
+        """
+        from . import secretbox
+
+        changed: list[str] = []
+        for row in self.secret_rows.__wrapped__(self):  # already holding the lock
+            if row["empty"]:
+                continue
+            if row["encrypted"] == to_encrypted:
+                continue
+            stored = self.db.execute(
+                "SELECT value FROM settings WHERE key=?", (row["key"],)
+            ).fetchone()["value"]
+            plain = secretbox.decrypt(stored) if secretbox.is_encrypted(stored) else stored
+            value = secretbox.encrypt(plain) if to_encrypted else plain
+            self.db.execute(
+                "UPDATE settings SET value=?, secret=1, updated_at=? WHERE key=?",
+                (value, time.time(), row["key"]),
+            )
+            changed.append(row["key"])
+        self.db.commit()
+        return changed
+
     # Outreach we sent, so a reply can be recognised as a reply. Without this
     # the company emails prospects and never learns whether anyone answered,
     # which is the one signal it exists to chase.

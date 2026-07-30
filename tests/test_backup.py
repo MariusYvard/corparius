@@ -141,7 +141,9 @@ def test_the_names_are_kept_so_a_restore_says_what_to_re_enter(tmp_path, monkeyp
     path = backup.make_backup(str(data), out_dir=str(tmp_path / "out"))
     note = _read(path, backup.NOTE).decode()
     assert "OPENROUTER_API_KEY" in note
-    assert "CORP_SECRET_KEY" in note, "and how to stop having to"
+    # And how to stop having to: the command, not the variable. Telling someone
+    # to set CORP_SECRET_KEY used to leave their existing keys in the clear.
+    assert "corparius secrets on" in note
 
 
 def test_everything_that_is_not_a_secret_still_restores(tmp_path, monkeypatch):

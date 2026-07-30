@@ -317,6 +317,20 @@ SPEC: list[FieldSpec] = [
     ),
     _f("CORP_UI_PORT", "access", type="int", default="8600", label_en="Port", label_fr="Port"),
     _f(
+        "CORP_SOCIAL_QUEUE_MAX",
+        "safety",
+        type="int",
+        default="5",
+        label_en="Unpublished posts before the social agent stops",
+        label_fr="Posts non publiés avant l'arrêt de l'agent social",
+        help_en="Nothing publishes to a social channel yet, so drafts queue up. Past this "
+        "many, the social agent skips its turn instead of spending more on posts nobody "
+        "reads. Read or export them and it resumes.",
+        help_fr="Rien ne publie encore sur un canal social, donc les brouillons s'empilent. "
+        "Au-delà, l'agent social saute son tour au lieu de dépenser pour des posts que "
+        "personne ne lit. Lisez-les ou exportez-les et il repart.",
+    ),
+    _f(
         "CORP_APPS_ENABLED",
         "access",
         type="bool",

@@ -89,7 +89,53 @@ def _social_post(ctx) -> str:
     tags = " ".join(f"#{h.lstrip('#')}" for h in data.get("hashtags", [])[:3])
     note = " (structure recovered)" if r and r.fell_back else ""
     tail = f" {tags}" if tags else ""
+    # Write it down. This is the tool that holds the text — schedule_post runs
+    # after ctx.structured has been reset, so if the draft is not stored here it
+    # is not stored at all, which is exactly what used to happen.
+    store = getattr(ctx, "store", None)
+    if store is not None:
+        body = (data.get("body") or headline).strip()
+        store.add_draft(
+            ctx.company.get("slug", "company"),
+            "social",
+            _channel(ctx),
+            body + (f"\n\n{tags}" if tags else ""),
+        )
     return f"Post drafted for {_channel(ctx)}: {headline[:100]}{tail}{note}"
+
+
+def _schedule_post(ctx) -> str:
+    """Promote the newest draft to the publishing queue, and say how deep it is.
+
+    `draft_social_post` writes the text — it is the tool that has it, and
+    ctx.structured is reset between tools, so this one never sees it. Here the
+    draft becomes something a publisher can pick up, and the depth of the queue
+    is the number that tells an operator whether any of this is reaching anyone.
+
+    Before this, the effect was `f"Post scheduled for +2h on {channel}"` and
+    nothing else. Measured on one operator's day, the social agent was the
+    largest line in the company's spend — 29 065 tokens — and every post it
+    wrote was gone before the next tick wrote another. "Scheduled" was true of
+    nothing.
+    """
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "Draft queue unavailable"
+    slug = ctx.company.get("slug", "company")
+    # Everything waiting, not just the newest. A draft written by a backlog task
+    # runs `draft_social_post` on its own, without the playbook's schedule_post
+    # after it — so promoting only the last one leaves those stranded in `draft`
+    # for ever, counted by nothing and published by nothing.
+    pending = store.list_drafts(slug, state="draft", limit=50)
+    if not pending:
+        return "Nothing drafted to queue"
+    for row in pending:
+        store.set_draft_state(row["id"], "queued")
+    waiting = store.count_drafts(slug, "queued")
+    return (
+        f"Queued for {_channel(ctx)}: {waiting} post(s) waiting. "
+        "Nothing publishes them yet — read or export them from the console."
+    )
 
 
 def _remember(ctx) -> str:
@@ -499,9 +545,9 @@ _ALL = [
     ),
     Tool(
         "schedule_post",
-        "Schedule the drafted post",
+        "Queue the drafted post so it can be published",
         risk=permissions.EXTERNAL,
-        effect=lambda c, d: _ok(f"Post scheduled for +2h on {_channel(c)}"),
+        effect=lambda c, d: _ok(_schedule_post(c)),
     ),
     Tool(
         "find_targets",

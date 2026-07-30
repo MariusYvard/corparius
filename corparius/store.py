@@ -68,13 +68,19 @@ CREATE TABLE IF NOT EXISTS machine (
     cores INTEGER, ram_total INTEGER, ram_available INTEGER,
     tokens_per_second REAL, load_seconds REAL, placement TEXT, model TEXT, ts REAL
 );
+CREATE TABLE IF NOT EXISTS drafts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company TEXT, kind TEXT, channel TEXT, body TEXT,
+    state TEXT, note TEXT, ts REAL, published_at REAL
+);
+CREATE INDEX IF NOT EXISTS drafts_by_company ON drafts (company, state, ts);
 """
 
 # Bump this and add a migration below whenever the schema changes in a way that
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -144,6 +150,23 @@ def _migration_6(db: sqlite3.Connection) -> None:
     )
 
 
+def _migration_7(db: sqlite3.Connection) -> None:
+    """Somewhere for a draft to land.
+
+    The social agent was the biggest line in one operator's spend — 29 065
+    tokens — and `schedule_post` returned a sentence. Nothing was stored, so
+    every post it wrote was gone before the next tick wrote another. A draft
+    nobody can read is a draft nobody asked for.
+    """
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS drafts ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " company TEXT, kind TEXT, channel TEXT, body TEXT,"
+        " state TEXT, note TEXT, ts REAL, published_at REAL)"
+    )
+    db.execute("CREATE INDEX IF NOT EXISTS drafts_by_company ON drafts (company, state, ts)")
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 MIGRATIONS = {
     1: _migration_1,
@@ -152,6 +175,7 @@ MIGRATIONS = {
     4: _migration_4,
     5: _migration_5,
     6: _migration_6,
+    7: _migration_7,
 }
 
 
@@ -702,6 +726,48 @@ class Store:
     @_locked
     def delete_setting(self, key) -> bool:
         cur = self.db.execute("DELETE FROM settings WHERE key=?", (key,))
+        self.db.commit()
+        return cur.rowcount > 0
+
+    # Drafts an agent wrote that nothing has published yet. Kept because the
+    # alternative — and what happened — is an agent spending the biggest share
+    # of a company's tokens writing posts that evaporate on the next tick.
+    @_locked
+    def add_draft(self, company, kind, channel, body, note="", state="draft") -> int:
+        cur = self.db.execute(
+            "INSERT INTO drafts (company, kind, channel, body, state, note, ts)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (company, kind, channel, body, state, note, time.time()),
+        )
+        self.db.commit()
+        return int(cur.lastrowid or 0)
+
+    @_locked
+    def list_drafts(self, company, state: str = "", limit: int = 50) -> list[dict]:
+        sql = "SELECT * FROM drafts WHERE company=?"
+        args: list = [company]
+        if state:
+            sql += " AND state=?"
+            args.append(state)
+        sql += " ORDER BY ts DESC LIMIT ?"
+        args.append(limit)
+        return [dict(r) for r in self.db.execute(sql, args).fetchall()]
+
+    @_locked
+    def count_drafts(self, company, state: str = "queued") -> int:
+        row = self.db.execute(
+            "SELECT COUNT(*) n FROM drafts WHERE company=? AND state=?", (company, state)
+        ).fetchone()
+        return int(row["n"])
+
+    @_locked
+    def set_draft_state(self, draft_id: int, state: str, note: str = "") -> bool:
+        cur = self.db.execute(
+            "UPDATE drafts SET state=?, note=COALESCE(NULLIF(?,''), note),"
+            " published_at=CASE WHEN ?='published' THEN ? ELSE published_at END"
+            " WHERE id=?",
+            (state, note, state, time.time(), draft_id),
+        )
         self.db.commit()
         return cur.rowcount > 0
 

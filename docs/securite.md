@@ -72,6 +72,20 @@ Côté dépôt de code, le même principe existe chez GitHub Agentic Workflows. 
 
 L'agent est informé de ces barrières dans son invite système. En cas de rejet, il doit informer l'exploitant, analyser les motifs si des commentaires ont été saisis puis proposer une correction ou demander des clarifications, sans relancer l'outil ni ouvrir d'autres tâches en parallèle.
 
+## Injection de prompt
+
+corparius lit du texte écrit par des inconnus : le courrier du support, les réponses à la prospection, et ce qu'un visiteur tape dans une app. La question n'est pas « peut-on convaincre un modèle », parce qu'on le peut. C'est : quand ça arrive, que se passe-t-il ?
+
+**Le modèle ne choisit jamais un outil.** Les playbooks sont des listes de noms dans `agents.py`, lues par le code. Le seul outil qui met du travail en file, `create_tasks`, écrit des noms d'outils codés en dur — le brouillon du modèle atteint le *titre* de la tâche, jamais son outil. `propose_task` n'attache aucun outil du tout : c'est une idée pour le PDG.
+
+**Un outil nommé dans `hitl_tools` attend un humain quoi qu'on lui dise.** C'est une barrière déclarée par nom : ni le mode le plus permissif, ni une règle permanente, ni aucune formulation ne l'abaisse.
+
+**Une app n'a aucun outil.** Elle renvoie du texte, point. Le message du visiteur est en plus encadré et annoncé comme non fiable dans l'invite système — mais c'est une mitigation posée par-dessus, pas ce sur quoi on s'appuie.
+
+Éprouvé par `tests/test_prompt_injection.py`, qui fait tourner douze ticks avec un routeur qui répond l'attaque à **chaque** appel. Résultat : seuls les outils des playbooks s'exécutent, et les trois outils sensibles sont enregistrés en échec avec « pending human approval », une approbation en attente dans la file. L'argent n'a pas bougé.
+
+Ce que ça ne couvre pas : une injection réussie peut toujours faire écrire une **mauvaise phrase** — un post social, une réponse au support. Le pare-feu borne les conséquences, il ne rend pas le modèle incorruptible.
+
 ## Secrets au repos
 
 Par défaut, les clés API et jetons enregistrés depuis la console sont stockés en clair dans la base SQLite (`data/corparius.sqlite`), et le doctor le signale. Sur les systèmes POSIX, corparius pose des permissions propriétaire-seul (dossier `0700`, base `0600`) ; sous Windows, `%LOCALAPPDATA%` est déjà propre au compte. Traitez ce fichier comme un mot de passe.

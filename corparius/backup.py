@@ -407,8 +407,16 @@ def _merge_restored_env(text: str) -> None:
         if "=" not in line or line.lstrip().startswith("#"):
             continue
         key, _, value = line.partition("=")
+        # A key with anything but name characters in it is not a key. The
+        # archive is a file someone handed over, and .env is where the console's
+        # own host allow-list lives — a crafted member should not get to write
+        # a setting the operator never typed. The writer refuses line breaks
+        # too; this is the boundary, that is the backstop.
+        name = key.strip()
+        if not name.replace("_", "").isalnum():
+            continue
         if value.strip():
-            values[key.strip()] = value.strip()
+            values[name] = value.strip()
     if values:
         path = paths.dotenv_file()
         path.parent.mkdir(parents=True, exist_ok=True)

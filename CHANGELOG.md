@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased — une revue adverse, et deux trous qu'elle a trouvés
+
+- **Fixed (HIGH) : le tag de mise à jour sortait du dépôt.** La route de la
+  console lisait le tag dans le corps de la requête et l'interpolait dans l'URL
+  de téléchargement. `requests` normalise les segments `..` en préparant la
+  requête, donc `DOWNLOAD_BASE` n'épinglait rien :
+  `../../../../quelquun/dautre/releases/download/v1` résolvait vers son dépôt.
+  **L'empreinte n'y pouvait rien** — `SHA256SUMS` venait du même répertoire
+  choisi par l'attaquant, donc la vérification était d'accord avec elle-même, et
+  le binaire était installé puis exécuté. Reproduit avant d'être corrigé. La
+  console demande désormais le tag à la vérification de version, comme le CLI l'a
+  toujours fait, et `check_tag` refuse tout ce qui n'est pas un numéro de version.
+- **Fixed (MEDIUM) : un saut de ligne dans une valeur écrivait ses propres
+  réglages.** Les valeurs partaient verbatim dans `.env`, jointes par des sauts
+  de ligne. Une seule écriture acceptée pouvait donc ajouter
+  `CORP_UI_ALLOWED_HOSTS=evil.example` — que `SECURITY.md` promet inatteignable
+  par l'API et qu'un test vérifie... par son **nom**. Le nom était protégé, pas
+  la valeur. Poser un hôte là éteint la défense contre le DNS-rebinding et la
+  console cesse d'être locale. Le garde est dans l'écrivain, pas chez l'appelant :
+  il y en a trois, dont une restauration qui lit un `.env` sorti d'une archive.
+- **L'injection de prompt est désormais éprouvée, pas affirmée.** Douze ticks
+  avec un routeur qui répond l'attaque à chaque appel : seuls les outils des
+  playbooks s'exécutent, et les trois outils sensibles finissent en « pending
+  human approval » avec une approbation dans la file. Le message d'un visiteur
+  est encadré et nommé comme non fiable dans l'invite d'une app — mitigation
+  posée par-dessus la garantie structurelle, jamais à sa place.
+- Ce que ça ne couvre pas est dit dans `docs/securite.md` : une injection
+  réussie peut encore faire écrire une mauvaise phrase.
+
 ## Unreleased — le chiffrement fait enfin ce qu'il annonce, et on peut restaurer
 
 - **Fixed: activer le chiffrement au repos ne chiffrait que la prochaine

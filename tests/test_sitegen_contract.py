@@ -340,7 +340,11 @@ def test_the_page_is_still_one_file_that_needs_nothing(tmp_path):
         },
     )
     assert "https://buy.stripe.com/x" in page, "the CTA has to reach the checkout"
-    assert "<script" not in page.lower()
-    assert "<link" not in page.lower()
+    # The only script element allowed is the structured-data block, which is
+    # read by crawlers and executed by nobody.
+    assert all(
+        'type="application/ld+json"' in attrs for attrs in re.findall(r"<script([^>]*)>", page)
+    )
+    assert not re.search(r'<link[^>]+rel="(?:stylesheet|preload|prefetch)"', page)
     assert not re.search(r'\ssrc\s*=\s*"', page)
     assert "@import" not in page and "url(" not in page

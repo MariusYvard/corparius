@@ -117,3 +117,21 @@ testimonial, no customer count. An empty section is deleted, never filled with a
 The long form, and the reasoning, is the shipped skill
 `packaging/skill-pack-starter/skills/landing-craft/`, which the design agent reads before
 it drafts.
+
+**Contrast is computed, never eyeballed.** The dark theme's pricing band shipped at
+**1.16:1** — near-black on near-black — because one line assumed the page background is
+always readable on the inverted band, which is true in the light theme and false in the
+dark one. Nothing here knew what contrast was, so nothing caught it. `sitegen.palette_for()`
+now derives every text colour from what it sits on, and `tests/test_sitegen_contrast.py`
+walks both themes against six accents. WCAG 2.1 AA: 4.5 body, 3.0 large and UI.
+
+Two rules follow from that failure: no colour reaches the page through `color-mix`, because
+a value that resolves in the browser is a value no test can measure; and `#fff` is never a
+hard-coded label colour, because it fails on any light accent (1.74:1 on the green the owner
+was using).
+
+**The page is built to be found.** Canonical, Open Graph, Twitter card, JSON-LD
+`Product`+`Offer`+`FAQPage`, `robots.txt` and `sitemap.xml`. All of it from config values —
+structured data is where a generator is most tempted to invent, because a fabricated rating
+is invisible on screen and still shows up in the search result. Everything absolute needs
+`site.url`; without it those are omitted, never guessed, and `corparius doctor` says so.

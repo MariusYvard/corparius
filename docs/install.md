@@ -125,6 +125,12 @@ fichier comme un mot de passe. Le doctor le rappelle et vérifie les permissions
   **vérifie son empreinte contre le `SHA256SUMS` publié**, prend une sauvegarde,
   puis remplace le programme. Fermez la fenêtre et relancez. En ligne de
   commande : `corparius update`.
+- **Vos fournisseurs LLM restent connectés.** Les clés et les paliers vivent sur
+  deux couches — `.env` dans le dossier de données, et la table `settings` du
+  store — toutes deux hors d'atteinte d'une mise à jour. Vérifié de bout en bout
+  avec une clé sur chaque couche : `connected_providers()`, les paliers et les
+  deux clés sont identiques avant et après. Rien à reconnecter, et la mesure de
+  `corparius bench` est dans le store elle aussi, donc pas à refaire.
 - **Vos entreprises ne sont jamais touchées.** Le binaire et les données vivent
   dans deux endroits différents (dossier par OS ci-dessus), et les seuls chemins
   qu'une mise à jour écrit sont le nom du binaire suivi d'un suffixe. Un test

@@ -380,7 +380,13 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
     system = (
         f"{spec.system_prompt} You are chatting with your human operator through "
         f"the corparius console. Be concise and concrete; reference the snapshot "
-        f"when relevant. Write 'reply' in {'French' if lang == 'fr' else 'English'}. "
+        # Not "Write 'reply' in French". A model reads that as an instruction to
+        # translate the word, and answers "Réponse" — reproduced live against
+        # llama-3.3-70b, three questions in a row, each answered with the label
+        # instead of an answer. Name the field and the language separately.
+        f"when relevant. The `reply` field holds your answer to the operator, "
+        f"written in {'French' if lang == 'fr' else 'English'}; do not put a label "
+        f"or a heading in it, only what you want to say. "
         f"Set 'intent' to one of {', '.join(_CEO_ACTIONS)} ONLY when the operator is "
         f"clearly asking to do that thing now; otherwise 'answer'. You never execute; "
         f"the operator confirms with a button. {snapshot}"
@@ -398,7 +404,18 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
     result = structured.ask(router, messages, _CEO_SCHEMA, difficulty=spec.difficulty)
     for u in result.usages:
         store.record_usage(slug, "ceo", u.input_tokens, u.output_tokens)
-    reply = result.data.get("reply") or message
+    # `or message` echoed the operator's own question back at them, which reads
+    # like an answer and is not one. When the model said nothing usable, say so.
+    reply = (result.data.get("reply") or "").strip()
+    unanswered = not reply
+    if unanswered:
+        reply = i18n.pick(
+            lang,
+            "The model did not answer. It may be rate-limited or the tier may be "
+            "misconfigured — the Providers tab shows which one replied.",
+            "Le modèle n'a pas répondu. Il est peut-être limité en débit, ou le palier "
+            "est mal configuré — l'onglet Providers montre lequel a répondu.",
+        )
     intent = result.data.get("intent", "answer")
     proposal = None
     if intent in _CEO_ACTIONS and not result.fell_back:
@@ -415,10 +432,21 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
         }
     provider, _, model = result.source.partition(":")  # "mock:haiku" -> mock, haiku
     history.append({"role": "user", "text": message})
-    history.append({"role": "assistant", "text": reply, "model": model, "provider": provider})
+    history.append(
+        {
+            "role": "assistant",
+            "text": reply,
+            "model": model,
+            "provider": provider,
+            "unanswered": unanswered,
+        }
+    )
     return {
         "ok": True,
         "reply": reply,
+        # So the page can render a failure as a failure rather than as the CEO
+        # having said something odd.
+        "unanswered": unanswered,
         "model": model,
         "provider": provider,
         "proposal": proposal,

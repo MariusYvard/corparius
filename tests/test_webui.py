@@ -426,3 +426,65 @@ def test_the_tag_applied_is_the_one_the_check_reported(server, monkeypatch):
     )
     _call(server, "POST", "/api/update/apply", {})
     assert seen["tag"] == "v0.2.0"
+
+
+# --- the CEO chat answered with the word "reply" ---------------------------
+def test_the_chat_prompt_cannot_be_read_as_translate_this_word():
+    """It said "Write 'reply' in French", and a model answered "Réponse" —
+    reproduced live against llama-3.3-70b, three questions in a row, each
+    answered with the label instead of an answer."""
+    import inspect
+
+    from corparius import webui as mod
+
+    # Comment lines stripped: the comment there quotes the old wording on
+    # purpose, and banning the explanation along with the mistake would be a
+    # test that punishes writing down why.
+    source = "\n".join(
+        line
+        for line in inspect.getsource(mod._chat).splitlines()
+        if not line.strip().startswith("#")
+    )
+    assert "Write 'reply' in" not in source
+    assert "holds your answer to the operator" in source
+
+
+def test_a_model_that_says_nothing_is_reported_as_such(server, monkeypatch):
+    """`or message` echoed the operator's own question back, which reads like an
+    answer and is not one."""
+    from corparius import structured
+    from corparius import webui as mod
+
+    monkeypatch.setattr(
+        structured,
+        "ask",
+        lambda *a, **k: structured.Result(
+            {"reply": "", "intent": "answer"}, ok=False, attempts=2, source="groq:llama", raw=""
+        ),
+    )
+    monkeypatch.setattr(mod, "HybridRouter", lambda s: object())
+    status, d = _call(server, "POST", "/api/chat", {"company": "t", "message": "le site ?"})
+    assert status == 200
+    assert d["unanswered"] is True
+    assert "le site ?" not in d["reply"], "the operator's own question came back"
+    assert "did not answer" in d["reply"] or "n'a pas répondu" in d["reply"]
+
+
+def test_a_real_answer_is_not_flagged_as_unanswered(server, monkeypatch):
+    from corparius import structured
+    from corparius import webui as mod
+
+    monkeypatch.setattr(
+        structured,
+        "ask",
+        lambda *a, **k: structured.Result(
+            {"reply": "Oui, presque prêt.", "intent": "answer"},
+            ok=True,
+            attempts=1,
+            source="groq:llama",
+            raw="",
+        ),
+    )
+    monkeypatch.setattr(mod, "HybridRouter", lambda s: object())
+    _status, d = _call(server, "POST", "/api/chat", {"company": "t", "message": "le site ?"})
+    assert d["unanswered"] is False and d["reply"] == "Oui, presque prêt."

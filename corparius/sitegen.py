@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import html as _html
+import json
 import logging
 import os
 import re
@@ -258,6 +259,89 @@ _THEMES = {
 DEFAULT_ACCENT = "#c2410c"
 
 
+# --------------------------------------------------------------------------
+# Contrast, computed rather than assumed
+# --------------------------------------------------------------------------
+
+# The dark theme's pricing band shipped with its text at 1.16:1 against its own
+# background — near-black on near-black, unreadable, and visible in a screenshot
+# the moment anyone looked. The cause was one line assuming that "the page
+# background colour" is always a good text colour on "the inverted band", which
+# is true in the light theme and false in the dark one.
+#
+# Nothing in this repo could have caught that, because no code here knew what
+# contrast was. Now it does, and `tests/test_sitegen_contrast.py` walks every
+# theme against every accent and fails on anything under the threshold.
+#
+# Thresholds are WCAG 2.1 AA, as listed in NullToHero's color-and-contrast
+# reference: 4.5 for body text, 3.0 for large text and UI components.
+AA_TEXT, AA_LARGE = 4.5, 3.0
+
+
+def _rgb(colour: str) -> tuple[int, int, int]:
+    value = colour.lstrip("#")
+    if len(value) == 3:
+        value = "".join(c * 2 for c in value)
+    return (int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16))
+
+
+def luminance(colour: str) -> float:
+    """WCAG relative luminance."""
+
+    def channel(raw: int) -> float:
+        c = raw / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (channel(c) for c in _rgb(colour))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(a: str, b: str) -> float:
+    """WCAG contrast ratio, 1.0 to 21.0."""
+    high, low = sorted((luminance(a), luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def mix(a: str, b: str, amount: float) -> str:
+    """`a` blended `amount` of the way towards `b`, as a hex string.
+
+    Done here rather than with CSS `color-mix` so the result is a value this
+    module can measure. A colour the code cannot read is a colour no test can
+    check, which is how the unreadable band shipped.
+    """
+    ra, ga, ba = _rgb(a)
+    rb, gb, bb = _rgb(b)
+    blend = (round(x + (y - x) * amount) for x, y in ((ra, rb), (ga, gb), (ba, bb)))
+    return "#" + "".join(f"{c:02x}" for c in blend)
+
+
+def readable_on(background: str, *candidates: str, target: float = AA_TEXT) -> str:
+    """The first candidate that clears `target` against `background`.
+
+    If none does, the best of black and white — which always clears 4.5 against
+    anything, so this never returns something unreadable.
+    """
+    for candidate in candidates:
+        if contrast(candidate, background) >= target:
+            return candidate
+    return max(("#ffffff", "#0a0a0a"), key=lambda c: contrast(c, background))
+
+
+def muted_on(background: str, text: str, target: float = AA_TEXT) -> str:
+    """`text` faded towards `background` as far as it can go and still be read.
+
+    Secondary text has to look secondary without becoming decoration. Walking
+    the blend back until it clears the threshold gets that without a hand-picked
+    grey per theme — and their own reference is blunt about the alternative:
+    "Alpha Is A Design Smell", because alpha makes contrast unpredictable.
+    """
+    for step in range(60, -1, -5):
+        candidate = mix(text, background, step / 100)
+        if contrast(candidate, background) >= target:
+            return candidate
+    return text
+
+
 def signature(seed: str) -> str:
     """A band of bars whose heights come from a hash of the company's own name.
 
@@ -288,8 +372,42 @@ def signature(seed: str) -> str:
     )
 
 
+def palette_for(theme: str = "light", accent: str = DEFAULT_ACCENT) -> dict[str, str]:
+    """Every colour the page uses, each one measured against what it sits on.
+
+    Returned as a dict so a test can walk it. The four derived entries are the
+    ones that used to be assumed:
+
+    - `on_ink` — text on the inverted pricing band. Assuming the page background
+      worked here is the bug that shipped at 1.16:1.
+    - `on_accent` — the button label. `#fff` was hard-coded, which fails on any
+      light accent: 1.74:1 on the green in the operator's screenshot.
+    - `muted`, `on_ink_muted` — secondary text, faded only as far as it can be.
+    - `wash` — the hero band's ground, computed rather than `color-mix`, so the
+      text on it can be measured too.
+    """
+    base = _THEMES.get(theme, _THEMES["light"])
+    bg, fg, ink = base["bg"], base["fg"], base["ink"]
+    on_ink = readable_on(ink, bg, fg, target=AA_TEXT)
+    return {
+        **base,
+        "accent": accent,
+        # The accent tint behind the hero, strong enough to read as a change of
+        # ground and weak enough to keep the body text on it.
+        "wash": mix(bg, accent, 0.14 if theme == "dark" else 0.09),
+        "edge": mix(bg, accent, 0.26),
+        "muted": base["muted"] if contrast(base["muted"], bg) >= AA_TEXT else muted_on(bg, fg),
+        "on_ink": on_ink,
+        "on_ink_muted": muted_on(ink, on_ink),
+        "on_accent": readable_on(accent, "#ffffff", "#0a0a0a"),
+        # The button's bottom edge. Decorative, but resolved here too so
+        # that nothing on the page is a colour this module cannot read.
+        "accent_deep": mix(accent, "#000000", 0.4),
+    }
+
+
 def css(theme: str = "light", font: str = "serif", accent: str = DEFAULT_ACCENT) -> str:
-    palette = _THEMES.get(theme, _THEMES["light"])
+    palette = palette_for(theme, accent)
     display = _SERIF if font == "serif" else _SANS
     # A serif display carries its own voice; a sans one has to earn the same
     # contrast through tracking and weight, or the page reads as unstyled.
@@ -308,9 +426,16 @@ def css(theme: str = "light", font: str = "serif", accent: str = DEFAULT_ACCENT)
   --display:{display};--body:{_SANS};
   /* The accent, thinned. Every tint on the page is this one colour at a
      different strength — which is what makes a palette read as chosen rather
-     than assembled. */
-  --wash:color-mix(in srgb,var(--accent) {"14" if theme == "dark" else "9"}%,var(--bg));
-  --edge:color-mix(in srgb,var(--accent) 26%,var(--bg));
+     than assembled. Every value here is resolved before it is written, so a
+     test can measure exactly what a visitor sees. */
+  --wash:{palette["wash"]};
+  --edge:{palette["edge"]};
+  /* Text on grounds that are not --bg. Every one of these is checked against
+     WCAG AA before it reaches the page; see palette_for(). */
+  --on-ink:{palette["on_ink"]};
+  --on-ink-muted:{palette["on_ink_muted"]};
+  --on-accent:{palette["on_accent"]};
+  --accent-deep:{palette["accent_deep"]};
 }}
 *{{box-sizing:border-box}}
 html{{-webkit-text-size-adjust:100%}}
@@ -328,10 +453,13 @@ p{{margin:0;max-width:62ch}}
    on a section boundary. */
 .band{{position:relative;overflow:hidden}}
 .band-hero{{background:var(--wash);border-bottom:1px solid var(--edge)}}
-.band-dark{{background:var(--ink);color:{palette["bg"]}}}
+.band-dark{{background:var(--ink);color:var(--on-ink)}}
 
-header{{display:flex;align-items:baseline;justify-content:space-between;gap:20px;
-  padding:26px 0;flex-wrap:wrap}}
+/* Landmarks, not divs: header / main / footer are how a screen reader and a
+   crawler find their way around a page. The banner used to live inside the hero
+   band, which made it a section header rather than the page's. */
+.topbar .wrap{{display:flex;align-items:baseline;justify-content:space-between;
+  gap:20px;padding:26px clamp(20px,5vw,52px);flex-wrap:wrap}}
 .logo{{font-family:var(--display);font-size:var(--f1);font-weight:700;
   letter-spacing:-.02em}}
 .nav{{color:var(--muted);font-size:.94rem;text-decoration:none;
@@ -359,15 +487,14 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:20px
   height:clamp(120px,20vw,230px);color:var(--accent);z-index:0;
   pointer-events:none}}
 
-.btn{{display:inline-block;background:var(--accent);color:#fff;
+.btn{{display:inline-block;background:var(--accent);color:var(--on-accent);
   padding:17px 34px;border-radius:2px;font-weight:600;font-size:1.05rem;
   border:0;cursor:pointer;text-decoration:none;letter-spacing:.01em;
-  box-shadow:0 1px 0 color-mix(in srgb,var(--accent) 60%,#000);
+  box-shadow:0 1px 0 var(--accent-deep);
   transition:transform .12s ease,filter .12s ease,box-shadow .12s ease}}
 .btn:hover{{filter:brightness(1.07);transform:translateY(-2px);
-  box-shadow:0 3px 0 color-mix(in srgb,var(--accent) 60%,#000)}}
-.btn:active{{transform:translateY(0);box-shadow:0 1px 0
-  color-mix(in srgb,var(--accent) 60%,#000)}}
+  box-shadow:0 3px 0 var(--accent-deep)}}
+.btn:active{{transform:translateY(0);box-shadow:0 1px 0 var(--accent-deep)}}
 .btn:focus-visible{{outline:3px solid var(--accent);outline-offset:4px}}
 
 section{{padding:var(--gap) 0}}
@@ -410,7 +537,7 @@ section h2{{font-size:var(--f2);margin:0 0 clamp(26px,3.5vw,40px);max-width:22ch
 .amt{{font-family:var(--display);font-size:clamp(3.4rem,10vw,6rem);
   font-weight:700;line-height:.9;letter-spacing:-.035em;
   font-variant-numeric:tabular-nums}}
-.per{{color:color-mix(in srgb,{palette["bg"]} 62%,transparent);font-size:.95rem;
+.per{{color:var(--on-ink-muted);font-size:.95rem;
   margin-top:14px;letter-spacing:.04em;text-transform:uppercase}}
 
 .faq{{display:grid;gap:0;max-width:64ch}}
@@ -428,9 +555,9 @@ section h2{{font-size:var(--f2);margin:0 0 clamp(26px,3.5vw,40px);max-width:22ch
 .close{{padding:var(--gap) 0 calc(var(--gap) * .7)}}
 .close h2{{font-size:clamp(2rem,5vw,3.2rem);margin-bottom:34px;max-width:18ch;
   border:0;padding-top:0}}
-footer{{padding:0 0 60px;color:var(--muted);font-size:.88rem;
+footer .wrap{{padding-bottom:60px;color:var(--muted);font-size:.88rem;
   display:flex;gap:10px;align-items:center}}
-footer::before{{content:"";width:22px;height:2px;background:var(--accent);
+footer .wrap::before{{content:"";width:22px;height:2px;background:var(--accent);
   flex:none}}
 
 @media(prefers-reduced-motion:reduce){{*{{transition:none!important}}}}
@@ -480,6 +607,119 @@ def _opening(text: str, limit: int = 190) -> str:
 # --------------------------------------------------------------------------
 
 
+# --------------------------------------------------------------------------
+# What a search engine needs, which is not on the page
+# --------------------------------------------------------------------------
+
+
+def head_tags(company: dict, title: str, description: str, faq: list) -> str:
+    """Canonical link, social cards and structured data.
+
+    A landing page nobody can find is a landing page nobody buys from, and this
+    generator was emitting four meta tags. The rest is here.
+
+    Everything absolute — the canonical, `og:url`, the sitemap entry — needs
+    `site.url`, which the operator sets once after hosting. Without it those
+    tags are omitted rather than pointed at a guess, because a canonical link to
+    the wrong address is worse for a site than no canonical link at all.
+    """
+    site = company.get("site") or {}
+    url = str(site.get("url") or "").rstrip("/")
+    name = company.get("name", "")
+    language = str(company.get("language") or "en")
+    offer = company.get("offer") or {}
+    price = offer.get("price_eur")
+
+    tags = [
+        f'<meta name="description" content="{_esc(description)}">',
+        '<meta name="robots" content="index,follow,max-image-preview:large">',
+        f'<meta property="og:type" content="{"product" if price is not None else "website"}">',
+        f'<meta property="og:site_name" content="{_esc(name)}">',
+        f'<meta property="og:title" content="{_esc(title)}">',
+        f'<meta property="og:description" content="{_esc(description)}">',
+        f'<meta property="og:locale" content="{_esc(language.replace("-", "_"))}">',
+        '<meta name="twitter:card" content="summary_large_image">',
+        f'<meta name="twitter:title" content="{_esc(title)}">',
+        f'<meta name="twitter:description" content="{_esc(description)}">',
+    ]
+    if url:
+        tags.insert(0, f'<link rel="canonical" href="{_esc(url)}/">')
+        tags.append(f'<meta property="og:url" content="{_esc(url)}/">')
+
+    # Structured data. `Product` with an `Offer` is what turns a price into a
+    # rich result; `FAQPage` does the same for questions the page already
+    # answers. Emitted only from values the config actually holds — a schema
+    # block claiming a rating nobody left is the machine-readable version of
+    # inventing "Cancel anytime".
+    graph: list[dict] = []
+    product: dict = {
+        "@type": "Product",
+        "name": name,
+        "description": description,
+    }
+    if url:
+        product["url"] = f"{url}/"
+    if price is not None:
+        product["offers"] = {
+            "@type": "Offer",
+            "price": str(price),
+            "priceCurrency": "EUR",
+            "availability": "https://schema.org/InStock",
+            **({"url": str(offer.get("payment_link"))} if offer.get("payment_link") else {}),
+        }
+    graph.append(product)
+    if faq:
+        graph.append(
+            {
+                "@type": "FAQPage",
+                "mainEntity": [
+                    {
+                        "@type": "Question",
+                        "name": question,
+                        "acceptedAnswer": {"@type": "Answer", "text": answer},
+                    }
+                    for question, answer in faq
+                ],
+            }
+        )
+    payload = json.dumps(
+        {"@context": "https://schema.org", "@graph": graph}, ensure_ascii=False, indent=None
+    )
+    # This block carries model output — the FAQ answers — into a <script>
+    # element, where HTML escaping is wrong because it would corrupt the JSON.
+    #
+    # Escaping only `</script>` is the usual advice and it is reasoning about
+    # HTML parser states, which is where XSS lives. Escaping `<`, `>` and `&` as
+    # JSON unicode escapes is valid JSON, decodes to the identical string for
+    # every consumer, and leaves nothing in the block that a parser could read
+    # as markup at all. No edge case to be wrong about.
+    payload = payload.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    tags.append(f'<script type="application/ld+json">{payload}</script>')
+    return "\n".join(tags)
+
+
+def companions(company: dict) -> dict[str, str]:
+    """robots.txt and sitemap.xml, keyed by filename.
+
+    Both need an absolute address, so both are absent until `site.url` is set —
+    a sitemap listing `/` with no host tells a crawler nothing, and a robots.txt
+    pointing at a sitemap that is not there is worse than none.
+    """
+    url = str((company.get("site") or {}).get("url") or "").rstrip("/")
+    if not url:
+        return {}
+    return {
+        "robots.txt": f"User-agent: *\nAllow: /\n\nSitemap: {url}/sitemap.xml\n",
+        "sitemap.xml": (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            f"  <url><loc>{_esc(url)}/</loc><changefreq>weekly</changefreq>"
+            "<priority>1.0</priority></url>\n"
+            "</urlset>\n"
+        ),
+    }
+
+
 def faq_pairs(company: dict, store) -> list[tuple[str, str]]:
     """Ask one of the company's own apps the questions listed in company.yaml.
 
@@ -519,16 +759,24 @@ def faq_pairs(company: dict, store) -> list[tuple[str, str]]:
     return pairs
 
 
-def faq_html(company: dict, store) -> str:
-    """Kept for callers that want the fragment on its own."""
-    pairs = faq_pairs(company, store)
+def faq_html_from(pairs: list[tuple[str, str]], txt: dict[str, str]) -> str:
+    """The rendered section, from questions already asked.
+
+    Split out from `faq_html` because the answers now feed two places — the
+    visible section and the FAQPage structured data — and asking a model the
+    same questions twice to build one page would be paying twice for one answer.
+    """
     if not pairs:
         return ""
-    txt = strings(company.get("language", "en"))
     items = "".join(
         f"<details><summary>{_esc(q)}</summary><p>{_esc(a)}</p></details>" for q, a in pairs
     )
     return f'<section id="faq"><h2>{_esc(txt["faq"])}</h2><div class="faq">{items}</div></section>'
+
+
+def faq_html(company: dict, store) -> str:
+    """Kept for callers that want the fragment on its own."""
+    return faq_html_from(faq_pairs(company, store), strings(company.get("language", "en")))
 
 
 def build_site(company: dict, out_dir: str, headline: str | None = None, store=None) -> str:
@@ -635,9 +883,25 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
         f'<div class="per">{_esc(billing or txt["oneoff"])}</div></div>{cta}</div>'
         f"</section></div></div>"
     )
-    faq = faq_html(company, store)
+    # Asked once, used twice: rendered on the page and again as FAQPage
+    # structured data, which is what earns the questions a rich result.
+    faq_qa = faq_pairs(company, store)
+    faq = faq_html_from(faq_qa, txt)
     if faq:
         faq = f'<div class="band"><div class="wrap">{faq}</div></div>'
+
+    # The <title> is what a search result shows, so it leads with the promise
+    # rather than the company name — a reader scanning ten results has no idea
+    # yet what "Vigil" is. Kept under the ~60 characters Google renders.
+    title = head if len(head) <= 58 else name
+    if len(f"{title} · {name}") <= 60 and title != name:
+        title = f"{title} · {name}"
+    # Not the visual lede. The lede is a strapline sized for a hero; the meta
+    # description is the two lines under a search result, and a 16-character one
+    # wastes the only sentence a stranger will read before deciding. So it takes
+    # the fullest text the config has and gives it the ~155 characters Google
+    # renders, rather than whatever the layout happened to want.
+    description = _opening(max((one_liner, product, head, lede), key=len) or head, limit=155)
 
     # The closing block repeats the CTA, not the H1. A page that ends by saying
     # its own headline again word for word has stopped making an argument — but
@@ -650,10 +914,8 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{_esc(name)} — {_esc(lede or head)}</title>
-<meta name="description" content="{_esc(lede or head)}">
-<meta property="og:title" content="{_esc(name)}">
-<meta property="og:description" content="{_esc(lede or head)}">
+<title>{_esc(title)}</title>
+{head_tags(company, title, description, faq_qa)}
 <style>{
         css(
             site.get("theme", "light"),
@@ -663,33 +925,39 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
     }</style>
 </head>
 <body>
-<div class="band band-hero">
+<header class="topbar">
   <div class="wrap">
-    <header>
-      <div class="logo">{_esc(name)}</div>
-      <a class="nav" href="#pricing">{_esc(txt["pricing"])}</a>
-    </header>
-    <div class="hero">
-      <h1>{_esc(head)}</h1>
-      {f'<p class="lede">{_esc(lede)}</p>' if lede else ""}
-      {cta}
-      {facts_html}
+    <div class="logo">{_esc(name)}</div>
+    <a class="nav" href="#pricing">{_esc(txt["pricing"])}</a>
+  </div>
+</header>
+<main>
+  <div class="band band-hero">
+    <div class="wrap">
+      <div class="hero">
+        <h1>{_esc(head)}</h1>
+        {f'<p class="lede">{_esc(lede)}</p>' if lede else ""}
+        {cta}
+        {facts_html}
+      </div>
+    </div>
+    {signature(company.get("slug") or name)}
+  </div>
+  {body_html}
+  {pricing}
+  {faq}
+  <div class="band">
+    <div class="wrap">
+      <div class="close">
+        <h2>{_esc(closer)}</h2>
+        {cta}
+      </div>
     </div>
   </div>
-  {signature(company.get("slug") or name)}
-</div>
-{body_html}
-{pricing}
-{faq}
-<div class="band">
-  <div class="wrap">
-    <div class="close">
-      <h2>{_esc(closer)}</h2>
-      {cta}
-    </div>
-    <footer>{_esc(name)} · {_esc(txt["built"])}</footer>
-  </div>
-</div>
+</main>
+<footer>
+  <div class="wrap">{_esc(name)} · {_esc(txt["built"])}</div>
+</footer>
 </body>
 </html>"""
 
@@ -697,4 +965,10 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
     path = os.path.join(out_dir, "index.html")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(doc)
+    # robots.txt and sitemap.xml go beside the page so that whatever uploads the
+    # directory uploads them too — every deploy provider in deploy.py ships the
+    # folder, not a file list, so this needs no change anywhere else.
+    for filename, content in companions(company).items():
+        with open(os.path.join(out_dir, filename), "w", encoding="utf-8") as fh:
+            fh.write(content)
     return path

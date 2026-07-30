@@ -321,6 +321,37 @@ def _check_apps(s: Settings) -> tuple:
     return ("ok", "apps", note)
 
 
+def _check_site(s: Settings) -> tuple:
+    """The one SEO fact the generator cannot work out for itself.
+
+    Canonical link, `og:url`, `sitemap.xml` and `robots.txt` all need the
+    absolute address the page will live at, and guessing one is worse than
+    having none — a canonical pointing at the wrong host tells a crawler to
+    index somebody else. So they are simply omitted, silently, which is exactly
+    the kind of missing thing an operator never discovers. This says it once.
+    """
+    from . import company as company_mod
+
+    base = paths.companies_dir()
+    slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
+    if not slugs:
+        return ("ok", "site", "no company yet")
+    missing = []
+    for slug in slugs:
+        cfg, _, _ = company_mod.validate(company_mod.load(company_mod.path_for(slug), slug))
+        if not (cfg.get("site") or {}).get("url"):
+            missing.append(slug)
+    if not missing:
+        return ("ok", "site", f"{len(slugs)} company(ies), every one with a site.url")
+    return (
+        "warn",
+        "site",
+        f"No site.url for {', '.join(missing)}. The generated page still builds, but with no "
+        "canonical link, no og:url, no sitemap.xml and no robots.txt — set it to the address "
+        "the page is hosted at once you have deployed it.",
+    )
+
+
 def _check_skills(s: Settings) -> tuple:
     """A skill that names a tool nobody has never applies, and does so silently:
     it is read, parsed and then matched against a name that does not exist. That
@@ -760,6 +791,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_skills(s),
         _check_apps(s),
         _check_budgets(s),
+        _check_site(s),
         _check_memory(s),
         _check_inbox(s),
     ]

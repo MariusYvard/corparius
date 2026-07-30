@@ -173,13 +173,34 @@ def _check_store(s: Settings) -> tuple:
         probe = Path(s.data_path) / ".doctor-probe"
         probe.write_text("ok")
         probe.unlink()
-        return ("ok", "store", f"writable at {s.data_path}")
     except OSError as exc:
         return (
             "fail",
             "store",
             f"cannot write {s.data_path}: {exc}. Fix permissions or set CORP_DATA_PATH.",
         )
+    # A store a newer build migrated, opened by an older one. It still opens —
+    # rolling back is the recovery path when an update goes wrong — but running
+    # on it can write values a later schema means differently, and nothing else
+    # would ever say so.
+    from .store import SCHEMA_VERSION, Store
+
+    try:
+        store = Store(s.data_path)
+        found = store.schema_version()
+        store.close()
+    except Exception:  # noqa: BLE001 - the writability answer above still stands
+        return ("ok", "store", f"writable at {s.data_path}")
+    if found > SCHEMA_VERSION:
+        return (
+            "fail",
+            "store",
+            f"this store was written by a newer corparius (schema {found}; this build "
+            f"knows {SCHEMA_VERSION}). Update again, or restore the backup taken before "
+            "the update. Running an older build against it can write values the newer "
+            "schema means differently.",
+        )
+    return ("ok", "store", f"writable at {s.data_path}")
 
 
 def _check_mode(s: Settings) -> tuple:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -82,3 +82,8 @@ class ApprovalRequest:
     status: str = "pending"  # pending | approved | rejected
     note: str = ""
     ts: float = 0.0
+    # Everything the operator needs to judge the request, and nothing the id is
+    # hashed from. `parameters` is hashed, so the draft in it had to be cut to
+    # 80 characters or the same request would look new on every tick — which
+    # meant approving an outreach email nobody could read.
+    detail: dict[str, Any] = field(default_factory=dict)

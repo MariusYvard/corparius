@@ -62,6 +62,21 @@ class ApprovalGate:
             parameters=parameters,
             status="pending",
             ts=time.time(),
+            # What the operator needs to judge it. None of this is hashed, so
+            # the draft can be whole: `parameters` had to cut it to 80
+            # characters or every tick would file a fresh request for the same
+            # thing, and approving an outreach email you cannot read is not
+            # approval, it is assent.
+            detail={
+                "draft": draft or "",
+                # getattr: a plugin registers its own tool objects through
+                # PluginAPI.register_tool, and several tests pass doubles.
+                # A missing description is a blank line in a panel, not a
+                # crash in the gate that holds the money tools.
+                "does": getattr(tool, "description", ""),
+                "risk": decision.rule or "",
+                "why": decision.reason or "",
+            },
         )
         self.store.add_approval(req)
         return ToolResult(

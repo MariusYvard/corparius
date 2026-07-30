@@ -193,8 +193,165 @@ MAIL_PRESETS: list[dict] = [
         "note_en": "For a homelab MTA on the same machine. Leave user and password empty.",
         "note_fr": "Pour un MTA de homelab sur la même machine. Laissez identifiant et mot "
         "de passe vides.",
+        "no_auth": True,
     },
 ]
+
+# What the operator has to go and do somewhere else, in order, with the link.
+#
+# The preset already fills four hostnames — the part corparius can do for you.
+# What it could not do was tell you the rest: an operator was left with a form,
+# a note, and no idea that the hard step (creating an app password on another
+# site, behind two-factor authentication) even existed. "La configuration de
+# l'email est encore trop complexe et les tâches à faire soi-même ne sont pas
+# guidées."
+#
+# `needs` names the settings that prove a step is done, so the console shows
+# state rather than a checklist the operator ticks off themselves. A step with
+# no `needs` is one corparius cannot verify — it says so instead of pretending.
+MAIL_STEPS: dict[str, list[dict]] = {
+    "gmail": [
+        {
+            "en": "Turn on 2-Step Verification on your Google account. App passwords do not "
+            "exist without it.",
+            "fr": "Activez la validation en deux étapes sur votre compte Google. Les mots de "
+            "passe d'application n'existent pas sans elle.",
+            "url": "https://myaccount.google.com/signinoptions/two-step-verification",
+        },
+        {
+            "en": "Create an app password. Google shows it once, as 16 characters in four "
+            "groups; copy it before closing the page.",
+            "fr": "Créez un mot de passe d'application. Google l'affiche une seule fois, "
+            "16 caractères en quatre groupes ; copiez-le avant de fermer la page.",
+            "url": "https://myaccount.google.com/apppasswords",
+        },
+        {
+            "en": "Paste your full Gmail address below, and the app password — not your "
+            "account password, which Google refuses.",
+            "fr": "Collez ci-dessous votre adresse Gmail complète, et le mot de passe "
+            "d'application — pas votre mot de passe de compte, que Google refuse.",
+            "needs": ["CORP_SMTP_USER", "CORP_SMTP_PASSWORD"],
+        },
+    ],
+    "fastmail": [
+        {
+            "en": "Create an app password scoped to Mail (SMTP and IMAP), in Settings, "
+            "Privacy & Security.",
+            "fr": "Créez un mot de passe d'application limité à Mail (SMTP et IMAP), dans "
+            "Réglages, Confidentialité et sécurité.",
+            "url": "https://app.fastmail.com/settings/security/apppasswords",
+        },
+        {
+            "en": "Paste your full address and that app password below.",
+            "fr": "Collez ci-dessous votre adresse complète et ce mot de passe d'application.",
+            "needs": ["CORP_SMTP_USER", "CORP_SMTP_PASSWORD"],
+        },
+    ],
+    "proton": [
+        {
+            "en": "Install Proton Mail Bridge and sign in. It has to stay running: it is the "
+            "local server corparius talks to.",
+            "fr": "Installez Proton Mail Bridge et connectez-vous. Il doit rester lancé : "
+            "c'est le serveur local auquel corparius parle.",
+            "url": "https://proton.me/mail/bridge",
+        },
+        {
+            "en": "Open the Bridge's mailbox settings. It prints a generated password — that "
+            "one, not your Proton password.",
+            "fr": "Ouvrez les réglages de boîte du Bridge. Il affiche un mot de passe "
+            "généré — celui-là, pas votre mot de passe Proton.",
+        },
+        {
+            "en": "Paste your Proton address and the Bridge password below.",
+            "fr": "Collez ci-dessous votre adresse Proton et le mot de passe du Bridge.",
+            "needs": ["CORP_SMTP_USER", "CORP_SMTP_PASSWORD"],
+        },
+    ],
+    "infomaniak": [
+        {
+            "en": "Use your full address as the username, and your mailbox password.",
+            "fr": "Utilisez votre adresse complète comme identifiant, et le mot de passe de "
+            "la boîte.",
+            "needs": ["CORP_SMTP_USER", "CORP_SMTP_PASSWORD"],
+        },
+    ],
+    "ovh": [
+        {
+            "en": "Use your full address as the username, and your mailbox password.",
+            "fr": "Utilisez votre adresse complète comme identifiant, et le mot de passe de "
+            "la boîte.",
+            "needs": ["CORP_SMTP_USER", "CORP_SMTP_PASSWORD"],
+        },
+    ],
+    "scaleway": [
+        {
+            "en": "Create an API key in the Transactional Email console, and verify the "
+            "domain you will send from.",
+            "fr": "Créez une clé API dans la console Transactional Email, et validez le "
+            "domaine depuis lequel vous enverrez.",
+            "url": "https://console.scaleway.com/transactional-email/domains",
+        },
+        {
+            "en": "The username is your project ID; the password is the API secret key.",
+            "fr": "L'identifiant est l'ID de projet ; le mot de passe est la clé secrète API.",
+            "needs": ["CORP_SMTP_USER", "CORP_SMTP_PASSWORD"],
+        },
+        {
+            "en": "This provider sends only. Nothing reads replies, so add a second provider "
+            "for the mailbox if you want triage.",
+            "fr": "Ce fournisseur envoie seulement. Rien ne lit les réponses ; ajoutez un "
+            "second fournisseur pour la boîte si vous voulez le tri.",
+        },
+    ],
+    "brevo": [
+        {
+            "en": "Open the SMTP & API page and read the login and master password shown "
+            "there. The login is not your account email.",
+            "fr": "Ouvrez la page SMTP & API et relevez le login et le mot de passe maître "
+            "qui y sont affichés. Le login n'est pas votre email de compte.",
+            "url": "https://app.brevo.com/settings/keys/smtp",
+        },
+        {
+            "en": "Paste that login and password below.",
+            "fr": "Collez ci-dessous ce login et ce mot de passe.",
+            "needs": ["CORP_SMTP_USER", "CORP_SMTP_PASSWORD"],
+        },
+        {
+            "en": "This provider sends only. Nothing reads replies.",
+            "fr": "Ce fournisseur envoie seulement. Rien ne lit les réponses.",
+        },
+    ],
+    "mailgun": [
+        {
+            "en": "Add and verify your sending domain, then open its SMTP credentials.",
+            "fr": "Ajoutez et validez votre domaine d'envoi, puis ouvrez ses identifiants SMTP.",
+            "url": "https://app.mailgun.com/mg/sending/domains",
+        },
+        {
+            "en": "Use the postmaster user shown for that domain, and its password.",
+            "fr": "Utilisez l'utilisateur postmaster affiché pour ce domaine, et son mot de passe.",
+            "needs": ["CORP_SMTP_USER", "CORP_SMTP_PASSWORD"],
+        },
+        {
+            "en": "This provider sends only. Nothing reads replies.",
+            "fr": "Ce fournisseur envoie seulement. Rien ne lit les réponses.",
+        },
+    ],
+    "local": [
+        {
+            "en": "Make sure your MTA is listening on port 25 of this machine and accepts "
+            "mail without authentication.",
+            "fr": "Vérifiez que votre MTA écoute sur le port 25 de cette machine et accepte "
+            "le courrier sans authentification.",
+        },
+        {
+            "en": "Leave the username and password empty, and set the From address below.",
+            "fr": "Laissez identifiant et mot de passe vides, et renseignez l'adresse "
+            "d'expéditeur ci-dessous.",
+            "needs": ["CORP_SMTP_FROM"],
+        },
+    ],
+}
 
 # Local OpenAI-compatible servers for the `custom:` target. Each runs on your
 # machine with no key, so "plug in an LLM" is: start the app, pick it here, point

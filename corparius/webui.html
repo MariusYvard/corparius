@@ -94,6 +94,27 @@ body {
   background: oklch(0.97 0.008 255); overflow: hidden; }
 .site-frame iframe { width: 400%; height: 400%; border: 0; transform: scale(0.25); transform-origin: 0 0; pointer-events: none; }
 .mono { font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 13px; }
+/* The per-provider mail steps. Numbered because they are genuinely sequential —
+   an app password cannot be created before two-factor is on — which is the one
+   case where numbering encodes something true rather than decorating. */
+.steps { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; }
+.steps li { display: flex; gap: 10px; align-items: baseline; padding: 9px 0;
+  border-top: 1px solid var(--border); font-size: 13px; line-height: 1.5; }
+.steps li:last-child { border-bottom: 1px solid var(--border); }
+.step-mark { flex: none; width: 1.1em; text-align: center; font-weight: 600; }
+.step-done .step-mark { color: var(--ok); }
+.step-todo .step-mark { color: var(--select); }
+.step-manual .step-mark, .step-manual .step-body { color: var(--muted); }
+.step-done .step-body { color: var(--muted); }
+.step-body a { white-space: nowrap; }
+/* Scoping an always-on skill. The tool list is long, so it scrolls in its own
+   box rather than pushing the rest of the panel off screen. */
+.sk-scope { margin-top: 8px; }
+.sk-scope > summary { cursor: pointer; color: var(--select); font-size: 13px; padding: 4px 0; }
+.sk-tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 2px 14px; max-height: 220px; overflow-y: auto; margin: 8px 0 10px;
+  padding: 8px; border: 1px solid var(--border); border-radius: 8px; }
+.sk-tools label { display: flex; gap: 7px; align-items: center; font-size: 13px; cursor: pointer; }
 a { color: var(--select); }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
 header.top { border-bottom: 1px solid var(--border); background: var(--surface); }
@@ -842,6 +863,7 @@ en: {
   "sk.applies":"Applies to","sk.everyTool":"every tool","sk.chars":"chars","sk.unknown":"names no such tool: {n}",
   "sk.unscoped":"applies to every prompt","sk.truncated":"cut short in every prompt",
   "sk.alwaysOn":"{n} characters ride on every prompt of every agent, whatever the tool.",
+  "sk.scopeIt":"Scope this skill","sk.scopeSave":"Save scope","sk.scopeNone":"Tick at least one tool.","sk.scopeSaved":"Scope saved.","sk.scopeHelp":"It costs {n} characters on every prompt of every agent. Tick the tools it is about, and it will only travel with those.",
   "pl.verified":"verified","pl.unverifiedTag":"UNVERIFIED","pl.disabled":"disabled","pl.loaded":"loaded",
   "pl.enable":"Enable","pl.disable":"Disable","pl.remove":"Remove","pl.install":"Install",
   "pl.saved":"Done — restart to apply","pl.confirmRemove":"Remove plugin {n}?",
@@ -885,6 +907,7 @@ en: {
   "mem.none":"Nothing learned yet. The CEO and strategy agents write here as they run.","mem.off":"Durable memory is off. Turn it on in Settings.",
   "mem.pin":"Pin","mem.unpin":"Unpin","mem.forget":"Forget","mem.pinned":"pinned",
   "ib.question":"asks you","ib.notification":"notice","ib.answer":"Your answer","ib.send":"Answer","ib.dismiss":"Dismiss",
+  "ib.fix.mail":"Set up email","ib.fix.payments":"Set up payments","ib.fix.providers":"Open providers","ib.fix.plugins":"Open plugins",
   "risk.read":"read","risk.write_local":"local write","risk.external":"external","risk.code":"code","risk.money":"money",
   "col.proposed":"Proposed, your call","col.approved":"Approved","col.in_progress":"In progress","col.waiting":"Held, waiting on you","col.done":"Done","col.empty":"Empty",
   "th.time":"Time","th.agent":"Agent","th.tool":"Tool","th.state":"State","th.output":"Output",
@@ -973,6 +996,7 @@ en: {
   "cfg.preset":"Provider","cfg.presetPick":"Pick your provider…",
   "cfg.presetFilled":"Hosts and ports filled. Add the address and an app password.",
   "cfg.presetSendOnly":"Sending host filled. This provider sends but has no mailbox to read.",
+  "cfg.stepOpen":"open ↗",
   "cfg.advanced":"Derived settings — filled from the provider, change only if needed",
   "cfg.testMail":"Test this account","cfg.testPayments":"Test this key",
   "cfg.testTo":"send the test to…","cfg.testing":"Testing…",
@@ -1032,6 +1056,7 @@ fr: {
   "sk.applies":"S'applique à","sk.everyTool":"tous les outils","sk.chars":"caractères","sk.unknown":"ne nomme aucun outil existant : {n}",
   "sk.unscoped":"s'applique à chaque invite","sk.truncated":"tronquée dans chaque invite",
   "sk.alwaysOn":"{n} caractères partent dans chaque invite de chaque agent, quel que soit l'outil.",
+  "sk.scopeIt":"Cadrer cette compétence","sk.scopeSave":"Enregistrer la portée","sk.scopeNone":"Cochez au moins un outil.","sk.scopeSaved":"Portée enregistrée.","sk.scopeHelp":"Elle pèse {n} caractères sur chaque invite de chaque agent. Cochez les outils qu'elle concerne : elle ne partira plus qu'avec eux.",
   "pl.verified":"vérifié","pl.unverifiedTag":"NON VÉRIFIÉ","pl.disabled":"désactivé","pl.loaded":"chargé",
   "pl.enable":"Activer","pl.disable":"Désactiver","pl.remove":"Supprimer","pl.install":"Installer",
   "pl.saved":"Fait — redémarrez pour appliquer","pl.confirmRemove":"Supprimer le plugin {n} ?",
@@ -1075,6 +1100,7 @@ fr: {
   "mem.none":"Rien d'appris pour l'instant. Le PDG et la stratégie écrivent ici au fil des exécutions.","mem.off":"La mémoire durable est désactivée. Activez-la dans Réglages.",
   "mem.pin":"Épingler","mem.unpin":"Désépingler","mem.forget":"Oublier","mem.pinned":"épinglé",
   "ib.question":"vous demande","ib.notification":"avis","ib.answer":"Votre réponse","ib.send":"Répondre","ib.dismiss":"Écarter",
+  "ib.fix.mail":"Configurer l'email","ib.fix.payments":"Configurer le paiement","ib.fix.providers":"Ouvrir les fournisseurs","ib.fix.plugins":"Ouvrir les greffons",
   "risk.read":"lecture","risk.write_local":"écriture locale","risk.external":"extérieur","risk.code":"code","risk.money":"argent",
   "col.proposed":"Proposées, à arbitrer","col.approved":"Approuvées","col.in_progress":"En cours","col.waiting":"Retenues, en attente de vous","col.done":"Terminées","col.empty":"Vide",
   "th.time":"Heure","th.agent":"Agent","th.tool":"Outil","th.state":"État","th.output":"Sortie",
@@ -1141,6 +1167,7 @@ fr: {
   "cfg.preset":"Fournisseur","cfg.presetPick":"Choisissez votre fournisseur…",
   "cfg.presetFilled":"Serveurs et ports remplis. Ajoutez l'adresse et un mot de passe d'application.",
   "cfg.presetSendOnly":"Serveur d'envoi rempli. Ce fournisseur envoie mais n'a pas de boîte à lire.",
+  "cfg.stepOpen":"ouvrir ↗",
   "cfg.advanced":"Réglages déduits — remplis par le fournisseur, à changer seulement si besoin",
   "cfg.testMail":"Tester ce compte","cfg.testPayments":"Tester cette clé",
   "cfg.testTo":"envoyer le test à…","cfg.testing":"Test en cours…",
@@ -1514,7 +1541,16 @@ async function loadPlugins() {
           const bad = flags.length
             ? `<br>${flags.map(f => `<span class="badge warn">${f}</span>`).join(" ")}`
             : "";
-          return `<div class="kv"><span><strong>${esc(s.name)}</strong> <span class="muted">${esc(s.scope)} · ${s.chars} ${t("sk.chars")}</span>${s.description ? `<br><span class="muted">${esc(s.description)}</span>` : ""}<br><span class="muted">${t("sk.applies")} ${tools}</span>${bad}</span>
+          /* Saying "this rides on every prompt" and stopping there leaves the
+             operator to find the file and hand-edit YAML. Naming the tools is
+             the whole fix, so offer it here. */
+          const fix = s.unscoped ? `<details class="sk-scope"><summary>${esc(t("sk.scopeIt"))}</summary>
+              <p class="note">${esc(t("sk.scopeHelp").replace("{n}", s.chars))}</p>
+              <div class="sk-tools">${(st.tool_names || []).map(n =>
+                `<label><input type="checkbox" value="${esc(n)}"> <span class="mono">${esc(n)}</span></label>`).join("")}</div>
+              <button class="primary" data-sk-scope="${esc(s.name)}">${esc(t("sk.scopeSave"))}</button>
+            </details>` : "";
+          return `<div class="kv"><span><strong>${esc(s.name)}</strong> <span class="muted">${esc(s.scope)} · ${s.chars} ${t("sk.chars")}</span>${s.description ? `<br><span class="muted">${esc(s.description)}</span>` : ""}<br><span class="muted">${t("sk.applies")} ${tools}</span>${bad}${fix}</span>
             <span class="mono muted" style="overflow-wrap:anywhere">${esc(s.path)}</span></div>`;
         }).join("") + (st.skills_always_on_chars
             ? `<p class="note">${t("sk.alwaysOn").replace("{n}", st.skills_always_on_chars)}</p>`
@@ -1533,6 +1569,25 @@ document.addEventListener("click", async (ev) => {
     await api("/api/plugins", {action, name});
     toast(t("pl.saved"));
   } catch (e) { toast(e.message, true); }
+  loadPlugins();
+});
+
+/* Scope an unscoped skill: pick its tools, write them into its SKILL.md. */
+document.addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-sk-scope]");
+  if (!b) return;
+  const box = b.closest(".sk-scope");
+  const tools = $$("input[type=checkbox]", box).filter(c => c.checked).map(c => c.value);
+  if (!tools.length) return toast(t("sk.scopeNone"), true);
+  b.disabled = true;
+  try {
+    // The company goes in the body: for a POST the router reads the slug from
+    // there, and a query string is silently ignored — which is a 404, not an
+    // error message.
+    await api("/api/skills/scope", {company: state.company, name: b.dataset.skScope, tools});
+    toast(t("sk.scopeSaved"));
+  } catch (e) { toast(e.message, true); }
+  b.disabled = false;
   loadPlugins();
 });
 
@@ -1858,7 +1913,8 @@ function render(d) {
       ${m.body ? `<div class="note" style="overflow-wrap:anywhere">${esc(m.body)}</div>` : ""}
       <div class="actions">
         ${m.kind === "question" ? `<input type="text" placeholder="${t("ib.answer")}" aria-label="${t("ib.answer")}" data-ib-note="${esc(m.id)}">` : ""}
-        <button class="primary" data-ib="${esc(m.id)}">${m.kind === "question" ? t("ib.send") : t("ib.dismiss")}</button>
+        ${m.fix ? `<button class="primary" data-ib-fix="${esc(m.fix)}">${esc(t("ib.fix." + m.fix))}</button>` : ""}
+        <button class="${m.fix ? "" : "primary"}" data-ib="${esc(m.id)}">${m.kind === "question" ? t("ib.send") : t("ib.dismiss")}</button>
       </div>
     </div>`).join("");
 
@@ -2068,6 +2124,23 @@ document.addEventListener("click", async e => {
   if (b.dataset.always) return act(() => api("/api/approvals", {id: b.dataset.always, decision: "approved", remember: "always", note: noteFor(b.dataset.always)}), t("toast.remembered"));
   if (b.dataset.revoke) return act(() => api("/api/rules", {tool: b.dataset.revoke}), t("toast.revoked"));
   if (b.dataset.mem) return act(() => api("/api/memory", {id: +b.dataset.memId, action: b.dataset.mem}), t("toast.memory"));
+  /* "No mailbox connected" used to be a log line repeated on every tick, with
+     the remedy left as an exercise. The notice now names where it is settled
+     and this opens it — including scrolling the mail group open, because
+     landing on a Settings tab with nine collapsed groups is barely better than
+     the log line was. */
+  if (b.dataset.ibFix) {
+    const dest = (state.overview && state.overview.inbox_fixes || {})[b.dataset.ibFix];
+    const tab = $("#t-" + dest);
+    if (tab) selectTab(tab);
+    if (b.dataset.ibFix === "mail") {
+      setTimeout(() => {
+        const group = $$("#settings-groups details").find(d => d.dataset.group === "mail");
+        if (group) { group.open = true; group.scrollIntoView({block: "center", behavior: "smooth"}); }
+      }, 120);
+    }
+    return;
+  }
   if (b.dataset.ib) {
     const field = $(`[data-ib-note="${CSS.escape(b.dataset.ib)}"]`);
     return act(() => api("/api/inbox", {id: b.dataset.ib, answer: field ? field.value : ""}), t("toast.answered"));
@@ -2624,7 +2697,35 @@ function renderPreset(d) {
       ${presets.map(p => `<option value="${esc(p.id)}">${esc(p.label)}</option>`).join("")}
     </select>
     <span class="note" id="preset-note" style="font-size:12px"></span>
+    <ol id="mail-steps" class="steps" hidden></ol>
   </div>`;
+}
+
+/* The part the preset could not do for you.
+   Filling four hostnames is the easy half; the hard half happens on somebody
+   else's website, behind two-factor authentication, and the console used to say
+   nothing about it at all — an operator was left with a form and a one-line
+   note. These are the actual steps, in order, with the link, and with the state
+   of each one resolved from the settings rather than ticked off by hand.
+
+   A step corparius cannot verify (install Bridge, read a password off a
+   dashboard) says so instead of showing a checkbox that can never turn green. */
+function renderMailSteps(providerId) {
+  const box = document.getElementById("mail-steps");
+  if (!box) return;
+  const steps = ((state.settings || {}).mail_steps || {})[providerId] || [];
+  if (!steps.length) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  box.innerHTML = steps.map((s, i) => {
+    const text = lang === "fr" ? s.fr : s.en;
+    const mark = !s.checkable ? "·" : (s.done ? "✓" : "○");
+    const cls  = !s.checkable ? "step-manual" : (s.done ? "step-done" : "step-todo");
+    const link = s.url
+      ? ` <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(t("cfg.stepOpen"))}</a>`
+      : "";
+    return `<li class="${cls}"><span class="step-mark" aria-hidden="true">${mark}</span>
+      <span class="step-body">${esc(text)}${link}</span></li>`;
+  }).join("");
 }
 
 /* A key you cannot test is a key you have to trust. Prove it instead. */
@@ -2673,6 +2774,21 @@ function renderSettings(d) {
       </div>
     </details>`;
   }).join("");
+  restoreMailPreset(d);
+}
+
+/* An operator who set this up last week and comes back should see where they
+   got to, not an empty dropdown. The host they saved identifies the provider,
+   so the selection and the step states come back with it. */
+function restoreMailPreset(d) {
+  const sel = document.getElementById("preset-mail");
+  if (!sel) return;
+  const host = ($("#set-CORP_SMTP_HOST") || {}).value || "";
+  const match = (d.mail_presets || []).find(p => p.host && p.host === host.trim());
+  if (!match) return;
+  sel.value = match.id;
+  $("#preset-note").textContent = lang === "fr" ? match.note_fr : match.note_en;
+  renderMailSteps(match.id);
 }
 
 // A local LLM server (LM Studio, Jan, llama.cpp…): pick it, the endpoint fills.
@@ -2686,6 +2802,7 @@ $("#settings-groups").addEventListener("change", ev => {
   if (!ev.target.closest("[data-preset]")) return;
   const preset = (state.settings.mail_presets || []).find(p => p.id === ev.target.value);
   $("#preset-note").textContent = preset ? (lang === "fr" ? preset.note_fr : preset.note_en) : "";
+  renderMailSteps(preset ? preset.id : "");
   if (!preset) return;
   const fill = (key, value) => {
     const el = $("#set-" + CSS.escape(key));

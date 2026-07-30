@@ -24,6 +24,12 @@ L'onglet Réglages couvre le reste, groupe par groupe, piloté par le registre `
 
 Un compte, dans les deux sens. Choisissez le fournisseur, donnez l'adresse et un mot de passe d'application : les serveurs et ports SMTP et IMAP sont déduits et repliés sous « Réglages déduits ». Le bouton « Tester ce compte » envoie un vrai message et lit vraiment la boîte, puis rapporte les deux moitiés séparément — elles échouent pour des raisons différentes. Les diagnostics nomment le remède, pas le protocole.
 
+**Les étapes, avec leur état.** Le préréglage remplit quatre noms d'hôte, ce qui est la moitié facile. La moitié difficile se passe ailleurs : créer un mot de passe d'application derrière la validation en deux étapes, lancer Proton Bridge, valider un domaine d'envoi. Choisir un fournisseur affiche désormais ses étapes numérotées, dans l'ordre, avec le lien direct vers la bonne page.
+
+L'état de chaque étape est **déduit des réglages**, pas coché à la main : une étape qui demande une adresse et un mot de passe passe au vert quand les deux sont enregistrés. Une étape que corparius ne peut pas vérifier — installer un logiciel, relever un mot de passe sur le tableau de bord de quelqu'un d'autre — le dit et reste grise, parce qu'une case qui ne pourra jamais devenir verte se lit comme un échec.
+
+**Et là où ça se plaint, il y a un bouton.** `scan_replies` et `triage_inbox` renvoyaient chacun leur ligne dans le journal d'actions à chaque tour : vrai, correct, répété indéfiniment, et ne pointant vers rien. C'est maintenant une notice unique dans l'inbox — une seule, parce que son identifiant est déterministe — avec un bouton qui ouvre directement le groupe Courrier de cet onglet.
+
 La lecture est en lecture seule : corparius ouvre la boîte en `readonly`, n'a jamais marqué un message comme lu, ne déplace rien et ne supprime rien. Elle sert à deux choses : le triage du support, et surtout savoir quels prospects ont répondu (`scan_replies`, agent outreach), ce qui ferme la boucle de la prospection.
 
 ## Icônes

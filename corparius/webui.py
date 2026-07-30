@@ -42,6 +42,7 @@ from . import (
     structured,
 )
 from . import company as company_mod
+from . import inbox as inbox_mod
 from .agents import ROSTER
 from .config import Settings
 from .doctor import run_checks
@@ -257,6 +258,10 @@ def _overview(state: UiState, slug: str) -> dict:
         "approvals": approvals,
         "rules": store.list_rules(slug),
         "inbox": store.list_inbox(slug, "pending"),
+        # Which console tab settles each kind of notice. Sent rather than
+        # duplicated in the page: two copies of this table would drift, and the
+        # failure mode is a button that silently does nothing.
+        "inbox_fixes": inbox_mod.FIXES,
         "memory": store.list_memory(slug) if s.memory_enabled else [],
         "memory_enabled": s.memory_enabled,
         "permission_mode": engine.mode,
@@ -866,7 +871,39 @@ def _settings_payload() -> dict:
         "fields": [settings_spec.describe(f.key) for f in settings_spec.SPEC],
         "warning": {"en": settings_spec.WARN_EN, "fr": settings_spec.WARN_FR},
         "mail_presets": settings_spec.MAIL_PRESETS,
+        "mail_steps": _mail_steps(),
     }
+
+
+def _mail_steps() -> dict:
+    """The per-provider steps, each carrying whether it is actually done.
+
+    Resolved here rather than in the page because "done" is a fact about this
+    installation's settings, not about the browser — the same reason the
+    approval panel resolves what a tool does server-side.
+
+    A step with no `needs` is one corparius cannot check: installing Proton
+    Bridge, reading a password off somebody else's dashboard. Those report
+    `checkable: false` and the console shows them as something to do rather
+    than as something outstanding, because a step that can never turn green is
+    worse than no state at all.
+    """
+    out: dict[str, list[dict]] = {}
+    for provider, steps in settings_spec.MAIL_STEPS.items():
+        resolved = []
+        for step in steps:
+            needs = step.get("needs") or []
+            resolved.append(
+                {
+                    "en": step["en"],
+                    "fr": step["fr"],
+                    "url": step.get("url", ""),
+                    "checkable": bool(needs),
+                    "done": bool(needs) and all(cfg.get(key, "").strip() for key in needs),
+                }
+            )
+        out[provider] = resolved
+    return out
 
 
 def _set_settings(state: UiState, values: dict, unset: list) -> dict:
@@ -1159,9 +1196,11 @@ def _route_plugins_get(ctx):
     from . import plugins, skills
 
     s = _fresh_settings()
-    # Read-only, and deliberately so. A skill is a file the operator wrote; the
-    # console tells them which ones are in play and which tools each one reaches,
-    # rather than becoming a second, worse text editor.
+    # Near enough to read-only. A skill is a file the operator wrote and the
+    # console will not become a second, worse text editor — but one edit earns
+    # its place: writing `allowed-tools` into a skill that has none. Unscoped, it
+    # rides on every prompt of every agent (3 815 characters, measured, on the
+    # owner's own company), and until now the console could only say so.
     catalog: list[dict] = []
     if s.skills_enabled:
         loader = skills.SkillLoader.for_company(ctx.slug or "", max_chars=s.skill_max_chars)
@@ -1185,7 +1224,35 @@ def _route_plugins_get(ctx):
         "skills": catalog,
         "skills_enabled": s.skills_enabled,
         "skills_always_on_chars": loader.always_on_chars() if s.skills_enabled else 0,
+        # So the scoping picker offers real names instead of asking the operator
+        # to know them. Sorted, because it is a list a human reads.
+        "tool_names": sorted(TOOLS),
     }
+
+
+def _route_skill_scope(ctx):
+    """Name the tools an unscoped skill applies to.
+
+    The one write the skills panel does. Refuses a tool that does not exist,
+    because a skill scoped to a name nobody has never applies — silently, which
+    is a worse outcome than the tax it was meant to fix.
+    """
+    from . import skills
+
+    s = _fresh_settings()
+    if not s.skills_enabled:
+        return 400, {"ok": False, "error": "skills are off"}
+    name = str(ctx.body.get("name", "")).strip()
+    tools = [str(t).strip() for t in (ctx.body.get("tools") or []) if str(t).strip()]
+    loader = skills.SkillLoader.for_company(ctx.slug or "", max_chars=s.skill_max_chars)
+    skill = next((sk for sk in loader.skills if sk.name == name), None)
+    if skill is None:
+        return 404, {"ok": False, "error": f"no skill named {name!r}"}
+    error = skills.scope_to(skill.path, tools)
+    if error:
+        return 400, {"ok": False, "error": error}
+    log.info("skill %s scoped to %s", name, ", ".join(tools))
+    return 200, {"ok": True, "name": name, "tools": tools}
 
 
 def _route_theme_get(ctx):
@@ -1504,6 +1571,7 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/provider/models", _route_provider_models),
     Route("POST", "/api/settings", _route_settings_post),
     Route("POST", "/api/plugins", _route_plugins_post),
+    Route("POST", "/api/skills/scope", _route_skill_scope, needs_slug=True),
     Route("POST", "/api/theme", _route_theme_post),
     Route("POST", "/api/test/mail", _route_test_mail),
     Route("POST", "/api/test/payments", _route_test_payments),

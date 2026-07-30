@@ -60,7 +60,7 @@ CREATE INDEX IF NOT EXISTS memory_by_company ON memory (company, pinned, ts);
 CREATE TABLE IF NOT EXISTS inbox (
     id TEXT PRIMARY KEY,
     company TEXT, agent TEXT, kind TEXT, title TEXT, body TEXT, options TEXT,
-    state TEXT, resolution TEXT, resolved_at REAL, ts REAL
+    state TEXT, resolution TEXT, resolved_at REAL, ts REAL, fix TEXT
 );
 CREATE INDEX IF NOT EXISTS inbox_by_company ON inbox (company, state, ts);
 CREATE TABLE IF NOT EXISTS machine (
@@ -80,7 +80,7 @@ CREATE INDEX IF NOT EXISTS drafts_by_company ON drafts (company, state, ts);
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -182,6 +182,20 @@ def _migration_8(db: sqlite3.Connection) -> None:
         pass
 
 
+def _migration_9(db: sqlite3.Connection) -> None:
+    """Where to go to make the notice stop.
+
+    `scan_replies` and `triage_inbox` said "no mailbox connected" on every tick
+    of every run, as a log line — true, repeated forever, and pointing at
+    nothing an operator could click. A notice that names its own remedy can be
+    filed once and answered once.
+    """
+    try:
+        db.execute("ALTER TABLE inbox ADD COLUMN fix TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 MIGRATIONS = {
     1: _migration_1,
@@ -192,6 +206,7 @@ MIGRATIONS = {
     6: _migration_6,
     7: _migration_7,
     8: _migration_8,
+    9: _migration_9,
 }
 
 
@@ -584,20 +599,25 @@ class Store:
         return cur.rowcount > 0
 
     @_locked
-    def add_inbox(self, company, agent, kind, title, body="", options=()) -> str:
+    def add_inbox(self, company, agent, kind, title, body="", options=(), fix="") -> str:
         """File a question or a notice. Idempotent on its deterministic id, so
         re-running the tick that raised it does not raise it twice, and a
         restart between the question and the answer changes nothing.
 
         INSERT OR IGNORE, not OR REPLACE: replacing would reset the state of an
-        item the operator had already answered."""
+        item the operator had already answered.
+
+        `fix` names where in the console this is fixed (see inbox.FIXES). It is
+        what turns "no mailbox connected", repeated on every tick forever, into
+        one item with a button on it.
+        """
         from .inbox import PENDING, item_id
 
         ident = item_id(company, kind, agent, title)
         self.db.execute(
             "INSERT OR IGNORE INTO inbox"
             " (id, company, agent, kind, title, body, options, state, resolution,"
-            "  resolved_at, ts) VALUES (?,?,?,?,?,?,?,?,'',0,?)",
+            "  resolved_at, ts, fix) VALUES (?,?,?,?,?,?,?,?,'',0,?,?)",
             (
                 ident,
                 company,
@@ -608,6 +628,7 @@ class Store:
                 json.dumps(list(options)),
                 PENDING,
                 time.time(),
+                fix,
             ),
         )
         self.db.commit()
@@ -631,6 +652,9 @@ class Store:
                 item["options"] = json.loads(item["options"] or "[]")
             except json.JSONDecodeError:
                 item["options"] = []
+            # NULL on every row written before schema 9. The console reads this
+            # to decide whether to draw a button, and `null` is not "".
+            item["fix"] = item.get("fix") or ""
             out.append(item)
         return out
 

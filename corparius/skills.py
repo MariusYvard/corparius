@@ -117,6 +117,92 @@ def parse(path: Path, scope: str = "global") -> Skill | None:
     )
 
 
+def scope_to(path: Path, tools: list[str]) -> str:
+    """Write `allowed-tools` into an existing SKILL.md. Returns "" or an error.
+
+    An unscoped skill lands in **every** prompt of **every** agent: on the
+    owner's own company, `promesse-clinique` was 3 815 characters riding on
+    every call, forever, and the only thing the console could do about it was
+    say so. Naming the tools is the fix, and it is an eight-line edit to a file
+    the operator would otherwise have to find and hand-edit.
+
+    Only the frontmatter is touched. The body is the operator's prose and is
+    written back byte for byte — this rewrites a header, it does not reformat
+    somebody's file.
+    """
+    from .tools import TOOLS
+
+    tools = [t.strip() for t in tools if t.strip()]
+    unknown = [t for t in tools if t not in TOOLS]
+    if unknown:
+        # A skill scoped to a tool nobody has never applies, silently. That is a
+        # worse outcome than the tax it was meant to fix.
+        return f"unknown tool(s): {', '.join(unknown)}"
+    if not tools:
+        return "name at least one tool, or the skill stays on every prompt"
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return f"cannot read {path.name}: {exc}"
+
+    head, body = _split(raw)
+    meta: dict = {}
+    if head.strip():
+        try:
+            loaded = yaml.safe_load(head)
+            meta = loaded if isinstance(loaded, dict) else {}
+        except yaml.YAMLError as exc:
+            return f"invalid frontmatter: {exc}"
+    meta.pop("allowed_tools", None)
+    meta["allowed-tools"] = tools
+    # `width` large enough that nothing is re-wrapped: the default folds a long
+    # description across two lines, which is valid YAML and still an unasked-for
+    # edit to a sentence somebody wrote. `sort_keys=False` for the same reason —
+    # the order in the file is the order the operator chose.
+    dumped = yaml.safe_dump(
+        meta, allow_unicode=True, sort_keys=False, width=10**6, default_flow_style=False
+    ).strip()
+    # `_split` drops the newline that ended the closing fence, so it has to be
+    # put back. Without it the fence merges into the first line of the prose,
+    # the file no longer has a closing `---` at all, and `parse` reads the whole
+    # thing as body — an unscoped skill twice the size, which is the opposite of
+    # what this function is for. Caught by running it on a real file, not by
+    # reading it.
+    tail = "\n" if text_ends_with_newline(raw) else ""
+    rebuilt = f"---\n{dumped}\n---\n{body}{tail}"
+    if parse_text(rebuilt) is None:
+        return "the rewritten file would not parse; nothing was written"
+    try:
+        # Atomic: a half-written SKILL.md is a skill that stops loading, and the
+        # operator's prose is in it.
+        tmp = path.with_suffix(".md.tmp")
+        tmp.write_text(rebuilt, encoding="utf-8")
+        tmp.replace(path)
+    except OSError as exc:
+        return f"cannot write {path.name}: {exc}"
+    return ""
+
+
+def text_ends_with_newline(text: str) -> bool:
+    return text.endswith("\n")
+
+
+def parse_text(raw: str) -> dict | None:
+    """The frontmatter of a SKILL.md held in memory, or None if there is none.
+
+    Used to check a rewrite before it reaches disk. `parse` takes a path, and
+    proving a file is still readable *after* writing it is one write too late.
+    """
+    head, _ = _split(raw)
+    if not head.strip():
+        return None
+    try:
+        loaded = yaml.safe_load(head)
+    except yaml.YAMLError:
+        return None
+    return loaded if isinstance(loaded, dict) else None
+
+
 class SkillLoader:
     """Discovery happens once, at construction, and reads the files whole.
 

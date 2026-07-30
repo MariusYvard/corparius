@@ -129,6 +129,30 @@ OPENAI_COMPAT_PROVIDERS: dict[str, dict] = {
         "signup": "https://console.mistral.ai/api-keys",
         "default_model": "mistral-small-latest",
     },
+    "openai": {
+        "base": "https://api.openai.com/v1",
+        "key_env": "OPENAI_API_KEY",
+        "signup": "https://platform.openai.com/api-keys",
+        # No default_model on purpose. Per the note above, one is set only where
+        # the name is known-good, and OpenAI renames and retires its models
+        # faster than a literal in this file can track — the previous
+        # openrouter default rotted exactly that way. The console reads the real
+        # catalogue from /models once a key is present, which is what
+        # list_models() is for.
+    },
+    "alibaba": {
+        # Model Studio (Bailian / DashScope) speaks the OpenAI protocol. Two
+        # regions, and they are separate accounts with separate keys rather than
+        # mirrors — a key from one is refused by the other. International is the
+        # default; set DASHSCOPE_BASE_URL to the Beijing endpoint
+        # (https://dashscope.aliyuncs.com/compatible-mode/v1) for a China
+        # account. Both verified live: each answers 401 unauthenticated, which
+        # is a real endpoint refusing a missing key rather than a wrong URL.
+        "base": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        "base_env": "DASHSCOPE_BASE_URL",
+        "key_env": "DASHSCOPE_API_KEY",
+        "signup": "https://modelstudio.console.alibabacloud.com/?tab=playground#/api-key",
+    },
     "gemini": {
         "base": "https://generativelanguage.googleapis.com/v1beta/openai",
         "key_env": "GEMINI_API_KEY",

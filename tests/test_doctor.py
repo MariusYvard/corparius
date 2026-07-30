@@ -236,3 +236,55 @@ def test_the_doctor_is_content_with_a_fully_wired_app(tmp_path, monkeypatch):
     _seed_app(tmp_path, origins=["https://site.test"])
     level, _, message = doctor._check_apps(Settings())
     assert level == "ok" and "browser" not in message
+
+
+# --- a ceiling too low to run --------------------------------------------
+def _company(home, slug, tpm):
+    folder = home / "companies" / slug
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "company.yaml").write_text(
+        f"slug: {slug}\nname: {slug.title()}\nbudgets:\n"
+        f"  session_tokens: 120000\n  tokens_per_minute: {tpm}\n",
+        encoding="utf-8",
+    )
+
+
+def test_the_doctor_names_a_company_whose_budget_will_freeze_it(tmp_path, monkeypatch):
+    """Measured: a company declaring 8000 froze six times in one session, and
+    the log said the breaker tripped without saying which ceiling. Raised to
+    60000 the same 24 ticks ran with none."""
+    from corparius import doctor
+    from corparius.config import Settings
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    _company(tmp_path, "vigil", 8000)
+    level, name, message = doctor._check_budgets(Settings())
+    assert (level, name) == ("warn", "budgets")
+    assert "vigil (8000)" in message and "20000" in message
+
+
+def test_a_workable_ceiling_is_not_flagged(tmp_path, monkeypatch):
+    from corparius import doctor
+    from corparius.config import Settings
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    _company(tmp_path, "acme", 60000)
+    level, _, message = doctor._check_budgets(Settings())
+    assert level == "ok" and "none with a ceiling too low" in message
+
+
+def test_the_operators_own_number_is_reported_never_overridden(tmp_path, monkeypatch):
+    """It is theirs to choose — two tests set a tiny one deliberately to trip
+    the breaker. Silently rewriting a value someone typed is a worse habit than
+    the freeze it would prevent."""
+    from corparius import company as company_mod
+    from corparius import doctor
+    from corparius.config import Settings
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    _company(tmp_path, "vigil", 8000)
+    doctor._check_budgets(Settings())
+    cfg_after = company_mod.load(tmp_path / "companies" / "vigil" / "company.yaml", "vigil")
+    # Not raised to the 20000 the warning recommends. (A pre-existing floor of
+    # 100 still applies to absurd values; that is not this check's doing.)
+    assert cfg_after["budgets"]["tokens_per_minute"] == 8000

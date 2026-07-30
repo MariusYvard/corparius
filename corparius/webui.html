@@ -394,6 +394,10 @@ tr:last-child td { border-bottom: 0; }
 .msg.user { justify-self: end; background: var(--accent-soft); border: 1px solid transparent; }
 .msg.ceo { justify-self: start; background: var(--raised); border: 1px solid var(--border); }
 .msg .meta { font-size: 11.5px; color: var(--muted); margin-top: 6px; font-family: ui-monospace, monospace; }
+/* A turn where the model said nothing usable. It reads as a status, not an
+   answer: the console used to echo the operator's own question back, or the
+   word "reply", and both look like the CEO talking. */
+.msg.msg-failed { border-style: dashed; color: var(--muted); font-style: italic; }
 .composer { display: flex; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px; }
 .composer textarea { flex: 1; resize: vertical; min-height: 44px; max-height: 160px; }
 .note { font-size: 13px; color: var(--muted); }
@@ -2348,7 +2352,7 @@ function renderChat(history) {
     return;
   }
   log.innerHTML = history.map(m => `
-    <div class="msg ${m.role === "user" ? "user" : "ceo"}">${esc(m.text)}${m.model ? `<div class="meta">${esc(m.provider)} · ${esc(m.model)}</div>` : ""}</div>`).join("");
+    <div class="msg ${m.role === "user" ? "user" : "ceo"}${m.unanswered ? " msg-failed" : ""}">${esc(m.text)}${m.model ? `<div class="meta">${esc(m.provider)} · ${esc(m.model)}</div>` : ""}</div>`).join("");
   log.scrollTop = log.scrollHeight;
 }
 async function loadChat() {

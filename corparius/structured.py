@@ -221,7 +221,13 @@ def ask(
     for key, spec in schema.items():
         if spec.get("required") and not data.get(key) and spec.get("type", "str") == "str":
             snippet = re.sub(r"\s+", " ", last_raw).strip()
-            data[key] = snippet[: spec.get("max_len", 120)] or key
+            # `or key` used to sit here, so a model that answered nothing at all
+            # produced the field's own name as its value — the console showed a
+            # CEO whose reply was the word "reply". A caller that receives the
+            # schema back as content cannot tell it apart from an answer, so an
+            # empty field stays empty and `ok` is already False: the caller
+            # decides what to say, which is the only place that knows.
+            data[key] = snippet[: spec.get("max_len", 120)]
     clean, _ = validate(data, schema)
     return Result(
         clean,

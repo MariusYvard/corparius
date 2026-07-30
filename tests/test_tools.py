@@ -176,7 +176,7 @@ def test_support_does_not_pay_for_a_reply_to_nobody(monkeypatch):
 
     monkeypatch.setattr(mailbox, "configured", lambda: False)
     ctx = type("Ctx", (), {"company": {"slug": "t", "name": "T"}})()
-    assert "no mailbox connected" in TOOLS["draft_support_reply"].skip_reason(ctx)
+    assert "no mailbox connected" in TOOLS["draft_support_reply"].skip_reason(ctx).lower()
 
 
 def test_a_tool_with_a_mailbox_is_not_skipped(monkeypatch):

@@ -123,7 +123,22 @@ def _load_company(slug: str) -> dict | None:
 
 def _merge_env_file(path: Path, values: dict[str, str]) -> None:
     """Persist KEY=value pairs, replacing existing lines and appending new
-    ones. Comments and unrelated lines are left untouched."""
+    ones. Comments and unrelated lines are left untouched.
+
+    A newline inside a value is refused here rather than upstream, because
+    upstream is three different places: the settings page, the providers panel,
+    and the .env a restore reads out of an archive someone else may have built.
+
+    It mattered. Values were written verbatim and joined with "\\n", so one
+    accepted write could append lines of its own — and the line worth appending
+    was `CORP_UI_ALLOWED_HOSTS`, which SECURITY.md promises cannot be set
+    through the API and which a test asserts is not in ALLOWED_VARS. The name
+    was not; the value was. Planting a host there turns off the DNS-rebinding
+    defence, and the console stops being localhost-only.
+    """
+    bad = sorted(k for k, v in values.items() if "\n" in str(v) or "\r" in str(v))
+    if bad:
+        raise _RequestRefused(400, f"a line break is not allowed in: {', '.join(bad)}")
     lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
     seen = set()
     for i, line in enumerate(lines):
@@ -1029,9 +1044,17 @@ def _route_update_apply(ctx):
     from . import selfupdate, update_check
 
     info = update_check.check()
-    tag = str(ctx.body.get("tag") or "").strip() or f"v{info.get('latest', '')}"
     if not info.get("update_available"):
         return 200, {"ok": False, "error": "already up to date"}
+    # The tag comes from the version check, never from the request. It used to
+    # be read out of the body, and `..` in it walked the download URL out of
+    # this repository entirely — requests normalises dot segments, so
+    # `../../../../someone/else/releases/download/v1` resolved to their repo.
+    # The checksum was no defence: SHA256SUMS was fetched from the same
+    # attacker-chosen directory, so verification agreed with itself and the
+    # binary was installed and then run. The CLI never had this; it asks
+    # update_check. So does this now.
+    tag = f"v{info.get('latest', '')}"
     try:
         return 200, {"ok": True, "result": selfupdate.apply(tag)}
     except selfupdate.UpdateError as exc:

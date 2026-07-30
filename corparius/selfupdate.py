@@ -35,6 +35,7 @@ from __future__ import annotations
 import hashlib
 import os
 import platform
+import re
 import shutil
 import sys
 import zipfile
@@ -149,9 +150,30 @@ def expected_sum(sums_text: str, name: str) -> str:
     raise UpdateError(f"{SUMS} has no line for {name}; refusing to install it")
 
 
+TAG = re.compile(r"v?\d+(?:\.\d+){0,3}\Z")
+
+
+def check_tag(tag: str) -> str:
+    """A release tag, or a refusal. Nothing else may reach the download URL.
+
+    `..` in this string used to walk the URL out of the repository: requests
+    normalises dot segments while preparing a request, so DOWNLOAD_BASE pinned
+    nothing. And the checksum could not catch it, because SHA256SUMS came from
+    the same redirected directory — the verification agreed with itself.
+
+    Callers should pass the tag update_check reported rather than one a user
+    typed. This is the second lock on that door, not the first.
+    """
+    clean = tag.strip()
+    if not TAG.match(clean):
+        raise UpdateError(f"{tag!r} is not a release tag; refusing to download anything")
+    return clean
+
+
 def fetch(tag: str, name: str) -> bytes:
     """Download the asset and prove it against the published sum. Nothing has
     touched the disk when this returns, and nothing will if it raises."""
+    tag = check_tag(tag)
     sums = _get(f"{DOWNLOAD_BASE}/{tag}/{SUMS}").decode("utf-8", "replace")
     want = expected_sum(sums, name)
     blob = _get(f"{DOWNLOAD_BASE}/{tag}/{name}")

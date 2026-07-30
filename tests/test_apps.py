@@ -148,7 +148,12 @@ def test_the_company_is_quoted_to_the_model(tmp_path, monkeypatch):
     )
     system = seen["messages"][0]["content"]
     assert "CVBoost" in system and "9" in system
-    assert seen["messages"][1] == {"role": "user", "content": "how much?"}
+    # The visitor's words go in the user turn, fenced and named as untrusted —
+    # see tests/test_prompt_injection.py. What matters here is that they arrive
+    # whole and are not mixed into the system prompt.
+    user = seen["messages"][1]
+    assert user["role"] == "user" and "how much?" in user["content"]
+    assert "how much?" not in system
 
 
 def test_an_unreachable_model_is_a_refusal_not_a_traceback(tmp_path, monkeypatch):

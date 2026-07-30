@@ -117,9 +117,10 @@ fichier comme un mot de passe. Le doctor le rappelle et vérifie les permissions
 
 ## Mettre à jour
 
-- **Le premier saut se fait à la main.** La v0.1.0 publiée ne contient pas encore
-  le bouton — il est arrivé après elle. Téléchargez la version suivante une fois
-  comme ci-dessous ; à partir de là, la console met à jour toute seule.
+- **Si vous faites encore tourner la v0.1.0, le premier saut se fait à la main.**
+  Cette version-là ne contient pas le bouton, il est arrivé avec la v0.2.0.
+  Téléchargez-la une fois comme ci-dessous ; à partir de là, la console met à
+  jour toute seule. Depuis la v0.2.0 il n'y a plus rien à faire à la main.
 - **Depuis la console** : quand une version plus récente existe, la bannière
   propose « Mettre à jour ». corparius télécharge le fichier de votre plateforme,
   **vérifie son empreinte contre le `SHA256SUMS` publié**, prend une sauvegarde,
@@ -145,9 +146,9 @@ fichier comme un mot de passe. Le doctor le rappelle et vérifie les permissions
 - **Si quelque chose tourne mal** : la version que vous faisiez tourner est
   conservée à côté, sous `corparius.exe.old` (ou `corparius.app.old`), jusqu'à ce
   que la nouvelle démarre une fois. Renommez-la pour revenir en arrière. (Le
-  ménage automatique n'existe qu'à partir de la version qui suit la 0.1.0 :
-  c'est le build **installé** qui l'efface, donc un build antérieur laisse le
-  `.old` derrière lui. Le supprimer à la main est sans risque.) La
+  ménage automatique est arrivé avec la v0.2.0 : c'est le build **installé** qui
+  efface le `.old`, donc une mise à jour *depuis* la v0.1.0 laisse le sien
+  derrière elle une dernière fois. Le supprimer à la main est sans risque.) La
   fenêtre où aucun binaire n'existe fait deux renommages de large : le nouveau
   est écrit à côté de l'ancien avant tout échange.
 - **Ce que l'empreinte prouve, et ce qu'elle ne prouve pas** : elle prouve que

@@ -90,6 +90,25 @@ was released.
   dépasse trente jours) — pour qu'un balayage arrêté ait dépensé ses appels sur
   ce qui valait la peine.
 
+- **Changed : le routage décide sur la performance mesurée, pas sur « il a
+  répondu ».** Une seule mesure ne valait pas grand-chose : quatre appels
+  identiques de huit jetons au même modèle se sont étalés de **465 à 774 ms**.
+  Le préflight prend désormais **trois échantillons** sur les seuls modèles
+  qu'un palier pourrait vraiment utiliser, demande un objet JSON, et lit le
+  débit dans le `usage.completion_time` du fournisseur — le temps mural sur un
+  WAN mesure autant le réseau que le modèle.
+
+  Sur la configuration réelle du propriétaire : groq 594 tok/s JSON ok,
+  cerebras 38 tok/s **incapable de produire du JSON**, mistral 10,6 tok/s JSON
+  ok, openrouter 7,2 tok/s **incapable de produire du JSON**. **Deux des quatre
+  modèles de sa chaîne de repli** ne savent donc pas suivre un schéma — ce
+  qu'une sonde de disponibilité ne peut pas voir, puisqu'elle demande un mot, et
+  qui casse tout outil passant par `structured.ask`.
+
+  L'ordre de décision : bloqué exclu, puis capacité JSON là où elle a été
+  mesurée, puis fiabilité, puis débit et latence. Un modèle jamais mesuré n'est
+  pas pénalisé — l'absence de preuve n'est pas une preuve. Schéma 11.
+
 - **Added : `corparius preflight --all`.** La passe complète depuis un
   terminal, pour qui est en SSH ou en cron et n'a pas le bouton. Même
   comptabilité, et la même règle : le prix est annoncé avant, et rien ne part

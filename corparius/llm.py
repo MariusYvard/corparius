@@ -304,7 +304,9 @@ def recommended_routing(
             # working default on the strength of a faster alternative: the
             # defaults are chosen for capability, not latency.
             return f"{provider}:{default}"
-        usable = [(v.get("ms", 0), m) for m, v in known.items() if v.get("state") == "usable"]
+        from .preflight import rank
+
+        usable = rank(known)
         if not usable:
             log.warning(
                 "%s: the pinned default %s is not callable with this key, and nothing else "
@@ -314,9 +316,9 @@ def recommended_routing(
                 provider,
             )
             return f"{provider}:{default}"
-        # Fastest proved model on that provider. Measured, deterministic, and
-        # the right tiebreak for a routing decision.
-        best = min(usable)[1]
+        # Best measured model on that provider — schema-capable first, then
+        # reliable, then fast. See preflight.rank for why that order.
+        best = usable[0]
         log.info("%s: %s is not callable; routing to %s, which answered", provider, default, best)
         return f"{provider}:{best}"
 

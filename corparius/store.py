@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS drafts (
 CREATE INDEX IF NOT EXISTS drafts_by_company ON drafts (company, state, ts);
 CREATE TABLE IF NOT EXISTS model_probes (
     provider TEXT, model TEXT, state TEXT, detail TEXT, status INTEGER, ms INTEGER, ts REAL,
+    tok_s REAL, json_ok INTEGER, samples INTEGER, failures INTEGER, measured_at REAL,
     PRIMARY KEY (provider, model)
 );
 """
@@ -84,7 +85,7 @@ CREATE TABLE IF NOT EXISTS model_probes (
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -218,6 +219,28 @@ def _migration_10(db: sqlite3.Connection) -> None:
     )
 
 
+def _migration_11(db: sqlite3.Connection) -> None:
+    """How a model performs, not just whether it answers.
+
+    "It answered" is a poor basis for a routing decision. Measured on real
+    providers: 547 tok/s on one, 10 on another, and one model in the owner's own
+    fallback chain that cannot produce a JSON object at all — which an
+    availability probe cannot see, and which breaks every tool that goes through
+    corparius/structured.py.
+    """
+    for column, kind in (
+        ("tok_s", "REAL"),
+        ("json_ok", "INTEGER"),
+        ("samples", "INTEGER"),
+        ("failures", "INTEGER"),
+        ("measured_at", "REAL"),
+    ):
+        try:
+            db.execute(f"ALTER TABLE model_probes ADD COLUMN {column} {kind}")
+        except sqlite3.OperationalError:
+            pass
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 MIGRATIONS = {
     1: _migration_1,
@@ -230,6 +253,7 @@ MIGRATIONS = {
     8: _migration_8,
     9: _migration_9,
     10: _migration_10,
+    11: _migration_11,
 }
 
 
@@ -841,6 +865,42 @@ class Store:
             " state=excluded.state, detail=excluded.detail, status=excluded.status,"
             " ms=excluded.ms, ts=excluded.ts",
             (provider, model, state, detail, int(status), int(ms), time.time()),
+        )
+        self.db.commit()
+
+    @_locked
+    def record_measurement(self, provider, model, tok_s, json_ok, samples, failures) -> None:
+        """Attach performance to a model already proved callable.
+
+        Kept separate from `record_probe` because the two cost different things:
+        availability is one small call across a whole catalogue, performance is
+        several larger ones and is only worth paying for on models a tier might
+        actually be routed to.
+        """
+        self.db.execute(
+            "INSERT INTO model_probes"
+            " (provider, model, state, detail, status, ms, ts,"
+            "  tok_s, json_ok, samples, failures, measured_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
+            " ON CONFLICT(provider, model) DO UPDATE SET"
+            " tok_s=excluded.tok_s, json_ok=excluded.json_ok,"
+            " samples=COALESCE(model_probes.samples,0)+excluded.samples,"
+            " failures=COALESCE(model_probes.failures,0)+excluded.failures,"
+            " measured_at=excluded.measured_at",
+            (
+                provider,
+                model,
+                "usable",
+                "",
+                200,
+                0,
+                time.time(),
+                float(tok_s or 0),
+                int(bool(json_ok)),
+                int(samples),
+                int(failures),
+                time.time(),
+            ),
         )
         self.db.commit()
 

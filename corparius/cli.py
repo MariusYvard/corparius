@@ -193,6 +193,61 @@ def cmd_board(args) -> None:
         print(f"{col:12} ({len(items)}): {head}")
 
 
+def cmd_preflight(args) -> None:
+    """Call each configured model for real, eight tokens each, and say which
+    ones this account can actually use.
+
+    A catalogue lists models that exist. It does not list models *you* may call:
+    a paid tier you are not on, a preview you were never granted, a region your
+    account is not in — all of them appear in `/models` and answer 404 to you.
+    Routing off that list configures a model that fails on the first real turn,
+    which is the worst place to find out.
+
+    A rate limit or a cold start is reported as capacity, never as a rejection.
+    The free tiers this project is built for look exactly like that when they
+    wake up, and failing them would throw away models that work a minute later.
+    """
+    from . import preflight
+
+    settings = Settings()
+    if settings.llm_mock:
+        print("Mock mode (CORP_LLM_MOCK=true): no provider to call. Nothing to prove.")
+        raise SystemExit(1)
+    plan = preflight.targets(settings)
+    if not plan:
+        print("No tier points at an API provider, so there is nothing to call.")
+        raise SystemExit(1)
+
+    print(f"Calling {len(plan)} model(s) for {preflight.MAX_TOKENS} tokens each…")
+    report = preflight.run(settings, timeout=args.timeout)
+    store = _store()
+    preflight.save(store, report)
+
+    if getattr(args, "json", False):
+        print(json.dumps(report.as_dict(), indent=2, ensure_ascii=False))
+    else:
+        mark = {
+            preflight.USABLE: "usable ",
+            preflight.BLOCKED: "BLOCKED",
+            preflight.CAPACITY: "cold   ",
+            preflight.UNKNOWN: "unknown",
+        }
+        for p in report.probes:
+            print(f"  [{mark[p.state]}] {p.tier:<8} {p.provider}:{p.model}")
+            print(f"              {p.detail}")
+    if report.blocking:
+        print(
+            f"\n{len(report.blocking)} configured model(s) cannot be called with this key. "
+            "Pick another in the console (Providers), or run recommended routing."
+        )
+        raise SystemExit(1)
+    if report.transient:
+        print(
+            f"\n{len(report.transient)} was rate-limited or still waking up. That is capacity, "
+            "not a verdict — run this again in a minute to prove it."
+        )
+
+
 def cmd_bench(args) -> None:
     """Measure what this machine can actually run locally.
 
@@ -582,6 +637,13 @@ def main(argv=None) -> None:
     sp = sub.add_parser("bench", help="measure what this machine can run locally")
     sp.add_argument("--json", action="store_true", help="machine-readable output")
     sp.set_defaults(fn=cmd_bench)
+
+    sp = sub.add_parser(
+        "preflight", help="prove which configured models this account can really call"
+    )
+    sp.add_argument("--json", action="store_true", help="machine-readable output")
+    sp.add_argument("--timeout", type=int, default=25, help="seconds to wait per model")
+    sp.set_defaults(fn=cmd_preflight)
 
     sp = sub.add_parser("claude", help="use your Claude subscription, no API key")
     sp.add_argument(

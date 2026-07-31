@@ -15,6 +15,29 @@ Tout se règle depuis l'onglet Providers de la console, sans éditer `.env` :
 
 Quel que soit le fournisseur ou le modèle, les sorties destinées aux agents passent par le harness `corparius/structured.py` : même schéma en entrée, même dict validé en sortie. Un modèle bavard, un fence markdown ou une prose sans JSON donnent tous la même structure, avec un repli déterministe qui garde le tour de l'agent en vie.
 
+## Prouver ce que votre compte peut vraiment appeler
+
+Un catalogue liste les modèles qui **existent**, pas ceux que **vous** pouvez appeler. `/models` renvoie sans broncher des noms qui répondent 404 pour votre clé : un palier payant auquel vous n'êtes pas abonné, une préversion qui ne vous a jamais été accordée, une région où votre compte n'est pas. Router un palier sur cette liste, c'est configurer un modèle qui échoue au premier tour réel, avec une entreprise qui en dépend.
+
+```text
+corparius preflight
+```
+
+Un appel réel de huit jetons par palier configuré, rôle par rôle. Ce que chaque réponse veut dire :
+
+| Réponse | Verdict | Pourquoi |
+| --- | --- | --- |
+| 200 | **utilisable** | Prouvé, pas supposé |
+| 404, ou 400 nommant le modèle | **bloqué** | Ce compte ne peut pas l'appeler |
+| 401 / 403 | **bloqué** | C'est la clé, pas le modèle : changer de modèle n'aiderait pas |
+| 429, 500, 502, 503, 504, délai dépassé | **capacité momentanée** | Pas un verdict |
+
+Cette dernière ligne est le cœur du dispositif. Les paliers gratuits sur lesquels ce projet est construit démarrent à froid, limitent le débit et renvoient 503 pendant qu'un modèle se charge. Compter cela comme « inutilisable » rejetterait des modèles qui fonctionnent parfaitement une minute plus tard, ce qui serait pire que le catalogue qu'on remplace. Mesuré sur la configuration réelle du propriétaire : OVH a renvoyé `HTTP 500 TTL exceeded` pour un modèle qui marche.
+
+Ce que le préflight ne peut pas prouver est **nommé, pas ignoré** : `claudecode:` passe par le CLI local et `local:` par Ollama, aucun des deux ne parle cette API. Un préflight qui couvre trois paliers sur six et annonce que tout va bien serait pire qu'un qui avoue sa portée.
+
+**Rien ne se déclenche tout seul.** Une sonde coûte une vraie génération sur un vrai compte, et le doctor tourne à chaque démarrage du binaire et est servi en HTTP : sonder là serait l'erreur de l'endpoint interrogé en boucle, avec l'argent de quelqu'un au bout. Le doctor lit le dernier résultat enregistré et ne mesure jamais, exactement comme pour le banc matériel. Dans la console, le bouton se trouve dans l'onglet Fournisseurs, sous les paliers de routage.
+
 ## Registre
 
 Limites relevées en juin et juillet 2026. Elles évoluent, la documentation du provider fait foi.

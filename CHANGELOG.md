@@ -6,6 +6,35 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
+## Non publié
+
+- **Added : `corparius preflight`, et un bouton « Prouver ces modèles ».**
+  Un catalogue liste les modèles qui *existent*, pas ceux que *vous* pouvez
+  appeler : `/models` renvoie des noms qui répondent 404 pour votre clé — un
+  palier payant auquel vous n'êtes pas abonné, une préversion jamais accordée,
+  une région où votre compte n'est pas. Router un palier là-dessus configure un
+  modèle qui échoue au premier tour réel. Le préflight appelle chaque palier
+  configuré pour de vrai, huit jetons, rôle par rôle.
+
+  **La classification est tout le dispositif.** Un 404 (ou un 400 qui nomme le
+  modèle) bloque ; un 401/403 bloque en disant que c'est la clé et non le
+  modèle ; mais un 429, un 500, un 503 ou un délai dépassé sont signalés comme
+  **capacité momentanée**, jamais comme un verdict. Les paliers gratuits sur
+  lesquels ce projet est bâti démarrent à froid : les rejeter jetterait des
+  modèles qui marchent une minute plus tard, ce qui serait pire que le
+  catalogue remplacé. Mesuré sur la configuration réelle du propriétaire — OVH
+  a renvoyé `HTTP 500 TTL exceeded` pour un modèle parfaitement utilisable.
+
+  Ce qu'il ne peut pas prouver est nommé plutôt qu'ignoré (`claudecode:` passe
+  par le CLI local, `local:` par Ollama). Et rien ne se déclenche seul : une
+  sonde coûte une vraie génération, donc le doctor lit le dernier résultat
+  enregistré et ne mesure jamais — même séparation que le banc matériel.
+
+  Deux défauts trouvés en l'exécutant : `llm_fallback` est une liste et non une
+  chaîne, donc aucun repli n'était analysé ; et un `content: null` (le palier
+  gratuit d'openrouter) devenait la chaîne « None » comme si le modèle l'avait
+  dite.
+
 ## 0.3.0 — la page vue par quelqu'un qui la regarde, et l'exploitant guidé
 
 Presque tout ici vient d'une session réelle sur une entreprise réelle : des

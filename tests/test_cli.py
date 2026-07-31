@@ -355,7 +355,11 @@ def test_skills_install_starter_lands_scoped_and_is_idempotent(tmp_path, monkeyp
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     cli.main(["skills", "install", "starter"])
     first = capsys.readouterr().out
-    assert "7 skill(s)" in first
+    # Counted from what is actually shipped, not a literal that has to be edited
+    # every time a skill is added. What matters is that install lands all of
+    # them, not that the number is any particular value.
+    shipped = len(list(Path("packaging/skill-pack-starter/skills").glob("*/SKILL.md")))
+    assert f"{shipped} skill(s)" in first
     cli.main(["skills", "list"])
     listed = capsys.readouterr().out
     assert "EVERY TOOL" not in listed, "a shipped skill must never be unscoped"
@@ -474,6 +478,43 @@ def test_the_frozen_launcher_hands_a_subcommand_to_the_cli(monkeypatch, tmp_path
     monkeypatch.setattr(_sys, "argv", ["corparius", "skills", "list"])
     assert launcher.main() == 0
     assert seen["argv"] == ["skills", "list"]
+
+
+def test_the_frozen_launcher_answers_help_instead_of_opening_a_browser(monkeypatch, tmp_path):
+    """Found by building the binary and running it, not by reading the code.
+    `corparius.exe --help` fell into "only flags serves the console", so asking
+    what the program can do launched a browser — and on this machine it then
+    failed on a port already in use and printed an error about ports to someone
+    who had asked for help.
+
+    `--no-browser` stays a console flag, because that is what it is for.
+    """
+    import sys as _sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packaging"))
+    try:
+        import launcher
+    finally:
+        sys.path.pop(0)
+
+    monkeypatch.setattr(launcher, "_prepare_home", lambda: None)
+    seen: list[list[str]] = []
+    monkeypatch.setattr("corparius.cli.main", seen.append)
+    for flag in ("--help", "-h", "--version"):
+        monkeypatch.setattr(_sys, "argv", ["corparius", flag])
+        assert launcher.main() == 0, flag
+    assert seen == [["--help"], ["-h"], ["--version"]]
+
+    # ...and the console flag still opens the console: it must reach serve(),
+    # never the CLI.
+    reached = {}
+    monkeypatch.setattr(launcher, "_announce_update", lambda: None)
+    monkeypatch.setattr("corparius.doctor.main", lambda quiet=False: None)
+    monkeypatch.setattr("corparius.webui.serve", lambda *a, **k: reached.setdefault("ui", True))
+    monkeypatch.setattr("corparius.cli.main", lambda argv: pytest.fail(f"CLI got {argv}"))
+    monkeypatch.setattr(_sys, "argv", ["corparius", "--no-browser"])
+    launcher.main()
+    assert reached.get("ui")
 
 
 def test_the_frozen_launcher_still_serves_the_console_with_no_command(monkeypatch):

@@ -74,8 +74,13 @@ def test_routing_check_flags_an_incoherent_tier_with_a_fix(tmp_path, monkeypatch
 
 def test_routing_check_is_green_when_every_tier_resolves(tmp_path, monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "gsk_x")
-    from corparius import cfg
+    from corparius import cfg, doctor
 
+    # Setting a key makes `_check_model_catalog` proceed, and it asks the
+    # provider for real. This test is about the *routing* check, and a suite
+    # that dials out to a third party fails for reasons that have nothing to do
+    # with the code under test.
+    monkeypatch.setattr(doctor, "list_models", lambda name, timeout=8: [])
     cfg.invalidate()
     s = _s(
         tmp_path,

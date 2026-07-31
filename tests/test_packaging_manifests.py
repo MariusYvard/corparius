@@ -53,9 +53,8 @@ def test_every_declared_checksum_is_a_real_sha256():
             assert re.fullmatch(r"[0-9a-fA-F]{64}", digest), f"{path}: {digest!r}"
 
 
-def test_every_manifest_describes_the_same_version_as_the_package():
-    """A manifest pinned to an older tag installs an older corparius while the
-    README says it is current. Two of these were a whole release behind."""
+def _declared():
+    """The version each manifest says it installs."""
     found = {}
     found[str(CASK)] = re.search(r'version "([^"]+)"', CASK.read_text(encoding="utf-8")).group(1)
     found[str(SCOOP)] = json.loads(SCOOP.read_text(encoding="utf-8"))["version"]
@@ -63,19 +62,49 @@ def test_every_manifest_describes_the_same_version_as_the_package():
         match = re.search(r"^PackageVersion: (\S+)$", path.read_text(encoding="utf-8"), re.M)
         if match:
             found[str(path)] = match.group(1)
-    wrong = {k: v for k, v in found.items() if v != __version__}
-    assert not wrong, f"corparius is {__version__}; these say {wrong}"
+    return found
 
 
-def test_every_download_url_points_at_the_declared_version():
+def _tuple(version: str):
+    return tuple(int(p) for p in re.findall(r"\d+", version))
+
+
+def test_no_manifest_is_ahead_of_the_package_or_disagrees_with_the_others():
+    """The manifests describe the **latest published release**, not the working
+    tree. Between bumping `__version__` and the release actually shipping, they
+    legitimately name the previous version — that is the truth, not drift, and
+    the `stamp-manifests` job moves them forward once the assets exist.
+
+    This checked `== __version__` at first, which would have failed CI on main
+    the moment anyone bumped the version, before a release could possibly have
+    run. What actually has to hold: never ahead of the code, and all of them
+    agreeing with each other, because they install the same program.
+    """
+    found = _declared()
+    assert found, "no manifest declares a version at all"
+    assert len(set(found.values())) == 1, f"the manifests disagree: {found}"
+
+    declared = next(iter(found.values()))
+    assert _tuple(declared) <= _tuple(__version__), (
+        f"manifests say {declared}, which is ahead of corparius {__version__} — "
+        "they would install something that does not exist"
+    )
+
+
+def test_every_download_url_points_at_the_version_its_own_manifest_declares():
     """The version field and the url can drift apart independently, and only the
-    url decides what a user actually downloads."""
+    url decides what a user actually downloads. Anchored on each manifest's own
+    declared version rather than on `__version__`, for the reason above."""
+    found = _declared()
     for path in _manifests():
         text = path.read_text(encoding="utf-8")
+        declared = found.get(str(path)) or next(iter(found.values()))
         for tag in re.findall(r"/releases/download/v([^/]+)/", text):
             # Scoop's autoupdate block keeps a literal $version template; that is
             # the point of it, and it must survive stamping.
-            assert tag in (__version__, "$version", "#{version}"), f"{path}: v{tag}"
+            assert tag in (declared, "$version", "#{version}"), (
+                f"{path} declares v{declared} but downloads v{tag}"
+            )
 
 
 def test_stamping_a_copy_produces_valid_manifests(tmp_path):

@@ -109,6 +109,36 @@ was released.
   mesurée, puis fiabilité, puis débit et latence. Un modèle jamais mesuré n'est
   pas pénalisé — l'absence de preuve n'est pas une preuve. Schéma 11.
 
+- **Added : le routage tient compte de ce qu'un modèle *est*.** Mesurer prouve
+  qu'un modèle répond et à quelle vitesse ; ça ne dit rien de sa capacité à
+  tenir une stratégie, ce que le palier `hard` a précisément besoin de savoir.
+  Nouveau `corparius/modelinfo.py`, trois sources étiquetées selon la règle du
+  dépôt : **Mesuré** (ce qu'il a fait ici), **Donné** (le catalogue du
+  fournisseur — contexte, date de création, paramètre `reasoning`), **Estimé**
+  (le nombre de paramètres lu dans le nom).
+
+  Le catalogue vient de l'endpoint public d'OpenRouter, un fournisseur déjà au
+  registre : 365 modèles décrits, sans clé. **Pas d'un classement de benchmarks
+  scrapé** — ce sont des produits web, pas des API versionnées, et en dépendre
+  ajouterait une source qui pourrit en silence, ce que ce dépôt a déjà payé.
+  Qui a un tableau de confiance pointe `CORP_MODEL_SCORES` vers son fichier.
+
+  **Le mesuré prime toujours sur le déclaré.** `gpt-oss-120b` annonce
+  `structured_outputs` et a été mesuré incapable de produire un objet JSON ;
+  il tombe dernier sur les trois paliers malgré sa fiche.
+
+  Chaque palier veut autre chose : `hard` pèse raisonnement, contexte,
+  génération et taille ; `trivial` le débit puis la petite taille ; `normal`
+  équilibre les deux. Vérifié sur des modèles réels — `hard` prend le 120B
+  raisonneur à 1 M de contexte, `trivial` le 8B à 800 tok/s.
+
+  Deux défauts trouvés en l'exécutant : `_normalise("groq:llama-3.3-70b")`
+  renvoyait `"groq"` — le préfixe fournisseur cassait toute correspondance, en
+  silence ; et le routage faisait un **appel réseau**, au point qu'un test
+  unitaire du CLI appelait openrouter en vrai et que 400 Ko de catalogue
+  atterrissaient dans la table `settings` de l'exploitant. Le catalogue a sa
+  propre table (schéma 12) et le routage ne sort plus jamais.
+
 - **Added : `corparius preflight --all`.** La passe complète depuis un
   terminal, pour qui est en SSH ou en cron et n'a pas le bouton. Même
   comptabilité, et la même règle : le prix est annoncé avant, et rien ne part

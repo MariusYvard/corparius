@@ -249,7 +249,14 @@ def check(timeout: int = 60, lang="en") -> dict:
     }
 
 
-def plan(configured=None, local_trivial: str = "", all_tiers: bool = False, proven=None) -> dict:
+def plan(
+    configured=None,
+    local_trivial: str = "",
+    all_tiers: bool = False,
+    proven=None,
+    catalogue=None,
+    scores=None,
+) -> dict:
     """What the one-press setup would write, for a preview and for the payload.
 
     A Claude subscription is metered in usage windows, not in tokens, so
@@ -279,6 +286,8 @@ def plan(configured=None, local_trivial: str = "", all_tiers: bool = False, prov
         hard=HARD_TIER,
         fallback_tail=FALLBACK_LADDER,
         proven=proven or None,
+        catalogue=catalogue or None,
+        scores=scores or None,
     )
     if routing is None:
         return {**TOGGLES, **TIERS}

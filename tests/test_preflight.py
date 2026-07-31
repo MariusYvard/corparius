@@ -893,3 +893,119 @@ def test_a_measurement_is_stored_and_accumulates(tmp_path):
     entry = preflight.proven_map(store)["groq"]["m"]
     assert entry["samples"] == 6 and entry["failures"] == 1
     store.close()
+
+
+# --------------------------------------------------------------------------
+# Capability: what a model is, not only what it did
+# --------------------------------------------------------------------------
+
+CATALOGUE = {
+    "llama3.18b": {
+        "context": 131072,
+        "created": 1721000000.0,
+        "reasoning": False,
+        "structured": True,
+        "params_b": 8.0,
+    },
+    "llama3.370b": {
+        "context": 131072,
+        "created": 1733000000.0,
+        "reasoning": False,
+        "structured": True,
+        "params_b": 70.0,
+    },
+    "nemotron3super120ba12b": {
+        "context": 1000000,
+        "created": 1773000000.0,
+        "reasoning": True,
+        "structured": True,
+        "params_b": 120.0,
+    },
+}
+BIG = "nvidia/nemotron-3-super-120b-a12b"
+
+
+def _measured(**k):
+    return {
+        "state": USABLE,
+        "tok_s": 100.0,
+        "json_ok": True,
+        "samples": 3,
+        "failures": 0,
+        "reliability": 1.0,
+        "ms": 500,
+        **k,
+    }
+
+
+SLICE = {
+    "llama-3.1-8b-instruct": _measured(tok_s=800.0, ms=200),
+    "llama-3.3-70b-versatile": _measured(tok_s=594.0, ms=900),
+    BIG: _measured(tok_s=60.0, ms=2500),
+}
+
+
+def test_the_hard_tier_takes_the_capable_model_not_the_fast_one():
+    """Strategy and code run a few times a day. A slow model that reasons, with
+    a 1M context and a 2026 generation, is the right trade there, and precisely
+    the wrong one for a social post every two hours."""
+    assert preflight.rank(SLICE, "hard", CATALOGUE)[0] == BIG
+
+
+def test_the_trivial_tier_takes_the_fast_small_one():
+    assert preflight.rank(SLICE, "trivial", CATALOGUE)[0] == "llama-3.1-8b-instruct"
+
+
+def test_normal_is_balanced_and_not_trivial_with_extra_steps():
+    """Sorting `normal` by speed first made it identical to `trivial`, which is
+    not a balance, it is speed with extra steps.
+
+    The separating case is a model that is neither the fastest nor the most
+    capable but good at both: `trivial` sorts it purely on speed, `normal`
+    promotes it. With only three perfectly anti-correlated models the two orders
+    legitimately coincide, so the fixture adds a fourth."""
+    mixed = dict(SLICE)
+    # Slower than the 8B, far more capable; faster than the 120B, less capable.
+    mixed["llama-3.3-70b-versatile"] = _measured(tok_s=594.0, ms=900)
+    trivial = preflight.rank(mixed, "trivial", CATALOGUE)
+    normal = preflight.rank(mixed, "normal", CATALOGUE)
+    assert normal.index(BIG) <= trivial.index(BIG)
+    # And neither is the hard ordering, which puts capability first outright.
+    assert preflight.rank(mixed, "hard", CATALOGUE) not in (trivial, normal)
+
+
+def test_measured_beats_declared_on_every_tier():
+    """The rule the whole module rests on. A real provider advertises
+    `structured_outputs` and was measured unable to return a JSON object; no
+    amount of declared capability outranks having watched it fail."""
+    crippled = dict(SLICE)
+    crippled[BIG] = _measured(tok_s=60.0, json_ok=False)
+    for tier in ("trivial", "normal", "hard"):
+        assert preflight.rank(crippled, tier, CATALOGUE)[-1] == BIG, tier
+
+
+def test_an_operator_score_outranks_the_derived_signals():
+    """Someone who supplied a table knows something this code does not."""
+    scores = {"llama3.18b": 99.0}
+    assert preflight.rank(SLICE, "hard", CATALOGUE, scores)[0] == "llama-3.1-8b-instruct"
+
+
+def test_with_no_catalogue_ranking_is_what_it_was():
+    """A machine that has never fetched the catalogue must not find itself
+    routed differently by accident."""
+    assert preflight.rank(SLICE, "normal") == preflight.rank(SLICE, "normal", {})
+
+
+def test_routing_asks_for_the_right_tier():
+    """The trivial tier and the hard tier must not receive the same model just
+    because one ranking function serves both."""
+    from corparius.llm import OPENAI_COMPAT_PROVIDERS, recommended_routing
+
+    default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
+    # The default is itself one of the models in SLICE, so it has to be marked
+    # blocked *after* the spread — writing it before let the usable entry
+    # overwrite it, and the routing then had no reason to look further.
+    proven = {"groq": {**SLICE, default: {"state": BLOCKED}}}
+    plan = recommended_routing(["groq"], proven=proven, catalogue=CATALOGUE)
+    assert plan["CORP_HARD_MODEL"] == f"groq:{BIG}"
+    assert plan["CORP_TRIVIAL_MODEL"] == "groq:llama-3.1-8b-instruct"

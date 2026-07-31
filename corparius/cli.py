@@ -269,6 +269,15 @@ def cmd_preflight(args) -> None:
         print(f"Remembered for {args.provider}, so the console can offer the ones that answered.")
         return
 
+    # Refresh what the providers say a model *is*, alongside measuring what it
+    # does. This is the one command that already goes to the network on purpose,
+    # so it is the right place — routing itself never fetches.
+    from . import modelinfo
+
+    catalogue = modelinfo.refresh(_store())
+    if catalogue:
+        print(f"Model catalogue: {len(catalogue)} models described by their providers.")
+
     plan = preflight.targets(settings)
     if not plan:
         print("No tier points at an API provider, so there is nothing to call.")
@@ -402,7 +411,7 @@ def cmd_claude(args) -> None:
 
     store = _store()
     local_trivial, _why = recommended_local(store, Settings())
-    from . import preflight
+    from . import modelinfo, preflight
 
     plan = claudecli.plan(
         connected_providers(),
@@ -411,6 +420,8 @@ def cmd_claude(args) -> None:
         # What a preflight proved, so this never writes a tier the key
         # cannot call. Empty until one has been run.
         proven=preflight.proven_map(store),
+        catalogue=modelinfo.cached(store),
+        scores=modelinfo.operator_scores(),
     )
     for key, value in plan.items():
         store.set_setting(key, value)

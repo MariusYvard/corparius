@@ -825,13 +825,15 @@ def _claude_setup(state: UiState, all_tiers: bool = False) -> dict:
     # and two four-second connect timeouts on a machine with no Ollama exceeded
     # the console client's own timeout.
     local_trivial, _why = hardware.recommended_local(state.store(), _fresh_settings())
-    from . import preflight
+    from . import modelinfo, preflight
 
     applied = claudecli.plan(
         connected_providers(),
         local_trivial,
         all_tiers=all_tiers,
         proven=preflight.proven_map(state.store()),
+        catalogue=modelinfo.cached(state.store()),
+        scores=modelinfo.operator_scores(),
     )
     _persist(state, applied)
     payload = _providers_payload()
@@ -1418,7 +1420,7 @@ def _route_tiers_recommend(ctx):
     # What a preflight actually proved, so "recommended" never writes a tier
     # this key cannot call. Empty until someone runs one, and then this behaves
     # exactly as it did before.
-    from . import preflight
+    from . import modelinfo, preflight
 
     routing = recommended_routing(
         connected_providers(),
@@ -1426,6 +1428,8 @@ def _route_tiers_recommend(ctx):
         hard=claudecli.HARD_TIER if claudecli.already_on() else "",
         fallback_tail=claudecli.FALLBACK_LADDER if claudecli.already_on() else (),
         proven=preflight.proven_map(ctx.store()),
+        catalogue=modelinfo.cached(ctx.store()),
+        scores=modelinfo.operator_scores(),
     )
     if routing is None:
         return 400, {

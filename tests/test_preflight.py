@@ -321,3 +321,112 @@ def test_a_cold_provider_does_not_make_the_doctor_complain(tmp_path, monkeypatch
     level, _, message = _check_preflight(Settings())[:3]
     assert level == "ok"
     assert "rate-limited or cold" in message and "not rejected" in message
+
+
+# --------------------------------------------------------------------------
+# What is remembered, per provider
+# --------------------------------------------------------------------------
+
+
+def test_a_verdict_is_remembered_per_provider_and_model(tmp_path):
+    """The first version kept one report per run and overwrote it, so the same
+    404s were rediscovered every time. Measured on NVIDIA with a real key: 10 of
+    18 catalogue entries answered 404. That is worth keeping."""
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    preflight.remember(
+        store,
+        [
+            preflight.Probe("nvidia", "meta/llama-3.1-8b-instruct", state=USABLE, status=200),
+            preflight.Probe("nvidia", "nvidia/nv-embed-v1", state=BLOCKED, status=404),
+            preflight.Probe("groq", "llama-3.3-70b-versatile", state=USABLE, status=200),
+        ],
+    )
+    assert preflight.known(store) == {
+        "nvidia": ["meta/llama-3.1-8b-instruct"],
+        "groq": ["llama-3.3-70b-versatile"],
+    }
+    assert preflight.known(store, "nvidia") == {"nvidia": ["meta/llama-3.1-8b-instruct"]}
+    assert len(store.known_probes()) == 3
+    store.close()
+
+
+def test_a_later_run_updates_a_verdict_instead_of_adding_a_second(tmp_path):
+    """A model that was cold last week and answers today must end up with
+    today's verdict, not two rows disagreeing."""
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    preflight.remember(store, [preflight.Probe("ovh", "m", state=CAPACITY, status=503)])
+    preflight.remember(store, [preflight.Probe("ovh", "m", state=USABLE, status=200)])
+    rows = store.known_probes("ovh")
+    assert len(rows) == 1 and rows[0]["state"] == USABLE
+    store.close()
+
+
+def test_nothing_is_remembered_when_nothing_was_called(tmp_path):
+    """No key means no knowledge. Writing "unknown" would let a later run treat
+    an unasked question as an answered one."""
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    preflight.remember(store, [preflight.Probe("groq", "m", state=UNKNOWN, detail="no key set")])
+    assert store.known_probes() == []
+    store.close()
+
+
+def test_a_catalogue_sweep_spreads_across_the_list_rather_than_taking_the_front(monkeypatch):
+    """Providers list alphabetically. The first twenty of "01-ai…" through
+    "ai21labs…" are not a sample of a 102-model catalogue."""
+    from corparius import llm
+
+    catalogue = [f"m{i:03d}" for i in range(100)]
+    monkeypatch.setattr(llm, "list_models", lambda name, timeout=8: catalogue)
+    monkeypatch.setattr(
+        preflight, "probe", lambda p, m, tier="", timeout=0: preflight.Probe(p, m, tier, USABLE)
+    )
+    got = [p.model for p in preflight.probe_catalogue("nvidia", limit=10)]
+    assert len(got) == 10
+    assert got[0] == "m000" and got[-1] != "m009", "it took the front of the list"
+    assert len(set(got)) == 10
+
+
+def test_a_provider_with_no_catalogue_is_not_a_crash(monkeypatch):
+    from corparius import llm
+
+    def boom(name, timeout=8):
+        raise requests.ConnectionError("no")
+
+    monkeypatch.setattr(llm, "list_models", boom)
+    assert preflight.probe_catalogue("nvidia") == []
+
+
+def test_the_model_picker_hides_what_is_proved_uncallable(tmp_path, monkeypatch):
+    """The whole point of remembering. Offering a name known to 404 is worse
+    than offering nothing."""
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    from corparius import llm, webui
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    preflight.remember(
+        store,
+        [
+            preflight.Probe("nvidia", "good", state=USABLE, status=200),
+            preflight.Probe("nvidia", "bad", state=BLOCKED, status=404),
+        ],
+    )
+    store.close()
+    monkeypatch.setattr(llm, "list_models", lambda name, timeout=8: ["good", "bad", "untried"])
+
+    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    ctx = types.SimpleNamespace(body={"name": "nvidia"}, state=state, lang="en")
+    status, payload = webui._route_provider_models(ctx)
+    state.close()
+
+    assert status == 200 and payload["ok"]
+    assert payload["proved"] == {"good": USABLE, "bad": BLOCKED}
+    # `bad` is still listed; the page drops it, and the count says how many.
+    assert "untried" in payload["models"], "an unprobed model is still offered"

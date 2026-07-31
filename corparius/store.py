@@ -74,13 +74,17 @@ CREATE TABLE IF NOT EXISTS drafts (
     state TEXT, note TEXT, ts REAL, published_at REAL
 );
 CREATE INDEX IF NOT EXISTS drafts_by_company ON drafts (company, state, ts);
+CREATE TABLE IF NOT EXISTS model_probes (
+    provider TEXT, model TEXT, state TEXT, detail TEXT, status INTEGER, ms INTEGER, ts REAL,
+    PRIMARY KEY (provider, model)
+);
 """
 
 # Bump this and add a migration below whenever the schema changes in a way that
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -196,6 +200,24 @@ def _migration_9(db: sqlite3.Connection) -> None:
         pass
 
 
+def _migration_10(db: sqlite3.Connection) -> None:
+    """What each provider's models actually did when called.
+
+    A catalogue lists models that exist. On NVIDIA, 8 of 14 sampled catalogue
+    entries answered 404 for the owner's own key. Knowing that is worth keeping:
+    the previous preflight overwrote one report per run and remembered nothing
+    per provider, so the same 404s were rediscovered every time.
+
+    Keyed on (provider, model) so a later run updates a verdict instead of
+    appending a second one, and so knowledge accumulates across runs.
+    """
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS model_probes ("
+        " provider TEXT, model TEXT, state TEXT, detail TEXT, status INTEGER, ms INTEGER,"
+        " ts REAL, PRIMARY KEY (provider, model))"
+    )
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 MIGRATIONS = {
     1: _migration_1,
@@ -207,6 +229,7 @@ MIGRATIONS = {
     7: _migration_7,
     8: _migration_8,
     9: _migration_9,
+    10: _migration_10,
 }
 
 
@@ -801,6 +824,36 @@ class Store:
             "SELECT COUNT(*) n FROM drafts WHERE company=? AND state=?", (company, state)
         ).fetchone()
         return int(row["n"])
+
+    @_locked
+    def record_probe(self, provider, model, state, detail="", status=0, ms=0) -> None:
+        """Remember what one model did when it was actually called.
+
+        UPSERT rather than INSERT: a model that was cold last week and answers
+        today should end up with today's verdict, not two rows disagreeing. The
+        knowledge accumulates across runs — the point of keeping it at all is
+        not rediscovering the same 404s every time.
+        """
+        self.db.execute(
+            "INSERT INTO model_probes (provider, model, state, detail, status, ms, ts)"
+            " VALUES (?,?,?,?,?,?,?)"
+            " ON CONFLICT(provider, model) DO UPDATE SET"
+            " state=excluded.state, detail=excluded.detail, status=excluded.status,"
+            " ms=excluded.ms, ts=excluded.ts",
+            (provider, model, state, detail, int(status), int(ms), time.time()),
+        )
+        self.db.commit()
+
+    @_locked
+    def known_probes(self, provider: str = "") -> list[dict]:
+        """Everything ever proved, newest verdict per (provider, model)."""
+        q = "SELECT * FROM model_probes"
+        args: list = []
+        if provider:
+            q += " WHERE provider=?"
+            args.append(provider)
+        rows = self.db.execute(q + " ORDER BY provider, model", args).fetchall()
+        return [dict(r) for r in rows]
 
     @_locked
     def count_unpublished(self, company) -> int:

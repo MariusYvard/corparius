@@ -102,8 +102,16 @@ def main() -> int:
     # anyone who downloaded the binary, which is the install path the README
     # puts first. The files were even bundled: the starter skill pack rides
     # inside the executable with nothing able to ask for it.
+    #
+    # `--help` is the exception to "only flags serves the console". Somebody who
+    # downloads one file and types `corparius --help` is asking what it can do,
+    # and answering by opening a browser is the same failure as the one above,
+    # one step smaller: it was launching the console, discovering the port was
+    # taken, and printing an error about a port to a person who asked for help.
+    # `--no-browser` stays a console flag, because that is what it is for.
     argv = sys.argv[1:]
-    if argv and not argv[0].startswith("-"):
+    HELP = {"-h", "--help", "--version", "-V"}
+    if argv and (not argv[0].startswith("-") or argv[0] in HELP):
         from corparius.cli import main as cli_main
 
         cli_main(argv)  # commands that fail raise SystemExit themselves

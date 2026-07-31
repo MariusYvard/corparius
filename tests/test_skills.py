@@ -8,6 +8,8 @@ not become the largest line in the token budget.
 
 import types
 
+import pytest
+
 from corparius.agents import ROSTER, _messages, language_line
 from corparius.models import AgentRole
 from corparius.skills import Skill, SkillLoader, parse
@@ -151,8 +153,8 @@ def test_the_shipped_example_skill_names_real_tools():
     from corparius import paths
 
     path = paths.companies_dir() / "example" / "skills" / "outreach-voice" / "SKILL.md"
-    if not path.is_file():  # a wheel install without the example seeded yet
-        return
+    if not path.is_file():
+        pytest.skip("a wheel install without the example seeded yet")
     skill = parse(path)
     assert isinstance(skill, Skill)
     assert skill.allowed_tools
@@ -209,8 +211,8 @@ def test_every_shipped_example_skill_is_well_formed():
     from corparius.skills import DEFAULT_MAX_CHARS, SkillLoader
 
     base = paths.companies_dir() / "example" / "skills"
-    if not base.is_dir():  # a wheel install without the example seeded yet
-        return
+    if not base.is_dir():
+        pytest.skip("a wheel install without the example seeded yet")
     loader = SkillLoader([(base, "example")])
     assert len(loader.skills) >= 3
     for skill in loader.skills:
@@ -230,7 +232,7 @@ def test_the_shipped_template_is_well_formed():
 
     path = Path("packaging/skill-template/SKILL.md")
     if not path.is_file():
-        return
+        pytest.skip("a wheel install without packaging/")
     skill = parse(path)
     assert skill is not None and skill.allowed_tools
     assert not skill.unscoped
@@ -246,10 +248,16 @@ def test_the_starter_pack_passes_the_bar_it_teaches():
     from corparius.skills import DEFAULT_MAX_CHARS, SkillLoader
 
     base = Path("packaging/skill-pack-starter/skills")
-    if not base.is_dir():  # a wheel install without packaging/
-        return
+    if not base.is_dir():
+        pytest.skip("a wheel install without packaging/")
     loader = SkillLoader([(base, "starter")])
-    assert len(loader.skills) == 7
+    # Counted from the folders on disk, not written here as a literal. A literal
+    # has to be edited every time a skill is added — it already broke twice —
+    # and each edit is a chance to change the number without looking at why. This
+    # still fails on the thing that matters: a skill present but not loading.
+    shipped = sorted(p.parent.name for p in base.glob("*/SKILL.md"))
+    assert sorted(s.name for s in loader.skills) == shipped
+    assert len(shipped) >= 6, "the starter pack lost skills"
     for skill in loader.skills:
         assert skill.allowed_tools, f"{skill.name} declares no allowed-tools"
         assert [t for t in skill.allowed_tools if t not in TOOLS] == [], skill.name
@@ -269,7 +277,7 @@ def test_the_starter_pack_covers_jobs_that_had_nothing():
 
     base = Path("packaging/skill-pack-starter/skills")
     if not base.is_dir():
-        return
+        pytest.skip("a wheel install without packaging/")
     loader = SkillLoader([(base, "starter")])
     for tool in ("draft_social_post", "triage_inbox", "reconcile_stripe", "scan_competitors"):
         assert loader.for_tool(tool), f"nothing covers {tool}"
@@ -287,7 +295,7 @@ def test_the_starter_pack_credits_where_it_came_from():
 
     base = Path("packaging/skill-pack-starter/skills")
     if not base.is_dir():
-        return
+        pytest.skip("a wheel install without packaging/")
     for path in base.glob("*/SKILL.md"):
         head = path.read_text(encoding="utf-8")
         source = next((ln for ln in head.splitlines() if ln.startswith("source:")), "")

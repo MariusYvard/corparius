@@ -14,6 +14,7 @@ against the owner's own providers before these were written — groq answered in
 which is exactly the cold-start case that must never count as a verdict.
 """
 
+import time
 import types
 
 import pytest
@@ -574,3 +575,128 @@ def test_the_progress_endpoint_reads_state_and_calls_nobody(tmp_path, monkeypatc
     state.close()
     assert status == 200
     assert payload["known"] == 1 and payload["usable_by_provider"] == {"groq": 1}
+
+
+# --------------------------------------------------------------------------
+# What the measurement is actually for
+# --------------------------------------------------------------------------
+
+
+def test_recommended_routing_never_writes_a_tier_proved_uncallable():
+    """The point of measuring 785 models. Without this the knowledge only
+    filtered a dropdown, and "recommended routing" kept writing the pinned
+    literal — which is exactly how openrouter's rotted default shipped."""
+    from corparius.llm import OPENAI_COMPAT_PROVIDERS, recommended_routing
+
+    default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
+    proven = {
+        "groq": {
+            default: {"state": BLOCKED, "ms": 0},
+            "slow-but-works": {"state": USABLE, "ms": 4000},
+            "fast-and-works": {"state": USABLE, "ms": 300},
+        }
+    }
+    plan = recommended_routing(["groq"], proven=proven)
+    assert plan["CORP_NORMAL_MODEL"] == "groq:fast-and-works", "it picked the fastest proved model"
+    assert default not in plan["CORP_NORMAL_MODEL"]
+
+
+def test_a_working_default_is_never_second_guessed_for_a_faster_one():
+    """The defaults are chosen for capability, not latency. Only a *blocked*
+    default is replaced."""
+    from corparius.llm import OPENAI_COMPAT_PROVIDERS, recommended_routing
+
+    default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
+    proven = {
+        "groq": {
+            default: {"state": USABLE, "ms": 4000},
+            "something-faster": {"state": USABLE, "ms": 100},
+        }
+    }
+    assert recommended_routing(["groq"], proven=proven)["CORP_NORMAL_MODEL"] == f"groq:{default}"
+
+
+def test_with_nothing_measured_routing_is_exactly_what_it_was():
+    """No preflight run means no knowledge, and no knowledge must not change
+    anybody's configuration."""
+    from corparius.llm import recommended_routing
+
+    assert recommended_routing(["groq", "cerebras"]) == recommended_routing(
+        ["groq", "cerebras"], proven={}
+    )
+
+
+def test_a_blocked_default_with_no_alternative_is_kept_and_reported(caplog):
+    """Swapping it for nothing would be worse. Say so instead."""
+    import logging
+
+    from corparius.llm import OPENAI_COMPAT_PROVIDERS, recommended_routing
+
+    default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
+    proven = {"groq": {default: {"state": BLOCKED, "ms": 0}}}
+    with caplog.at_level(logging.WARNING):
+        plan = recommended_routing(["groq"], proven=proven)
+    assert plan["CORP_NORMAL_MODEL"] == f"groq:{default}"
+    assert "not callable" in caplog.text
+
+
+# --------------------------------------------------------------------------
+# Verdicts age
+# --------------------------------------------------------------------------
+
+
+def test_a_capacity_verdict_is_always_worth_asking_again(tmp_path):
+    """It means "the provider was busy", which is not knowledge and never
+    becomes knowledge by sitting in a table."""
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    preflight.remember(
+        store,
+        [
+            preflight.Probe("ovh", "cold", state=CAPACITY, status=503),
+            preflight.Probe("groq", "fine", state=USABLE, status=200),
+        ],
+    )
+    worth = preflight.stale(store)
+    assert ("ovh", "cold", CAPACITY) in worth
+    assert not any(m == "fine" for _, m, _ in worth)
+    store.close()
+
+
+def test_an_old_verdict_is_worth_asking_again(tmp_path):
+    """A model blocked six months ago may be open today."""
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    preflight.remember(store, [preflight.Probe("groq", "old", state=BLOCKED, status=404)])
+    store.db.execute("UPDATE model_probes SET ts=?", (time.time() - 90 * 86400,))
+    store.db.commit()
+    assert ("groq", "old", BLOCKED) in preflight.stale(store)
+    assert preflight.stale(store, days=365) == []
+    store.close()
+
+
+def test_the_map_carries_the_age_so_nothing_reads_as_current_fact(tmp_path):
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    preflight.remember(store, [preflight.Probe("groq", "m", state=USABLE, status=200)])
+    store.db.execute("UPDATE model_probes SET ts=?", (time.time() - 10 * 86400,))
+    store.db.commit()
+    entry = preflight.proven_map(store)["groq"]["m"]
+    assert entry["age_days"] == 10 and entry["state"] == USABLE
+    store.close()
+
+
+def test_a_sweep_asks_the_provisional_questions_first(tmp_path, monkeypatch):
+    """A sweep stopped early should have spent its calls on what was worth
+    asking, not on re-confirming what was proved this morning."""
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    preflight.remember(store, [preflight.Probe("groq", "c", state=CAPACITY, status=503)])
+    seen = _sweepable(monkeypatch, {"groq": ["a", "b", "c", "d"]})
+    preflight.sweep(store, timeout=1)
+    store.close()
+    assert seen[0] == ("groq", "c"), f"the provisional one was not asked first: {seen}"

@@ -52,6 +52,24 @@ was released.
   Et ça sert : le sélecteur de modèles de la console retire les noms prouvés
   non appelables et étiquette ceux qui ont répondu.
 
+- **Added : « Vérifier tous les modèles » — une passe sur tout, en une fois.**
+  Tous les modèles de tous les fournisseurs configurés, un appel réel chacun.
+  Sur la machine du propriétaire, cela représente **785 appels sur 10
+  fournisseurs** (openrouter 365, huggingface 128, nvidia 102…), et c'est
+  exactement pour ça que **le prix s'affiche d'abord** : lire les catalogues
+  coûte peu, les appeler non, et ce sont ses clés et ses quotas.
+
+  Le balayage tourne en arrière-plan avec sa progression, comme un
+  téléchargement Ollama, parce qu'aucune requête HTTP n'attendrait plusieurs
+  minutes. Les fournisseurs sont parcourus l'un après l'autre et non en
+  parallèle : ce sont des paliers gratuits limités en débit, et en marteler
+  quatre à la fois transforme chaque réponse en 429 et ne prouve rien.
+
+  **Chaque verdict est écrit dès qu'il arrive.** Vérifié en direct : un
+  balayage arrêté après 27 appels a conservé les 27. Perdre une heure d'appels
+  réels parce qu'un onglet s'est fermé serait un gâchis en soi. Un second
+  balayage simultané est refusé.
+
 ## 0.3.0 — la page vue par quelqu'un qui la regarde, et l'exploitant guidé
 
 Presque tout ici vient d'une session réelle sur une entreprise réelle : des

@@ -711,6 +711,7 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
           <button id="recommend-routing" class="primary" data-recommend data-i18n="prov.useRouting">Use recommended routing</button>
           <button id="save-tiers" data-i18n="prov.saveTiers">Save tiers</button>
           <button id="run-preflight" data-i18n="prov.preflight">Prove these models</button>
+          <button id="sweep-all" data-i18n="prov.sweepAll">Check every model</button>
           <span class="note" data-i18n="prov.format">Format: target:model, e.g. groq:llama-3.3-70b-versatile</span>
         </div>
         <!-- A catalogue lists models that exist, not models this key may call.
@@ -948,7 +949,7 @@ en: {
   "oll.install":"Not detected. Install it from",
   "prov.note":"Changes apply to new calls immediately and are saved to the .env file. Mock mode serves every call from a deterministic offline mock.",
   "prov.tiers":"Routing tiers","prov.saveTiers":"Save tiers",
-  "prov.preflight":"Prove these models","prov.proved":"proved","prov.modelsHidden":"({n} hidden: proved not callable with this key)","prov.preflightRunning":"Calling each one for eight tokens…",
+  "prov.preflight":"Prove these models","prov.sweepAll":"Check every model","prov.sweepStop":"Stop the sweep","prov.sweepPricing":"Reading each catalogue…","prov.sweepConfirm":"This calls {n} models across {p} providers, one real generation each. It uses your own keys and rate limits, and can take several minutes. Everything proved is kept even if you stop. Start?","prov.sweepRunning":"{n} called — now:","prov.sweepDone":"{n} models known. Usable per provider:","prov.proved":"proved","prov.modelsHidden":"({n} hidden: proved not callable with this key)","prov.preflightRunning":"Calling each one for eight tokens…",
   "prov.pf.usable":"usable","prov.pf.blocked":"blocked","prov.pf.capacity":"cold","prov.pf.unknown":"unknown","prov.pf.skipped":"not probed",
   "prov.pfSkippedWhy":"Not an OpenAI-compatible endpoint, so this cannot prove it.",
   "prov.pfNothing":"No tier points at an API provider, so there is nothing to call.","prov.format":"Format: target:model, e.g. groq:llama-3.3-70b-versatile",
@@ -1145,7 +1146,7 @@ fr: {
   "oll.install":"Non détecté. Installez-le depuis",
   "prov.note":"Les changements s'appliquent immédiatement aux nouveaux appels et sont écrits dans .env. Le mode mock sert chaque appel depuis un simulateur hors ligne.",
   "prov.tiers":"Tiers de routage","prov.saveTiers":"Enregistrer les tiers",
-  "prov.preflight":"Prouver ces modèles","prov.proved":"prouvé","prov.modelsHidden":"({n} masqués : prouvés non appelables avec cette clé)","prov.preflightRunning":"Appel de chacun sur huit jetons…",
+  "prov.preflight":"Prouver ces modèles","prov.sweepAll":"Vérifier tous les modèles","prov.sweepStop":"Arrêter le balayage","prov.sweepPricing":"Lecture de chaque catalogue…","prov.sweepConfirm":"Ceci appelle {n} modèles sur {p} fournisseurs, une vraie génération chacun. Cela consomme vos propres clés et quotas, et peut prendre plusieurs minutes. Tout ce qui est prouvé est conservé même si vous arrêtez. Lancer ?","prov.sweepRunning":"{n} appelés — en cours :","prov.sweepDone":"{n} modèles connus. Utilisables par fournisseur :","prov.proved":"prouvé","prov.modelsHidden":"({n} masqués : prouvés non appelables avec cette clé)","prov.preflightRunning":"Appel de chacun sur huit jetons…",
   "prov.pf.usable":"utilisable","prov.pf.blocked":"bloqué","prov.pf.capacity":"à froid","prov.pf.unknown":"inconnu","prov.pf.skipped":"non sondé",
   "prov.pfSkippedWhy":"Point d'accès non compatible OpenAI : impossible de le prouver ici.",
   "prov.pfNothing":"Aucun palier ne pointe vers un fournisseur API, il n'y a rien à appeler.","prov.format":"Format : cible:modèle, ex. groq:llama-3.3-70b-versatile",
@@ -1583,6 +1584,35 @@ document.addEventListener("click", async (ev) => {
   } catch (e) { toast(e.message, true); }
   loadPlugins();
 });
+
+/* The sweep runs in a worker thread; this only reads its progress. Each verdict
+   is written to the store the moment it arrives, so closing the tab or pressing
+   stop keeps everything proved so far — an hour of real calls is never lost to
+   a browser refresh. */
+async function pollSweep() {
+  const out = $("#preflight-out");
+  if (!out) return;
+  let d;
+  try { d = await api("/api/preflight/sweep"); }
+  catch { return; }
+  const s = d.sweep || {};
+  const counts = Object.entries(s.counts || {})
+    .map(([k, n]) => `${esc(t("prov.pf." + k))} ${n}`).join(" · ");
+  out.innerHTML = s.running
+    ? `<div class="kv"><span>${esc(t("prov.sweepRunning").replace("{n}", s.done || 0))}
+         <span class="mono">${esc(s.provider || "")}:${esc(s.model || "")}</span></span>
+       <span class="note">${counts}</span></div>`
+    : `<div class="kv"><span>${esc(t("prov.sweepDone").replace("{n}", d.known || 0))}</span>
+       <span class="note">${Object.entries(d.usable_by_provider || {})
+         .map(([p, n]) => `${esc(p)} ${n}`).join(" · ")}</span></div>`;
+  if (!s.running) stopSweep();
+}
+function stopSweep() {
+  if (state.sweepTimer) { clearInterval(state.sweepTimer); state.sweepTimer = null; }
+  const b = $("#sweep-all");
+  if (b) { b.textContent = t("prov.sweepAll"); b.disabled = false; }
+  api("/api/preflight/sweep", {stop: true}).catch(() => {});
+}
 
 /* Scope an unscoped skill: pick its tools, write them into its SKILL.md. */
 document.addEventListener("click", async (ev) => {
@@ -2310,6 +2340,26 @@ document.addEventListener("click", async e => {
           out.innerHTML = `<span class="note">${esc(t("prov.pfNothing"))}</span>`;
       } catch (e) { out.innerHTML = `<span class="badge danger">${esc(e.message)}</span>`; }
       b.disabled = false;
+    } else if (b.id === "sweep-all") {
+      /* Every model of every configured provider, one real call each. That can
+         be several hundred generations — NVIDIA alone advertises 102 — so the
+         price comes first and the operator agrees to it before anything runs.
+         It is their money and their rate limits. */
+      if (state.sweepTimer) return stopSweep();
+      const out = $("#preflight-out");
+      b.disabled = true;
+      out.innerHTML = `<span class="note">${esc(t("prov.sweepPricing"))}</span>`;
+      let est;
+      try { est = await api("/api/preflight/sweep", {estimate: true}); }
+      catch (e) { out.innerHTML = `<span class="badge danger">${esc(e.message)}</span>`; b.disabled = false; return; }
+      const providers = Object.keys(est.providers || {}).length;
+      const ask = t("prov.sweepConfirm").replace("{n}", est.total).replace("{p}", providers);
+      b.disabled = false;
+      if (!est.total || !confirm(ask)) { out.innerHTML = ""; return; }
+      await api("/api/preflight/sweep", {});
+      b.textContent = t("prov.sweepStop");
+      state.sweepTimer = setInterval(pollSweep, 1500);
+      pollSweep();
     } else if (b.hasAttribute("data-save-anthropic")) {
       const v = $("#anthropic-key").value.trim();
       if (!v) return toast(t("toast.pasteFirst"), true);

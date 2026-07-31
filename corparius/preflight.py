@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 import requests
 
 from . import cfg
-from .llm import OPENAI_COMPAT_PROVIDERS, _split
+from .llm import OPENAI_COMPAT_PROVIDERS, _split, list_models
 
 log = logging.getLogger("corparius.preflight")
 
@@ -273,8 +273,6 @@ def probe_catalogue(provider: str, limit: int = 0, timeout: int = TIMEOUT) -> li
     is a hundred real generations. Zero means all of them, which is a deliberate
     thing to ask for.
     """
-    from .llm import list_models
-
     try:
         models = list_models(provider, timeout=timeout)
     except (requests.RequestException, ValueError) as exc:
@@ -287,6 +285,76 @@ def probe_catalogue(provider: str, limit: int = 0, timeout: int = TIMEOUT) -> li
         step = max(1, len(models) // limit)
         models = models[::step][:limit]
     return [probe(provider, model, "catalogue", timeout=timeout) for model in models]
+
+
+def configured_providers() -> list[str]:
+    """Providers this machine has a key for, so a sweep does not spend a minute
+    proving that fourteen unconfigured endpoints are unconfigured."""
+    out = []
+    for name, spec in OPENAI_COMPAT_PROVIDERS.items():
+        if cfg.get(spec["key_env"], "").strip() or spec.get("key_optional"):
+            if cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base"):
+                out.append(name)
+    return sorted(out)
+
+
+def estimate(timeout: int = 8) -> dict:
+    """How many real calls a full sweep would be, before anyone commits to it.
+
+    Reading a catalogue is cheap; calling every entry in it is not. NVIDIA alone
+    advertises 102 models. An operator pressing "check everything" deserves the
+    number first — this is their money and their rate limits.
+    """
+    per: dict[str, int] = {}
+    for name in configured_providers():
+        try:
+            per[name] = len(list_models(name, timeout=timeout))
+        except (requests.RequestException, ValueError):
+            per[name] = 0
+    return {"providers": per, "total": sum(per.values())}
+
+
+def sweep(
+    store,
+    limit: int = 0,
+    timeout: int = TIMEOUT,
+    on_progress=None,
+    should_stop=None,
+) -> dict:
+    """Call every model of every configured provider, remembering as it goes.
+
+    Written to be interrupted and resumed: each verdict is stored the moment it
+    arrives, so a sweep stopped halfway has still taught the machine everything
+    it proved up to that point. Losing an hour of real calls because the last
+    provider timed out would be its own kind of waste.
+
+    Providers run one after another rather than in parallel on purpose. These
+    are rate-limited free tiers; hammering four at once is how a sweep turns
+    every answer into a 429 and proves nothing.
+    """
+    counts = {"usable": 0, "blocked": 0, "capacity": 0, "unknown": 0}
+    done = 0
+    for name in configured_providers():
+        if should_stop and should_stop():
+            break
+        try:
+            models = list_models(name, timeout=timeout)
+        except (requests.RequestException, ValueError) as exc:
+            log.warning("sweep: %s has no reachable catalogue: %s", name, exc)
+            continue
+        if limit > 0 and len(models) > limit:
+            step = max(1, len(models) // limit)
+            models = models[::step][:limit]
+        for model in models:
+            if should_stop and should_stop():
+                break
+            result = probe(name, model, "catalogue", timeout=timeout)
+            remember(store, [result])
+            counts[result.state] = counts.get(result.state, 0) + 1
+            done += 1
+            if on_progress:
+                on_progress(name, model, result, done)
+    return {"counts": counts, "probed": done}
 
 
 def remember(store, probes: list[Probe]) -> None:

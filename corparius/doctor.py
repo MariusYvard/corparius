@@ -8,6 +8,7 @@ import os
 import shutil
 import socket
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -717,6 +718,59 @@ def _check_tier_coherence(s: Settings) -> tuple:
     return ("ok", "routing", "every tier resolves to a configured provider")
 
 
+def _check_preflight(s: Settings) -> tuple:
+    """What the last real preflight proved. Reads the cache; never probes.
+
+    A probe is a real generation on a real account, and this function runs on
+    every launcher start and is served over HTTP — measuring here would be the
+    polled-endpoint mistake with somebody's money attached, exactly as for the
+    hardware bench. `corparius preflight` is the thing that measures.
+
+    A catalogue says a model *exists*. Only a call says this account may use it,
+    which is why this outranks `_check_model_catalog` and why that one now
+    stands down whenever a preflight has been run.
+    """
+    from . import preflight
+
+    if s.llm_mock:
+        return ("ok", "preflight", "mock mode: nothing to prove")
+    try:
+        from .store import Store
+
+        store = Store(s.data_path)
+    except Exception:
+        return ("ok", "preflight", "no store to read a previous run from")
+    try:
+        report = preflight.load(store)
+    finally:
+        store.close()
+    if not report.probes:
+        return (
+            "ok",
+            "preflight",
+            "never run. `corparius preflight` calls each configured model once, "
+            "for eight tokens, and says which ones this account can really use.",
+        )
+    age = max(0, int((time.time() - report.ts) / 3600))
+    blocked = report.blocking
+    if blocked:
+        return (
+            "warn",
+            "preflight",
+            f"{', '.join(f'{p.tier} ({p.provider}:{p.model})' for p in blocked)} answered "
+            f"as unusable on this account — {blocked[0].detail[:90]}. Pick another model in "
+            f"Providers. Measured {age}h ago.",
+            "recommend_routing",
+        )
+    usable = [p for p in report.probes if p.state == preflight.USABLE]
+    note = f"{len(usable)}/{len(report.probes)} configured model(s) answered for real, {age}h ago"
+    if report.transient:
+        # Not a failure: a cold free tier looks exactly like this, and calling it
+        # one would reject models that work a minute later.
+        note += f"; {len(report.transient)} was rate-limited or cold at the time, not rejected"
+    return ("ok", "preflight", note)
+
+
 def _check_model_catalog(s: Settings) -> tuple:
     """A configured model that the provider no longer lists.
 
@@ -783,6 +837,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_ollama(s),
         _check_providers(s),
         _check_tier_coherence(s),
+        _check_preflight(s),
         _check_model_catalog(s),
         _check_network(s),
         _check_claude_cli(s),

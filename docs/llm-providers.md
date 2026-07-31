@@ -36,6 +36,20 @@ Cette dernière ligne est le cœur du dispositif. Les paliers gratuits sur lesqu
 
 Ce que le préflight ne peut pas prouver est **nommé, pas ignoré** : `claudecode:` passe par le CLI local et `local:` par Ollama, aucun des deux ne parle cette API. Un préflight qui couvre trois paliers sur six et annonce que tout va bien serait pire qu'un qui avoue sa portée.
 
+### Balayer un catalogue entier, et s'en souvenir
+
+```text
+corparius preflight --provider nvidia --limit 18
+```
+
+C'est là que l'écart est le plus large. **Mesuré sur le compte du propriétaire : 10 des 18 entrées échantillonnées du catalogue NVIDIA répondent 404**, sur 102 annoncées. Choisir un palier dans cette liste, c'est jouer à pile ou face.
+
+L'échantillon est réparti sur tout le catalogue, pas pris au début : les fournisseurs listent par ordre alphabétique, et les vingt premiers de `01-ai/…` à `ai21labs/…` ne représentent rien. `--limit 0` appelle tout, ce qui est une chose délibérée à demander : chaque ligne est une vraie génération.
+
+Chaque verdict est **retenu par (fournisseur, modèle)** dans le store, et mis à jour plutôt que dupliqué : un modèle froid la semaine dernière qui répond aujourd'hui finit avec le verdict d'aujourd'hui. La connaissance s'accumule au lieu d'être redécouverte à chaque fois.
+
+À quoi ça sert : le sélecteur de modèles de la console **retire les noms prouvés non appelables** et étiquette ceux qui ont répondu. Proposer un nom dont on sait qu'il renvoie 404 est pire que de ne rien proposer.
+
 **Rien ne se déclenche tout seul.** Une sonde coûte une vraie génération sur un vrai compte, et le doctor tourne à chaque démarrage du binaire et est servi en HTTP : sonder là serait l'erreur de l'endpoint interrogé en boucle, avec l'argent de quelqu'un au bout. Le doctor lit le dernier résultat enregistré et ne mesure jamais, exactement comme pour le banc matériel. Dans la console, le bouton se trouve dans l'onglet Fournisseurs, sous les paliers de routage.
 
 ## Registre

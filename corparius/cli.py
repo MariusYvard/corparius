@@ -213,6 +213,36 @@ def cmd_preflight(args) -> None:
     if settings.llm_mock:
         print("Mock mode (CORP_LLM_MOCK=true): no provider to call. Nothing to prove.")
         raise SystemExit(1)
+
+    # `--provider` sweeps a whole catalogue instead of the configured tiers.
+    # This is where the gap is widest: on NVIDIA, 8 of 14 sampled entries
+    # answered 404 for a real key, out of 102 advertised.
+    if getattr(args, "provider", ""):
+        store = _store()
+        probes = preflight.probe_catalogue(args.provider, limit=args.limit, timeout=args.timeout)
+        if not probes:
+            print(f"{args.provider} did not answer with a catalogue, so there was nothing to try.")
+            raise SystemExit(1)
+        preflight.remember(store, probes)
+        usable = [p for p in probes if p.state == preflight.USABLE]
+        blocked = [p for p in probes if p.state == preflight.BLOCKED]
+        for p in probes:
+            print(f"  [{p.state:<8}] {p.model}")
+            if p.state != preflight.USABLE:
+                print(f"             {p.detail[:110]}")
+        print(
+            f"\n{len(usable)} usable, {len(blocked)} not callable with this key, "
+            f"{len(probes) - len(usable) - len(blocked)} cold or unclear, of {len(probes)} tried."
+        )
+        if not any(p.status for p in probes):
+            # Nothing was actually called — no key, or the endpoint never
+            # answered. Saying "remembered" here would claim knowledge that does
+            # not exist, which is the failure this whole command exists to end.
+            print("Nothing was called, so nothing was learned. Set the key first.")
+            raise SystemExit(1)
+        print(f"Remembered for {args.provider}, so the console can offer the ones that answered.")
+        return
+
     plan = preflight.targets(settings)
     if not plan:
         print("No tier points at an API provider, so there is nothing to call.")
@@ -643,6 +673,15 @@ def main(argv=None) -> None:
     )
     sp.add_argument("--json", action="store_true", help="machine-readable output")
     sp.add_argument("--timeout", type=int, default=25, help="seconds to wait per model")
+    sp.add_argument(
+        "--provider", default="", help="sweep this provider's whole catalogue instead of the tiers"
+    )
+    sp.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="with --provider, how many models to call (0 = all; each one is a real call)",
+    )
     sp.set_defaults(fn=cmd_preflight)
 
     sp = sub.add_parser("claude", help="use your Claude subscription, no API key")

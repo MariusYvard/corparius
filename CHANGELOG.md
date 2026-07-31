@@ -35,6 +35,23 @@ was released.
   gratuit d'openrouter) devenait la chaîne « None » comme si le modèle l'avait
   dite.
 
+- **Added : `--provider` balaie un catalogue entier, et le résultat est
+  retenu.** Sur NVIDIA, avec la vraie clé du propriétaire : **10 des 18 entrées
+  échantillonnées répondent 404**, sur un catalogue de 102. L'échantillon est
+  réparti sur toute la liste et non pris au début — les fournisseurs listent par
+  ordre alphabétique, et les vingt premiers ne représentent rien.
+
+  La première version ne retenait rien par fournisseur : un rapport par
+  exécution, écrasé à chaque fois, donc les mêmes 404 étaient redécouverts
+  indéfiniment. Schéma 10 ajoute `model_probes`, clé (fournisseur, modèle), mis
+  à jour plutôt que dupliqué — un modèle froid la semaine dernière qui répond
+  aujourd'hui finit avec le verdict d'aujourd'hui. Rien n'est écrit quand rien
+  n'a été appelé : traiter une question non posée comme une réponse serait
+  exactement l'erreur que cette commande existe pour supprimer.
+
+  Et ça sert : le sélecteur de modèles de la console retire les noms prouvés
+  non appelables et étiquette ceux qui ont répondu.
+
 ## 0.3.0 — la page vue par quelqu'un qui la regarde, et l'exploitant guidé
 
 Presque tout ici vient d'une session réelle sur une entreprise réelle : des

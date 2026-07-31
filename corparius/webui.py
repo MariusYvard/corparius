@@ -1423,16 +1423,32 @@ def _route_tiers_recommend(ctx):
 def _route_provider_models(ctx):
     # The models a provider advertises, so a tier can be filled from a list rather
     # than a remembered string. A network failure is reported, never a 500.
+    from . import preflight
     from .llm import list_models
 
     name = str(ctx.body.get("name", ""))
     if name not in OPENAI_COMPAT_PROVIDERS:
         return 404, {"ok": False, "error": f"unknown provider '{name}'"}
+    # What a previous preflight actually proved, alongside the advertised list.
+    # Measured on NVIDIA with a real key: 10 of 18 catalogue entries answered
+    # 404. Offering the catalogue alone is offering a coin flip; offering it
+    # with the proven ones marked is offering what is known.
+    proved = {r["model"]: r["state"] for r in ctx.state.store().known_probes(name)}
     try:
-        return 200, {"ok": True, "models": list_models(name)}
+        models = list_models(name)
     except Exception as exc:  # network/HTTP/parse: report, do not crash the handler
         log.info("model list for %s failed: %s", name, exc)
-        return 200, {"ok": False, "models": [], "error": "could not list models; check the key"}
+        return 200, {
+            "ok": False,
+            "models": sorted(proved),
+            "proved": proved,
+            "error": "could not list models; showing what a preflight proved",
+        }
+    # A model that answered but is no longer advertised is still callable, and
+    # dropping it would hide the one fact here that was measured rather than
+    # claimed.
+    every = sorted(set(models) | {m for m, s in proved.items() if s == preflight.USABLE})
+    return 200, {"ok": True, "models": every, "proved": proved}
 
 
 def _route_settings_post(ctx):

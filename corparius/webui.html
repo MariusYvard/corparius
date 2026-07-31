@@ -948,7 +948,7 @@ en: {
   "oll.install":"Not detected. Install it from",
   "prov.note":"Changes apply to new calls immediately and are saved to the .env file. Mock mode serves every call from a deterministic offline mock.",
   "prov.tiers":"Routing tiers","prov.saveTiers":"Save tiers",
-  "prov.preflight":"Prove these models","prov.preflightRunning":"Calling each one for eight tokens…",
+  "prov.preflight":"Prove these models","prov.proved":"proved","prov.modelsHidden":"({n} hidden: proved not callable with this key)","prov.preflightRunning":"Calling each one for eight tokens…",
   "prov.pf.usable":"usable","prov.pf.blocked":"blocked","prov.pf.capacity":"cold","prov.pf.unknown":"unknown","prov.pf.skipped":"not probed",
   "prov.pfSkippedWhy":"Not an OpenAI-compatible endpoint, so this cannot prove it.",
   "prov.pfNothing":"No tier points at an API provider, so there is nothing to call.","prov.format":"Format: target:model, e.g. groq:llama-3.3-70b-versatile",
@@ -1145,7 +1145,7 @@ fr: {
   "oll.install":"Non détecté. Installez-le depuis",
   "prov.note":"Les changements s'appliquent immédiatement aux nouveaux appels et sont écrits dans .env. Le mode mock sert chaque appel depuis un simulateur hors ligne.",
   "prov.tiers":"Tiers de routage","prov.saveTiers":"Enregistrer les tiers",
-  "prov.preflight":"Prouver ces modèles","prov.preflightRunning":"Appel de chacun sur huit jetons…",
+  "prov.preflight":"Prouver ces modèles","prov.proved":"prouvé","prov.modelsHidden":"({n} masqués : prouvés non appelables avec cette clé)","prov.preflightRunning":"Appel de chacun sur huit jetons…",
   "prov.pf.usable":"utilisable","prov.pf.blocked":"bloqué","prov.pf.capacity":"à froid","prov.pf.unknown":"inconnu","prov.pf.skipped":"non sondé",
   "prov.pfSkippedWhy":"Point d'accès non compatible OpenAI : impossible de le prouver ici.",
   "prov.pfNothing":"Aucun palier ne pointe vers un fournisseur API, il n'y a rien à appeler.","prov.format":"Format : cible:modèle, ex. groq:llama-3.3-70b-versatile",
@@ -2239,10 +2239,26 @@ document.addEventListener("click", async e => {
     try {
       const d = await api("/api/provider/models", {name});
       const dl = $("#model-suggestions");
+      const proved = d.proved || {};
+      /* A catalogue lists models that exist, not models this key may call —
+         measured on NVIDIA, 10 of 18 answered 404. Anything a preflight has
+         actually proved is labelled, and the blocked ones are left out of the
+         suggestions entirely: offering a name that is known to 404 is worse
+         than offering nothing. */
       (d.models || []).forEach(m => {
-        const opt = document.createElement("option"); opt.value = name + ":" + m; dl.appendChild(opt);
+        if (proved[m] === "blocked") return;
+        const opt = document.createElement("option");
+        opt.value = name + ":" + m;
+        if (proved[m] === "usable") opt.label = t("prov.proved");
+        dl.appendChild(opt);
       });
-      if (out) { out.textContent = t("prov.modelsLoaded").replace("{n}", (d.models || []).length); out.style.color = "var(--ok)"; }
+      const blocked = Object.values(proved).filter(s => s === "blocked").length;
+      if (out) {
+        const shown = (d.models || []).filter(m => proved[m] !== "blocked").length;
+        out.textContent = t("prov.modelsLoaded").replace("{n}", shown)
+          + (blocked ? " " + t("prov.modelsHidden").replace("{n}", blocked) : "");
+        out.style.color = "var(--ok)";
+      }
     } catch (err) { if (out) { out.textContent = err.message; out.style.color = "var(--warn)"; } }
     finally { b.disabled = false; }
     return;

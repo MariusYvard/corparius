@@ -160,6 +160,10 @@ class UiState:
         self.runs: dict[str, dict] = {}
         self.chats: dict[str, deque] = {}
         self.pulls: dict = {"running": False}  # Ollama model pull, background
+        # A full catalogue sweep across every configured provider. Background
+        # for the same reason as a pull: it is hundreds of real calls and would
+        # time out any request that waited for it.
+        self.sweep: dict = {"running": False}
         self.lock = threading.Lock()
         self._store: Store | None = None
 
@@ -1529,6 +1533,87 @@ def _route_preflight(ctx):
     }
 
 
+def _route_sweep_get(ctx):
+    """Progress of a running sweep, and what is known when none is running.
+
+    A GET, polled by the page — so it reads state and calls nobody. The probing
+    happens in the worker thread that the POST started.
+    """
+    from . import preflight
+
+    known = ctx.state.store().known_probes()
+    tally: dict[str, int] = {}
+    for row in known:
+        tally[row["state"]] = tally.get(row["state"], 0) + 1
+    return 200, {
+        "ok": True,
+        "sweep": ctx.state.sweep,
+        "known": len(known),
+        "tally": tally,
+        "usable_by_provider": {k: len(v) for k, v in preflight.known(ctx.state.store()).items()},
+    }
+
+
+def _route_sweep_post(ctx):
+    """Start — or price, or stop — a sweep of every configured provider.
+
+    `{"estimate": true}` returns the number of calls it would make without
+    making any. That is deliberate: NVIDIA alone advertises 102 models, and an
+    operator pressing "check everything" is spending their own money and their
+    own rate limits. They get the number first.
+    """
+    from . import preflight
+
+    s = _fresh_settings()
+    if ctx.body.get("stop"):
+        ctx.state.sweep["stop"] = True
+        return 200, {"ok": True, "stopping": True}
+    if s.llm_mock:
+        return 400, {"ok": False, "error": "mock mode: there is no provider to call"}
+    if ctx.body.get("estimate"):
+        return 200, {"ok": True, **preflight.estimate()}
+    with ctx.state.lock:
+        if ctx.state.sweep.get("running"):
+            return 400, {"ok": False, "error": "a sweep is already running"}
+        ctx.state.sweep = {
+            "running": True,
+            "stop": False,
+            "done": 0,
+            "provider": "",
+            "model": "",
+            "counts": {},
+        }
+
+    limit = int(ctx.body.get("limit", 0) or 0)
+    timeout = int(ctx.body.get("timeout", preflight.TIMEOUT) or preflight.TIMEOUT)
+    store = ctx.state.store()
+
+    def _worker() -> None:
+        def note(provider, model, result, done):
+            sweep = ctx.state.sweep
+            sweep["provider"], sweep["model"], sweep["done"] = provider, model, done
+            sweep["counts"][result.state] = sweep["counts"].get(result.state, 0) + 1
+
+        try:
+            preflight.sweep(
+                store,
+                limit=limit,
+                timeout=timeout,
+                on_progress=note,
+                should_stop=lambda: bool(ctx.state.sweep.get("stop")),
+            )
+        except Exception:  # noqa: BLE001 - a background thread must not die silently
+            log.exception("sweep failed")
+        finally:
+            # Everything proved before the failure is already in the store: each
+            # verdict is written the moment it arrives, so an hour of real calls
+            # is never lost to whatever went wrong at the end.
+            ctx.state.sweep["running"] = False
+
+    threading.Thread(target=_worker, daemon=True, name="corparius-preflight-sweep").start()
+    return 200, {"ok": True, "started": True}
+
+
 def _route_ollama_pull(ctx):
     return 200, _ollama_pull(ctx.state, list(ctx.body.get("models", [])))
 
@@ -1620,6 +1705,8 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/claude/install", _route_claude_install),
     Route("POST", "/api/test/provider", _route_test_provider),
     Route("POST", "/api/preflight", _route_preflight),
+    Route("GET", "/api/preflight/sweep", _route_sweep_get),
+    Route("POST", "/api/preflight/sweep", _route_sweep_post),
     Route("POST", "/api/ollama/pull", _route_ollama_pull),
     Route("POST", "/api/ollama/bench", _route_ollama_bench),
     Route("POST", "/api/company", _route_company_post),

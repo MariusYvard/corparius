@@ -379,10 +379,12 @@ def test_nothing_is_remembered_when_nothing_was_called(tmp_path):
 def test_a_catalogue_sweep_spreads_across_the_list_rather_than_taking_the_front(monkeypatch):
     """Providers list alphabetically. The first twenty of "01-ai…" through
     "ai21labs…" are not a sample of a 102-model catalogue."""
-    from corparius import llm
 
     catalogue = [f"m{i:03d}" for i in range(100)]
-    monkeypatch.setattr(llm, "list_models", lambda name, timeout=8: catalogue)
+    # `preflight` imports `list_models` at module level, so patching it on `llm`
+    # alone leaves the real one in place — and this test then swept the live
+    # NVIDIA catalogue over the network. Patch the name the code actually calls.
+    monkeypatch.setattr(preflight, "list_models", lambda name, timeout=8: catalogue)
     monkeypatch.setattr(
         preflight, "probe", lambda p, m, tier="", timeout=0: preflight.Probe(p, m, tier, USABLE)
     )
@@ -393,12 +395,10 @@ def test_a_catalogue_sweep_spreads_across_the_list_rather_than_taking_the_front(
 
 
 def test_a_provider_with_no_catalogue_is_not_a_crash(monkeypatch):
-    from corparius import llm
-
     def boom(name, timeout=8):
         raise requests.ConnectionError("no")
 
-    monkeypatch.setattr(llm, "list_models", boom)
+    monkeypatch.setattr(preflight, "list_models", boom)
     assert preflight.probe_catalogue("nvidia") == []
 
 
@@ -430,3 +430,147 @@ def test_the_model_picker_hides_what_is_proved_uncallable(tmp_path, monkeypatch)
     assert payload["proved"] == {"good": USABLE, "bad": BLOCKED}
     # `bad` is still listed; the page drops it, and the count says how many.
     assert "untried" in payload["models"], "an unprobed model is still offered"
+
+
+# --------------------------------------------------------------------------
+# One pass over everything
+# --------------------------------------------------------------------------
+
+
+def _sweepable(monkeypatch, catalogues, answers=None):
+    """A machine with keys for the named providers and these catalogues."""
+    from corparius import cfg, llm
+
+    monkeypatch.setattr(
+        cfg, "get", lambda key, default="": "k" if key.endswith(("_KEY", "_TOKEN")) else ""
+    )
+    monkeypatch.setattr(llm, "list_models", lambda name, timeout=8: catalogues.get(name, []))
+    monkeypatch.setattr(preflight, "list_models", lambda name, timeout=8: catalogues.get(name, []))
+    seen = []
+
+    def fake_probe(provider, model, tier="", timeout=0):
+        seen.append((provider, model))
+        state = (answers or {}).get(f"{provider}:{model}", USABLE)
+        return preflight.Probe(provider, model, tier, state, "", 200 if state == USABLE else 404)
+
+    monkeypatch.setattr(preflight, "probe", fake_probe)
+    return seen
+
+
+def test_the_estimate_prices_the_sweep_without_calling_anything(monkeypatch):
+    """NVIDIA alone advertises 102 models; a real sweep of the owner's machine
+    prices at 785 calls. Someone pressing "check everything" is spending their
+    own money and their own rate limits, so they get the number first."""
+    called = []
+    monkeypatch.setattr(preflight, "probe", lambda *a, **k: called.append(1))
+    _sweepable(monkeypatch, {"groq": ["a", "b"], "nvidia": ["x"]})
+    monkeypatch.setattr(preflight, "probe", lambda *a, **k: called.append(1))
+
+    est = preflight.estimate()
+    assert est["total"] == sum(est["providers"].values())
+    assert not called, "estimating must not call a single model"
+
+
+def test_a_sweep_covers_every_configured_provider(tmp_path, monkeypatch):
+    from corparius.store import Store
+
+    seen = _sweepable(monkeypatch, {"groq": ["a", "b"], "nvidia": ["x", "y", "z"]})
+    store = Store(str(tmp_path))
+    result = preflight.sweep(store, timeout=1)
+    store.close()
+    assert result["probed"] == 5
+    assert set(seen) >= {("groq", "a"), ("nvidia", "z")}
+
+
+def test_each_verdict_is_stored_as_it_arrives_so_stopping_keeps_it(tmp_path, monkeypatch):
+    """Verified live: a sweep stopped after 27 calls kept all 27. Losing an hour
+    of real calls because someone closed a tab would be its own kind of waste."""
+    from corparius.store import Store
+
+    _sweepable(monkeypatch, {"groq": [f"m{i}" for i in range(10)]})
+    store = Store(str(tmp_path))
+    stop_after = 4
+    preflight.sweep(store, timeout=1, should_stop=lambda: len(store.known_probes()) >= stop_after)
+    kept = store.known_probes()
+    store.close()
+    assert 0 < len(kept) <= stop_after + 1, len(kept)
+    assert all(r["state"] for r in kept)
+
+
+def test_a_limit_samples_across_the_catalogue_rather_than_its_front(tmp_path, monkeypatch):
+    from corparius.store import Store
+
+    seen = _sweepable(monkeypatch, {"groq": [f"m{i:03d}" for i in range(60)]})
+    store = Store(str(tmp_path))
+    preflight.sweep(store, limit=6, timeout=1)
+    store.close()
+    models = [m for _, m in seen]
+    assert len(models) == 6
+    assert models[-1] != "m005", "it took the front of the list"
+
+
+def test_a_provider_with_no_catalogue_does_not_stop_the_sweep(tmp_path, monkeypatch):
+    from corparius import llm
+    from corparius.store import Store
+
+    _sweepable(monkeypatch, {"groq": ["a"], "nvidia": ["x"]})
+
+    def half_broken(name, timeout=8):
+        if name == "groq":
+            raise requests.ConnectionError("no")
+        return ["x"]
+
+    monkeypatch.setattr(llm, "list_models", half_broken)
+    monkeypatch.setattr(preflight, "list_models", half_broken)
+    store = Store(str(tmp_path))
+    result = preflight.sweep(store, timeout=1)
+    store.close()
+    assert result["probed"] >= 1, "one unreachable provider ended the whole pass"
+
+
+def test_only_providers_with_a_key_are_swept(monkeypatch):
+    """Otherwise a sweep spends a minute proving that unconfigured endpoints are
+    unconfigured."""
+    from corparius import cfg
+
+    monkeypatch.setattr(cfg, "get", lambda key, default="": "k" if key == "GROQ_API_KEY" else "")
+    names = preflight.configured_providers()
+    assert "groq" in names
+    assert "openai" not in names
+    # `ovh` needs no key, so it stays in.
+    assert "ovh" in names
+
+
+def test_two_sweeps_at_once_are_refused(tmp_path, monkeypatch):
+    """Two threads probing the same rate-limited free tiers would turn every
+    answer into a 429 and prove nothing."""
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    monkeypatch.setenv("CORP_LLM_MOCK", "false")
+    from corparius import webui
+
+    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    state.sweep = {"running": True}
+    ctx = types.SimpleNamespace(body={}, state=state, lang="en")
+    status, payload = webui._route_sweep_post(ctx)
+    state.close()
+    assert status == 400 and "already running" in payload["error"]
+
+
+def test_the_progress_endpoint_reads_state_and_calls_nobody(tmp_path, monkeypatch):
+    """It is polled by the page. Probing there would be the polled-endpoint
+    mistake with somebody's money attached."""
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    monkeypatch.setattr(
+        requests, "post", lambda *a, **k: pytest.fail("the progress endpoint called a provider")
+    )
+    from corparius import webui
+
+    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    preflight.remember(state.store(), [preflight.Probe("groq", "a", state=USABLE, status=200)])
+    ctx = types.SimpleNamespace(body={}, state=state, lang="en")
+    status, payload = webui._route_sweep_get(ctx)
+    state.close()
+    assert status == 200
+    assert payload["known"] == 1 and payload["usable_by_provider"] == {"groq": 1}

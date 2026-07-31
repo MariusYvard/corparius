@@ -50,6 +50,24 @@ Chaque verdict est **retenu par (fournisseur, modèle)** dans le store, et mis �
 
 À quoi ça sert : le sélecteur de modèles de la console **retire les noms prouvés non appelables** et étiquette ceux qui ont répondu. Proposer un nom dont on sait qu'il renvoie 404 est pire que de ne rien proposer.
 
+### Tout vérifier en une passe
+
+Dans la console, onglet Fournisseurs : **Vérifier tous les modèles**. Tous les modèles de tous les fournisseurs configurés, un appel réel chacun.
+
+**Le prix s'affiche avant que quoi que ce soit ne parte.** Lire les catalogues coûte peu ; les appeler non. Sur la machine du propriétaire, la passe complète représente 785 appels sur 10 fournisseurs :
+
+```text
+openrouter    365    huggingface   128    nvidia        102
+mistral        60    gemini         59    cohere         31
+ovh            22    groq           15    cerebras        3
+```
+
+Ce sont vos clés et vos quotas, donc vous avez le nombre d'abord et vous confirmez.
+
+Le balayage tourne en arrière-plan avec sa progression, comme un téléchargement Ollama : aucune requête HTTP n'attendrait plusieurs minutes. Les fournisseurs sont parcourus **l'un après l'autre**, jamais en parallèle : ce sont des paliers gratuits limités en débit, et en marteler quatre à la fois transforme chaque réponse en 429 et ne prouve rien.
+
+**Chaque verdict est écrit dès qu'il arrive**, donc arrêter en cours de route garde tout ce qui a été prouvé jusque-là. Vérifié en direct : un balayage arrêté après 27 appels a conservé les 27.
+
 **Rien ne se déclenche tout seul.** Une sonde coûte une vraie génération sur un vrai compte, et le doctor tourne à chaque démarrage du binaire et est servi en HTTP : sonder là serait l'erreur de l'endpoint interrogé en boucle, avec l'argent de quelqu'un au bout. Le doctor lit le dernier résultat enregistré et ne mesure jamais, exactement comme pour le banc matériel. Dans la console, le bouton se trouve dans l'onglet Fournisseurs, sous les paliers de routage.
 
 ## Registre

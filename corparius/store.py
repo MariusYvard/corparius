@@ -74,6 +74,9 @@ CREATE TABLE IF NOT EXISTS drafts (
     state TEXT, note TEXT, ts REAL, published_at REAL
 );
 CREATE INDEX IF NOT EXISTS drafts_by_company ON drafts (company, state, ts);
+CREATE TABLE IF NOT EXISTS model_catalogue (
+    id INTEGER PRIMARY KEY CHECK (id = 1), models TEXT, ts REAL
+);
 CREATE TABLE IF NOT EXISTS model_probes (
     provider TEXT, model TEXT, state TEXT, detail TEXT, status INTEGER, ms INTEGER, ts REAL,
     tok_s REAL, json_ok INTEGER, samples INTEGER, failures INTEGER, measured_at REAL,
@@ -85,7 +88,7 @@ CREATE TABLE IF NOT EXISTS model_probes (
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -241,6 +244,20 @@ def _migration_11(db: sqlite3.Connection) -> None:
             pass
 
 
+def _migration_12(db: sqlite3.Connection) -> None:
+    """The provider catalogue, in its own table rather than in `settings`.
+
+    It went in `settings` first and that was wrong twice over: 400 KB of JSON
+    appeared as a row among the operator's own configuration, and it travelled
+    into backups as if somebody had set it.
+    """
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS model_catalogue ("
+        " id INTEGER PRIMARY KEY CHECK (id = 1), models TEXT, ts REAL)"
+    )
+    db.execute("DELETE FROM settings WHERE key='CORP_MODEL_CATALOGUE'")
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 MIGRATIONS = {
     1: _migration_1,
@@ -254,6 +271,7 @@ MIGRATIONS = {
     9: _migration_9,
     10: _migration_10,
     11: _migration_11,
+    12: _migration_12,
 }
 
 
@@ -903,6 +921,32 @@ class Store:
             ),
         )
         self.db.commit()
+
+    @_locked
+    def save_model_catalogue(self, models: dict) -> None:
+        """One row, replaced wholesale: it is a snapshot of somebody else's
+        catalogue, not a log."""
+        self.db.execute(
+            "INSERT INTO model_catalogue (id, models, ts) VALUES (1,?,?)"
+            " ON CONFLICT(id) DO UPDATE SET models=excluded.models, ts=excluded.ts",
+            (json.dumps(models), time.time()),
+        )
+        self.db.commit()
+
+    @_locked
+    def model_catalogue(self) -> dict:
+        row = self.db.execute("SELECT models FROM model_catalogue WHERE id=1").fetchone()
+        if not row or not row["models"]:
+            return {}
+        try:
+            return json.loads(row["models"])
+        except json.JSONDecodeError:
+            return {}
+
+    @_locked
+    def model_catalogue_ts(self) -> float:
+        row = self.db.execute("SELECT ts FROM model_catalogue WHERE id=1").fetchone()
+        return float(row["ts"] or 0) if row else 0.0
 
     @_locked
     def known_probes(self, provider: str = "") -> list[dict]:

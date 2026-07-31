@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import logging
+import statistics
 import time
 from dataclasses import dataclass, field
 
@@ -168,6 +169,130 @@ def probe(provider: str, model: str, tier: str = "", timeout: int = TIMEOUT) -> 
     result.state = USABLE
     result.detail = f"answered in {result.ms} ms"
     return result
+
+
+# A richer measurement than "did it answer", for the handful of models a tier
+# might actually be routed to. Deliberately not run across a 365-model
+# catalogue: availability is cheap to ask, performance is not.
+MEASURE_TOKENS = 48
+MEASURE_SAMPLES = 3
+# The one capability the whole runtime depends on. Every agent tool with a
+# schema goes through corparius/structured.py, so a model that cannot return
+# parseable JSON is useless for most of the roster however fast it is — and
+# that is invisible to an availability probe, which only asks for one word.
+JSON_PROMPT = 'Answer with only this JSON object and nothing else: {"ok": true, "n": 7}'
+
+
+@dataclass
+class Measurement:
+    """What a model does under a slightly realistic ask, sampled more than once.
+
+    Measured before this existed: four identical 8-token calls to the same model
+    spanned 465–774 ms. A single sample is not a measurement, and routing on one
+    would be routing on noise.
+    """
+
+    provider: str
+    model: str
+    samples: int = 0
+    failures: int = 0
+    ms: int = 0  # median wall clock
+    tok_s: float = 0.0  # median, from the provider's own timing where given
+    json_ok: bool = False
+
+    @property
+    def reliability(self) -> float:
+        return 0.0 if not self.samples else 1.0 - (self.failures / self.samples)
+
+
+def measure(
+    provider: str, model: str, samples: int = MEASURE_SAMPLES, timeout: int = TIMEOUT
+) -> Measurement:
+    """Sample a model several times and report speed, throughput and whether it
+    can produce JSON at all.
+
+    Throughput comes from the provider's own `usage.completion_time` when it
+    sends one (groq, cerebras and most OpenAI-compatible gateways do), because
+    wall clock over a WAN measures the network as much as the model. It falls
+    back to wall clock when the provider says nothing.
+    """
+    out = Measurement(provider=provider, model=model)
+    lat: list[int] = []
+    rates: list[float] = []
+    json_seen = 0
+    for _ in range(max(1, samples)):
+        one = _one_measure(provider, model, timeout)
+        out.samples += 1
+        if one is None:
+            out.failures += 1
+            continue
+        ms, tok_s, ok_json = one
+        lat.append(ms)
+        if tok_s:
+            rates.append(tok_s)
+        json_seen += int(ok_json)
+    if lat:
+        out.ms = int(statistics.median(lat))
+    if rates:
+        out.tok_s = round(statistics.median(rates), 1)
+    # Every successful sample, not just one: a model that produces JSON two
+    # times in three is a model that breaks a tool one turn in three.
+    out.json_ok = bool(lat) and json_seen == len(lat)
+    return out
+
+
+def _one_measure(provider: str, model: str, timeout: int):
+    """(ms, tokens_per_second, json_parsed) or None if the sample failed."""
+    spec = OPENAI_COMPAT_PROVIDERS.get(provider)
+    if spec is None:
+        return None
+    base = (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base", "")).rstrip("/")
+    key = cfg.get(spec["key_env"], "").strip()
+    if not base or (not key and not spec.get("key_optional")):
+        return None
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    started = time.monotonic()
+    try:
+        response = requests.post(
+            f"{base}/chat/completions",
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": JSON_PROMPT}],
+                "max_tokens": MEASURE_TOKENS,
+                "temperature": 0,
+            },
+            headers=headers,
+            timeout=timeout,
+        )
+        if response.status_code >= 400:
+            return None
+        data = response.json()
+    except (requests.RequestException, ValueError):
+        return None
+    ms = int((time.monotonic() - started) * 1000)
+    text = ""
+    try:
+        text = str((data["choices"][0].get("message") or {}).get("content") or "")
+    except (KeyError, IndexError, TypeError):
+        return None
+
+    usage = data.get("usage") or {}
+    completion = float(usage.get("completion_tokens") or 0)
+    elapsed = float(usage.get("completion_time") or 0)
+    tok_s = completion / elapsed if completion and elapsed > 0 else 0.0
+    if not tok_s and completion and ms:
+        tok_s = completion / (ms / 1000)
+
+    json_ok = False
+    snippet = text.strip().strip("`").removeprefix("json").strip()
+    try:
+        parsed = json.loads(snippet[snippet.find("{") : snippet.rfind("}") + 1] or snippet)
+        json_ok = isinstance(parsed, dict) and "ok" in parsed
+    except (json.JSONDecodeError, ValueError):
+        json_ok = False
+    return ms, tok_s, json_ok
 
 
 @dataclass
@@ -388,6 +513,49 @@ def known(store, provider: str = "") -> dict[str, list[str]]:
     return out
 
 
+def save_measurement(store, m: Measurement) -> None:
+    if store is None or not m.samples:
+        return
+    store.record_measurement(m.provider, m.model, m.tok_s, m.json_ok, m.samples, m.failures)
+
+
+def rank(candidates: dict[str, dict]) -> list[str]:
+    """Models best-first, on what was measured rather than on what answered once.
+
+    `candidates` is one provider's slice of `proven_map`. The order of the keys
+    is the argument:
+
+    1. **Blocked is excluded.** Not a preference — it cannot be called.
+    2. **JSON capability, where it was measured.** Every tool with a schema goes
+       through `structured.ask`; a model that cannot return a JSON object breaks
+       most of the roster however fast it is. Measured on a real provider:
+       `cerebras:gpt-oss-120b` answers instantly and cannot do it. A model never
+       *measured* is not penalised — absence of evidence is not evidence.
+    3. **Reliability.** Two failures in five samples is a model that will drop a
+       turn in five, and no amount of throughput compensates.
+    4. **Throughput**, then latency. Measured 547 tok/s against 10 tok/s on two
+       providers in the same chain, so this is not a tiebreak, it is a real
+       difference — but it is the *last* thing considered, because a fast model
+       that cannot follow a schema is worth nothing.
+    """
+
+    def key(item):
+        model, v = item
+        measured = v.get("samples") or 0
+        json_penalty = 0 if (not measured or v.get("json_ok")) else 1
+        reliability = v.get("reliability", 1.0) if measured else 1.0
+        return (
+            json_penalty,
+            -round(reliability, 2),
+            -(v.get("tok_s") or 0.0),
+            v.get("ms") or 10**6,
+            model,  # deterministic when everything else ties
+        )
+
+    usable = {m: v for m, v in candidates.items() if v.get("state") == USABLE}
+    return [m for m, _ in sorted(usable.items(), key=key)]
+
+
 def proven_map(store, provider: str = "") -> dict[str, dict[str, dict]]:
     """{provider: {model: {state, ms, ts, age_days}}} — everything measured.
 
@@ -400,11 +568,20 @@ def proven_map(store, provider: str = "") -> dict[str, dict[str, dict]]:
     now = time.time()
     out: dict[str, dict[str, dict]] = {}
     for row in store.known_probes(provider):
+        samples = int(row["samples"] or 0) if "samples" in row.keys() else 0
+        failures = int(row["failures"] or 0) if "failures" in row.keys() else 0
         out.setdefault(row["provider"], {})[row["model"]] = {
             "state": row["state"],
             "ms": int(row["ms"] or 0),
             "ts": float(row["ts"] or 0),
             "age_days": int(max(0.0, now - float(row["ts"] or now)) / 86400),
+            # Absent on a store that has only ever seen availability probes, and
+            # `rank` treats absent as "not measured" rather than as "bad".
+            "tok_s": float(row["tok_s"] or 0) if "tok_s" in row.keys() else 0.0,
+            "json_ok": bool(row["json_ok"]) if "json_ok" in row.keys() else False,
+            "samples": samples,
+            "failures": failures,
+            "reliability": 1.0 if not samples else 1.0 - failures / samples,
         }
     return out
 

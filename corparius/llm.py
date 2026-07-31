@@ -245,7 +245,11 @@ def connected_providers() -> list[str]:
 
 
 def recommended_routing(
-    configured: list[str], local_trivial: str = "", hard: str = "", fallback_tail=()
+    configured: list[str],
+    local_trivial: str = "",
+    hard: str = "",
+    fallback_tail=(),
+    proven: dict[str, dict[str, dict]] | None = None,
 ) -> dict[str, str] | None:
     """A coherent tier configuration from the free providers actually connected,
     so no tier resolves to something the operator has not set up.
@@ -273,6 +277,16 @@ def recommended_routing(
     `hard`: the chain is shared by *every* tier, so putting the top-tier model
     there would let a failed social post escalate to the most expensive model in
     the roster. Cheapest first — the everyday work degrades one rung at a time.
+
+    `proven` is what a preflight actually measured, from
+    `preflight.proven_map`. Without it this behaves exactly as before, on the
+    `default_model` literals — which are strings frozen on the day they were
+    written, and they rot: openrouter's pinned default stopped existing while
+    its paid variant stayed, so "recommended" routing wrote a tier that 404s.
+    With it, a default known to be blocked is never chosen, and the replacement
+    is the fastest model that province actually answered on. Measuring 785
+    models to populate a dropdown would have been a waste; this is what the
+    measurement is for.
     """
     picks = [
         p
@@ -283,7 +297,28 @@ def recommended_routing(
         return None
 
     def model(provider: str) -> str:
-        return f"{provider}:{OPENAI_COMPAT_PROVIDERS[provider]['default_model']}"
+        default = OPENAI_COMPAT_PROVIDERS[provider]["default_model"]
+        known = (proven or {}).get(provider) or {}
+        if not known or known.get(default, {}).get("state") != "blocked":
+            # Nothing measured, or the default is fine. Never second-guess a
+            # working default on the strength of a faster alternative: the
+            # defaults are chosen for capability, not latency.
+            return f"{provider}:{default}"
+        usable = [(v.get("ms", 0), m) for m, v in known.items() if v.get("state") == "usable"]
+        if not usable:
+            log.warning(
+                "%s: the pinned default %s is not callable with this key, and nothing else "
+                "on it has been proved. Leaving it; run `corparius preflight --provider %s`.",
+                provider,
+                default,
+                provider,
+            )
+            return f"{provider}:{default}"
+        # Fastest proved model on that provider. Measured, deterministic, and
+        # the right tiebreak for a routing decision.
+        best = min(usable)[1]
+        log.info("%s: %s is not callable; routing to %s, which answered", provider, default, best)
+        return f"{provider}:{best}"
 
     normal_p = picks[0]
     hard_p = "openrouter" if "openrouter" in picks else normal_p

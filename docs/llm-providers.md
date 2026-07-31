@@ -68,6 +68,20 @@ Le balayage tourne en arrière-plan avec sa progression, comme un téléchargeme
 
 **Chaque verdict est écrit dès qu'il arrive**, donc arrêter en cours de route garde tout ce qui a été prouvé jusque-là. Vérifié en direct : un balayage arrêté après 27 appels a conservé les 27.
 
+### À quoi sert la mesure
+
+Mesurer 785 modèles pour peupler une liste déroulante serait un gâchis. Ce qui est prouvé **décide** :
+
+- **Le routage recommandé ne choisit jamais un modèle prouvé non appelable.** Les `default_model` du registre sont des chaînes figées le jour où elles ont été écrites, et elles pourrissent : celle d'openrouter a cessé d'exister pendant que sa variante payante restait, donc le routage « recommandé » écrivait un palier qui répond 404. Quand un préflight a prouvé que le défaut d'un fournisseur est bloqué, le routage prend à la place **le modèle le plus rapide qui a répondu** sur ce fournisseur.
+- **Un défaut qui marche n'est jamais remis en cause** pour un plus rapide : les défauts sont choisis pour leur capacité, pas pour leur latence. Seul un défaut *bloqué* est remplacé.
+- **Sans préflight, rien ne change.** Aucune connaissance ne doit modifier la configuration de qui que ce soit.
+
+### Un verdict vieillit
+
+Un modèle bloqué il y a six mois peut être ouvert aujourd'hui, et un `capacité momentanée` n'a jamais été un verdict : il veut dire « le fournisseur était occupé », ce qui n'est pas une connaissance et ne le devient pas en restant dans une table.
+
+La console affiche l'âge du plus vieux verdict et combien méritent d'être redemandés. Un balayage **repose les questions provisoires en premier** — les `capacity` d'abord, puis tout ce qui dépasse trente jours — pour qu'un balayage arrêté en cours de route ait dépensé ses appels sur ce qui valait la peine plutôt qu'à reconfirmer ce qui a été prouvé ce matin.
+
 **Rien ne se déclenche tout seul.** Une sonde coûte une vraie génération sur un vrai compte, et le doctor tourne à chaque démarrage du binaire et est servi en HTTP : sonder là serait l'erreur de l'endpoint interrogé en boucle, avec l'argent de quelqu'un au bout. Le doctor lit le dernier résultat enregistré et ne mesure jamais, exactement comme pour le banc matériel. Dans la console, le bouton se trouve dans l'onglet Fournisseurs, sous les paliers de routage.
 
 ## Registre

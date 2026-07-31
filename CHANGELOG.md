@@ -6,7 +6,12 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
-## Non publié
+## 0.3.0 — la page vue par quelqu'un qui la regarde, et l'exploitant guidé
+
+Presque tout ici vient d'une session réelle sur une entreprise réelle : des
+captures d'écran, une ventilation de dépense, 250 lignes de journal, et deux
+verdicts sans ambiguïté sur le site généré. Les défauts corrigés étaient tous
+visibles en dix minutes d'utilisation, et invisibles en relecture de code.
 
 ### Ce que l'exploitant doit faire lui-même
 

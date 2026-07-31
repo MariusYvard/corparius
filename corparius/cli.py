@@ -291,6 +291,21 @@ def cmd_preflight(args) -> None:
         for p in report.probes:
             print(f"  [{mark[p.state]}] {p.tier:<8} {p.provider}:{p.model}")
             print(f"              {p.detail}")
+    # Availability answered; now what it is like to use. Only on the handful of
+    # models a tier might actually be routed to — several larger calls each, so
+    # it is not something to run across a 365-model catalogue.
+    usable = [p for p in report.probes if p.state == preflight.USABLE]
+    if usable and not getattr(args, "quick", False):
+        print(f"\nMeasuring {len(usable)} model(s), {preflight.MEASURE_SAMPLES} samples each…")
+        for p in usable:
+            m = preflight.measure(p.provider, p.model, timeout=args.timeout)
+            preflight.save_measurement(store, m)
+            schema = "JSON ok" if m.json_ok else "CANNOT return JSON"
+            print(
+                f"  {p.provider}:{p.model}\n"
+                f"     {m.ms} ms median · {m.tok_s} tok/s · {schema} · "
+                f"{m.reliability:.0%} of {m.samples} samples"
+            )
     if report.blocking:
         print(
             f"\n{len(report.blocking)} configured model(s) cannot be called with this key. "
@@ -721,6 +736,9 @@ def main(argv=None) -> None:
         "--all", action="store_true", help="sweep every configured provider's whole catalogue"
     )
     sp.add_argument("--yes", action="store_true", help="with --all, skip the confirmation")
+    sp.add_argument(
+        "--quick", action="store_true", help="availability only; skip the performance samples"
+    )
     sp.set_defaults(fn=cmd_preflight)
 
     sp = sub.add_parser("claude", help="use your Claude subscription, no API key")

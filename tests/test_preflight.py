@@ -700,3 +700,196 @@ def test_a_sweep_asks_the_provisional_questions_first(tmp_path, monkeypatch):
     preflight.sweep(store, timeout=1)
     store.close()
     assert seen[0] == ("groq", "c"), f"the provisional one was not asked first: {seen}"
+
+
+# --------------------------------------------------------------------------
+# Routing on performance, not on "it answered once"
+# --------------------------------------------------------------------------
+
+
+def _slice(**models):
+    base = {
+        "state": USABLE,
+        "tok_s": 100.0,
+        "json_ok": True,
+        "samples": 3,
+        "failures": 0,
+        "reliability": 1.0,
+        "ms": 500,
+    }
+    return {name: {**base, **over} for name, over in models.items()}
+
+
+def test_a_model_that_cannot_return_json_ranks_last_however_fast_it_is():
+    """The finding that motivated this. Measured on the owner's own fallback
+    chain: `cerebras:gpt-oss-120b` answers in 38 tok/s and cannot produce a JSON
+    object, and `openrouter:openai/gpt-oss-20b:free` neither. Every tool with a
+    schema goes through `structured.ask`, so speed is worth nothing without it."""
+    order = preflight.rank(
+        _slice(
+            fast_no_json={"tok_s": 900.0, "json_ok": False},
+            slow_json={"tok_s": 12.0},
+        )
+    )
+    assert order == ["slow_json", "fast_no_json"]
+
+
+def test_reliability_outranks_throughput():
+    """Two failures in five samples is a turn dropped in five, and no amount of
+    tokens per second makes that up."""
+    order = preflight.rank(
+        _slice(
+            flaky={"tok_s": 900.0, "samples": 5, "failures": 2, "reliability": 0.6},
+            steady={"tok_s": 100.0},
+        )
+    )
+    assert order == ["steady", "flaky"]
+
+
+def test_throughput_decides_when_nothing_else_separates_them():
+    """Measured 594 tok/s against 10.6 on two providers in the same chain — not
+    a tiebreak, a real difference, but the last thing considered."""
+    assert preflight.rank(_slice(slow={"tok_s": 10.0}, quick={"tok_s": 594.0})) == [
+        "quick",
+        "slow",
+    ]
+
+
+def test_a_model_never_measured_is_not_punished_for_it():
+    """Absence of evidence is not evidence. A catalogue sweep proves
+    availability and measures nothing; those models must stay eligible."""
+    order = preflight.rank(
+        _slice(
+            unmeasured={"samples": 0, "json_ok": False, "tok_s": 0.0},
+            measured_bad={"json_ok": False, "tok_s": 900.0},
+        )
+    )
+    assert order[0] == "unmeasured"
+
+
+def test_blocked_models_are_not_ranked_at_all():
+    assert "dead" not in preflight.rank(_slice(alive={}, dead={"state": BLOCKED}))
+
+
+def test_the_order_is_deterministic_when_everything_ties():
+    """Two runs of routing must not disagree about which model to write."""
+    tied = _slice(bravo={}, alpha={})
+    assert preflight.rank(tied) == preflight.rank(tied) == ["alpha", "bravo"]
+
+
+def test_routing_takes_the_best_measured_model_not_merely_the_fastest():
+    from corparius.llm import OPENAI_COMPAT_PROVIDERS, recommended_routing
+
+    default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
+    proven = {
+        "groq": {
+            default: {"state": BLOCKED},
+            "quick-but-no-schema": {
+                "state": USABLE,
+                "tok_s": 900.0,
+                "json_ok": False,
+                "samples": 3,
+                "failures": 0,
+                "reliability": 1.0,
+                "ms": 200,
+            },
+            "slower-but-usable": {
+                "state": USABLE,
+                "tok_s": 90.0,
+                "json_ok": True,
+                "samples": 3,
+                "failures": 0,
+                "reliability": 1.0,
+                "ms": 900,
+            },
+        }
+    }
+    plan = recommended_routing(["groq"], proven=proven)
+    assert plan["CORP_NORMAL_MODEL"] == "groq:slower-but-usable"
+
+
+# --------------------------------------------------------------------------
+# The measurement itself
+# --------------------------------------------------------------------------
+
+
+def test_a_measurement_is_more_than_one_sample(monkeypatch, keyed):
+    """Four identical 8-token calls to one model spanned 465-774 ms. Routing on
+    a single sample would be routing on noise."""
+    calls = []
+
+    def fake_post(url, json=None, **kwargs):
+        calls.append(json["max_tokens"])
+        return _Response(
+            200,
+            payload={
+                "choices": [{"message": {"content": '{"ok": true, "n": 7}'}}],
+                "usage": {"completion_tokens": 20, "completion_time": 0.04},
+            },
+        )
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    m = preflight.measure(keyed, "m", samples=3)
+    assert len(calls) == 3 and all(n == preflight.MEASURE_TOKENS for n in calls)
+    assert m.json_ok and m.samples == 3 and m.failures == 0
+    assert m.tok_s == 500.0, "throughput comes from the provider's own timing"
+    assert m.reliability == 1.0
+
+
+def test_json_capability_needs_every_sample_not_just_one(monkeypatch, keyed):
+    """A model that returns JSON two times in three breaks a tool one turn in
+    three, which is not a model that can hold a tier."""
+    bodies = ['{"ok": true}', "sure! here you go", '{"ok": true}']
+
+    def fake_post(url, **kwargs):
+        return _Response(200, payload={"choices": [{"message": {"content": bodies.pop(0)}}]})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    assert preflight.measure(keyed, "m", samples=3).json_ok is False
+
+
+def test_a_fenced_json_block_still_counts(monkeypatch, keyed):
+    """Models wrap JSON in markdown constantly; `structured.ask` copes with it,
+    so this must too or it would condemn models that work."""
+
+    def fake_post(url, **kwargs):
+        return _Response(
+            200, payload={"choices": [{"message": {"content": '```json\n{"ok": true}\n```'}}]}
+        )
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    assert preflight.measure(keyed, "m", samples=1).json_ok is True
+
+
+def test_failed_samples_lower_reliability_without_losing_the_good_ones(monkeypatch, keyed):
+    answers = [_Response(500), _Response(200), _Response(200)]
+
+    def fake_post(url, **kwargs):
+        return answers.pop(0)
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    m = preflight.measure(keyed, "m", samples=3)
+    assert m.samples == 3 and m.failures == 1
+    assert m.reliability == pytest.approx(2 / 3)
+
+
+def test_a_measurement_is_stored_and_accumulates(tmp_path):
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    preflight.remember(store, [preflight.Probe("groq", "m", state=USABLE, status=200)])
+    preflight.save_measurement(
+        store, preflight.Measurement("groq", "m", samples=3, failures=1, tok_s=120.0, json_ok=True)
+    )
+    entry = preflight.proven_map(store)["groq"]["m"]
+    assert entry["tok_s"] == 120.0 and entry["json_ok"] is True
+    assert entry["samples"] == 3 and entry["failures"] == 1
+
+    # A second run adds to the sample count rather than replacing it: a model's
+    # reliability is its record, not its last afternoon.
+    preflight.save_measurement(
+        store, preflight.Measurement("groq", "m", samples=3, failures=0, tok_s=130.0, json_ok=True)
+    )
+    entry = preflight.proven_map(store)["groq"]["m"]
+    assert entry["samples"] == 6 and entry["failures"] == 1
+    store.close()

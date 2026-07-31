@@ -76,6 +76,32 @@ Mesurer 785 modèles pour peupler une liste déroulante serait un gâchis. Ce qu
 - **Un défaut qui marche n'est jamais remis en cause** pour un plus rapide : les défauts sont choisis pour leur capacité, pas pour leur latence. Seul un défaut *bloqué* est remplacé.
 - **Sans préflight, rien ne change.** Aucune connaissance ne doit modifier la configuration de qui que ce soit.
 
+### Router sur la performance, pas sur « il a répondu »
+
+« Il a répondu » est une base faible pour une décision de routage, et une seule mesure encore plus : quatre appels identiques de huit jetons au même modèle se sont étalés de **465 à 774 ms**. Un échantillon unique n'est pas une mesure.
+
+`corparius preflight` mesure donc, sur les seuls modèles qu'un palier pourrait vraiment utiliser (pas sur un catalogue de 365) : **trois échantillons**, une demande d'objet JSON, et le débit pris dans le `usage.completion_time` que le fournisseur renvoie lui-même — le temps mural sur un WAN mesure autant le réseau que le modèle.
+
+Mesuré sur la configuration réelle du propriétaire :
+
+| Modèle | Débit | JSON | Fiabilité |
+| --- | --- | --- | --- |
+| `groq:llama-3.3-70b-versatile` | 594 tok/s | oui | 100 % |
+| `cerebras:gpt-oss-120b` | 38 tok/s | **non** | 100 % |
+| `mistral:mistral-small-latest` | 10,6 tok/s | oui | 100 % |
+| `openrouter:openai/gpt-oss-20b:free` | 7,2 tok/s | **non** | 100 % |
+
+**Deux des quatre modèles de sa chaîne de repli ne savent pas produire un objet JSON.** Une sonde de disponibilité ne peut pas le voir : elle demande un mot. Or chaque outil à schéma passe par `corparius/structured.py`, donc un modèle qui ne suit pas de schéma casse la moitié du roster quelle que soit sa vitesse.
+
+L'ordre de classement suit exactement cette logique :
+
+1. **Bloqué est exclu** — ce n'est pas une préférence, on ne peut pas l'appeler.
+2. **Capacité JSON**, là où elle a été mesurée. Un modèle jamais mesuré n'est pas pénalisé : l'absence de preuve n'est pas une preuve.
+3. **Fiabilité** — deux échecs sur cinq échantillons, c'est un tour perdu sur cinq, et aucun débit ne compense.
+4. **Débit, puis latence.** 594 contre 10,6 tok/s n'est pas un départage, c'est une vraie différence — mais c'est la **dernière** chose regardée, parce qu'un modèle rapide qui ne suit pas de schéma ne vaut rien.
+
+`--quick` saute la mesure de performance quand seule la disponibilité intéresse.
+
 ### Un verdict vieillit
 
 Un modèle bloqué il y a six mois peut être ouvert aujourd'hui, et un `capacité momentanée` n'a jamais été un verdict : il veut dire « le fournisseur était occupé », ce qui n'est pas une connaissance et ne le devient pas en restant dans une table.

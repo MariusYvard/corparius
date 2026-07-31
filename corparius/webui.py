@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import threading
+import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -824,7 +825,14 @@ def _claude_setup(state: UiState, all_tiers: bool = False) -> dict:
     # and two four-second connect timeouts on a machine with no Ollama exceeded
     # the console client's own timeout.
     local_trivial, _why = hardware.recommended_local(state.store(), _fresh_settings())
-    applied = claudecli.plan(connected_providers(), local_trivial, all_tiers=all_tiers)
+    from . import preflight
+
+    applied = claudecli.plan(
+        connected_providers(),
+        local_trivial,
+        all_tiers=all_tiers,
+        proven=preflight.proven_map(state.store()),
+    )
     _persist(state, applied)
     payload = _providers_payload()
     return {**payload, "check": result, "applied": applied}
@@ -1407,11 +1415,17 @@ def _route_tiers_recommend(ctx):
     from .llm import recommended_routing
 
     local_trivial, _why = hardware.recommended_local(ctx.store(), _fresh_settings())
+    # What a preflight actually proved, so "recommended" never writes a tier
+    # this key cannot call. Empty until someone runs one, and then this behaves
+    # exactly as it did before.
+    from . import preflight
+
     routing = recommended_routing(
         connected_providers(),
         local_trivial,
         hard=claudecli.HARD_TIER if claudecli.already_on() else "",
         fallback_tail=claudecli.FALLBACK_LADDER if claudecli.already_on() else (),
+        proven=preflight.proven_map(ctx.store()),
     )
     if routing is None:
         return 400, {
@@ -1543,14 +1557,20 @@ def _route_sweep_get(ctx):
 
     known = ctx.state.store().known_probes()
     tally: dict[str, int] = {}
+    oldest = 0.0
     for row in known:
         tally[row["state"]] = tally.get(row["state"], 0) + 1
+        oldest = max(oldest, time.time() - float(row["ts"] or time.time()))
     return 200, {
         "ok": True,
         "sweep": ctx.state.sweep,
         "known": len(known),
         "tally": tally,
         "usable_by_provider": {k: len(v) for k, v in preflight.known(ctx.state.store()).items()},
+        # A verdict is a measurement and measurements age. Shown so nobody reads
+        # a six-month-old "blocked" as current fact.
+        "oldest_days": int(oldest / 86400),
+        "worth_rechecking": len(preflight.stale(ctx.state.store())),
     }
 
 

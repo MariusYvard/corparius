@@ -70,6 +70,31 @@ was released.
   réels parce qu'un onglet s'est fermé serait un gâchis en soi. Un second
   balayage simultané est refusé.
 
+- **Changed : le routage recommandé ne choisit plus un modèle prouvé mort.**
+  C'est ce qui donne son sens à la mesure — sans cela, on appelait 785 modèles
+  pour peupler une liste déroulante. Les `default_model` du registre sont des
+  chaînes figées qui pourrissent : celle d'openrouter a cessé d'exister pendant
+  que sa variante payante restait, et « recommandé » écrivait alors un palier
+  qui répond 404. Quand un préflight a prouvé qu'un défaut est bloqué, le
+  routage prend **le modèle le plus rapide qui a répondu** sur ce fournisseur.
+  Un défaut qui marche n'est jamais remis en cause pour un plus rapide : ils
+  sont choisis pour leur capacité, pas leur latence. Et sans préflight, rien ne
+  change.
+
+- **Added : un verdict vieillit.** Un modèle bloqué il y a six mois peut être
+  ouvert aujourd'hui, et un `capacité momentanée` n'a jamais été un verdict —
+  il dit que le fournisseur était occupé, ce qui ne devient pas une
+  connaissance en restant dans une table. La console affiche l'âge du plus
+  vieux verdict et combien méritent d'être redemandés, et un balayage **repose
+  les questions provisoires en premier** (les `capacity`, puis tout ce qui
+  dépasse trente jours) — pour qu'un balayage arrêté ait dépensé ses appels sur
+  ce qui valait la peine.
+
+- **Added : `corparius preflight --all`.** La passe complète depuis un
+  terminal, pour qui est en SSH ou en cron et n'a pas le bouton. Même
+  comptabilité, et la même règle : le prix est annoncé avant, et rien ne part
+  sans `--yes`.
+
 ## 0.3.0 — la page vue par quelqu'un qui la regarde, et l'exploitant guidé
 
 Presque tout ici vient d'une session réelle sur une entreprise réelle : des

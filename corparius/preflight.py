@@ -334,6 +334,10 @@ def sweep(
     """
     counts = {"usable": 0, "blocked": 0, "capacity": 0, "unknown": 0}
     done = 0
+    # Anything provisional or old goes first, so a sweep that is stopped early
+    # has spent its calls on the questions actually worth asking again rather
+    # than on re-confirming what was proved this morning.
+    priority = {(p, m) for p, m, _ in stale(store)}
     for name in configured_providers():
         if should_stop and should_stop():
             break
@@ -345,6 +349,7 @@ def sweep(
         if limit > 0 and len(models) > limit:
             step = max(1, len(models) // limit)
             models = models[::step][:limit]
+        models.sort(key=lambda m: (name, m) not in priority)
         for model in models:
             if should_stop and should_stop():
                 break
@@ -381,6 +386,52 @@ def known(store, provider: str = "") -> dict[str, list[str]]:
         if row["state"] == USABLE:
             out.setdefault(row["provider"], []).append(row["model"])
     return out
+
+
+def proven_map(store, provider: str = "") -> dict[str, dict[str, dict]]:
+    """{provider: {model: {state, ms, ts, age_days}}} — everything measured.
+
+    Richer than `known` because a routing decision needs the blocked ones too:
+    the point is not only "what works" but "never pick the pinned default that
+    is known to 404".
+    """
+    if store is None:
+        return {}
+    now = time.time()
+    out: dict[str, dict[str, dict]] = {}
+    for row in store.known_probes(provider):
+        out.setdefault(row["provider"], {})[row["model"]] = {
+            "state": row["state"],
+            "ms": int(row["ms"] or 0),
+            "ts": float(row["ts"] or 0),
+            "age_days": int(max(0.0, now - float(row["ts"] or now)) / 86400),
+        }
+    return out
+
+
+# A verdict is a measurement, and measurements age. A model blocked six months
+# ago may be open today, and a `capacity` was never a verdict in the first
+# place — it is the one state that is explicitly provisional.
+STALE_DAYS = 30
+
+
+def stale(store, days: int = STALE_DAYS) -> list[tuple[str, str, str]]:
+    """(provider, model, state) worth asking again, most provisional first.
+
+    `capacity` leads whatever its age: it means "the provider was busy", which
+    is not knowledge and never becomes knowledge by sitting in a table. Then
+    anything older than `days`.
+    """
+    now = time.time()
+    provisional, old = [], []
+    for row in store.known_probes():
+        age = (now - float(row["ts"] or now)) / 86400
+        entry = (row["provider"], row["model"], row["state"])
+        if row["state"] == CAPACITY:
+            provisional.append(entry)
+        elif age > days:
+            old.append(entry)
+    return provisional + old
 
 
 def save(store, report: Report) -> None:

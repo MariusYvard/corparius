@@ -214,6 +214,32 @@ def cmd_preflight(args) -> None:
         print("Mock mode (CORP_LLM_MOCK=true): no provider to call. Nothing to prove.")
         raise SystemExit(1)
 
+    # `--all` is the console's "Check every model" from a terminal — for anyone
+    # over SSH or in a cron job, who does not have the button. Same worker, same
+    # accounting, and the same rule: the price is stated before anything runs.
+    if getattr(args, "all", False):
+        store = _store()
+        est = preflight.estimate()
+        print(
+            f"This would call {est['total']} model(s) across {len(est['providers'])} provider(s):"
+        )
+        for name, n in sorted(est["providers"].items(), key=lambda kv: -kv[1]):
+            print(f"  {name:<14} {n:>4}")
+        if not est["total"]:
+            print("Nothing to call. Set a provider key first.")
+            raise SystemExit(1)
+        if not args.yes:
+            # Their keys, their rate limits. A terminal has no confirm dialog,
+            # so this is the equivalent — and `--yes` is how a cron job says it
+            # already knows.
+            print("\nEach one is a real generation on your own account.")
+            print("Re-run with --yes to go ahead, or --provider <name> for one provider.")
+            return
+        result = preflight.sweep(store, limit=args.limit or 0, timeout=args.timeout)
+        print(f"\n{result['probed']} called: {result['counts']}")
+        print("Remembered, so recommended routing and the model picker can use it.")
+        return
+
     # `--provider` sweeps a whole catalogue instead of the configured tiers.
     # This is where the gap is widest: on NVIDIA, 8 of 14 sampled entries
     # answered 404 for a real key, out of 102 advertised.
@@ -361,7 +387,16 @@ def cmd_claude(args) -> None:
 
     store = _store()
     local_trivial, _why = recommended_local(store, Settings())
-    plan = claudecli.plan(connected_providers(), local_trivial, all_tiers=args.all_tiers)
+    from . import preflight
+
+    plan = claudecli.plan(
+        connected_providers(),
+        local_trivial,
+        all_tiers=args.all_tiers,
+        # What a preflight proved, so this never writes a tier the key
+        # cannot call. Empty until one has been run.
+        proven=preflight.proven_map(store),
+    )
     for key, value in plan.items():
         store.set_setting(key, value)
     every = all(v.startswith("claudecode:") for k, v in plan.items() if k.endswith("_MODEL"))
@@ -682,6 +717,10 @@ def main(argv=None) -> None:
         default=20,
         help="with --provider, how many models to call (0 = all; each one is a real call)",
     )
+    sp.add_argument(
+        "--all", action="store_true", help="sweep every configured provider's whole catalogue"
+    )
+    sp.add_argument("--yes", action="store_true", help="with --all, skip the confirmation")
     sp.set_defaults(fn=cmd_preflight)
 
     sp = sub.add_parser("claude", help="use your Claude subscription, no API key")

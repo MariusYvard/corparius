@@ -11,6 +11,8 @@ a throwaway directory, and pin mock mode. Tests that want a different value set
 it with monkeypatch.setenv, which lands in layer 1 and outranks all of this.
 """
 
+import socket
+
 import pytest
 
 from corparius import cfg
@@ -62,3 +64,27 @@ def hermetic_settings(tmp_path, monkeypatch):
     yield
     cfg.set_dotenv_path(cfg.ROOT / ".env")
     cfg.invalidate()
+
+
+# A test that reaches the network fails for reasons that have nothing to do with
+# the code it is testing: a provider being slow, a rate limit, a laptop on a
+# train. One did — `test_routing_check_is_green_when_every_tier_resolves` set a
+# provider key, which made the doctor's catalogue check dial a real endpoint —
+# and it was invisible because it passed.
+#
+# Loopback stays open: several tests start the real console and talk to it, and
+# that is the point of them.
+_real_connect = socket.socket.connect
+
+
+def _refuse_the_network(self, address):
+    host = address[0] if isinstance(address, tuple) else str(address)
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        raise AssertionError(
+            f"this test reached the network ({address}). Stub the call: a suite that "
+            "depends on a third party fails for reasons unrelated to the code."
+        )
+    return _real_connect(self, address)
+
+
+socket.socket.connect = _refuse_the_network

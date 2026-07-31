@@ -1489,6 +1489,30 @@ def _route_test_provider(ctx):
     }
 
 
+def _route_preflight(ctx):
+    """Call every configured model once, for eight tokens, and remember it.
+
+    A POST, never a GET on a polled path: each probe is a real generation on the
+    operator's own account. The doctor reads what this leaves behind and never
+    measures — the same split as the hardware bench.
+    """
+    from . import preflight
+
+    s = _fresh_settings()
+    if s.llm_mock:
+        return 400, {"ok": False, "error": "mock mode: there is no provider to call"}
+    report = preflight.run(s, timeout=int(ctx.body.get("timeout", preflight.TIMEOUT)))
+    preflight.save(ctx.state.store(), report)
+    return 200, {
+        "ok": True,
+        **report.as_dict(),
+        # What this cannot reach, named rather than dropped: a preflight that
+        # covers three of six tiers and reports success is worse than one that
+        # admits its reach.
+        "skipped": [{"tier": t, "model": m} for t, m in preflight.skipped(s)],
+    }
+
+
 def _route_ollama_pull(ctx):
     return 200, _ollama_pull(ctx.state, list(ctx.body.get("models", [])))
 
@@ -1579,6 +1603,7 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/claude/setup", _route_claude_setup),
     Route("POST", "/api/claude/install", _route_claude_install),
     Route("POST", "/api/test/provider", _route_test_provider),
+    Route("POST", "/api/preflight", _route_preflight),
     Route("POST", "/api/ollama/pull", _route_ollama_pull),
     Route("POST", "/api/ollama/bench", _route_ollama_bench),
     Route("POST", "/api/company", _route_company_post),

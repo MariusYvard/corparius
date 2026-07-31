@@ -710,8 +710,12 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
         <div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
           <button id="recommend-routing" class="primary" data-recommend data-i18n="prov.useRouting">Use recommended routing</button>
           <button id="save-tiers" data-i18n="prov.saveTiers">Save tiers</button>
+          <button id="run-preflight" data-i18n="prov.preflight">Prove these models</button>
           <span class="note" data-i18n="prov.format">Format: target:model, e.g. groq:llama-3.3-70b-versatile</span>
         </div>
+        <!-- A catalogue lists models that exist, not models this key may call.
+             Eight tokens each, and the answer is the only proof there is. -->
+        <div id="preflight-out" class="stack" style="gap:2px; margin-top:12px"></div>
       </div>
       <div class="card">
         <h2>Anthropic</h2>
@@ -943,7 +947,11 @@ en: {
   "oll.starting":"Starting the pull…","oll.done":"Models pulled.","oll.allSet":"Every model your tiers need is installed.",
   "oll.install":"Not detected. Install it from",
   "prov.note":"Changes apply to new calls immediately and are saved to the .env file. Mock mode serves every call from a deterministic offline mock.",
-  "prov.tiers":"Routing tiers","prov.saveTiers":"Save tiers","prov.format":"Format: target:model, e.g. groq:llama-3.3-70b-versatile",
+  "prov.tiers":"Routing tiers","prov.saveTiers":"Save tiers",
+  "prov.preflight":"Prove these models","prov.preflightRunning":"Calling each one for eight tokens…",
+  "prov.pf.usable":"usable","prov.pf.blocked":"blocked","prov.pf.capacity":"cold","prov.pf.unknown":"unknown","prov.pf.skipped":"not probed",
+  "prov.pfSkippedWhy":"Not an OpenAI-compatible endpoint, so this cannot prove it.",
+  "prov.pfNothing":"No tier points at an API provider, so there is nothing to call.","prov.format":"Format: target:model, e.g. groq:llama-3.3-70b-versatile",
   "tier.trivial":"trivial","tier.normal":"normal","tier.hard":"hard","tier.local":"local fallback","tier.chain":"fallback chain",
   "prov.free":"Free-tier providers",
   "prov.freeNote":"A provider joins the routing pool once its key is set (and cloud is enabled). Keys are write-only: the console never displays them back.",
@@ -1136,7 +1144,11 @@ fr: {
   "oll.starting":"Démarrage du téléchargement…","oll.done":"Modèles tirés.","oll.allSet":"Tous les modèles dont vos tiers ont besoin sont installés.",
   "oll.install":"Non détecté. Installez-le depuis",
   "prov.note":"Les changements s'appliquent immédiatement aux nouveaux appels et sont écrits dans .env. Le mode mock sert chaque appel depuis un simulateur hors ligne.",
-  "prov.tiers":"Tiers de routage","prov.saveTiers":"Enregistrer les tiers","prov.format":"Format : cible:modèle, ex. groq:llama-3.3-70b-versatile",
+  "prov.tiers":"Tiers de routage","prov.saveTiers":"Enregistrer les tiers",
+  "prov.preflight":"Prouver ces modèles","prov.preflightRunning":"Appel de chacun sur huit jetons…",
+  "prov.pf.usable":"utilisable","prov.pf.blocked":"bloqué","prov.pf.capacity":"à froid","prov.pf.unknown":"inconnu","prov.pf.skipped":"non sondé",
+  "prov.pfSkippedWhy":"Point d'accès non compatible OpenAI : impossible de le prouver ici.",
+  "prov.pfNothing":"Aucun palier ne pointe vers un fournisseur API, il n'y a rien à appeler.","prov.format":"Format : cible:modèle, ex. groq:llama-3.3-70b-versatile",
   "tier.trivial":"trivial","tier.normal":"normal","tier.hard":"difficile","tier.local":"repli local","tier.chain":"chaîne de repli",
   "prov.free":"Providers gratuits",
   "prov.freeNote":"Un provider rejoint le pool dès que sa clé est saisie (et que le cloud est activé). Clés en écriture seule : jamais réaffichées.",
@@ -2259,6 +2271,29 @@ document.addEventListener("click", async e => {
       $$("input[data-tier]").forEach(i => values[i.dataset.tier] = i.value.trim());
       await api("/api/providers", {values});
       toast(t("toast.tiersSaved")); await loadProviders();
+    } else if (b.id === "run-preflight") {
+      /* Eight tokens per configured model. A catalogue lists models that exist;
+         only a call says this key may use one. A rate limit or a cold start is
+         reported as capacity, never as a rejection — the free tiers this is
+         built for look exactly like that while they wake up. */
+      const out = $("#preflight-out");
+      b.disabled = true;
+      out.innerHTML = `<span class="note">${esc(t("prov.preflightRunning"))}</span>`;
+      try {
+        const d = await api("/api/preflight", {});
+        const badge = {usable: "ok", blocked: "danger", capacity: "warn", unknown: "dim"};
+        out.innerHTML = (d.probes || []).map(p => `
+          <div class="kv"><span><span class="badge ${badge[p.state] || "dim"}">${esc(t("prov.pf." + p.state))}</span>
+            <span class="mono">${esc(p.tier)}</span> ${esc(p.provider)}:${esc(p.model)}</span>
+            <span class="note" style="overflow-wrap:anywhere">${esc(p.detail)}</span></div>`).join("")
+          + (d.skipped || []).map(s => `
+          <div class="kv"><span><span class="badge dim">${esc(t("prov.pf.skipped"))}</span>
+            <span class="mono">${esc(s.tier)}</span> ${esc(s.model)}</span>
+            <span class="note">${esc(t("prov.pfSkippedWhy"))}</span></div>`).join("");
+        if (!(d.probes || []).length && !(d.skipped || []).length)
+          out.innerHTML = `<span class="note">${esc(t("prov.pfNothing"))}</span>`;
+      } catch (e) { out.innerHTML = `<span class="badge danger">${esc(e.message)}</span>`; }
+      b.disabled = false;
     } else if (b.hasAttribute("data-save-anthropic")) {
       const v = $("#anthropic-key").value.trim();
       if (!v) return toast(t("toast.pasteFirst"), true);

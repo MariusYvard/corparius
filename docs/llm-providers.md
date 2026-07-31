@@ -102,6 +102,40 @@ L'ordre de classement suit exactement cette logique :
 
 `--quick` saute la mesure de performance quand seule la disponibilité intéresse.
 
+### Capacité : ce qu'un modèle *est*, pas seulement ce qu'il a fait
+
+Mesurer prouve qu'un modèle répond, à quelle vitesse, et s'il sait produire du JSON. Cela ne dit rien de sa capacité à tenir une stratégie — ce que le palier `hard` a précisément besoin de savoir.
+
+Trois sources, chacune étiquetée, selon la règle du dépôt :
+
+| Source | Ce que c'est | Autorité |
+| --- | --- | --- |
+| **Mesuré** | ce que le modèle a fait ici : réponse, débit, JSON, fiabilité | la plus forte |
+| **Donné** | le catalogue du fournisseur : contexte, date de création, paramètre `reasoning` | ensuite |
+| **Estimé** | le nombre de paramètres lu dans le nom (`70b`, `120b`, `nano-9b`) | en dernier |
+
+Le catalogue vient de l'endpoint public d'OpenRouter — un fournisseur déjà au registre, sans clé, qui décrit 365 modèles, et que quelqu'un maintient parce que son métier en dépend. La date de création est ce que « génération » veut dire en pratique : `nemotron-3-super-120b` date de mars 2026, `llama-3.3-70b` de décembre 2024.
+
+**Le mesuré prime toujours sur le déclaré**, et l'écart est réel : `gpt-oss-120b` **annonce** `structured_outputs` et a été **mesuré incapable** de produire un objet JSON. Avoir vu échouer bat ce qui est écrit sur une fiche.
+
+Un modèle que rien ne décrit le dit — `mistral-small-latest` est un alias, pas une version — plutôt que de deviner.
+
+**Pourquoi pas un classement de benchmarks.** Ils existent : [llm-stats](https://llm-stats.com/), [Vellum](https://www.vellum.ai/llm-leaderboard), [BenchLM](https://benchlm.ai/), [iternal](https://iternal.ai/llm-benchmark-repository). Mais ce sont des produits web, pas des API versionnées. En dépendre à l'exécution ajouterait une source qui pourrit en silence, ce que ce projet a déjà payé : le `default_model` d'openrouter a cessé d'exister sans que rien ne le remarque. Qui fait confiance à un classement précis pointe `CORP_MODEL_SCORES` vers son propre fichier JSON ; il est lu comme donnée **Donnée** et prime sur les signaux dérivés, sans que le dépôt prétende maintenir un tableau qu'il n'a pas les moyens de tenir à jour.
+
+### Chaque palier veut autre chose
+
+| Palier | Ce qui compte | Pourquoi |
+| --- | --- | --- |
+| `hard` | raisonnement, contexte, génération, taille | stratégie et code, quelques fois par jour : un modèle lent qui réfléchit est le bon échange |
+| `trivial` | débit, puis petite taille | un post social toutes les deux heures ; un 120B y paie une capacité que personne ne lit |
+| `normal` | position au classement vitesse (comptée double) plus position au classement capacité | le travail quotidien, où aucun axe ne doit dominer |
+
+Vérifié sur des modèles réels : `hard` prend le 120B raisonneur à 1 M de contexte, `trivial` le 8B à 800 tok/s. Et si ce même 120B est **mesuré** incapable de JSON, il tombe dernier sur les trois paliers.
+
+Deux choses qu'aucun palier ne négocie, avant tout le reste : suivre un schéma, et ne pas perdre de tours.
+
+Une pondération égale pour `normal` a été essayée et elle est dégénérée : quand les deux classements sont exactement opposés, tous les modèles obtiennent le même score et le résultat retombe sur l'ordre alphabétique. La vitesse compte double parce que ce palier tourne en permanence.
+
 ### Un verdict vieillit
 
 Un modèle bloqué il y a six mois peut être ouvert aujourd'hui, et un `capacité momentanée` n'a jamais été un verdict : il veut dire « le fournisseur était occupé », ce qui n'est pas une connaissance et ne le devient pas en restant dans une table.

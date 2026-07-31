@@ -250,6 +250,8 @@ def recommended_routing(
     hard: str = "",
     fallback_tail=(),
     proven: dict[str, dict[str, dict]] | None = None,
+    catalogue: dict[str, dict] | None = None,
+    scores: dict[str, float] | None = None,
 ) -> dict[str, str] | None:
     """A coherent tier configuration from the free providers actually connected,
     so no tier resolves to something the operator has not set up.
@@ -296,7 +298,7 @@ def recommended_routing(
     if not picks:
         return None
 
-    def model(provider: str) -> str:
+    def model(provider: str, tier: str = "normal") -> str:
         default = OPENAI_COMPAT_PROVIDERS[provider]["default_model"]
         known = (proven or {}).get(provider) or {}
         if not known or known.get(default, {}).get("state") != "blocked":
@@ -306,7 +308,7 @@ def recommended_routing(
             return f"{provider}:{default}"
         from .preflight import rank
 
-        usable = rank(known)
+        usable = rank(known, tier=tier, catalogue=catalogue, scores=scores)
         if not usable:
             log.warning(
                 "%s: the pinned default %s is not callable with this key, and nothing else "
@@ -324,12 +326,15 @@ def recommended_routing(
 
     normal_p = picks[0]
     hard_p = "openrouter" if "openrouter" in picks else normal_p
+    # The chain is walked by every tier, so it is ranked as `normal`.
     chain = [model(p) for p in picks if p != normal_p]
     chain += [step for step in fallback_tail if step]
     return {
-        "CORP_TRIVIAL_MODEL": f"local:{local_trivial}" if local_trivial else model(normal_p),
-        "CORP_NORMAL_MODEL": model(normal_p),
-        "CORP_HARD_MODEL": hard or model(hard_p),
+        "CORP_TRIVIAL_MODEL": (
+            f"local:{local_trivial}" if local_trivial else model(normal_p, "trivial")
+        ),
+        "CORP_NORMAL_MODEL": model(normal_p, "normal"),
+        "CORP_HARD_MODEL": hard or model(hard_p, "hard"),
         "CORP_LLM_FALLBACK": ",".join(chain),
     }
 

@@ -261,11 +261,66 @@ def run(settings, timeout: int = TIMEOUT) -> Report:
     return report
 
 
+def probe_catalogue(provider: str, limit: int = 0, timeout: int = TIMEOUT) -> list[Probe]:
+    """Call every model the provider advertises, and see which ones answer.
+
+    This is where the gap between a catalogue and an account is widest.
+    Measured on NVIDIA with the owner's own key: **8 of 14 sampled entries
+    answered 404** out of a catalogue of 102. Picking a tier off that list is
+    close to a coin flip.
+
+    `limit` caps the number of calls, because a full sweep of a large catalogue
+    is a hundred real generations. Zero means all of them, which is a deliberate
+    thing to ask for.
+    """
+    from .llm import list_models
+
+    try:
+        models = list_models(provider, timeout=timeout)
+    except (requests.RequestException, ValueError) as exc:
+        log.warning("preflight: %s did not answer with a catalogue: %s", provider, exc)
+        return []
+    if limit > 0:
+        # Spread across the catalogue rather than the first N: providers list
+        # alphabetically, and the first twenty of "01-ai…" through "ai21labs…"
+        # are not a sample of anything.
+        step = max(1, len(models) // limit)
+        models = models[::step][:limit]
+    return [probe(provider, model, "catalogue", timeout=timeout) for model in models]
+
+
+def remember(store, probes: list[Probe]) -> None:
+    """Write each verdict into the per-provider memory.
+
+    Separate from `save`: that keeps the last *run* for the doctor to summarise,
+    this accumulates what is known about each model across every run. The first
+    version had only the former, so the same 404s were rediscovered every time.
+    """
+    if store is None:
+        return
+    for p in probes:
+        if p.state == UNKNOWN and not p.status:
+            continue  # nothing was called; there is nothing to remember
+        store.record_probe(p.provider, p.model, p.state, p.detail, p.status, p.ms)
+
+
+def known(store, provider: str = "") -> dict[str, list[str]]:
+    """{provider: [models proved usable]}, from everything ever probed."""
+    if store is None:
+        return {}
+    out: dict[str, list[str]] = {}
+    for row in store.known_probes(provider):
+        if row["state"] == USABLE:
+            out.setdefault(row["provider"], []).append(row["model"])
+    return out
+
+
 def save(store, report: Report) -> None:
     """Remember it, so the doctor can report without ever probing."""
     if store is None:
         return
     store.set_setting("CORP_PREFLIGHT", json.dumps(report.as_dict()))
+    remember(store, report.probes)
 
 
 def load(store) -> Report:

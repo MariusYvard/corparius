@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 import requests
 
-from . import inbox
+from . import documents, inbox
 from .agents import ROSTER, AgentSpec, Executor
 from .config import Settings
 from .hitl import ApprovalGate
@@ -39,6 +39,10 @@ class RunContext:
     structured: object = None  # the last structured.Result, when a tool asked for one
     skills: object = None  # a skills.SkillLoader, or None when skills are off
     memory_top_k: int = 0  # durable facts recalled per prompt; 0 disables recall
+    # The company's own files, extracted once per tick. A pitch deck, a spec,
+    # a price list: knowledge that had no way into a prompt at all before —
+    # only the config, a hand-written skill, or nothing.
+    documents: str = ""
 
 
 def _load_skills(settings, slug: str):
@@ -200,6 +204,10 @@ class Runtime:
                     store=self.store,
                     skills=skills,
                     memory_top_k=memory_top_k,
+                    # Read once per tick rather than per agent: extraction
+                    # touches the disk, and every agent in a tick sees the
+                    # same files.
+                    documents=documents.context(slug),
                 )
                 for spec in due_roles(
                     tick,

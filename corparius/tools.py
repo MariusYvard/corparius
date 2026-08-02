@@ -467,6 +467,74 @@ def _record_decision(ctx, draft: str) -> str:
     return f"Decided: {text[:120]}"
 
 
+def _write_site_content(ctx, draft: str) -> str:
+    """Turn a drafted plan into the site blocks, in company.yaml.
+
+    The renderer gained `how_it_works`, `privacy` and `pages`, and I filled them
+    in by hand to show them working — which is exactly the wrong way round. An
+    operator hand-writing YAML is the friction this project exists to remove,
+    and a capability nothing can reach is not a capability.
+
+    **What it will write, and what it refuses to.** A company can describe its
+    own protocol and its own data handling: those are facts it owns, and drafting
+    them is honest work. It cannot invent a customer quote or a study — so
+    `proof` and `testimonials` are never written here, and the tool says so
+    rather than leaving the operator to wonder why those sections stayed empty.
+    That is the same line the renderer already draws, one step earlier.
+    """
+    store = getattr(ctx, "store", None)
+    slug = ctx.company.get("slug", "company")
+    data = getattr(ctx, "structured", None)
+    fields = data.data if data else {}
+
+    steps = [str(s).strip() for s in (fields.get("steps") or []) if str(s).strip()][:5]
+    privacy = [str(s).strip() for s in (fields.get("privacy") or []) if str(s).strip()][:5]
+    page_title = str(fields.get("page_title", "")).strip()
+    page_body = str(fields.get("page_body", "")).strip()
+
+    if not (steps or privacy or page_body):
+        return "Nothing usable drafted, so company.yaml is unchanged"
+
+    path = company_mod.path_for(slug)
+    try:
+        raw = company_mod.load(path, slug)
+    except (FileNotFoundError, ValueError) as exc:
+        return f"Cannot read {slug}: {exc}"
+
+    site = dict(raw.get("site") or {})
+    wrote = []
+    if steps:
+        site["how_it_works"] = steps
+        wrote.append(f"{len(steps)} step(s)")
+    if privacy:
+        site["privacy"] = privacy
+        wrote.append(f"{len(privacy)} privacy point(s)")
+    if page_title and page_body:
+        pages = [p for p in (site.get("pages") or []) if isinstance(p, dict)]
+        slug_new = re.sub(r"[^a-z0-9-]+", "-", page_title.lower()).strip("-")[:40] or "more"
+        pages = [p for p in pages if p.get("slug") != slug_new]
+        pages.append({"slug": slug_new, "title": page_title, "body": page_body})
+        site["pages"] = pages[:6]
+        wrote.append(f"a page ({slug_new})")
+    raw["site"] = site
+
+    cfg_out, errors, warnings = company_mod.validate(raw)
+    if errors:
+        # Refuse rather than persist: a company.yaml that stops loading takes the
+        # whole company down, and this tool runs unattended.
+        return f"Refused, the result would not validate: {'; '.join(errors)}"
+    company_mod.dump(cfg_out, path)
+    if store is not None:
+        store.record_action(slug, "design", "write_site_content", {}, "; ".join(wrote), True)
+    note = "Wrote " + ", ".join(wrote) + " into company.yaml"
+    if not (cfg_out.get("site") or {}).get("proof"):
+        note += (
+            ". Proof and testimonials are left empty on purpose: a claim needs a source "
+            "and a quote needs a name, and neither can be drafted"
+        )
+    return note
+
+
 def _review_commitments(ctx) -> str:
     """Did the last plan happen? Compare what was promised to what was done.
 
@@ -974,6 +1042,31 @@ _ALL = [
             "been decided, answer exactly: nothing decided."
         ),
         effect=lambda c, d: _ok(_record_decision(c, d)),
+    ),
+    Tool(
+        "write_site_content",
+        "Draft the site sections and write them into company.yaml",
+        needs_draft=True,
+        risk=permissions.WRITE_LOCAL,
+        schema={
+            "steps": {"type": "list", "default": []},
+            "privacy": {"type": "list", "default": []},
+            "page_title": {"type": "str", "default": "", "max_len": 60},
+            "page_body": {"type": "str", "default": "", "max_len": 1200},
+        },
+        prompt=lambda c: (
+            f"Write the sales-site content for {_name(c)}, which sells: "
+            f"{(c.company.get('offer') or {}).get('product', '')[:200]}. "
+            "`steps`: three to five short steps describing how it actually works, in order. "
+            "`privacy`: up to four sentences on what happens to the customer's data, only "
+            "what is true of this product. "
+            "`page_title` and `page_body`: one secondary page the buyer would want — the "
+            "method, the architecture, who it is for — two or three paragraphs separated "
+            "by a blank line. "
+            "Never invent a customer quote, a statistic or a study; those are not yours to "
+            "write. Leave a field empty rather than filling it with something you do not know."
+        ),
+        effect=lambda c, d: _ok(_write_site_content(c, d)),
     ),
     Tool(
         "review_kpis",

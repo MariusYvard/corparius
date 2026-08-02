@@ -511,7 +511,7 @@ def _write_site_content(ctx, draft: str) -> str:
         wrote.append(f"{len(privacy)} privacy point(s)")
     if page_title and page_body:
         pages = [p for p in (site.get("pages") or []) if isinstance(p, dict)]
-        slug_new = re.sub(r"[^a-z0-9-]+", "-", page_title.lower()).strip("-")[:40] or "more"
+        slug_new = company_mod._slugify(page_title) or "more"
         pages = [p for p in pages if p.get("slug") != slug_new]
         pages.append({"slug": slug_new, "title": page_title, "body": page_body})
         site["pages"] = pages[:6]

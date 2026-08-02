@@ -194,6 +194,21 @@ def template(tid: str) -> dict | None:
     return next((dict(t) for t in TEMPLATES if t["id"] == tid), None)
 
 
+def _slugify(text: str) -> str:
+    """A URL-safe slug that survives accents.
+
+    `[^a-z0-9-]+` turned "Méthode et architecture" into
+    `m-thode-et-architecture` — the accent became a hyphen and the word lost a
+    letter. A French company got a broken URL for every page it wrote, which is
+    the kind of thing nobody notices until it is in a sitemap.
+    """
+    import unicodedata
+
+    folded = unicodedata.normalize("NFKD", str(text or ""))
+    folded = "".join(c for c in folded if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", "-", folded.lower()).strip("-")[:48]
+
+
 def slugify(name: str) -> str:
     return SLUG_RE.sub("-", name.strip().lower()).strip("-")
 
@@ -488,7 +503,7 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
         for entry in site_in.get("pages") or []:
             if not isinstance(entry, dict):
                 continue
-            slug = re.sub(r"[^a-z0-9-]+", "-", str(entry.get("slug", "")).lower()).strip("-")
+            slug = _slugify(entry.get("slug", "") or entry.get("title", ""))
             title = str(entry.get("title", "")).strip()
             body = str(entry.get("body", "")).strip()
             if slug and title and body:

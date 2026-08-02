@@ -150,6 +150,11 @@ def _messages(spec: AgentSpec, ctx, tool) -> list[dict]:
     learned = _recall(ctx, tool)
     if learned:
         system = f"{system}\n\nWhat this company has learned:\n{learned}"
+    # The company's own files. Bounded in documents.context, because this
+    # rides on every prompt and an unscoped block already cost this project
+    # 3 815 characters a turn.
+    if getattr(ctx, "documents", ""):
+        system = f"{system}\n\n{ctx.documents}"
     # The company's language, in the one place every drafting tool passes
     # through. A French company was drafting `Reply drafted: "Thank you for
     # contacting us…"` to its French customers, because nothing in the prompt

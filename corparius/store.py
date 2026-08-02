@@ -77,6 +77,11 @@ CREATE INDEX IF NOT EXISTS drafts_by_company ON drafts (company, state, ts);
 CREATE TABLE IF NOT EXISTS model_catalogue (
     id INTEGER PRIMARY KEY CHECK (id = 1), models TEXT, ts REAL
 );
+CREATE TABLE IF NOT EXISTS directives (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT, kind TEXT, target TEXT,
+    note TEXT, active INTEGER DEFAULT 1, ts REAL
+);
+CREATE INDEX IF NOT EXISTS directives_by_company ON directives (company, active);
 CREATE TABLE IF NOT EXISTS model_probes (
     provider TEXT, model TEXT, state TEXT, detail TEXT, status INTEGER, ms INTEGER, ts REAL,
     tok_s REAL, json_ok INTEGER, samples INTEGER, failures INTEGER, measured_at REAL,
@@ -88,7 +93,7 @@ CREATE TABLE IF NOT EXISTS model_probes (
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -258,6 +263,23 @@ def _migration_12(db: sqlite3.Connection) -> None:
     db.execute("DELETE FROM settings WHERE key='CORP_MODEL_CATALOGUE'")
 
 
+def _migration_13(db: sqlite3.Connection) -> None:
+    """What the operator told the CEO, in a form the runtime can obey.
+
+    The CEO chat read the store and wrote nothing. So an operator could say
+    "too early for cold emailing, focus on the prototype", watch the CEO answer
+    "I will pause the campaigns", and then watch the next tick draft another
+    cold email. The chat was a conversation held over a machine that could not
+    hear it, which is worse than no chat: it promised.
+    """
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS directives ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT, kind TEXT, target TEXT,"
+        " note TEXT, active INTEGER DEFAULT 1, ts REAL)"
+    )
+    db.execute("CREATE INDEX IF NOT EXISTS directives_by_company ON directives (company, active)")
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 MIGRATIONS = {
     1: _migration_1,
@@ -272,6 +294,7 @@ MIGRATIONS = {
     10: _migration_10,
     11: _migration_11,
     12: _migration_12,
+    13: _migration_13,
 }
 
 
@@ -947,6 +970,37 @@ class Store:
     def model_catalogue_ts(self) -> float:
         row = self.db.execute("SELECT ts FROM model_catalogue WHERE id=1").fetchone()
         return float(row["ts"] or 0) if row else 0.0
+
+    @_locked
+    def add_directive(self, company, kind, target, note="") -> int:
+        """Record a standing instruction. Replaces any live one for the same
+        (kind, target): "pause social" said twice is one instruction, and the
+        second saying should not leave the first to be revoked separately."""
+        self.db.execute(
+            "UPDATE directives SET active=0 WHERE company=? AND kind=? AND target=? AND active=1",
+            (company, kind, target),
+        )
+        cur = self.db.execute(
+            "INSERT INTO directives (company, kind, target, note, active, ts) VALUES (?,?,?,?,1,?)",
+            (company, kind, target, note, time.time()),
+        )
+        self.db.commit()
+        return int(cur.lastrowid or 0)
+
+    @_locked
+    def directives(self, company, kind="") -> list[dict]:
+        q = "SELECT * FROM directives WHERE company=? AND active=1"
+        args: list = [company]
+        if kind:
+            q += " AND kind=?"
+            args.append(kind)
+        return [dict(r) for r in self.db.execute(q + " ORDER BY ts DESC", args).fetchall()]
+
+    @_locked
+    def clear_directive(self, directive_id) -> bool:
+        cur = self.db.execute("UPDATE directives SET active=0 WHERE id=?", (directive_id,))
+        self.db.commit()
+        return cur.rowcount > 0
 
     @_locked
     def known_probes(self, provider: str = "") -> list[dict]:

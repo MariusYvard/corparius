@@ -49,7 +49,14 @@ class LocalDatasetSource(LeadSource):
     name = "local"
 
     def available(self) -> bool:
-        return True
+        """A CSV that does not exist is not a source.
+
+        This answered True unconditionally, so `configured_sources()` reported
+        `local` on a machine with no list at all — telling an operator their
+        leads were configured while nothing could ever return one.
+        """
+        path = cfg.get("CORP_LEADS_CSV", "")
+        return bool(path) and os.path.isfile(path)
 
     def find(self, query: str, limit: int) -> list[Lead]:
         path = cfg.get("CORP_LEADS_CSV", "")
@@ -126,11 +133,109 @@ class BrowserSource(LeadSource):
         return leads
 
 
-REGISTRY: dict[str, LeadSource] = {s.name: s for s in [LocalDatasetSource(), BrowserSource()]}
+class WebSearchSource(LeadSource):
+    """Search the web and read the pages it finds, rather than being handed a list.
+
+    `find_targets` used to answer "Found 5 ICP-matching targets from enriched
+    data (mock)" whenever no source was configured — five people who did not
+    exist, entering the action log and then the outreach agent's drafts. Deleting
+    that lie left a gap: an operator with no CSV had no way to find anybody. This
+    is the way.
+
+    `CORP_LEAD_SEARCH_URL` is a search endpoint with `{query}` in it. Anything
+    that renders results server-side works, and the operator chooses it, because
+    which engine is acceptable to query is their decision and their jurisdiction:
+
+        CORP_LEAD_SEARCH_URL=https://searx.example.org/search?q={query}
+        CORP_LEAD_SEARCH_URL=https://duckduckgo.com/html/?q={query}
+
+    Two hops, both headless: the results page for candidate links, then each
+    candidate for a real contact. Nothing is invented — a page with no address
+    yields no lead, and that is reported as none rather than padded.
+
+    You are the operator: respect each site's terms and the applicable
+    data-protection law. A public professional address is not a licence to mail
+    it; see docs/conformite-fr.md.
+    """
+
+    name = "search"
+    # Follow only a handful of results: each is a rendered page load, and a lead
+    # search that takes two minutes is a lead search nobody runs.
+    MAX_PAGES = 4
+
+    def available(self) -> bool:
+        if not cfg.get("CORP_LEAD_SEARCH_URL"):
+            return False
+        try:
+            import playwright  # noqa: F401
+        except ImportError:
+            return False
+        return True
+
+    def find(self, query: str, limit: int) -> list[Lead]:
+        raw = cfg.get("CORP_LEAD_SEARCH_URL")
+        if not raw:
+            raise RuntimeError("CORP_LEAD_SEARCH_URL is not set")
+        from urllib.parse import quote_plus, urlparse
+
+        url = raw.replace("{query}", quote_plus(query))
+        leads: list[Lead] = []
+        seen: set[str] = set()
+
+        def harvest(text: str, origin: str) -> None:
+            for email in EMAIL_RE.findall(text):
+                key = email.lower()
+                # Addresses that belong to the plumbing rather than to a person.
+                if key in seen or any(
+                    key.startswith(p) for p in ("noreply", "no-reply", "postmaster", "abuse@")
+                ):
+                    continue
+                seen.add(key)
+                leads.append(Lead(email=email, company=urlparse(origin).netloc, source="search"))
+
+        results = render_page_text(url)
+        harvest(results, url)
+        if len(leads) < limit:
+            for link in _links(results)[: self.MAX_PAGES]:
+                if len(leads) >= limit:
+                    break
+                try:
+                    harvest(render_page_text(link), link)
+                except Exception:  # noqa: BLE001 - one dead page is not a failed search
+                    continue
+        return leads[:limit]
+
+
+_LINK = re.compile(r"https?://[^\s\)\]\"'<>]+")
+
+
+def _links(text: str) -> list[str]:
+    """Distinct http(s) links in rendered text, search engines' own pages
+    dropped: following them re-searches instead of reading a result."""
+    out, seen = [], set()
+    engines = ("google.", "duckduckgo.", "bing.", "searx", "yahoo.", "ecosia.", "qwant.")
+    for link in _LINK.findall(text or ""):
+        link = link.rstrip(".,);")
+        if link in seen or any(e in link for e in engines):
+            continue
+        seen.add(link)
+        out.append(link)
+    return out
+
+
+REGISTRY: dict[str, LeadSource] = {
+    s.name: s for s in [WebSearchSource(), LocalDatasetSource(), BrowserSource()]
+}
+
+
+def configured_sources() -> list[str]:
+    """Which sources could actually return something on this machine. Named in
+    the "no lead found" message, so the answer says what to do about it."""
+    return [name for name in _order() if (REGISTRY.get(name) and REGISTRY[name].available())]
 
 
 def _order() -> list[str]:
-    raw = cfg.get("CORP_LEAD_SOURCES", "browser,local")
+    raw = cfg.get("CORP_LEAD_SOURCES", "search,browser,local")
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 

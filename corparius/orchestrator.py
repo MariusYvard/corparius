@@ -58,7 +58,12 @@ def _memory_top_k(settings) -> int:
     return max(0, int(getattr(settings, "memory_top_k", 5)))
 
 
-def due_roles(tick: int, enabled: dict, paused: set[str] | None = None) -> list[AgentSpec]:
+def due_roles(
+    tick: int,
+    enabled: dict,
+    paused: set[str] | None = None,
+    overrides: dict[str, int] | None = None,
+) -> list[AgentSpec]:
     """Which roles run this tick.
 
     `paused` is the set of roles the operator has told the CEO to stand down.
@@ -70,6 +75,7 @@ def due_roles(tick: int, enabled: dict, paused: set[str] | None = None) -> list[
     another one.
     """
     paused = paused or set()
+    overrides = overrides or {}
     specs = []
     for role, spec in ROSTER.items():
         if spec.cadence_hours is None:
@@ -78,9 +84,30 @@ def due_roles(tick: int, enabled: dict, paused: set[str] | None = None) -> list[
             continue
         if role.value in paused:
             continue
-        if tick % spec.cadence_hours == 0:
+        # "social once a day, not every two hours" is a sentence, not a YAML
+        # edit. The operator's own period wins over the roster's default.
+        every = overrides.get(role.value) or spec.cadence_hours
+        if tick % every == 0:
             specs.append(spec)
     return specs
+
+
+def cadence_overrides(store, slug: str) -> dict[str, int]:
+    """Per-role periods the operator set in the CEO chat, in hours."""
+    if store is None:
+        return {}
+    out: dict[str, int] = {}
+    try:
+        for d in store.directives(slug, "cadence"):
+            try:
+                hours = int(d.get("note") or 0)
+            except (TypeError, ValueError):
+                continue
+            if d.get("target") and hours > 0:
+                out[d["target"]] = hours
+    except Exception:  # noqa: BLE001 - an unreadable directive must not stop a run
+        return {}
+    return out
 
 
 def paused_roles(store, slug: str) -> set[str]:
@@ -163,7 +190,12 @@ class Runtime:
                     skills=skills,
                     memory_top_k=memory_top_k,
                 )
-                for spec in due_roles(tick, enabled, paused_roles(self.store, slug)):
+                for spec in due_roles(
+                    tick,
+                    enabled,
+                    paused_roles(self.store, slug),
+                    cadence_overrides(self.store, slug),
+                ):
                     try:
                         for line in executor.run_turn(slug, spec, ctx):
                             log.info("tick %d [%s] %s", tick, spec.role.value, line)

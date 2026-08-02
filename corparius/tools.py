@@ -5,12 +5,14 @@ live. Tools flagged `hitl` never execute until a human approves them.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 
 from . import (
     cfg,
     deploy,
+    documents,
     enrich,
     inbox,
     integrations,
@@ -25,6 +27,8 @@ from . import (
     company as company_mod,
 )
 from .models import ToolResult
+
+log = logging.getLogger("corparius.tools")
 
 
 class Tool:
@@ -467,6 +471,21 @@ def _record_decision(ctx, draft: str) -> str:
     return f"Decided: {text[:120]}"
 
 
+def _keep(ctx, name: str, text: str, line: str) -> str:
+    """Log the line, keep the document.
+
+    The agent wrote several hundred words; the action log holds a hundred and
+    twenty characters of them. Everything past that was thrown away at the
+    moment of writing — including by the agent that would want it next turn.
+    """
+    slug = ctx.company.get("slug", "company")
+    try:
+        documents.write(slug, name, text)
+    except OSError as exc:  # a full disk must not fail the turn
+        log.warning("could not keep %s for %s: %s", name, slug, exc)
+    return line
+
+
 def _write_site_content(ctx, draft: str) -> str:
     """Turn a drafted plan into the site blocks, in company.yaml.
 
@@ -872,7 +891,7 @@ _ALL = [
         "Summarise the day",
         needs_draft=True,
         prompt=lambda c: f"In one sentence, summarise the day for {_name(c)}.",
-        effect=lambda c, d: _ok(f"EOD summary: {d[:140]}"),
+        effect=lambda c, d: _ok(_keep(c, "End of day", d, f"EOD summary: {d[:140]}")),
     ),
     Tool(
         "remember",
@@ -1078,7 +1097,7 @@ _ALL = [
         "Draft a pricing adjustment",
         needs_draft=True,
         prompt=lambda c: f"Suggest one pricing tweak for {_name(c)} in a sentence.",
-        effect=lambda c, d: _ok(f"Pricing note: {d[:120]}"),
+        effect=lambda c, d: _ok(_keep(c, "Pricing note", d, f"Pricing note: {d[:120]}")),
     ),
     Tool(
         "scan_competitors",
@@ -1086,7 +1105,7 @@ _ALL = [
         risk=permissions.EXTERNAL,
         needs_draft=True,
         prompt=lambda c: f"Name one competitor risk for {_name(c)} in a sentence.",
-        effect=lambda c, d: _ok(f"Competitor scan: {d[:120]}"),
+        effect=lambda c, d: _ok(_keep(c, "Competitor scan", d, f"Competitor scan: {d[:120]}")),
     ),
     Tool(
         "scan_signals",
@@ -1113,7 +1132,7 @@ _ALL = [
         "Draft a visual direction or brief",
         needs_draft=True,
         prompt=lambda c: f"Describe a visual direction for {_name(c)} in one sentence.",
-        effect=lambda c, d: _ok(f"Design brief drafted: {d[:120]}"),
+        effect=lambda c, d: _ok(_keep(c, "Design brief", d, f"Design brief drafted: {d[:120]}")),
     ),
     Tool(
         "produce_mockup",

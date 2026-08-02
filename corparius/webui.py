@@ -403,6 +403,17 @@ _CEO_SCHEMA = {
     # answered "I will pause the campaigns", and the next tick drafted another.
     "pause": {"type": "list", "default": []},
     "resume": {"type": "list", "default": []},
+    # What the company should be working on. Read by `create_tasks`, which
+    # otherwise queues its housekeeping baseline on top of whatever the operator
+    # just asked for — and re-arms a role they had just stood down.
+    "focus": {"type": "str", "default": "", "max_len": 200},
+    # {"social": 24} — hours between turns, per role. The alternative was editing
+    # company.yaml, which is not a thing anyone does mid-conversation.
+    "cadence": {"type": "dict", "default": {}},
+    # Bonus, and deliberately narrow: name a tool whose pending request the
+    # operator is approving in words. The console button stays exactly as it is;
+    # this is a second door, not a replacement.
+    "approve": {"type": "list", "default": []},
 }
 
 
@@ -428,6 +439,39 @@ def _apply_directives(store, slug: str, data: dict, lang: str) -> str:
         for d in store.directives(slug, "pause"):
             if d["target"] == role:
                 store.clear_directive(d["id"])
+    # A stated priority, which `create_tasks` reads instead of its baseline.
+    focus = str(data.get("focus") or "").strip()
+    if focus:
+        store.add_directive(slug, "focus", "", focus)
+    elif isinstance(data.get("focus"), str) and "focus" in data:
+        for d in store.directives(slug, "focus"):
+            store.clear_directive(d["id"])
+
+    # Cadence, in hours, per role. Bounded: zero would busy-loop a role and a
+    # year would be indistinguishable from off, and neither is what anybody
+    # means. Out of range is dropped rather than clamped silently.
+    cadence = {}
+    raw_cadence = data.get("cadence")
+    if isinstance(raw_cadence, dict):
+        for role, hours in raw_cadence.items():
+            role = str(role).strip().lower()
+            try:
+                hours = int(hours)
+            except (TypeError, ValueError):
+                continue
+            if role in PAUSABLE and 1 <= hours <= 168:
+                store.add_directive(slug, "cadence", role, str(hours))
+                cadence[role] = hours
+
+    # Bonus: approving in words. Narrow on purpose — it approves a request that
+    # already exists and was already shown, and the console button is untouched.
+    approved = []
+    for name in {str(x).strip() for x in (data.get("approve") or [])}:
+        waiting = store.pending_approval_for(slug, name)
+        if waiting:
+            store.set_approval_status(waiting["id"], "approved", "approved in the CEO chat")
+            approved.append(name)
+
     parts = []
     if paused:
         parts.append(
@@ -443,8 +487,28 @@ def _apply_directives(store, slug: str, data: dict, lang: str) -> str:
                 lang, f"Started again: {', '.join(resumed)}.", f"Redémarré : {', '.join(resumed)}."
             )
         )
-    if paused or resumed:
-        log.info("%s: CEO paused %s, resumed %s", slug, paused or "-", resumed or "-")
+    if focus:
+        parts.append(i18n.pick(lang, f"Priority set: {focus}", f"Priorité fixée : {focus}"))
+    if cadence:
+        spelled = ", ".join(f"{r} every {h}h" for r, h in cadence.items())
+        spelled_fr = ", ".join(f"{r} toutes les {h} h" for r, h in cadence.items())
+        parts.append(i18n.pick(lang, f"Cadence: {spelled}.", f"Cadence : {spelled_fr}."))
+    if approved:
+        parts.append(
+            i18n.pick(
+                lang, f"Approved: {', '.join(approved)}.", f"Approuvé : {', '.join(approved)}."
+            )
+        )
+    if any((paused, resumed, focus, cadence, approved)):
+        log.info(
+            "%s: CEO paused=%s resumed=%s focus=%r cadence=%s approved=%s",
+            slug,
+            paused or "-",
+            resumed or "-",
+            focus,
+            cadence or "-",
+            approved or "-",
+        )
     return " ".join(parts)
 
 
@@ -475,12 +539,18 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
         f"clearly asking to do that thing now; otherwise 'answer'. You never execute; "
         f"the operator confirms with a button. "
         # The part that makes the answer true rather than polite.
-        f"You DO have one real power: standing a role down. When the operator says they "
-        f"do not want a kind of work done for now — cold emailing, posting, anything — "
-        f"put those role names in `pause`, from {', '.join(PAUSABLE)}. When they want it "
-        f"started again, put them in `resume`. A paused role stops on the next tick; say "
-        f"so plainly in your reply, and never claim to have paused anything you did not "
-        f"list. Leave both lists empty for an ordinary answer. {snapshot}"
+        f"You DO have real powers, and using them is how your answer becomes true "
+        f"rather than polite. Roles: {', '.join(PAUSABLE)}. "
+        f"`pause` / `resume`: role names, when the operator does or does not want that "
+        f"kind of work for now. A paused role stops on the next tick and the backlog "
+        f"stops queueing for it. "
+        f"`focus`: one short sentence when they say what the company should concentrate "
+        f"on; it replaces the routine backlog until they change it. Empty string clears it. "
+        f'`cadence`: {{"social": 24}} to change how many hours between a role\'s turns. '
+        f"`approve`: tool names whose pending request they are approving in words. "
+        f"Never claim to have done any of these unless you put it in the field, and never "
+        f"name a role that is not in the list above. Leave them empty for an ordinary "
+        f"answer. {snapshot}"
     )
     history = state.chats.setdefault(slug, deque(maxlen=_CHAT_LIMIT))
     messages = (

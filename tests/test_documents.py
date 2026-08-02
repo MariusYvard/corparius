@@ -129,3 +129,55 @@ def test_only_readable_documents_reach_the_prompt(drop):
     (drop / "a.zip").write_bytes(b"PK\x03\x04")
     (drop / "shot.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     assert documents.context("acme") == ""
+
+
+# --------------------------------------------------------------------------
+# Written by the company, not only read by it
+# --------------------------------------------------------------------------
+
+
+def test_a_deliverable_survives_the_turn_that_produced_it(drop):
+    """Four tools produced real prose and kept 120 characters of it as a log
+    line. The rest was discarded on the spot — including from the agent that
+    would want it next turn."""
+    import types
+
+    from corparius.tools import TOOLS
+
+    ctx = types.SimpleNamespace(company={"slug": "acme", "name": "Acme"}, store=None)
+    brief = "A severe visual identity, dark tones, deep blue accents. " * 8
+    line = TOOLS["draft_design_brief"].run(ctx, brief).output
+
+    assert len(line) < 200, "the log line stays a log line"
+    kept = [d for d in documents.load("acme") if d.name == "design-brief.md"]
+    assert kept, "the brief was not kept"
+    assert "deep blue accents" in kept[0].text
+    assert len(kept[0].text) > len(line), "more was kept than was logged"
+
+
+def test_what_the_agents_wrote_is_context_next_turn(drop):
+    documents.write("acme", "Design brief", "Dark tones and deep blue accents.")
+    assert "deep blue accents" in documents.context("acme")
+
+
+def test_a_rewrite_replaces_rather_than_accumulates(drop):
+    """Nineteen near-identical briefs in a folder is the queue-of-drafts problem
+    in another costume."""
+    documents.write("acme", "Design brief", "first version")
+    documents.write("acme", "Design brief", "second version")
+    briefs = [d for d in documents.load("acme") if d.name == "design-brief.md"]
+    assert len(briefs) == 1 and "second version" in briefs[0].text
+
+
+def test_written_and_dropped_files_live_apart_but_both_count(drop):
+    (drop / "operator.md").write_text("what the operator dropped", encoding="utf-8")
+    documents.write("acme", "Weekly review", "what the company wrote")
+    names = {d.path.parent.name for d in documents.load("acme")}
+    assert names == {"documents", documents.WRITTEN}
+    block = documents.context("acme")
+    assert "operator dropped" in block and "company wrote" in block
+
+
+def test_an_empty_draft_writes_nothing(drop):
+    documents.write("acme", "Nothing", "   ")
+    assert documents.load("acme") == []

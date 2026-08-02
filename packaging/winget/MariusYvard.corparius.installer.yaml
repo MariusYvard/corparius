@@ -1,12 +1,12 @@
 PackageIdentifier: MariusYvard.corparius
-PackageVersion: 0.3.0
+PackageVersion: 0.3.1
 InstallerType: portable
 Commands:
   - corparius
-ReleaseDate: 2026-07-31
+ReleaseDate: 2026-08-02
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/MariusYvard/corparius/releases/download/v0.3.0/corparius-windows-x64.exe
-    InstallerSha256: bb0271d9476fbd9abcb52f4f224c0f2063bcf02d356166477412083ccf8ba175
+    InstallerUrl: https://github.com/MariusYvard/corparius/releases/download/v0.3.1/corparius-windows-x64.exe
+    InstallerSha256: f908f454d175feeb19705947567abddc07541998e8e119f94640af1b3e238415
 ManifestType: installer
 ManifestVersion: 1.6.0

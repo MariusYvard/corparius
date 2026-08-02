@@ -176,7 +176,9 @@ def load(slug: str) -> list[Document]:
     base = folder(slug)
     if not base.is_dir():
         return []
-    files = [p for p in base.iterdir() if p.is_file() and not p.name.startswith(".")]
+    # Recursive: what the agents wrote lives in a subfolder, and it is context
+    # exactly as much as what the operator dropped in.
+    files = [p for p in base.rglob("*") if p.is_file() and not p.name.startswith(".")]
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return [read(p) for p in files]
 
@@ -207,3 +209,38 @@ def context(slug: str, budget: int = 6000) -> str:
 def images(slug: str) -> list[Path]:
     """Image paths, for a caller that can actually send them to a model."""
     return [d.path for d in load(slug) if d.kind == "image"]
+
+
+# Written by the company, not only read by it. Kept apart from what the operator
+# drops in so a sweep of one never deletes the other, and so the provenance of a
+# file is visible from its path.
+WRITTEN = "written"
+
+
+def write(slug: str, name: str, text: str, kind: str = WRITTEN) -> Path:
+    """Persist something an agent produced, and return where it went.
+
+    Four tools were producing real deliverables and throwing them away:
+    `draft_design_brief`, `update_pricing`, `scan_competitors` and
+    `write_eod_summary` each generated prose and kept the first 120 characters
+    as a log line. The rest was discarded on the spot — a design brief the
+    design agent had just written could not be read by anyone, including the
+    design agent on its next turn.
+
+    Same folder the operator drops files into, so a brief written on Monday is
+    context on Tuesday without anybody moving it.
+    """
+    from . import company as company_mod
+
+    base = folder(slug) / kind
+    base.mkdir(parents=True, exist_ok=True)
+    stem = company_mod._slugify(name) or "note"
+    path = base / f"{stem}.md"
+    body = " ".join(str(text or "").split())
+    if not body:
+        return path
+    # Overwritten rather than appended: the latest design brief replaces the
+    # previous one, because a folder of nineteen near-identical briefs is the
+    # queue-of-drafts problem again in another costume.
+    path.write_text(f"# {name}\n\n{body}\n", encoding="utf-8")
+    return path

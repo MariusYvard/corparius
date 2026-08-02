@@ -12,7 +12,14 @@ from corparius.models import ToolResult
 from corparius.orchestrator import RunContext
 from corparius.safety import CircuitBreaker, TokenBudget
 from corparius.store import Store
+from corparius.structured import Result
 from corparius.tools import TOOLS
+
+
+def _drafted(idea, why=""):
+    """What the executor hands a schema tool once the model has answered."""
+    return Result(data={"idea": idea, "why": why}, ok=True, attempts=1)
+
 
 # The tools the operator must approve by hand. This list is a claim about the
 # product, not an implementation detail: if a tool moves money or touches
@@ -202,10 +209,11 @@ def test_a_role_keeps_one_idea_with_the_ceo_not_one_per_turn(tmp_path):
 
     store = Store(str(tmp_path))
     ctx = type("Ctx", (), {"store": store, "company": {"slug": "t"}, "role": "support"})()
+    ctx.structured = _drafted("Answer the three refund tickets from Tuesday")
     first = TOOLS["propose_task"].run(ctx, draft="")
     for _ in range(4):
         again = TOOLS["propose_task"].run(ctx, draft="")
-    assert "proposed a task" in first.output
+    assert "Answer the three refund tickets" in first.output
     assert "already has an idea waiting" in again.output
     assert len(store.list_tasks("t", "proposed")) == 1
     store.close()
@@ -217,6 +225,7 @@ def test_another_role_can_still_propose(tmp_path):
     store = Store(str(tmp_path))
     for role in ("support", "design"):
         ctx = type("Ctx", (), {"store": store, "company": {"slug": "t"}, "role": role})()
+        ctx.structured = _drafted(f"Something only {role} would notice")
         TOOLS["propose_task"].run(ctx, draft="")
     assert len(store.list_tasks("t", "proposed")) == 2
     store.close()

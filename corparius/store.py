@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS state (
 CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company TEXT, title TEXT, target TEXT, priority INTEGER,
-    status TEXT, created_by TEXT, note TEXT, ts REAL, tool TEXT
+    status TEXT, created_by TEXT, note TEXT, ts REAL, tool TEXT, why TEXT
 );
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY, value TEXT NOT NULL,
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS model_probes (
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -299,6 +299,22 @@ def _migration_14(db: sqlite3.Connection) -> None:
     db.execute("CREATE INDEX IF NOT EXISTS decisions_by_company ON decisions (company, ts)")
 
 
+def _migration_15(db: sqlite3.Connection) -> None:
+    """Why a task exists, where a status change cannot erase it.
+
+    `note` was carrying two jobs: the agent's reason for proposing the task, and
+    the provenance of the last decision about it. Every caller of
+    `set_task_status` overwrites it — "validated by CEO", "via console" — so the
+    reason survived exactly until somebody acted on the task, which is the one
+    moment it was needed. The operator was left with a row naming its own author
+    and nothing else.
+    """
+    try:
+        db.execute("ALTER TABLE tasks ADD COLUMN why TEXT")
+    except sqlite3.OperationalError:
+        pass  # already there: fresh stores get it from SCHEMA
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 MIGRATIONS = {
     1: _migration_1,
@@ -315,6 +331,7 @@ MIGRATIONS = {
     12: _migration_12,
     13: _migration_13,
     14: _migration_14,
+    15: _migration_15,
 }
 
 
@@ -1274,11 +1291,13 @@ class Store:
         created_by="ceo",
         note="",
         tool="",
+        why="",
     ) -> int:
         cur = self.db.execute(
-            "INSERT INTO tasks (company, title, target, priority, status, created_by, note, tool, ts)"
-            " VALUES (?,?,?,?,?,?,?,?,?)",
-            (company, title, target, priority, status, created_by, note, tool, time.time()),
+            "INSERT INTO tasks"
+            " (company, title, target, priority, status, created_by, note, tool, why, ts)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (company, title, target, priority, status, created_by, note, tool, why, time.time()),
         )
         self.db.commit()
         assert cur.lastrowid is not None  # always set after an AUTOINCREMENT insert

@@ -519,3 +519,21 @@ def test_the_consoles_javascript_parses():
         path.write_text("\n".join(blocks), encoding="utf-8")
         proc = subprocess.run([node, "--check", str(path)], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
+
+
+def test_the_done_column_is_bounded_and_says_the_true_count(server):
+    """Completed tasks only ever accumulate. One console showed thirty-six of
+    them, oldest first, pushing everything below the board off the page — and
+    the renderer cut at thirty without saying so, so the header disagreed with
+    the column under it."""
+    from corparius.webui import DONE_KEPT
+
+    store = server.RequestHandlerClass.state.store()
+    for i in range(DONE_KEPT + 12):
+        store.add_task("example", f"Task {i}", "design", status="done")
+
+    _, data = _call(server, "GET", "/api/overview?company=example")
+    sent = data["tasks"]["done"]
+    assert len(sent) == DONE_KEPT, "the payload is bounded"
+    assert data["done_total"] == DONE_KEPT + 12, "and the count is the real one"
+    assert sent[0]["title"] == f"Task {DONE_KEPT + 11}", "newest first, not the first ever done"

@@ -5,6 +5,7 @@ live. Tools flagged `hitl` never execute until a human approves them.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 
 from . import (
@@ -19,6 +20,9 @@ from . import (
     permissions,
     signals,
     sitegen,
+)
+from . import (
+    company as company_mod,
 )
 from .models import ToolResult
 
@@ -441,6 +445,202 @@ def _triage_inbox(ctx) -> str:
     return f"Inbox read: {len(messages)} unread, {len(urgent)} look urgent. Top: {top.label()}"
 
 
+# --------------------------------------------------------------------------
+# What makes a CEO rather than a task generator
+# --------------------------------------------------------------------------
+
+
+def _record_decision(ctx, draft: str) -> str:
+    """Write a decision down, or decline to invent one.
+
+    "Nothing decided" is a real answer and has to stay cheap to give: a CEO
+    that must produce a decision every turn produces noise, which is how three
+    contradicting priorities landed in one afternoon.
+    """
+    text = " ".join((draft or "").split())
+    if not text or text.lower().startswith("nothing decided"):
+        return "No decision this turn"
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "No store, so nothing recorded"
+    store.add_decision(ctx.company.get("slug", "company"), text)
+    return f"Decided: {text[:120]}"
+
+
+def _review_commitments(ctx) -> str:
+    """Did the last plan happen? Compare what was promised to what was done.
+
+    The CEO wrote "the absolute priority is to finish and deploy the new site"
+    and then never looked again — three different "absolute priorities" in three
+    hours in one real run, two of them contradicting each other. A CEO who never
+    rereads their own plan is a plan generator.
+    """
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "No store, so nothing to hold anyone to"
+    slug = ctx.company.get("slug", "company")
+    plans = store.recent_outputs(slug, "set_daily_plan", 1)
+    if not plans:
+        return "No plan on record yet, so there is nothing to check against"
+    done = [t for t in store.list_tasks(slug) if t["status"] == "done"]
+    still_open = [t for t in store.list_tasks(slug) if t["status"] in ("approved", "in_progress")]
+    plan = plans[0].replace("Daily plan set: ", "")[:110]
+    if not done:
+        return (
+            f"Last plan: {plan}. Nothing has been completed since. Either it was not "
+            f"actionable or the company is blocked ({len(still_open)} task(s) open)."
+        )
+    return (
+        f"Last plan: {plan}. {len(done)} task(s) done since, {len(still_open)} open. "
+        f"Most recent: {done[-1]['title'][:60]}."
+    )
+
+
+def _review_kpis(ctx) -> str:
+    """The real numbers, or the honest absence of them.
+
+    This returned "KPIs reviewed: signups flat, conversion 2.1%" for every
+    company on every run — two fabricated figures that then fed the CEO's own
+    decisions, while `reconcile_stripe` read a live balance three lines below in
+    the same log. The rule this repo set itself is that every number is
+    Measured, Given or Estimated, and those were none.
+    """
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "No store, so no numbers"
+    slug = ctx.company.get("slug", "company")
+    stats = store.outreach_stats(slug)
+    flow = store.flow_metrics(slug)
+    spend = sum(int(row.get("tokens", 0) or 0) for row in store.spend_by_agent(slug))
+    revenue = store.recent_outputs(slug, "reconcile_stripe", 1)
+    parts = [f"{flow['throughput']} task(s) completed, {flow['wip']} in progress"]
+    if stats.get("sent"):
+        parts.append(f"outreach {stats['replied']}/{stats['sent']} answered")
+    else:
+        parts.append("no outreach sent, so there is no reply rate to report")
+    parts.append(f"{spend} tokens spent")
+    parts.append(
+        revenue[0].replace("Stripe reconciled: ", "revenue ") if revenue else "no revenue reading"
+    )
+    return "KPIs: " + "; ".join(parts)
+
+
+def _stop_useless_work(ctx) -> str:
+    """Stand down whatever produces into a void, and say so once.
+
+    A real run drafted ten LinkedIn posts nobody could publish while the agent
+    stood itself down and the CEO kept queueing "Publish a post today" for it.
+    The stand-down was a patch on the agent; deciding what is worth producing is
+    the CEO's job, and the CEO can now act on it.
+    """
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "No store, so nothing to weigh"
+    slug = ctx.company.get("slug", "company")
+    already = {d["target"] for d in store.directives(slug, "pause")}
+    stopped, restarted = [], []
+
+    unpublished = store.count_unpublished(slug)
+    cap = cfg.get_int("CORP_SOCIAL_QUEUE_MAX", 5)
+    if unpublished >= cap and "social" not in already:
+        store.add_directive(
+            slug, "pause", "social", f"{unpublished} drafts and nothing publishes them"
+        )
+        stopped.append(f"social ({unpublished} unpublished)")
+    elif unpublished < cap:
+        for d in store.directives(slug, "pause"):
+            if d["target"] == "social" and "publishes them" in (d.get("note") or ""):
+                store.clear_directive(d["id"])
+                restarted.append("social, its queue drained")
+
+    if not mailbox.configured() and "support" not in already:
+        store.add_directive(slug, "pause", "support", "no mailbox connected")
+        stopped.append("support (no mailbox)")
+
+    if stopped:
+        return "Stood down: " + ", ".join(stopped) + ". Nothing consumes what they produce."
+    if restarted:
+        return "Restarted: " + ", ".join(restarted)
+    return "Every role still has somewhere for its work to go"
+
+
+def _check_providers(ctx) -> str:
+    """React when a tier keeps failing, instead of watching it fail.
+
+    One run logged twenty-odd `429 Too Many Requests` from one provider and two
+    `claude CLI exited 1`, and nothing anywhere reacted. The preflight knows how
+    to answer this; what was missing was anybody asking.
+    """
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "No store, so no history to read"
+    slug = ctx.company.get("slug", "company")
+    failures = [o for o in store.recent_failures(slug, 40) if o]
+    if not failures:
+        return "No provider failure in the recent log"
+    limited = [o for o in failures if "429" in o or "Too Many Requests" in o]
+    note = f"{len(failures)} failed call(s) recently"
+    note += (
+        f", {len(limited)} of them rate limits. Slow the noisiest role, or run "
+        "`corparius preflight` to route onto a model that answers."
+        if limited
+        else ". Run `corparius preflight` to see which configured models still answer."
+    )
+    inbox.notify(store, slug, "ceo", "Providers are failing", note, fix="providers")
+    return note
+
+
+def _set_roster(ctx, draft: str = "") -> str:
+    """Hire and fire. The most CEO decision there is, and it lived in a YAML file.
+
+    `design -social` turns design on and social off. A role nobody has is
+    dropped rather than promised.
+    """
+    store = getattr(ctx, "store", None)
+    slug = ctx.company.get("slug", "company")
+    words = [w.strip().lower() for w in re.split(r"[,\s]+", draft or "") if w.strip()]
+    roles = set(company_mod.ROLES)
+    off = [w.lstrip("-") for w in words if w.startswith("-") and w.lstrip("-") in roles]
+    on = [w for w in words if not w.startswith("-") and w in roles]
+    if not on and not off:
+        return "No role named, so the roster is unchanged"
+    if store is not None:
+        for role in off:
+            store.add_directive(slug, "pause", role, "stood down by the CEO")
+        for role in on:
+            for d in store.directives(slug, "pause"):
+                if d["target"] == role:
+                    store.clear_directive(d["id"])
+    parts = []
+    if on:
+        parts.append("on: " + ", ".join(on))
+    if off:
+        parts.append("off: " + ", ".join(off))
+    return "Roster changed — " + "; ".join(parts)
+
+
+def _weekly_review(ctx) -> str:
+    """Spent against produced, promised against delivered, over seven days.
+
+    The end-of-day summary is a paragraph a model wrote. This is arithmetic: it
+    can be wrong, but it cannot flatter.
+    """
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "No store, so no account to give"
+    slug = ctx.company.get("slug", "company")
+    week = store.week_summary(slug)
+    if not week["actions"]:
+        return "Nothing happened this week"
+    line = (
+        f"Seven days: {week['actions']} actions, {week['done']} task(s) finished, "
+        f"{week['tokens']} tokens, {week['failed']} failed call(s)."
+    )
+    if not week["done"]:
+        return line + " Nothing was finished, so every token this week bought nothing."
+    return line + f" {week['tokens'] // max(1, week['done'])} tokens per finished task."
+
+
 ROLE_TOOL = {
     "outreach": "send_outreach",
     "social": "draft_social_post",
@@ -735,9 +935,50 @@ _ALL = [
         effect=lambda c, d: _ok("Paid infrastructure invoice 12 EUR (mock)"),
     ),
     Tool(
+        "review_commitments",
+        "Check the last plan against what actually happened",
+        effect=lambda c, d: _ok(_review_commitments(c)),
+    ),
+    Tool(
+        "stop_useless_work",
+        "Stand down any role producing into a void",
+        effect=lambda c, d: _ok(_stop_useless_work(c)),
+    ),
+    Tool(
+        "check_providers",
+        "Notice a failing model tier and say what to do",
+        effect=lambda c, d: _ok(_check_providers(c)),
+    ),
+    Tool(
+        "set_roster",
+        "Turn a role on or off",
+        needs_draft=True,
+        prompt=lambda c: (
+            "Name the roles to run, and prefix with - the ones to stand down. "
+            "Answer with role names only, e.g. `design coder -social`."
+        ),
+        effect=lambda c, d: _ok(_set_roster(c, d)),
+    ),
+    Tool(
+        "weekly_review",
+        "Seven days: spent against produced",
+        effect=lambda c, d: _ok(_weekly_review(c)),
+    ),
+    Tool(
+        "decide",
+        "Record a decision that binds what comes next",
+        needs_draft=True,
+        prompt=lambda c: (
+            "State one decision the company is taking now, in a sentence, and why. "
+            "A decision binds the future; an observation does not. If nothing has "
+            "been decided, answer exactly: nothing decided."
+        ),
+        effect=lambda c, d: _ok(_record_decision(c, d)),
+    ),
+    Tool(
         "review_kpis",
         "Review KPIs against targets",
-        effect=lambda c, d: _ok("KPIs reviewed: signups flat, conversion 2.1%"),
+        effect=lambda c, d: _ok(_review_kpis(c)),
     ),
     Tool(
         "update_pricing",

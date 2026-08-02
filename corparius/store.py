@@ -82,6 +82,10 @@ CREATE TABLE IF NOT EXISTS directives (
     note TEXT, active INTEGER DEFAULT 1, ts REAL
 );
 CREATE INDEX IF NOT EXISTS directives_by_company ON directives (company, active);
+CREATE TABLE IF NOT EXISTS decisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT, text TEXT, why TEXT, ts REAL
+);
+CREATE INDEX IF NOT EXISTS decisions_by_company ON decisions (company, ts);
 CREATE TABLE IF NOT EXISTS model_probes (
     provider TEXT, model TEXT, state TEXT, detail TEXT, status INTEGER, ms INTEGER, ts REAL,
     tok_s REAL, json_ok INTEGER, samples INTEGER, failures INTEGER, measured_at REAL,
@@ -93,7 +97,7 @@ CREATE TABLE IF NOT EXISTS model_probes (
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -280,6 +284,21 @@ def _migration_13(db: sqlite3.Connection) -> None:
     db.execute("CREATE INDEX IF NOT EXISTS directives_by_company ON directives (company, active)")
 
 
+def _migration_14(db: sqlite3.Connection) -> None:
+    """Decisions, kept apart from facts.
+
+    `memory` holds what the company observed. A decision is a different animal:
+    it binds the future, and it should be reread before the next one is taken.
+    Mixing them is why one run produced three contradicting priorities in three
+    hours.
+    """
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS decisions ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT, text TEXT, why TEXT, ts REAL)"
+    )
+    db.execute("CREATE INDEX IF NOT EXISTS decisions_by_company ON decisions (company, ts)")
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 MIGRATIONS = {
     1: _migration_1,
@@ -295,6 +314,7 @@ MIGRATIONS = {
     11: _migration_11,
     12: _migration_12,
     13: _migration_13,
+    14: _migration_14,
 }
 
 
@@ -970,6 +990,75 @@ class Store:
     def model_catalogue_ts(self) -> float:
         row = self.db.execute("SELECT ts FROM model_catalogue WHERE id=1").fetchone()
         return float(row["ts"] or 0) if row else 0.0
+
+    @_locked
+    def recent_failures(self, company, limit=40) -> list[str]:
+        """Outputs of recent actions that did not succeed.
+
+        The CEO reads this to notice a provider falling over instead of watching
+        it happen: one real run logged twenty-odd rate limits and nothing
+        anywhere reacted.
+        """
+        rows = self.db.execute(
+            "SELECT output FROM actions WHERE company=? AND ok=0 ORDER BY ts DESC LIMIT ?",
+            (company, int(limit)),
+        ).fetchall()
+        return [str(r["output"] or "") for r in rows]
+
+    @_locked
+    def week_summary(self, company) -> dict:
+        """Seven days of arithmetic: spent against produced.
+
+        The end-of-day summary is a paragraph a model wrote. This can be wrong,
+        but it cannot flatter.
+        """
+        since = time.time() - 7 * 86400
+        row = self.db.execute(
+            "SELECT COUNT(*) n, COALESCE(SUM(CASE WHEN ok=0 THEN 1 ELSE 0 END),0) bad"
+            " FROM actions WHERE company=? AND ts>=?",
+            (company, since),
+        ).fetchone()
+        # Tokens live in token_usage, not on the action row. Guessing the column
+        # name cost fifteen red tests, which is the cheap way to find out.
+        spent = self.db.execute(
+            "SELECT COALESCE(SUM(input_tokens + output_tokens),0) tok FROM token_usage"
+            " WHERE company=? AND ts>=?",
+            (company, since),
+        ).fetchone()
+        done = self.db.execute(
+            "SELECT COUNT(*) n FROM tasks WHERE company=? AND status='done'", (company,)
+        ).fetchone()
+        return {
+            "actions": int(row["n"] or 0),
+            "tokens": int(spent["tok"] or 0),
+            "failed": int(row["bad"] or 0),
+            "done": int(done["n"] or 0),
+        }
+
+    @_locked
+    def add_decision(self, company, text, why="") -> int:
+        """A decision, kept apart from a fact.
+
+        `remember` stores "customers value the privacy of the voice model" —
+        an observation. "We stop cold emailing until the prototype ships" is a
+        different kind of thing, and a CEO that cannot tell them apart rewrites
+        its own strategy every twelve hours. One real run produced three
+        contradicting "absolute priorities" in three hours.
+        """
+        cur = self.db.execute(
+            "INSERT INTO decisions (company, text, why, ts) VALUES (?,?,?,?)",
+            (company, str(text)[:400], str(why)[:400], time.time()),
+        )
+        self.db.commit()
+        return int(cur.lastrowid or 0)
+
+    @_locked
+    def list_decisions(self, company, limit=6) -> list[dict]:
+        rows = self.db.execute(
+            "SELECT * FROM decisions WHERE company=? ORDER BY ts DESC LIMIT ?",
+            (company, int(limit)),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     @_locked
     def add_directive(self, company, kind, target, note="") -> int:

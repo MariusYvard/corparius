@@ -17,6 +17,7 @@ from .agents import ROSTER, AgentSpec, Executor
 from .config import Settings
 from .hitl import ApprovalGate
 from .llm import HybridRouter
+from .models import AgentRole
 from .permissions import PermissionEngine
 from .safety import CircuitBreaker, TokenBudget
 from .skills import SkillLoader
@@ -63,6 +64,7 @@ def due_roles(
     enabled: dict,
     paused: set[str] | None = None,
     overrides: dict[str, int] | None = None,
+    session_start: bool = False,
 ) -> list[AgentSpec]:
     """Which roles run this tick.
 
@@ -83,6 +85,15 @@ def due_roles(
         if not enabled.get(role.value, False):
             continue
         if role.value in paused:
+            continue
+        # The CEO is the one role whose turn should follow an event, not a
+        # clock. Twelve hours meant that starting a run, watching it produce
+        # something wrong, and starting it again changed nothing until half a
+        # day had passed — the operator could not get a decision out of it when
+        # a decision was exactly what was wanted. So it runs at the top of every
+        # session as well as on its cadence.
+        if session_start and role is AgentRole.CEO:
+            specs.append(spec)
             continue
         # "social once a day, not every two hours" is a sentence, not a YAML
         # edit. The operator's own period wins over the roster's default.
@@ -195,6 +206,9 @@ class Runtime:
                     enabled,
                     paused_roles(self.store, slug),
                     cadence_overrides(self.store, slug),
+                    #  counts turns already taken in this session, so this is true
+                    # exactly once per launch.
+                    session_start=(ran == 0 and offset == 0),
                 ):
                     try:
                         for line in executor.run_turn(slug, spec, ctx):

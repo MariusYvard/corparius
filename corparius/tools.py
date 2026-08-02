@@ -268,6 +268,43 @@ def _find_targets(ctx) -> str:
     return "Found 5 ICP-matching targets from enriched data (mock)"
 
 
+def _outreach_prompt(ctx) -> str:
+    """Name the person, or say plainly that there is nobody to name.
+
+    The prompt was `Draft a 2-line cold email opener for {company}.` — which
+    never mentions a recipient. So every draft came back addressed to
+    `Bonjour [nom]`, and that was the model behaving correctly: asked to write
+    a cold email to nobody in particular, a placeholder is the only honest
+    thing it can produce. Meanwhile `find_targets` had just put five real
+    people on `ctx.leads`, and nothing passed them along.
+
+    Naming the lead is what turns a template into a letter, and the
+    instruction against placeholders only means something once there is a name
+    to use instead.
+    """
+    name = _name(ctx)
+    leads = list(getattr(ctx, "leads", []) or [])
+    if not leads:
+        # No lead: say so rather than inviting a placeholder. A generic opener
+        # the operator will personalise by hand is a usable thing; a letter to
+        # `[nom]` presented as ready to send is not.
+        return (
+            f"Draft a 2-line cold email opener for {name}. No specific recipient is known, "
+            "so write it so that it reads correctly with no name at all — never leave a "
+            "bracket, a placeholder or a blank to fill in."
+        )
+    lead = leads[0]
+    who = getattr(lead, "label", lambda: "")() or getattr(lead, "name", "") or ""
+    role = getattr(lead, "role", "") or getattr(lead, "title", "")
+    org = getattr(lead, "company", "") or getattr(lead, "org", "")
+    about = ", ".join(part for part in (who, role, org) if part)
+    return (
+        f"Draft a 2-line cold email opener for {name}, addressed to: {about}. "
+        "Use their actual name. Never write a placeholder, a bracket or a blank "
+        "to fill in — this is sent as written."
+    )
+
+
 def _scan_signals(ctx) -> str:
     company = ctx.company
     icp = company.get("icp", {}) or {}
@@ -616,7 +653,7 @@ _ALL = [
         "Send a cold email sequence",
         risk=permissions.EXTERNAL,
         needs_draft=True,
-        prompt=lambda c: f"Draft a 2-line cold email opener for {_name(c)}.",
+        prompt=lambda c: _outreach_prompt(c),
         effect=lambda c, d: _ok(_send_outreach(c, d)),
     ),
     Tool(

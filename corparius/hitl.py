@@ -53,6 +53,27 @@ class ApprovalGate:
             return tool.run(ctx, draft)
         if prior and prior["status"] == "rejected":
             return ToolResult(ok=False, output=REJECTION_MESSAGE, denied=True)
+
+        # One pending request per (company, tool), whatever the wording.
+        #
+        # The id hashes `parameters`, and for a drafting tool those carry the
+        # first 80 characters of a freshly generated draft. The model rewrites
+        # it every tick, so every tick minted a *new* approval: a real run left
+        # eight distinct pending `send_outreach` requests for one action the
+        # operator had already been asked about. Approving one changed nothing,
+        # because the next tick asked again under a new id.
+        #
+        # An operator approving "send outreach to these targets" is approving
+        # the action, not that phrasing of it. So an outstanding request for the
+        # same tool *is* this request.
+        waiting = self.store.pending_approval_for(company, tool.name)
+        if waiting:
+            return ToolResult(
+                ok=False,
+                output="pending human approval",
+                pending=True,
+                approval_id=waiting["id"],
+            )
         approval_id = _approval_id(company, tool.name, parameters)
         req = ApprovalRequest(
             id=approval_id,

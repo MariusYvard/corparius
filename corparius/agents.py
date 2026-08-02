@@ -110,7 +110,14 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         24,
         Difficulty.EASY,
         "You own visual design, brand consistency and the sales site.",
-        ["draft_design_brief", "produce_mockup", "build_sales_site"],
+        [
+            # Write the sections first, then render them: building the page
+            # before deciding what goes on it is how it stayed one screen.
+            "write_site_content",
+            "draft_design_brief",
+            "produce_mockup",
+            "build_sales_site",
+        ],
     ),
     AgentRole.CODER: AgentSpec(
         AgentRole.CODER,

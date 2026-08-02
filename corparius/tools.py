@@ -265,7 +265,19 @@ def _find_targets(ctx) -> str:
         return f"Found {len(leads)} leads via {leads[0].source}: " + ", ".join(
             lead.label() for lead in leads[:5]
         )
-    return "Found 5 ICP-matching targets from enriched data (mock)"
+    # No source, no leads, no number. This used to answer "Found 5 ICP-matching
+    # targets from enriched data (mock)" — five people who do not exist, written
+    # into the action log every tick, where the flow metrics read it and the
+    # outreach agent then drafted letters to them. It is the same fabrication
+    # `triage_inbox` was already caught doing, and the repo's own rule is that
+    # every number is Measured, Given or Estimated. That one was none.
+    ctx.leads = []
+    configured = ", ".join(leadsource.configured_sources()) or "none"
+    return (
+        "No lead found. Sources configured: "
+        f"{configured}. Set CORP_LEADS_CSV for a list you own, or CORP_LEAD_SEARCH_URL "
+        "to let corparius search the web itself (Settings, Leads)."
+    )
 
 
 def _outreach_prompt(ctx) -> str:

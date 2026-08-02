@@ -388,11 +388,64 @@ _CEO_ACTIONS: dict[str, dict] = {
     },
 }
 
+# Roles the operator can stand down or bring back. Closed on purpose: a
+# directive naming a role that does not exist would be a promise nothing keeps,
+# which is the failure this whole mechanism exists to end.
+PAUSABLE = ("social", "outreach", "support", "ads", "finance", "strategy", "competitor", "design")
+
 _CEO_SCHEMA = {
     "reply": {"type": "str", "required": True, "max_len": 800},
     "intent": {"type": "str", "default": "answer", "choices": ["answer"] + list(_CEO_ACTIONS)},
     "ticks": {"type": "int", "default": 24},
+    # What the CEO is committing the company to, in a form the runtime obeys.
+    # Without these the chat was a conversation held over a machine that could
+    # not hear it: an operator said "too early for cold emailing", the CEO
+    # answered "I will pause the campaigns", and the next tick drafted another.
+    "pause": {"type": "list", "default": []},
+    "resume": {"type": "list", "default": []},
 }
+
+
+def _apply_directives(store, slug: str, data: dict, lang: str) -> str:
+    """Turn the CEO's `pause` / `resume` lists into standing directives.
+
+    Returns a line naming what changed, appended to the reply so the operator
+    reads the effect rather than the intention. A role the model invented is
+    dropped and not mentioned: promising to pause `marketing` — which is not a
+    role — would be exactly the empty promise this replaces.
+    """
+
+    def names(key):
+        raw = data.get(key) or []
+        if isinstance(raw, str):
+            raw = [raw]
+        return [n for n in (str(x).strip().lower() for x in raw) if n in PAUSABLE]
+
+    paused, resumed = names("pause"), names("resume")
+    for role in paused:
+        store.add_directive(slug, "pause", role, "asked in the CEO chat")
+    for role in resumed:
+        for d in store.directives(slug, "pause"):
+            if d["target"] == role:
+                store.clear_directive(d["id"])
+    parts = []
+    if paused:
+        parts.append(
+            i18n.pick(
+                lang,
+                f"Stood down from the next tick: {', '.join(paused)}.",
+                f"Mis en veille dès le prochain tour : {', '.join(paused)}.",
+            )
+        )
+    if resumed:
+        parts.append(
+            i18n.pick(
+                lang, f"Started again: {', '.join(resumed)}.", f"Redémarré : {', '.join(resumed)}."
+            )
+        )
+    if paused or resumed:
+        log.info("%s: CEO paused %s, resumed %s", slug, paused or "-", resumed or "-")
+    return " ".join(parts)
 
 
 def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
@@ -420,7 +473,14 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
         f"or a heading in it, only what you want to say. "
         f"Set 'intent' to one of {', '.join(_CEO_ACTIONS)} ONLY when the operator is "
         f"clearly asking to do that thing now; otherwise 'answer'. You never execute; "
-        f"the operator confirms with a button. {snapshot}"
+        f"the operator confirms with a button. "
+        # The part that makes the answer true rather than polite.
+        f"You DO have one real power: standing a role down. When the operator says they "
+        f"do not want a kind of work done for now — cold emailing, posting, anything — "
+        f"put those role names in `pause`, from {', '.join(PAUSABLE)}. When they want it "
+        f"started again, put them in `resume`. A paused role stops on the next tick; say "
+        f"so plainly in your reply, and never claim to have paused anything you did not "
+        f"list. Leave both lists empty for an ordinary answer. {snapshot}"
     )
     history = state.chats.setdefault(slug, deque(maxlen=_CHAT_LIMIT))
     messages = (
@@ -447,6 +507,13 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
             "Le modèle n'a pas répondu. Il est peut-être limité en débit, ou le palier "
             "est mal configuré — l'onglet Providers montre lequel a répondu.",
         )
+    # Act on it, then report what actually happened. The CEO used to answer
+    # "I will pause the campaigns" and change nothing; now the sentence and the
+    # state agree, or the sentence is corrected.
+    changed = _apply_directives(store, slug, result.data, lang)
+    if changed:
+        reply = "\n\n".join(part for part in (reply, changed) if part)
+        unanswered = False
     intent = result.data.get("intent", "answer")
     proposal = None
     if intent in _CEO_ACTIONS and not result.fell_back:

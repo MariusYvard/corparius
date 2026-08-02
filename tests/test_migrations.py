@@ -136,3 +136,32 @@ def test_the_doctor_is_quiet_about_a_store_at_the_right_version(tmp_path, monkey
     Store(str(tmp_path)).close()
     level, _, message = doctor._check_store(Settings())
     assert level == "ok" and "writable" in message
+
+
+def test_a_populated_v14_store_keeps_its_tasks_and_gains_why(tmp_path):
+    """v15 splits the agent's reason out of `note`, which every status change
+    overwrites. A store with a backlog in it has to reach the new shape by being
+    migrated, with the backlog intact."""
+    path = tmp_path / "corparius.sqlite"
+    db = sqlite3.connect(str(path))
+    db.executescript(
+        "CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT,"
+        " title TEXT, target TEXT, priority INTEGER, status TEXT, created_by TEXT,"
+        " note TEXT, ts REAL, tool TEXT);"
+        "PRAGMA user_version = 14;"
+    )
+    db.execute(
+        "INSERT INTO tasks (company, title, target, priority, status, created_by, note, ts, tool)"
+        " VALUES ('t','Idea from support','support',2,'approved','support','validated by CEO',"
+        " 1.0,'draft_support_reply')"
+    )
+    db.commit()
+    db.close()
+
+    store = Store(str(tmp_path))
+    assert store.schema_version() == SCHEMA_VERSION
+    assert "why" in _columns(store.db, "tasks")
+    kept = store.list_tasks("t", "approved")[0]
+    assert kept["title"] == "Idea from support" and kept["note"] == "validated by CEO"
+    assert kept["why"] is None, "an old row has no reason to show, and does not invent one"
+    store.close()

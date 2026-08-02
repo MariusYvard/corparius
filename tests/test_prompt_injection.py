@@ -24,6 +24,7 @@ import pytest
 from corparius import agents, apps, permissions
 from corparius.models import LLMResult, Usage
 from corparius.store import Store
+from corparius.structured import Result
 from corparius.tools import TOOLS
 
 # What an attacker writes when they know what they are doing.
@@ -73,6 +74,8 @@ def test_a_proposed_task_carries_no_tool_at_all(tmp_path):
     is not an instruction: there is no tool on it to run."""
     store = Store(str(tmp_path))
     ctx = type("Ctx", (), {"store": store, "company": {"slug": "t"}, "role": "support"})()
+    # The agent writes the title now, so the hostile text reaches the row itself.
+    ctx.structured = Result(data={"idea": HOSTILE, "why": HOSTILE}, ok=True, attempts=1)
     TOOLS["propose_task"].run(ctx, draft=HOSTILE)
     task = store.list_tasks("t")[0]
     assert not task.get("tool")

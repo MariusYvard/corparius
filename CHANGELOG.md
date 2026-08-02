@@ -6,6 +6,30 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
+## Non publié
+
+- **Added : un dossier de documents par entreprise, lu *et* écrit.** Déposez un
+  PDF, un .docx, un .pptx, un .xlsx, un CSV, une note ou une capture dans
+  `companies/<slug>/documents/` et le texte devient du contexte pour les agents,
+  sans nouvelle dépendance. Ce qui ne peut pas être lu honnêtement est nommé
+  plutôt qu'inventé : un PDF scanné répond « aucune couche de texte », une image
+  est proposée aux modèles qui acceptent les images. Et quatre outils qui
+  produisaient un vrai livrable pour n'en garder que 120 caractères de journal
+  l'écrivent maintenant dans `written/` — le brief de design mesuré passe de 120
+  à 512 caractères et revient dans l'invite au tour suivant.
+- **Fixed : une proposition d'agent dit enfin ce qu'elle propose.** Le titre
+  était fabriqué à partir du rôle — « Idea from support », indéfiniment. Quatre
+  lignes identiques dans une colonne, que ni l'exploitant ni le CEO ne pouvaient
+  distinguer. L'agent rédige désormais l'intitulé et la raison ; sans intitulé,
+  rien n'est déposé, parce qu'un backlog vide se lit et qu'un backlog de
+  gabarits non. La raison va dans une colonne à elle (schéma 15) : `note`
+  portait deux métiers et chaque changement d'état l'écrasait, si bien que le
+  pourquoi mourait au moment précis où quelqu'un agissait sur la tâche.
+- **Fixed : la colonne « Terminées » ne pousse plus la page à l'infini.** Elle
+  s'ouvre repliée sur six lignes, les plus récentes d'abord, avec un « voir
+  les N autres ». Le rendu coupait à trente sans le dire, donc l'en-tête
+  annonçait 36 au-dessus d'une colonne qui en montrait 30.
+
 ## 0.3.1 — prouver ce qu'un modèle peut faire, au lieu de le croire
 
 Un catalogue de fournisseur liste des modèles qui existent, pas des modèles que

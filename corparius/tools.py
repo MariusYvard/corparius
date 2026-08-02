@@ -821,29 +821,68 @@ def _review_proposals(ctx) -> str:
     return f"CEO reviewed {len(proposals)}: {approved} approved ({modified} modified), {rejected} rejected"
 
 
+def _already_proposing(ctx) -> str:
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return ""
+    role = getattr(ctx, "role", "agent")
+    open_ones = [
+        t
+        for t in store.list_tasks(ctx.company.get("slug", "company"), "proposed")
+        if t["created_by"] == role
+    ]
+    return f"{role} already has an idea waiting with the CEO" if open_ones else ""
+
+
 def _propose_task(ctx) -> str:
-    """One open idea per role, not one per turn.
+    """One open idea per role, and the idea has to say what it is.
 
     Support runs every three hours and filed "Idea from support" each time —
     five identical rows in one measured session, none carrying a tool, all
-    completed "(symbolic)". A backlog nobody can read is a backlog nobody uses,
-    and the CEO's review had to walk past them to find anything real.
+    completed "(symbolic)". Capping it at one per role stopped the pile from
+    growing, which left one unreadable row instead of five: the title was
+    generated from the role, so the proposal never contained the proposal. The
+    CEO approved it blind and the operator could not tell one from another.
+
+    So the agent writes it: a title that names the work, a sentence of why, and
+    the tool that would do it. A backlog row that does not say what it is has
+    nothing to review.
     """
     store = getattr(ctx, "store", None)
     if store is None:
         return "Backlog unavailable"
     slug = ctx.company.get("slug", "company")
     role = getattr(ctx, "role", "agent")
-    title = f"Idea from {role}"
-    already = [
-        t
-        for t in store.list_tasks(slug, "proposed")
-        if t["title"] == title and t["created_by"] == role
-    ]
-    if already:
+    result = getattr(ctx, "structured", None)
+    fields = result.data if result else {}
+    title = " ".join(str(fields.get("idea", "")).split())[:90]
+    if not title:
+        # Better nothing than a row that says "Idea from support": an empty
+        # backlog is readable, a backlog of placeholders is not.
+        return f"{role} had nothing specific to propose"
+    why = " ".join(str(fields.get("why", "")).split())[:200]
+
+    existing = store.list_tasks(slug)
+    if any(t["created_by"] == role and t["status"] == "proposed" for t in existing):
         return f"{role} already has an idea waiting with the CEO"
-    store.add_task(slug, title, role, priority=1, status="proposed", created_by=role)
-    return f"{role} proposed a task to the CEO"
+    if any(t["title"].lower() == title.lower() for t in existing):
+        # Already proposed once, whatever the CEO did with it. Re-filing it is
+        # how five identical rows happened in the first place.
+        return f"{role} already proposed that: {title}"
+
+    store.add_task(
+        slug,
+        title,
+        role,
+        priority=1,
+        status="proposed",
+        created_by=role,
+        why=why,
+        # No tool, deliberately. The title is now model-written text, and an idea
+        # is not an instruction: `_review_proposals` attaches the tool when the
+        # CEO approves it, so nothing an agent writes arrives executable.
+    )
+    return f"{role} proposed to the CEO: {title}"
 
 
 def _kaizen(ctx) -> str:
@@ -932,6 +971,22 @@ _ALL = [
     Tool(
         "propose_task",
         "Suggest a task to the CEO for review",
+        needs_draft=True,
+        # Checked before the call, not after: the cap is one open idea per role,
+        # and support reaches this tool every three hours. Without this the model
+        # writes a proposal that the effect then throws away, every time.
+        skip_when=lambda c: _already_proposing(c),
+        prompt=lambda c: (
+            f"Propose one concrete task for {_name(c)}, drawn from what you have just seen "
+            "in your own work. `idea`: the task itself, as an instruction someone could act "
+            "on — name the thing, not the category. `why`: one sentence on what prompted it. "
+            "If nothing in this turn warrants a task, leave `idea` empty rather than "
+            "inventing something to file."
+        ),
+        schema={
+            "idea": {"type": "str", "default": "", "max_len": 90},
+            "why": {"type": "str", "default": "", "max_len": 200},
+        },
         effect=lambda c, d: _ok(_propose_task(c)),
     ),
     Tool(

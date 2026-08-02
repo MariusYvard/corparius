@@ -17,6 +17,7 @@ import json
 import logging
 import re
 import subprocess
+import time
 from abc import ABC, abstractmethod
 
 import requests
@@ -564,6 +565,46 @@ def _remote_providers() -> dict[str, LLMProvider]:
     return remotes
 
 
+# A provider that just refused is not going to say yes to the next call a
+# second later. The router already walked the fallback chain, but it walked it
+# from the top every single time, so a rate-limited provider was re-tried on
+# every turn of every agent and each attempt cost a full round trip before the
+# chain even started. One real run logged twenty-odd `429 Too Many Requests`
+# against the same model in four minutes, and every one of them was a wait the
+# operator sat through.
+#
+# So: remember the refusal for a moment and skip straight past it. Short on
+# purpose — free tiers recover in seconds, and a long cooldown would be its own
+# outage.
+_COOLDOWN_S = 45.0
+_RATE_LIMIT_COOLDOWN_S = 90.0
+_resting: dict[str, float] = {}
+
+
+def _rest(provider: str, exc: Exception) -> None:
+    """Stand a provider down briefly after it refuses."""
+    text = str(exc)
+    seconds = _RATE_LIMIT_COOLDOWN_S if ("429" in text or "Too Many" in text) else _COOLDOWN_S
+    _resting[provider] = time.monotonic() + seconds
+
+
+def _is_resting(provider: str) -> bool:
+    until = _resting.get(provider, 0.0)
+    if not until:
+        return False
+    if time.monotonic() >= until:
+        # Expired: forget it rather than leaving a stale entry to be re-read.
+        _resting.pop(provider, None)
+        return False
+    return True
+
+
+def resting_providers() -> dict[str, int]:
+    """{provider: seconds left}, for the console and the doctor. Never probes."""
+    now = time.monotonic()
+    return {p: int(until - now) for p, until in _resting.items() if until > now}
+
+
 class HybridRouter:
     """Local first, remote on escalation. If mock mode is on, everything is
     served by the MockProvider. Otherwise EASY tasks stay on Ollama and HARD
@@ -627,16 +668,27 @@ class HybridRouter:
         if self.settings.llm_mock:
             return self.local.generate(messages, name, max_tokens)
         if target != "local":
-            for step_target, step_name in self._chain(target, name):
+            chain = list(self._chain(target, name))
+            # Anything that refused a moment ago goes to the back rather than
+            # being dropped: if every provider is resting, a stale cooldown must
+            # not be the reason nothing answers at all.
+            ready = [s for s in chain if not _is_resting(s[0])]
+            rested = [s for s in chain if _is_resting(s[0])]
+            for step_target, step_name in ready + rested:
                 provider = self._remote(step_target)
                 if provider is None:
                     continue
                 try:
-                    return provider.generate(messages, step_name, max_tokens)
+                    result = provider.generate(messages, step_name, max_tokens)
                 except (requests.RequestException, ProviderError) as exc:
+                    _rest(step_target, exc)
                     log.warning(
                         "%s call failed (%s), trying next step: %s", step_target, step_name, exc
                     )
+                    continue
+                # It answered, so whatever we thought about it is out of date.
+                _resting.pop(step_target, None)
+                return result
             log.warning(
                 "all remote steps failed or unavailable, falling back to local %s",
                 self.settings.local_model,

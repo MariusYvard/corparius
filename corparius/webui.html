@@ -387,6 +387,11 @@ tr:last-child td { border-bottom: 0; }
 .kcol .kcard:last-child { border-bottom: 0; }
 .kcard:hover { background: var(--raised); }
 .kcard .meta { display: flex; gap: 8px; color: var(--muted); font-size: 12px; align-items: center; flex-wrap: wrap; }
+/* Why the agent proposed it. The title says what, this says what prompted it —
+   without it the CEO was approving a row that named only its own author. */
+.kcard .knote { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.kfold { padding: 8px 12px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.kfold span { color: var(--muted); font-size: 12px; }
 .kcard .row { display: flex; gap: 6px; }
 .prow { display: grid; grid-template-columns: 130px minmax(0,1fr) auto; gap: 12px; align-items: center;
   padding: 10px 0; border-bottom: 1px solid var(--border); }
@@ -915,6 +920,7 @@ en: {
   "ib.fix.mail":"Set up email","ib.fix.payments":"Set up payments","ib.fix.providers":"Open providers","ib.fix.plugins":"Open plugins",
   "risk.read":"read","risk.write_local":"local write","risk.external":"external","risk.code":"code","risk.money":"money",
   "col.proposed":"Proposed, your call","col.approved":"Approved","col.in_progress":"In progress","col.waiting":"Held, waiting on you","col.done":"Done","col.empty":"Empty",
+  "col.more":"Show {n} more","col.less":"Show fewer","col.rest":"{n} older ones stay in the store",
   "th.time":"Time","th.agent":"Agent","th.tool":"Tool","th.state":"State","th.output":"Output",
   "badge.ok":"ok","badge.fail":"fail","badge.held":"held","badge.mock":"mock mode","badge.localOnly":"local only",
   "badge.frozen":"session frozen","badge.breaker":"breaker","badge.running":"running","badge.active":"active","badge.off":"off",
@@ -1112,6 +1118,7 @@ fr: {
   "ib.fix.mail":"Configurer l'email","ib.fix.payments":"Configurer le paiement","ib.fix.providers":"Ouvrir les fournisseurs","ib.fix.plugins":"Ouvrir les greffons",
   "risk.read":"lecture","risk.write_local":"écriture locale","risk.external":"extérieur","risk.code":"code","risk.money":"argent",
   "col.proposed":"Proposées, à arbitrer","col.approved":"Approuvées","col.in_progress":"En cours","col.waiting":"Retenues, en attente de vous","col.done":"Terminées","col.empty":"Vide",
+  "col.more":"Voir les {n} autres","col.less":"Voir moins","col.rest":"{n} plus anciennes restent dans le journal",
   "th.time":"Heure","th.agent":"Agent","th.tool":"Outil","th.state":"État","th.output":"Sortie",
   "badge.ok":"ok","badge.fail":"échec","badge.held":"retenu","badge.mock":"mode mock","badge.localOnly":"local seul",
   "badge.frozen":"session gelée","badge.breaker":"disjoncteur","badge.running":"en cours","badge.active":"actif","badge.off":"inactif",
@@ -2060,21 +2067,54 @@ document.addEventListener("click", async (e) => {
   } finally { act.disabled = false; }
 });
 
+// How many rows a column shows before it folds. Finished work only ever grows —
+// thirty-six rows of it pushed everything below the board off the screen, and
+// the renderer used to cut at thirty and say nothing, so the count in the header
+// disagreed with the column underneath it.
+const KANBAN_FOLD = 6;
+
 function renderKanban(d) {
+  const open = state.kanbanOpen || (state.kanbanOpen = new Set());
   $("#kanban").innerHTML = ["proposed", "approved", "in_progress", "waiting", "done"].map(key => {
     const items = d.tasks[key] || [];
-    return `<div class="kcol"><h3>${t("col." + key)}<span class="mono" style="color:var(--muted)">${items.length}</span></h3>
-      ${items.slice(0, 30).map(x => `
+    // The header counts everything the company has, including what the payload
+    // deliberately left behind.
+    const total = key === "done" && d.done_total != null ? d.done_total : items.length;
+    const folded = !open.has(key) && items.length > KANBAN_FOLD;
+    const shown = folded ? items.slice(0, KANBAN_FOLD) : items;
+    // What unfolding reveals, and what unfolding cannot reveal, kept apart: a
+    // button offering 306 more when the payload holds 60 would be a lie the
+    // operator only discovers by pressing it.
+    const more = items.length - shown.length;
+    const offscreen = total - items.length;
+    return `<div class="kcol"><h3>${t("col." + key)}<span class="mono" style="color:var(--muted)">${total}</span></h3>
+      ${shown.map(x => `
         <div class="kcard"><span>${esc(x.title)}</span>
+          ${x.why ? `<span class="knote">${esc(x.why)}</span>` : ""}
           <span class="meta"><span>#${esc(x.id)}</span><span style="display:inline-flex; align-items:center; gap:5px">${agentIcon(x.target)}${esc(x.target)}</span><span>p${esc(x.priority)}</span>${x.tool ? `<span class="mono">${esc(x.tool)}</span>` : ""}</span>
           <span class="row">
             ${key === "proposed" ? `<button data-task-approve="${esc(x.id)}">${t("btn.approve")}</button><button class="quiet-danger" data-task-reject="${esc(x.id)}">${t("btn.reject")}</button>` : ""}
             ${key !== "done" ? `<button class="quiet" data-task-edit="${esc(x.id)}" style="padding:4px 9px; font-size:12px">${t("task.edit")}</button>` : ""}
           </span>
         </div>`).join("") || `<div class="empty" style="padding:14px">${t("col.empty")}</div>`}
+      ${more > 0 || open.has(key) ? `<div class="kfold">
+        <button class="link-quiet" data-kanban-fold="${key}">${
+          folded ? t("col.more").replace("{n}", more) : t("col.less")
+        }</button>${offscreen > 0 && !folded ? `<span>${t("col.rest").replace("{n}", offscreen)}</span>` : ""}</div>` : ""}
     </div>`;
   }).join("");
 }
+
+// Fold state lives on the client and survives the poll: a column the operator
+// opened must not shut itself again five seconds later.
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-kanban-fold]");
+  if (!b) return;
+  const key = b.dataset.kanbanFold;
+  const open = state.kanbanOpen || (state.kanbanOpen = new Set());
+  open.has(key) ? open.delete(key) : open.add(key);
+  if (state.overview) renderKanban(state.overview);
+});
 
 function renderLog(d) {
   // Rows that were not on screen a moment ago arrive rather than appear. The log

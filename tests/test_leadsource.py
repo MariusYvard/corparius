@@ -4,7 +4,20 @@ from corparius import leadsource
 from corparius.leadsource import LocalDatasetSource
 
 
-def test_local_source_is_always_available():
+def test_the_local_source_is_available_only_when_a_list_exists(tmp_path, monkeypatch):
+    """This asserted `is True` unconditionally, which is what the code did and
+    what was wrong with it: `configured_sources()` then reported `local` on a
+    machine with no CSV at all, telling an operator their leads were set up
+    while nothing could ever return one. An empty source is not a source."""
+    monkeypatch.delenv("CORP_LEADS_CSV", raising=False)
+    assert LocalDatasetSource().available() is False
+
+    path = tmp_path / "leads.csv"
+    path.write_text("name,company,title,email\n", encoding="utf-8")
+    monkeypatch.setenv("CORP_LEADS_CSV", str(path))
+    from corparius import cfg
+
+    cfg.invalidate()
     assert LocalDatasetSource().available() is True
 
 

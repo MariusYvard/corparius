@@ -58,16 +58,40 @@ def _memory_top_k(settings) -> int:
     return max(0, int(getattr(settings, "memory_top_k", 5)))
 
 
-def due_roles(tick: int, enabled: dict) -> list[AgentSpec]:
+def due_roles(tick: int, enabled: dict, paused: set[str] | None = None) -> list[AgentSpec]:
+    """Which roles run this tick.
+
+    `paused` is the set of roles the operator has told the CEO to stand down.
+    Cadence answers "has enough time passed"; it has no way to answer "is this
+    worth doing", and the two are not the same question. An operator who says
+    "too early for cold emailing, I want a working prototype first" is answering
+    the second, and until this argument existed the runtime could not hear it:
+    the CEO replied that it would pause the campaigns and the next tick drafted
+    another one.
+    """
+    paused = paused or set()
     specs = []
     for role, spec in ROSTER.items():
         if spec.cadence_hours is None:
             continue
         if not enabled.get(role.value, False):
             continue
+        if role.value in paused:
+            continue
         if tick % spec.cadence_hours == 0:
             specs.append(spec)
     return specs
+
+
+def paused_roles(store, slug: str) -> set[str]:
+    """Roles under a live `pause` directive. Read fresh every tick, so telling
+    the CEO to stop takes effect on the next one rather than on a restart."""
+    if store is None:
+        return set()
+    try:
+        return {d["target"] for d in store.directives(slug, "pause") if d.get("target")}
+    except Exception:  # noqa: BLE001 - a directive table that cannot be read must not stop a run
+        return set()
 
 
 class Runtime:
@@ -139,7 +163,7 @@ class Runtime:
                     skills=skills,
                     memory_top_k=memory_top_k,
                 )
-                for spec in due_roles(tick, enabled):
+                for spec in due_roles(tick, enabled, paused_roles(self.store, slug)):
                     try:
                         for line in executor.run_turn(slug, spec, ctx):
                             log.info("tick %d [%s] %s", tick, spec.role.value, line)

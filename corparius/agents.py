@@ -36,8 +36,25 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         AgentRole.CEO,
         12,
         Difficulty.EASY,
-        "You are the CEO. Own the backlog: create data-driven tasks from what the company observes, arbitrate proposals, keep it solvent.",
-        ["set_daily_plan", "review_proposals", "create_tasks", "remember", "write_eod_summary"],
+        "You are the CEO. Own the backlog, arbitrate proposals, keep the company solvent — "
+        "and reread your own decisions before taking another. Stop work that produces "
+        "nothing. Say when you do not know rather than filling the gap with a number.",
+        [
+            # Read the week and the last plan before deciding anything: the
+            # order is the point. A CEO that decides first and reviews later is
+            # the one that wrote three contradicting priorities in three hours.
+            "review_commitments",
+            "review_kpis",
+            "weekly_review",
+            "check_providers",
+            "stop_useless_work",
+            "set_daily_plan",
+            "review_proposals",
+            "create_tasks",
+            "decide",
+            "remember",
+            "write_eod_summary",
+        ],
     ),
     AgentRole.SOCIAL: AgentSpec(
         AgentRole.SOCIAL,

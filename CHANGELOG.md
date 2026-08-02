@@ -6,7 +6,13 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
-## Non publié
+## 0.3.1 — prouver ce qu'un modèle peut faire, au lieu de le croire
+
+Un catalogue de fournisseur liste des modèles qui existent, pas des modèles que
+votre compte peut appeler. Mesuré sur une vraie clé : **10 des 18 entrées
+échantillonnées du catalogue NVIDIA répondent 404**, et **deux des quatre
+modèles d'une chaîne de repli réelle ne savent pas produire de JSON** — ce
+qu'aucune fiche ne dit et que tout outil à schéma paie.
 
 - **Added : `corparius preflight`, et un bouton « Prouver ces modèles ».**
   Un catalogue liste les modèles qui *existent*, pas ceux que *vous* pouvez

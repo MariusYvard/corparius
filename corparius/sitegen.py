@@ -121,6 +121,10 @@ def clean_headline(raw: str | None) -> str | None:
 # translation nobody can check. See company.LANGUAGES.
 STRINGS: dict[str, dict[str, str]] = {
     "en": {
+        "how": "How it works",
+        "proof": "What this rests on",
+        "voices": "What people say",
+        "privacy": "Your data",
         "pricing": "Pricing",
         "problem": "The problem",
         "includes": "What you get",
@@ -134,6 +138,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "built": "built with corparius",
     },
     "fr": {
+        "how": "Comment ça marche",
+        "proof": "Sur quoi ça repose",
+        "voices": "Ce qu'ils en disent",
+        "privacy": "Vos données",
         "pricing": "Tarif",
         "problem": "Le problème",
         "includes": "Ce que vous obtenez",
@@ -147,6 +155,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "built": "créé avec corparius",
     },
     "es": {
+        "how": "Cómo funciona",
+        "proof": "En qué se basa",
+        "voices": "Lo que dicen",
+        "privacy": "Tus datos",
         "pricing": "Precio",
         "problem": "El problema",
         "includes": "Qué incluye",
@@ -160,6 +172,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "built": "creado con corparius",
     },
     "de": {
+        "how": "So funktioniert es",
+        "proof": "Worauf es beruht",
+        "voices": "Stimmen",
+        "privacy": "Ihre Daten",
         "pricing": "Preis",
         "problem": "Das Problem",
         "includes": "Das bekommen Sie",
@@ -173,6 +189,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "built": "erstellt mit corparius",
     },
     "it": {
+        "how": "Come funziona",
+        "proof": "Su cosa si basa",
+        "voices": "Cosa dicono",
+        "privacy": "I tuoi dati",
         "pricing": "Prezzo",
         "problem": "Il problema",
         "includes": "Cosa ottieni",
@@ -186,6 +206,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "built": "creato con corparius",
     },
     "pt": {
+        "how": "Como funciona",
+        "proof": "Em que se baseia",
+        "voices": "O que dizem",
+        "privacy": "Os seus dados",
         "pricing": "Preço",
         "problem": "O problema",
         "includes": "O que está incluído",
@@ -199,6 +223,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "built": "criado com corparius",
     },
     "nl": {
+        "how": "Hoe het werkt",
+        "proof": "Waarop het rust",
+        "voices": "Wat men zegt",
+        "privacy": "Jouw gegevens",
         "pricing": "Prijs",
         "problem": "Het probleem",
         "includes": "Wat je krijgt",
@@ -540,6 +568,32 @@ section h2{{font-size:var(--f2);margin:0 0 clamp(26px,3.5vw,40px);max-width:22ch
 .per{{color:var(--on-ink-muted);font-size:.95rem;
   margin-top:14px;letter-spacing:.04em;text-transform:uppercase}}
 
+/* The protocol. Numbered because these are genuinely sequential — a check-in
+   that happens after the analysis is a different product — which is the one
+   case where a numeral carries information rather than decorating. */
+.how{{list-style:none;padding:0;margin:0;counter-reset:s;display:grid;gap:0;
+  max-width:58ch}}
+.how li{{display:flex;gap:18px;align-items:baseline;padding:20px 0;
+  border-top:1px solid var(--line);font-size:var(--f1);line-height:1.4}}
+.how li:last-child{{border-bottom:1px solid var(--line)}}
+.step-n{{font-family:var(--display);font-size:var(--f2);color:var(--accent);
+  font-weight:700;line-height:1;flex:none;min-width:1.2em}}
+
+/* A claim and where it comes from, on the same line. The source is not a
+   footnote here: it is the reason the claim is allowed on the page at all. */
+.proof{{list-style:none;padding:0;margin:0;max-width:62ch;display:grid;gap:0}}
+.proof li{{padding:18px 0;border-top:1px solid var(--line);display:grid;gap:4px}}
+.proof li:last-child{{border-bottom:1px solid var(--line)}}
+.claim{{font-size:var(--f1);line-height:1.4}}
+.source{{color:var(--muted);font-size:.88rem}}
+
+.voices{{display:grid;gap:22px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}}
+.voices figure{{margin:0;padding:24px;border:1px solid var(--line);border-radius:10px}}
+.voices blockquote{{margin:0;font-family:var(--display);font-size:var(--f1);
+  line-height:1.4}}
+.voices figcaption{{margin-top:14px;color:var(--muted);font-size:.9rem}}
+.voices figcaption::before{{content:"— "}}
+
 .faq{{display:grid;gap:0;max-width:64ch}}
 .faq details{{border-top:1px solid var(--line);padding:20px 0}}
 .faq details:last-of-type{{border-bottom:1px solid var(--line)}}
@@ -715,7 +769,14 @@ def companions(company: dict) -> dict[str, str]:
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             f"  <url><loc>{_esc(url)}/</loc><changefreq>weekly</changefreq>"
             "<priority>1.0</priority></url>\n"
-            "</urlset>\n"
+            # Every secondary page too: one that no sitemap lists is one no
+            # crawler is told about, which is most of the point of having it.
+            + "".join(
+                f"  <url><loc>{_esc(url)}/{pg['slug']}.html</loc>"
+                "<changefreq>monthly</changefreq><priority>0.6</priority></url>\n"
+                for pg in extra_pages(company)
+            )
+            + "</urlset>\n"
         ),
     }
 
@@ -777,6 +838,128 @@ def faq_html_from(pairs: list[tuple[str, str]], txt: dict[str, str]) -> str:
 def faq_html(company: dict, store) -> str:
     """Kept for callers that want the fragment on its own."""
     return faq_html_from(faq_pairs(company, store), strings(company.get("language", "en")))
+
+
+# --------------------------------------------------------------------------
+# The blocks that persuade, none of them invented
+# --------------------------------------------------------------------------
+
+
+def _steps_html(company: dict, txt: dict) -> str:
+    """`site.how_it_works`: the protocol, numbered.
+
+    Numbering here is not decoration — these are sequential and the order is
+    the information. A check-in that happens after the analysis is a different
+    product.
+    """
+    steps = [s for s in (company.get("site") or {}).get("how_it_works") or [] if str(s).strip()]
+    if not steps:
+        return ""
+    items = "".join(
+        f'<li><span class="step-n">{i}</span><span>{_esc(step)}</span></li>'
+        for i, step in enumerate(steps, 1)
+    )
+    return f'<section id="how"><h2>{_esc(txt["how"])}</h2><ol class="how">{items}</ol></section>'
+
+
+def _proof_html(company: dict, txt: dict) -> str:
+    """`site.proof`: claims that carry a source, and only those.
+
+    A claim without a source is the machine-readable form of the invented
+    testimonial — it looks like evidence and is not. Entries are `text` plus
+    `source`; an entry missing either is dropped, and dropped loudly enough to
+    find in the log rather than silently.
+    """
+    raw = (company.get("site") or {}).get("proof") or []
+    kept = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        text, source = str(item.get("text", "")).strip(), str(item.get("source", "")).strip()
+        if text and source:
+            kept.append((text, source))
+        elif text:
+            log.warning("site: proof %r has no source, so it is not published", text[:60])
+    if not kept:
+        return ""
+    items = "".join(
+        f'<li><span class="claim">{_esc(text)}</span>'
+        f'<span class="source">{_esc(source)}</span></li>'
+        for text, source in kept
+    )
+    return (
+        f'<section id="proof"><h2>{_esc(txt["proof"])}</h2><ul class="proof">{items}</ul></section>'
+    )
+
+
+def _voices_html(company: dict, txt: dict) -> str:
+    """`site.testimonials`: quotes with a name against them.
+
+    An unattributed quote on a commercial page is a fabrication with quotation
+    marks around it. This generator has already been caught printing terms of
+    sale nobody agreed to; a testimonial is the same fault with a face on it.
+    Entries need `quote` and `who`, or they do not appear.
+    """
+    raw = (company.get("site") or {}).get("testimonials") or []
+    kept = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        quote, who = str(item.get("quote", "")).strip(), str(item.get("who", "")).strip()
+        if quote and who:
+            kept.append((quote, who))
+        elif quote:
+            log.warning("site: a testimonial has no attribution, so it is not published")
+    if not kept:
+        return ""
+    items = "".join(
+        f"<figure><blockquote>{_esc(q)}</blockquote><figcaption>{_esc(w)}</figcaption></figure>"
+        for q, w in kept
+    )
+    return (
+        f'<section id="voices"><h2>{_esc(txt["voices"])}</h2>'
+        f'<div class="voices">{items}</div></section>'
+    )
+
+
+def _privacy_html(company: dict, txt: dict) -> str:
+    """`site.privacy`: what happens to the visitor's data, in their words."""
+    points = [p for p in (company.get("site") or {}).get("privacy") or [] if str(p).strip()]
+    if not points:
+        return ""
+    items = "".join(f"<li>{_esc(p)}</li>" for p in points)
+    return (
+        f'<section id="privacy"><h2>{_esc(txt["privacy"])}</h2>'
+        f'<ul class="gets">{items}</ul></section>'
+    )
+
+
+def extra_pages(company: dict) -> list[dict]:
+    """`site.pages`: secondary pages, each a title and some prose.
+
+    One page was the whole site. An operator with something to say about their
+    architecture, their method or their terms had nowhere to put it, and the
+    nav had nothing to point at.
+
+        site:
+          pages:
+            - slug: tech
+              title: Architecture
+              body: |
+                Two paragraphs about how it works.
+    """
+    out = []
+    for page in (company.get("site") or {}).get("pages") or []:
+        if not isinstance(page, dict):
+            continue
+        slug = re.sub(r"[^a-z0-9-]+", "-", str(page.get("slug", "")).lower()).strip("-")
+        title = str(page.get("title", "")).strip()
+        body = str(page.get("body", "")).strip()
+        if slug and title and body:
+            out.append({"slug": slug, "title": title, "body": body})
+        elif slug or title:
+            log.warning("site: page %r needs a slug, a title and a body; skipped", slug or title)
+    return out
 
 
 def build_site(company: dict, out_dir: str, headline: str | None = None, store=None) -> str:
@@ -869,6 +1052,15 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
         parts.append(
             f'<section><h2>{_esc(txt["includes"])}</h2><ul class="gets">{items}</ul></section>'
         )
+    # Ordered the way somebody decides: what it is, how it works, what it rests
+    # on, who vouches for it, what happens to their data — then the price. The
+    # operator's own previous site had ten sections in roughly this order, and
+    # they said plainly it was better than the single page this produced.
+    parts.append(_steps_html(company, txt))
+    parts.append(_proof_html(company, txt))
+    parts.append(_voices_html(company, txt))
+    parts.append(_privacy_html(company, txt))
+
     body_html = "".join(p for p in parts if p)
     if body_html:
         body_html = f'<div class="band"><div class="wrap">{body_html}</div></div>'
@@ -893,6 +1085,14 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
     # The <title> is what a search result shows, so it leads with the promise
     # rather than the company name — a reader scanning ten results has no idea
     # yet what "Vigil" is. Kept under the ~60 characters Google renders.
+    # One nav shared by every page, so a visitor who lands on a sub-page can get
+    # back. Relative links throughout: the site is a folder that has to open
+    # from disk, with no server and no base href.
+    pages = extra_pages(company)
+    nav = f'<a class="nav" href="#pricing">{_esc(txt["pricing"])}</a>' + "".join(
+        f'<a class="nav" href="{pg["slug"]}.html">{_esc(pg["title"])}</a>' for pg in pages
+    )
+
     title = head if len(head) <= 58 else name
     if len(f"{title} · {name}") <= 60 and title != name:
         title = f"{title} · {name}"
@@ -928,7 +1128,7 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
 <header class="topbar">
   <div class="wrap">
     <div class="logo">{_esc(name)}</div>
-    <a class="nav" href="#pricing">{_esc(txt["pricing"])}</a>
+    {nav}
   </div>
 </header>
 <main>
@@ -968,6 +1168,37 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
     # robots.txt and sitemap.xml go beside the page so that whatever uploads the
     # directory uploads them too — every deploy provider in deploy.py ships the
     # folder, not a file list, so this needs no change anywhere else.
+    for page in pages:
+        paragraphs = "".join(
+            f"<p>{_esc(para.strip())}</p>"
+            for para in re.split(r"\n\s*\n", page["body"])
+            if para.strip()
+        )
+        head_band = (
+            '<div class="band band-hero"><div class="wrap"><div class="hero">'
+            f"<h1>{_esc(page['title'])}</h1></div></div></div>"
+        )
+        sub = doc.replace(
+            f"<title>{_esc(title)}</title>",
+            f"<title>{_esc(page['title'])} · {_esc(name)}</title>",
+        )
+        start, end = sub.index("<main>"), sub.index("</main>") + len("</main>")
+        sub = (
+            sub[:start]
+            + "<main>"
+            + head_band
+            + '<div class="band"><div class="wrap"><section class="story">'
+            + paragraphs
+            + "</section></div></div></main>"
+            + sub[end:]
+        )
+        # On a sub-page the anchors have to return to the index, and this page
+        # must not link to itself.
+        sub = sub.replace('href="#pricing"', 'href="index.html#pricing"')
+        sub = sub.replace(f'href="{page["slug"]}.html"', 'href="#"')
+        with open(os.path.join(out_dir, f"{page['slug']}.html"), "w", encoding="utf-8") as fh:
+            fh.write(sub)
+
     for filename, content in companions(company).items():
         with open(os.path.join(out_dir, filename), "w", encoding="utf-8") as fh:
             fh.write(content)

@@ -446,6 +446,60 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             accent = ""
         if accent:
             site["accent"] = accent
+        # The blocks that persuade. Every one is the operator's own words —
+        # nothing here is generated, and the two most tempting to fabricate
+        # (a testimonial, a claim) are refused by sitegen unless they carry an
+        # author and a source respectively.
+        steps = [str(s).strip() for s in (site_in.get("how_it_works") or []) if str(s).strip()]
+        if steps:
+            site["how_it_works"] = steps
+        points = [str(s).strip() for s in (site_in.get("privacy") or []) if str(s).strip()]
+        if points:
+            site["privacy"] = points
+        proof = [
+            {"text": str(i.get("text", "")).strip(), "source": str(i.get("source", "")).strip()}
+            for i in (site_in.get("proof") or [])
+            if isinstance(i, dict)
+        ]
+        unsourced = [i["text"] for i in proof if i["text"] and not i["source"]]
+        if unsourced:
+            warnings.append(
+                f"site.proof: {len(unsourced)} claim(s) have no source and will not be "
+                "published — a claim without one looks like evidence and is not"
+            )
+        proof = [i for i in proof if i["text"] and i["source"]]
+        if proof:
+            site["proof"] = proof
+        voices = [
+            {"quote": str(i.get("quote", "")).strip(), "who": str(i.get("who", "")).strip()}
+            for i in (site_in.get("testimonials") or [])
+            if isinstance(i, dict)
+        ]
+        anon = [i["quote"] for i in voices if i["quote"] and not i["who"]]
+        if anon:
+            warnings.append(
+                f"site.testimonials: {len(anon)} quote(s) have no attribution and will not "
+                "be published — an unattributed quote is a fabrication in quotation marks"
+            )
+        voices = [i for i in voices if i["quote"] and i["who"]]
+        if voices:
+            site["testimonials"] = voices
+        pages = []
+        for entry in site_in.get("pages") or []:
+            if not isinstance(entry, dict):
+                continue
+            slug = re.sub(r"[^a-z0-9-]+", "-", str(entry.get("slug", "")).lower()).strip("-")
+            title = str(entry.get("title", "")).strip()
+            body = str(entry.get("body", "")).strip()
+            if slug and title and body:
+                pages.append({"slug": slug, "title": title, "body": body})
+            elif slug or title:
+                warnings.append(
+                    f"site.pages: '{slug or title}' needs a slug, a title and a body; skipped"
+                )
+        if pages:
+            site["pages"] = pages
+
         faq_app = str(site_in.get("faq_app", "")).strip()
         faq = [str(q).strip() for q in (site_in.get("faq") or []) if str(q).strip()]
         if faq_app and not faq:

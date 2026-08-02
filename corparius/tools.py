@@ -466,7 +466,17 @@ def _create_tasks(ctx) -> str:
     created: list[str] = []
     wip_limit = cfg.get_int("CORP_WIP_LIMIT", 4)
 
+    # What the operator told the CEO. A paused role must not be re-armed by the
+    # CEO's own baseline: the run log shows `social stood down: 9 post(s)
+    # queued` and, three lines later, the CEO queueing "Publish a post today"
+    # for that same role. Standing a role down has to mean the whole company
+    # stops asking it for work, not only that the agent skips its turn.
+    paused = {d["target"] for d in store.directives(slug, "pause") if d.get("target")}
+    focus = next((d["note"] for d in store.directives(slug, "focus") if d.get("note")), "")
+
     def queue(title, target, tool, priority):
+        if target in paused:
+            return
         if not enabled.get(target) or (target, tool) in open_pairs:
             return
         if store.wip_count(slug, target) >= wip_limit:
@@ -484,8 +494,14 @@ def _create_tasks(ctx) -> str:
     kpis = store.recent_outputs(slug, "review_kpis", 1)
     if kpis and ("flat" in kpis[0].lower() or "conversion" in kpis[0].lower()):
         queue("Refresh the landing page to lift conversion", "design", "build_sales_site", 2)
-    queue("Publish a post today", "social", "draft_social_post", 1)
-    queue("Clear the support inbox", "support", "draft_support_reply", 1)
+    # The baseline is what fills a quiet day. Under a stated priority it is the
+    # wrong thing to fill it with: an operator who said "focus on the prototype"
+    # does not want two housekeeping tasks queued on top of it every cycle.
+    if focus:
+        queue(f"Priority: {focus[:70]}", "ceo", "set_daily_plan", 3)
+    else:
+        queue("Publish a post today", "social", "draft_social_post", 1)
+        queue("Clear the support inbox", "support", "draft_support_reply", 1)
 
     if not created:
         return "CEO backlog review: nothing new to queue"

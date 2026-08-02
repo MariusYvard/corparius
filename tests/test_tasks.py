@@ -7,6 +7,7 @@ from corparius import tools
 from corparius.config import Settings
 from corparius.orchestrator import Runtime
 from corparius.store import Store
+from corparius.structured import Result
 
 
 def _settings(tmp) -> Settings:
@@ -34,7 +35,16 @@ def test_agents_propose_and_ceo_decides(tmp_path, monkeypatch):
     # CEO now. Support ran every three hours and filed five identical "Idea from
     # support" rows in one measured session, none carrying a tool.
     for role in ("support", "design"):
-        tools._propose_task(types.SimpleNamespace(company={"slug": "t"}, store=store, role=role))
+        tools._propose_task(
+            types.SimpleNamespace(
+                company={"slug": "t"},
+                store=store,
+                role=role,
+                structured=Result(
+                    data={"idea": f"An idea from {role}", "why": ""}, ok=True, attempts=1
+                ),
+            )
+        )
     assert len(store.list_tasks("t", "proposed")) == 2
     monkeypatch.setenv("CORP_CEO_APPROVE_CAP", "1")
     ceo_ctx = types.SimpleNamespace(company={"slug": "t"}, store=store)
@@ -139,3 +149,80 @@ def test_ceo_queues_baseline_without_data(tmp_path):
     tools._create_tasks(ctx)
     targets = {t["target"] for t in store.list_tasks("t", "approved")}
     assert targets == {"social", "support"}  # no data -> baseline only, no outreach
+
+
+# --------------------------------------------------------------------------
+# A backlog row has to say what it is
+# --------------------------------------------------------------------------
+
+
+def _idea(text, why=""):
+    return Result(data={"idea": text, "why": why}, ok=True, attempts=1)
+
+
+def _ctx(store, role="support", **kw):
+    return types.SimpleNamespace(company={"slug": "t"}, store=store, role=role, **kw)
+
+
+def test_a_proposal_says_what_it_is(tmp_path):
+    """The title was generated from the role — "Idea from support", forever. The
+    operator saw four of them in a column and could not tell one from another,
+    and neither could the CEO reviewing them."""
+    store = Store(str(tmp_path))
+    ctx = _ctx(store, structured=_idea("Answer the three refund tickets", "two are 4 days old"))
+    out = tools._propose_task(ctx)
+
+    task = store.list_tasks("t", "proposed")[0]
+    assert task["title"] == "Answer the three refund tickets"
+    assert task["why"] == "two are 4 days old"
+    assert "Idea from" not in task["title"] and "Idea from" not in out
+    store.close()
+
+
+def test_nothing_to_propose_files_nothing(tmp_path):
+    """An empty backlog is readable. A backlog of placeholders is not."""
+    store = Store(str(tmp_path))
+    out = tools._propose_task(_ctx(store, structured=_idea("   ")))
+    assert store.list_tasks("t") == []
+    assert "nothing specific" in out
+    store.close()
+
+
+def test_the_same_idea_is_not_filed_twice(tmp_path):
+    """One per role stopped the pile growing while the title was generated. Now
+    that the agent writes it, the same thought worded identically must not come
+    back after the CEO has already ruled on it."""
+    store = Store(str(tmp_path))
+    tools._propose_task(_ctx(store, structured=_idea("Answer the refund tickets")))
+    store.set_task_status(store.list_tasks("t")[0]["id"], "rejected", "declined by CEO")
+
+    out = tools._propose_task(_ctx(store, structured=_idea("answer the REFUND tickets")))
+    assert "already proposed" in out
+    assert len(store.list_tasks("t")) == 1
+    store.close()
+
+
+def test_the_reason_survives_the_ceo_deciding(tmp_path, monkeypatch):
+    """`set_task_status` overwrites `note` on every transition — "validated by
+    CEO" — so the reason a task existed died the moment somebody acted on it,
+    which is the one moment it was worth having."""
+    store = Store(str(tmp_path))
+    tools._propose_task(_ctx(store, structured=_idea("Ship the pricing page", "3 asked for it")))
+    monkeypatch.setenv("CORP_CEO_APPROVE_CAP", "1")
+    tools._review_proposals(types.SimpleNamespace(company={"slug": "t"}, store=store))
+
+    task = store.list_tasks("t", "approved")[0]
+    assert task["note"] == "validated by CEO", "who decided is still recorded"
+    assert task["why"] == "3 asked for it", "and so is why it was proposed"
+    store.close()
+
+
+def test_a_second_idea_costs_nothing_to_refuse(tmp_path):
+    """`propose_task` needs a draft now, so the cap has to be checked before the
+    model is called. Support reaches this tool every three hours; without the
+    guard it would pay for a proposal the effect then discards."""
+    store = Store(str(tmp_path))
+    tools._propose_task(_ctx(store, structured=_idea("Answer the refund tickets")))
+    assert "already has an idea" in tools.TOOLS["propose_task"].skip_reason(_ctx(store))
+    assert tools.TOOLS["propose_task"].skip_reason(_ctx(store, role="design")) == ""
+    store.close()

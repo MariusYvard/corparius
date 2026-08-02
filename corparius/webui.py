@@ -70,6 +70,9 @@ ALLOWED_VARS = settings_spec.WRITABLE
 _SECRET_VARS = settings_spec.SECRETS
 
 _CHAT_LIMIT = 30  # turns kept per company, in-process only
+# Completed tasks sent to the console. They accumulate for the life of a company
+# and this payload is polled every few seconds; the store keeps all of them.
+DONE_KEPT = 60
 
 # The largest body the console accepts. The biggest legitimate one is a company
 # YAML or a settings batch, orders of magnitude under this.
@@ -253,6 +256,11 @@ def _overview(state: UiState, slug: str) -> dict:
     }
     for t in tasks:
         by_status.setdefault(t["status"], []).append(t)
+    # Finished work is history, and it only ever grows. Newest first, because a
+    # column that opens on the first task the company ever completed is showing
+    # the least useful end of it, and bounded, because this payload is polled.
+    done_total = len(by_status["done"])
+    by_status["done"] = list(reversed(by_status["done"]))[:DONE_KEPT]
     return {
         "ok": True,
         "company": slug,
@@ -260,6 +268,9 @@ def _overview(state: UiState, slug: str) -> dict:
         "status": st,
         "flow": flow,
         "tasks": by_status,
+        # The true count, not the number of rows sent: the column header must
+        # not read 60 when the company has completed three hundred.
+        "done_total": done_total,
         "approvals": approvals,
         "rules": store.list_rules(slug),
         "inbox": store.list_inbox(slug, "pending"),

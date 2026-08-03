@@ -735,7 +735,19 @@ class ClaudeCodeProvider(LLMProvider):
         if system:
             cmd += ["--append-system-prompt", system]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout)
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                # utf-8 explicitly: `text=True` alone decodes with the locale
+                # encoding — cp1252 on Windows — and the CLI emits utf-8 JSON.
+                # Measured on a real run: every accent in a hard-tier reply came
+                # back mangled and stored that way, and the malformed bytes also
+                # produced intermittent "claude CLI returned non-JSON output".
+                encoding="utf-8",
+                errors="replace",
+                timeout=self.timeout,
+            )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise ProviderError(f"claude CLI unavailable: {exc}") from exc
         if proc.returncode != 0:

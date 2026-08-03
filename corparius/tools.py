@@ -306,6 +306,31 @@ def _find_targets(ctx) -> str:
     )
 
 
+def _no_lead_to_write_to(ctx) -> str:
+    """Why there is nothing to draft, or "" when there is somebody to write to.
+
+    `find_targets` runs first in the outreach playbook and puts what it found on
+    `ctx.leads`. When it found nobody, the next tool used to draft anyway: a real
+    model call, every three hours, producing a letter addressed to `[Nom]` that was
+    then queued for the operator's approval as if it were ready to send.
+
+    Two costs in one. The tokens, which is the same waste `draft_support_reply`
+    stopped paying on a company with no mailbox. And the letter itself — asked to
+    write a cold email to nobody in particular, a placeholder is the honest thing a
+    model can produce. The prompt forbids it, and a prompt is a request; not
+    drafting is the version that cannot be ignored.
+    """
+    leads = [lead for lead in (getattr(ctx, "leads", None) or []) if getattr(lead, "email", "")]
+    if leads:
+        return ""
+    configured = ", ".join(leadsource.configured_sources()) or "none"
+    return (
+        "No lead with an email address, so there is nobody to write to and nothing "
+        f"to draft. Sources configured: {configured}. Set CORP_LEADS_CSV for a list "
+        "you own, or CORP_LEAD_SEARCH_URL to let corparius search (Settings, Leads)."
+    )
+
+
 def _outreach_prompt(ctx) -> str:
     """Name the person, or say plainly that there is nobody to name.
 
@@ -353,9 +378,40 @@ def _scan_signals(ctx) -> str:
     return "No buying signals in configured sources (mock)"
 
 
+# A bracketed blank a model left for someone to fill in: [Nom], [thème], {{name}}.
+# Deliberately narrow — a real sentence rarely carries one, and a false positive
+# here refuses a good email.
+_PLACEHOLDER = re.compile(r"\[[^\]\n]{1,40}\]|\{\{[^}\n]{1,40}\}\}")
+
+
+def unfilled_blanks(text: str) -> list[str]:
+    """Placeholders a draft still carries, in order, deduplicated.
+
+    The prompt already tells the model never to leave one. That is a request, and
+    the draft is sent verbatim — so the instruction was the only thing between a
+    prospect and `Bonjour Dr [Nom]`. Measured beats declared here as everywhere:
+    this reads the text that is actually about to go out.
+    """
+    seen: list[str] = []
+    for found in _PLACEHOLDER.findall(str(text or "")):
+        if found not in seen:
+            seen.append(found)
+    return seen
+
+
 def _send_outreach(ctx, draft: str) -> str:
     company = ctx.company
     store = getattr(ctx, "store", None)
+    # Never send a letter with a blank in it. `skip_when` stops the common case —
+    # no lead, no draft — and this stops the rest: a model given a real name can
+    # still leave `[thème de publication]` behind, and nothing else looks at the
+    # text before it reaches somebody's inbox.
+    blanks = unfilled_blanks(draft)
+    if blanks:
+        return (
+            f"Not sent: the draft still has {len(blanks)} blank(s) to fill in "
+            f"({', '.join(blanks[:3])}). It would have gone out as written."
+        )
     leads = [lead for lead in getattr(ctx, "leads", []) if lead.email]
     if leads:
         cap = cfg.get_int("CORP_OUTREACH_MAX_PER_RUN", 20)
@@ -504,6 +560,33 @@ def _keep(ctx, name: str, text: str, line: str) -> str:
     return line
 
 
+def _empty_draft(ctx, consequence: str) -> str:
+    """Why a schema tool got nothing: the model said nothing, or none answered.
+
+    Two very different facts, reported as one. `structured.ask` returns the schema
+    defaults when no reply validates — empty lists, empty strings — so a tool that
+    reads only `.data` cannot tell "it had nothing to add" from "every provider
+    refused". Measured on a real run: groq and cerebras both answered 429, the
+    harness fell back, and `write_site_content` reported "Nothing usable drafted".
+    The operator read that as a bad site generator and had spent 365 026 tokens
+    getting there.
+
+    The harness has always carried the answer — `ok`, `fell_back`, `attempts`,
+    `source`, `errors` — and this is the fourth caller to read only one field of it.
+    """
+    result = getattr(ctx, "structured", None)
+    if result is not None and (getattr(result, "fell_back", False) or not result.ok):
+        why = "; ".join(getattr(result, "errors", []) or []) or "no valid structure came back"
+        where = getattr(result, "source", "") or "no provider"
+        attempts = getattr(result, "attempts", 0)
+        return (
+            f"No model returned usable structure after {attempts} attempt(s) "
+            f"({where}): {why}. {consequence}. This is a routing problem, not an "
+            "empty answer — prove your models in the console (Providers)."
+        )
+    return f"Nothing to add, so {consequence}"
+
+
 def _write_site_content(ctx, draft: str) -> str:
     """Turn a drafted plan into the site blocks, in company.yaml.
 
@@ -530,7 +613,7 @@ def _write_site_content(ctx, draft: str) -> str:
     page_body = str(fields.get("page_body", "")).strip()
 
     if not (steps or privacy or page_body):
-        return "Nothing usable drafted, so company.yaml is unchanged"
+        return _empty_draft(ctx, "company.yaml is unchanged")
 
     path = company_mod.path_for(slug)
     try:
@@ -684,14 +767,17 @@ def _check_providers(ctx) -> str:
     if not failures:
         return "No provider failure in the recent log"
     limited = [o for o in failures if "429" in o or "Too Many Requests" in o]
+    # The measured fact, and only that. The remedy used to be spelled out here as
+    # "run `corparius preflight`" — a terminal command told to somebody reading a
+    # web console, in English, on a page that may be in French, while the console
+    # has had a button doing exactly that all along. What to press is the console's
+    # sentence to write, in the operator's own language; what happened is this
+    # function's. `fix` is the seam between the two.
     note = f"{len(failures)} failed call(s) recently"
-    note += (
-        f", {len(limited)} of them rate limits. Slow the noisiest role, or run "
-        "`corparius preflight` to route onto a model that answers."
-        if limited
-        else ". Run `corparius preflight` to see which configured models still answer."
-    )
-    inbox.notify(store, slug, "ceo", "Providers are failing", note, fix="providers")
+    if limited:
+        note += f", {len(limited)} of them rate limits"
+    note += "."
+    inbox.notify(store, slug, "ceo", "Providers are failing", note, fix="preflight")
     return note
 
 
@@ -727,21 +813,20 @@ def _set_roster(ctx, draft: str = "") -> str:
         for role in off:
             store.add_directive(slug, "pause", role, CEO_STAND_DOWN)
         for role in list(on):
-            mine = [
-                d
-                for d in store.directives(slug, "pause")
-                if d["target"] == role and (d.get("note") or "") == CEO_STAND_DOWN
-            ]
-            theirs = [
-                d
-                for d in store.directives(slug, "pause")
-                if d["target"] == role and (d.get("note") or "") != CEO_STAND_DOWN
-            ]
+            paused = [d for d in store.directives(slug, "pause") if d["target"] == role]
+            mine = [d for d in paused if (d.get("note") or "") == CEO_STAND_DOWN]
+            theirs = [d for d in paused if (d.get("note") or "") != CEO_STAND_DOWN]
             if theirs:
                 # Said, not silently ignored: a CEO that reports turning a role
                 # back on while it stays off is the empty promise again.
                 on.remove(role)
                 kept.append(role)
+                continue
+            if not mine:
+                # Already running. Reporting "on: coder" for a role that was never
+                # off is a change that did not happen — measured on a real run, the
+                # CEO announced exactly that on four consecutive turns.
+                on.remove(role)
                 continue
             for d in mine:
                 store.clear_directive(d["id"])
@@ -1075,6 +1160,16 @@ _ALL = [
         "Send a cold email sequence",
         risk=permissions.EXTERNAL,
         needs_draft=True,
+        # Checked before the draft, like draft_support_reply with no mailbox. With
+        # nobody to write to there is nothing to write, and paying a model call to
+        # find that out is the exact waste that check was added for — on the tool
+        # next to it, three hours apart.
+        #
+        # It also removes the letter to `[Nom]` at the root. Asked to write a cold
+        # email to nobody, a model produces a placeholder; the prompt forbids it and
+        # a prompt is a request. Not drafting at all is the only version that cannot
+        # be ignored.
+        skip_when=lambda c: _no_lead_to_write_to(c),
         prompt=lambda c: _outreach_prompt(c),
         effect=lambda c, d: _ok(_send_outreach(c, d)),
     ),

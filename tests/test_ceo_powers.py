@@ -132,3 +132,74 @@ def test_the_reply_reports_what_happened_not_what_was_intended(store):
         store, SLUG, {"pause": ["social"], "focus": "ship the prototype"}, "en"
     )
     assert "social" in said and "ship the prototype" in said
+
+
+# --------------------------------------------------------------------------
+# A power the model is never told about is a power nothing can reach
+# --------------------------------------------------------------------------
+#
+# `model` was added to _CEO_SCHEMA and to `_apply_directives`, and the CEO was
+# asked in a real console to put the design role on claudecode:opus. It answered
+# "J'approuve l'utilisation de Claudecode Opus pour le design" and wrote nothing —
+# the empty promise, arriving through the very field meant to end it.
+#
+# The cause was not the paragraph. `render_hint` had no rendering for a `dict`, so
+# every dict field was described to the model as `string`: it was asked for a
+# string where the code expected an object. `cadence` survived only because its
+# prose happened to carry an example. These tests hold both ends.
+
+
+def _chat_prompt() -> str:
+    """The system prompt the chat sends, read out of the source: building it for
+    real needs a store, a company and a live router, and what matters here is
+    whether the field is described at all."""
+    from pathlib import Path
+
+    src = Path("corparius/webui.py").read_text(encoding="utf-8")
+    return src[src.index("    system = (") : src.index("{snapshot}")]
+
+
+# `reply` is the answer itself; `intent` and `ticks` drive the console's buttons,
+# not a standing directive.
+_NOT_A_DIRECTIVE = {"reply", "intent", "ticks"}
+_POWERS = sorted(set(webui._CEO_SCHEMA) - _NOT_A_DIRECTIVE)
+
+
+@pytest.mark.parametrize("field", _POWERS)
+def test_every_power_is_named_in_the_prompt(field):
+    assert f"`{field}`" in _chat_prompt(), (
+        f"the chat acts on `{field}` and never tells the CEO it exists, so it "
+        "answers in prose and records nothing"
+    )
+
+
+@pytest.mark.parametrize("field", _POWERS)
+def test_every_power_is_read_when_it_arrives(field):
+    """The mirror direction: a field offered to the model and read by nobody is a
+    promise the console makes and drops."""
+    from pathlib import Path
+
+    src = Path("corparius/webui.py").read_text(encoding="utf-8")
+    applied = src[src.index("def _apply_directives") : src.index("def _chat")]
+    assert f'"{field}"' in applied, f"`{field}` is offered to the CEO and never read"
+
+
+def test_no_dict_field_is_described_to_a_model_as_a_string():
+    """The root cause, guarded once for every schema in the project rather than
+    once per field: `render_hint` fell through to "string" for a dict, so the model
+    was asked for the wrong type and had no way to know the shape."""
+    from corparius import structured
+
+    rendered = structured.render_hint({"d": {"type": "dict", "default": {}}})
+    assert "string" not in rendered, "a dict is still described as a string"
+    assert "{" in rendered.split('"d":')[1]
+
+
+@pytest.mark.parametrize("field", _POWERS)
+def test_a_dict_power_carries_its_own_shape(field):
+    """An example in a paragraph has to be remembered; one on the field cannot be
+    forgotten, because `render_hint` reads it."""
+    spec = webui._CEO_SCHEMA[field]
+    if spec.get("type") != "dict":
+        pytest.skip("not a dict field")
+    assert spec.get("shape"), f"`{field}` is a dict with no shape for the model to copy"

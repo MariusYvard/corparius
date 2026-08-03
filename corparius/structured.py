@@ -148,6 +148,16 @@ def render_hint(schema: dict) -> str:
         want = spec.get("type", "str")
         if want == "list":
             shape = '["string", ...]'
+        elif want == "dict":
+            # A dict used to fall through to "string", so the model was asked for a
+            # string where the code expected an object. `cadence` survived only
+            # because its prose paragraph happened to show an example; `model`
+            # shipped without one and the CEO answered "J'approuve l'utilisation de
+            # Claudecode Opus pour le design" and wrote nothing at all.
+            #
+            # The shape belongs to the field, not to a paragraph somebody has to
+            # remember to keep in step with it.
+            shape = spec.get("shape") or '{"key": "value"}'
         elif want in ("int", "float"):
             shape = "number"
         elif want == "bool":

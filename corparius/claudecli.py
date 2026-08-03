@@ -137,6 +137,8 @@ def install(timeout: int = 600) -> dict:
             [npm, "install", "-g", "@anthropic-ai/claude-code"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
@@ -191,6 +193,8 @@ def check(timeout: int = 60, lang="en") -> dict:
             [exe, "-p", "Reply with the single word: ready", "--output-format", "json"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
         )
     except subprocess.TimeoutExpired:

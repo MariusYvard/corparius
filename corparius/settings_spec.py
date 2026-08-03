@@ -1161,6 +1161,20 @@ SPEC: list[FieldSpec] = [
         help_fr="{query} est remplacé par le segment ICP de l'entreprise.",
     ),
     _f(
+        "CORP_LEAD_SEARCH_URL",
+        "leads",
+        label_en="Search endpoint",
+        label_fr="Point de recherche",
+        help_en="A search URL with {query} in it, read by the search lead source. "
+        "Distinct from the browser source above. `find_targets` names this variable "
+        "when it finds nobody and told the operator to set it in Settings — where "
+        "there was no field for it at all.",
+        help_fr="Une URL de recherche contenant {query}, lue par la source de "
+        "prospects par recherche. Distincte de la source navigateur ci-dessus. "
+        "`find_targets` nomme cette variable quand il ne trouve personne et disait "
+        "de la régler dans les Réglages — où aucun champ ne l'accueillait.",
+    ),
+    _f(
         "CORP_BROWSER_UA",
         "leads",
         default="Mozilla/5.0 (compatible; corparius/0.1)",
@@ -1191,6 +1205,16 @@ SPEC: list[FieldSpec] = [
     ),
     _f("CORP_SIGNALS_URL", "leads", label_en="Signals URL", label_fr="URL des signaux"),
     # --- versioning ---------------------------------------------------------
+    _f(
+        "CORP_REPO_NAME_PREFIX",
+        "versioning",
+        label_en="Repository name prefix",
+        label_fr="Préfixe du nom de dépôt",
+        help_en="Prepended to the company slug when a repository is created, so "
+        "several companies do not compete for the same name on one account.",
+        help_fr="Ajouté devant le slug de l'entreprise à la création d'un dépôt, "
+        "pour que plusieurs entreprises ne se disputent pas le même nom sur un compte.",
+    ),
     _f(
         "CORP_REPO_PROVIDERS",
         "versioning",

@@ -52,6 +52,11 @@ FIXES = {
     "mail": "settings",  # Settings tab; the console also opens the mail group
     "payments": "settings",
     "providers": "providers",
+    # Providers tab, and the console presses "Prove these models" for you.
+    # `providers` only opened the tab, which left an operator standing in front of
+    # nine provider rows with no idea which control was the answer — while the
+    # notice told them to run a terminal command from inside a web console.
+    "preflight": "providers",
     "plugins": "plugins",
 }
 

@@ -6,6 +6,68 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
+## Non publié
+
+- **Added : une règle, appliquée à chaque registre — vérifier les deux bouts du
+  fil.** Le défaut a une forme et deux faces, et il a coûté neuf bugs à ce projet.
+  *Produit et jamais consommé* : `usage.cost`, les timings d'Ollama,
+  `icp.channels`, `architecture.input_modalities`, la vraie longueur d'un document.
+  *Atteignable et jamais atteint* : `documents.images()` sans appelant,
+  `ask_operator` et `set_roster` sans chemin, `_CEO_SCHEMA["model"]` décrit au
+  modèle comme une chaîne. Aucun n'échouait, parce que rien ne regardait les deux
+  bouts à la fois. `tests/test_registries.py` l'exige désormais pour `TOOLS`,
+  `ROSTER`, `ROLE_TOOL`, le registre de réglages, les fournisseurs, les migrations
+  et les correctifs d'inbox — sans jugement, ce qui est tout l'intérêt.
+  **Elle a trouvé deux vrais trous au premier passage** : `CORP_LEAD_SEARCH_URL` et
+  `CORP_REPO_NAME_PREFIX` étaient lus par le code, absents du registre et de toute
+  documentation — et `find_targets` disait à l'exploitant de régler le premier
+  « dans Réglages, Prospects », où aucun champ ne l'accueillait. Les deux sont
+  réglables maintenant.
+  Elle a aussi produit trois fausses alertes, dues à mon détecteur et non au code :
+  sa regex n'acceptait que les clés `CORP_` sur une seule ligne, donc
+  `CORP_HITL_TOOLS`, `GITLAB_TOKEN` et `NETLIFY_SITE_ID` passaient pour non lus. Un
+  détecteur qui crie au loup est un détecteur qu'on finit par ignorer : corrigé,
+  pas contourné.
+- **Fixed : un champ `dict` était décrit à un modèle comme une chaîne.**
+  `render_hint` n'avait aucun rendu pour `dict` et retombait sur `string`, donc le
+  CEO recevait `"model": string` là où le code attend `{"design": "..."}`. Demandé
+  en console de mettre le design sur `claudecode:opus`, il a répondu « J'approuve
+  l'utilisation de Claudecode Opus pour le design » et n'a **rien écrit** — la
+  promesse vide, arrivant par le champ censé y mettre fin. `cadence` ne survivait
+  que parce que sa prose montrait un exemple par chance. La forme vit désormais
+  **sur le champ** (`shape`), que `render_hint` lit : un paragraphe s'oublie, un
+  attribut non.
+- **Fixed : huit sous-processus décodaient l'UTF-8 avec l'encodage local.**
+  `subprocess.run(text=True)` sans `encoding` utilise cp1252 sous Windows, et le CLI
+  Claude émet de l'UTF-8 — vérifié sur les octets, `0xC3 0xB9` pour « ù ». Chaque
+  accent d'une réponse du palier `hard` revenait donc abîmé et était **stocké**
+  ainsi (`Facturez Ã  partir du jour oÃ¹`). Corrigé dans `llm.py`, `claudecli.py`,
+  `companyrepo.py` et `deploy.py`.
+- **Fixed : « Nothing usable drafted » ne disait pas laquelle des deux choses
+  s'était produite.** `structured.ask` renvoie les valeurs par défaut du schéma
+  quand aucune réponse ne valide, donc un outil qui ne lit que `.data` ne peut pas
+  distinguer « le modèle n'avait rien à ajouter » de « aucun fournisseur n'a
+  répondu ». Mesuré sur une vraie exécution : groq et cerebras en 429, le harnais
+  retombe, et `write_site_content` annonce n'avoir rien trouvé à écrire. L'exploitant
+  y a lu un mauvais générateur de site après 365 026 jetons. Le harnais portait
+  `ok`, `fell_back`, `attempts`, `source` et `errors` depuis toujours : quatrième
+  appelant à n'en lire qu'un champ.
+- **Fixed : `send_outreach` rédigeait sans destinataire.** Sans lead, un appel de
+  modèle toutes les trois heures pour écrire à personne — le gaspillage exact que
+  `draft_support_reply` avait déjà cessé de payer sur une entreprise sans boîte
+  mail, jamais corrigé sur la prospection juste à côté. Et le brouillon obtenu
+  était adressé à `[Nom]`, prêt à partir tel quel. `skip_when` sans destinataire,
+  et un brouillon contenant un blanc n'est plus envoyé : l'invite l'interdisait
+  déjà, mais une invite est une demande.
+- **Fixed : `set_roster` annonçait un changement qui n'existait pas.** « Roster
+  changed — on: coder » à chaque tour, pour un rôle jamais mis en veille. Ma
+  régression du jour même.
+- **Fixed : une notice disait de lancer une commande de terminal.** « Run
+  `corparius preflight` », dans une console web, en anglais, sur une page qui peut
+  être en français — alors que le bouton existe depuis toujours. La note ne porte
+  plus que le fait mesuré ; la console dit quoi presser, dans la langue de
+  l'exploitant, avec les mots du contrôle qu'elle va presser — et elle le presse.
+
 ## 0.3.3 — construit et jamais atteint
 
 Onze entrées, un seul fil. Une capacité annoncée en **sept endroits** que rien

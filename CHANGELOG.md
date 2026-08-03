@@ -8,6 +8,51 @@ was released.
 
 ## Non publié
 
+- **Fixed : une image déposée est enfin envoyée à un modèle. Pendant deux
+  versions, le produit disait qu'elle l'était.** `documents.images()` n'avait
+  **aucun appelant**, aucun signal de capacité vision n'existait, et rien dans
+  `llm.py`, `agents.py` ni `structured.py` ne pouvait envoyer une image. Elle
+  était listée, nommée, puis jetée — pendant que sept endroits affirmaient
+  qu'elle était « proposée aux modèles qui acceptent les images » : le module, la
+  console dans les deux langues, `docs/documents.md` et le README. Deux de ces
+  sept avaient été écrits le jour même de la 0.3.2.
+  **Et le motif habituel était là, pour la huitième fois** : la donnée qui
+  permettait de tenir la promesse arrivait déjà et était jetée.
+  `modelinfo.fetch()` lisait le catalogue et ne gardait que le contexte, le
+  raisonnement et le JSON — d'une réponse qui porte aussi
+  `architecture.input_modalities`. Mesuré sur le catalogue réel : **180 entrées
+  sur 337 déclarent l'image en entrée, et 5 seulement en palier gratuit**, ce qui
+  compte pour un projet qui route vers le gratuit.
+  Trois conditions gouvernent désormais l'envoi, et il faut les trois : l'outil
+  l'a demandée (`Tool(sees_images=True)` — `draft_design_brief` et
+  `scan_competitors`, pas le rapprochement Stripe), l'entreprise en a une, et le
+  modèle sait la lire — **mesuré d'abord, déclaré ensuite**. `corparius preflight`
+  envoie une vraie image de test, un carré bleu sur jaune de 79 octets généré en
+  code, et demande les deux couleurs dans l'ordre : une seule serait devinable
+  par un modèle qui ne voit rien, et l'invite ne nomme jamais la réponse qu'elle
+  attend. Le verdict va dans `model_probes.vision_ok` (**schéma 16**), où `NULL`
+  est un troisième état — jamais demandé, ce qui n'est pas « ne voit pas » — et où
+  une mesure ultérieure qui n'a pas posé la question n'efface pas un verdict
+  acquis.
+  **`content` reste une chaîne.** `_flatten`, le Mock et le `system` d'Anthropic
+  la joignent tous : glisser des blocs façon OpenAI dans `messages` aurait cassé
+  quatre chemins d'un coup et en silence. Les images voyagent donc dans un
+  argument à part, que chaque fournisseur dépense dans son dialecte — `image_url`
+  en URI `data:`, le bloc `source` d'Anthropic, le tableau `images` d'Ollama — et
+  celui qui ne sait pas le déclare (`accepts_images = False`) plutôt que de la
+  laisser tomber. Le mot-clé est **absent** quand il n'y a pas d'image, pas passé
+  vide, pour qu'un fournisseur de greffon écrit avant ce changement continue de
+  fonctionner. `base64` est dans la bibliothèque standard : toujours deux
+  dépendances.
+  Borné et dit : deux images par appel, 3 Mio chacune, et ce qui dépasse est nommé
+  avec sa taille réelle. Prouvé hors ligne de bout en bout — le brief de design
+  reçoit `[saw 1 image(s): competitor-page.png]`, et aucun outil qui ne l'a pas
+  demandée n'en reçoit.
+  Enfin **le test qui manquait** : aucune surface ne peut dire qu'un modèle voit
+  une image tant que le chemin n'existe pas — `documents.images()` doit avoir un
+  appelant, le contrat des fournisseurs doit porter les images, un outil doit
+  pouvoir en demander. Vérifié non vacant : sur le code d'avant, les quatre
+  conditions étaient fausses.
 - **Fixed : le README décrivait une version antérieure du produit.** Un audit
   ligne à ligne a trouvé : toute la capacité documents absente — pas de section,
   pas de module dans le plan, pas de `docs/documents.md`, rien dans

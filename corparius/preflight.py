@@ -29,6 +29,7 @@ never measures, exactly as it does for the hardware bench.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import statistics
@@ -182,6 +183,107 @@ MEASURE_SAMPLES = 3
 # that is invisible to an availability probe, which only asks for one word.
 JSON_PROMPT = 'Answer with only this JSON object and nothing else: {"ok": true, "n": 7}'
 
+# The same argument, for images. A catalogue entry that lists `image` among its
+# input modalities is a claim, and this project already knows what a capability
+# claim is worth: one model in a real fallback chain announces structured output
+# and cannot produce an object. So the claim gets tested by sending a picture.
+#
+# Two colours in a known order, not one. "What colour is this square" is a
+# question a model that sees nothing can answer correctly by guessing, and a probe
+# a blind model passes measures nothing.
+VISION_PROMPT = (
+    "The image is a square split into two halves. Reply with exactly two words, "
+    "lowercase, no punctuation: the colour of the top half, then the colour of "
+    "the bottom half."
+)
+VISION_TOP, VISION_BOTTOM = "blue", "yellow"
+
+
+def _solid_png(rows: list[tuple[int, int, int]], side: int = 8) -> bytes:
+    """A tiny truecolour PNG, built here rather than shipped as a binary fixture.
+
+    Stdlib only (`zlib`, `struct`), like every other format this project reads and
+    writes. One row of `rows` per band, top to bottom.
+    """
+    import struct
+    import zlib
+
+    def chunk(tag: bytes, payload: bytes) -> bytes:
+        body = tag + payload
+        return struct.pack(">I", len(payload)) + body + struct.pack(">I", zlib.crc32(body))
+
+    height = side * len(rows)
+    scanlines = b"".join(b"\x00" + bytes(colour) * side for colour in rows for _ in range(side))
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", side, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(scanlines, 9))
+        + chunk(b"IEND", b"")
+    )
+
+
+def vision_png() -> bytes:
+    """The probe image: blue over yellow."""
+    return _solid_png([(0, 0, 255), (255, 255, 0)])
+
+
+def vision_probe(provider: str, model: str, timeout: int = TIMEOUT) -> bool | None:
+    """Send a picture and see whether the model can read it.
+
+    True, False, or None when the call never got far enough to tell — a transport
+    failure is not a verdict, and storing it as one would mark a model blind
+    because a laptop was on a train.
+
+    One call, not a sample of several: this answers a yes/no, and the image makes
+    it the most expensive request in this module.
+    """
+    spec = OPENAI_COMPAT_PROVIDERS.get(provider)
+    if spec is None:
+        return None
+    base = (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base", "")).rstrip("/")
+    key = cfg.get(spec["key_env"], "").strip()
+    if not base or (not key and not spec.get("key_optional")):
+        return None
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    data_uri = "data:image/png;base64," + base64.b64encode(vision_png()).decode()
+    try:
+        response = requests.post(
+            f"{base}/chat/completions",
+            json={
+                "model": model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": VISION_PROMPT},
+                            {"type": "image_url", "image_url": {"url": data_uri}},
+                        ],
+                    }
+                ],
+                "max_tokens": MEASURE_TOKENS,
+                "temperature": 0,
+            },
+            headers=headers,
+            timeout=timeout,
+        )
+    except (requests.RequestException, ValueError):
+        return None
+    if response.status_code >= 400:
+        # A refusal is an answer: most gateways reject an image for a text-only
+        # model with a 400, and that is exactly the thing being measured.
+        return False
+    try:
+        text = str((response.json()["choices"][0].get("message") or {}).get("content") or "")
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+    said = text.lower()
+    top, bottom = said.find(VISION_TOP), said.find(VISION_BOTTOM)
+    # Both colours, in the right order. Naming them the other way round is the
+    # answer of something that read the prompt and not the picture.
+    return top >= 0 and bottom > top
+
 
 @dataclass
 class Measurement:
@@ -199,6 +301,8 @@ class Measurement:
     ms: int = 0  # median wall clock
     tok_s: float = 0.0  # median, from the provider's own timing where given
     json_ok: bool = False
+    # None means nobody asked, which is not the same answer as "cannot see".
+    vision_ok: bool | None = None
 
     @property
     def reliability(self) -> float:
@@ -206,10 +310,18 @@ class Measurement:
 
 
 def measure(
-    provider: str, model: str, samples: int = MEASURE_SAMPLES, timeout: int = TIMEOUT
+    provider: str,
+    model: str,
+    samples: int = MEASURE_SAMPLES,
+    timeout: int = TIMEOUT,
+    vision: bool = False,
 ) -> Measurement:
     """Sample a model several times and report speed, throughput and whether it
     can produce JSON at all.
+
+    `vision` adds one more call, with a picture in it. Off by default and asked
+    for by the caller, because the image makes it the most expensive request here
+    and it is only worth spending on a model that claims to accept one.
 
     Throughput comes from the provider's own `usage.completion_time` when it
     sends one (groq, cerebras and most OpenAI-compatible gateways do), because
@@ -238,6 +350,10 @@ def measure(
     # Every successful sample, not just one: a model that produces JSON two
     # times in three is a model that breaks a tool one turn in three.
     out.json_ok = bool(lat) and json_seen == len(lat)
+    # Only if something answered at all: sending a picture to a model that just
+    # failed three plain calls buys a fourth failure and a bigger bill.
+    if vision and lat:
+        out.vision_ok = vision_probe(provider, model, timeout)
     return out
 
 
@@ -516,7 +632,9 @@ def known(store, provider: str = "") -> dict[str, list[str]]:
 def save_measurement(store, m: Measurement) -> None:
     if store is None or not m.samples:
         return
-    store.record_measurement(m.provider, m.model, m.tok_s, m.json_ok, m.samples, m.failures)
+    store.record_measurement(
+        m.provider, m.model, m.tok_s, m.json_ok, m.samples, m.failures, m.vision_ok
+    )
 
 
 def rank(

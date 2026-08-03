@@ -422,10 +422,19 @@ companies/<slug>/documents/written/    what its agents wrote
 **No new dependency.** A PDF, a `.docx`, a `.pptx`, an `.xlsx`, a CSV, a Markdown
 note and a plain text file are all read with the standard library. **And nothing
 is invented**: a scanned PDF answers "no text layer this build can read" rather
-than returning noise, an image is offered to the models that accept images instead
-of being silently dropped, and a format with no extractor is named rather than
-guessed. Nothing is uploaded anywhere — extraction happens in your process, and
-what reaches a provider is the text you put there.
+than returning noise, and a format with no extractor is named rather than guessed.
+Nothing is uploaded anywhere — extraction happens in your process, and what
+reaches a provider is what you put there.
+
+**A picture is sent, not described.** No text is invented for an image, because
+describing one needs a model that can see it — so the file itself travels, base64
+in the provider's own dialect, still with no new dependency. It goes only where it
+will be read: the tool has to have asked for it (a design brief and a competitor
+scan do; reconciling Stripe does not) and the model has to be able to read one.
+Which models can is **measured, not believed** — `corparius preflight` sends a
+real two-colour test image and stores the verdict, and that verdict outranks the
+catalogue's claim. Measured on the live catalogue: 180 of 337 entries declare image
+input, and only 5 of those are free.
 
 The agents write here too, which is the half that is easy to miss: a design brief,
 a competitor scan, a pricing note and the end-of-day summary used to be produced,

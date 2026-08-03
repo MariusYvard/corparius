@@ -181,10 +181,16 @@ def ask(
     *,
     retries: int = 1,
     fallback: dict | None = None,
+    images: list | None = None,
 ) -> Result:
     """Drive the router until the reply validates, then stop. On exhaustion,
     return the fallback (or the schema defaults) so the caller always gets the
-    agreed shape and the agent turn never dies on a malformed reply."""
+    agreed shape and the agent turn never dies on a malformed reply.
+
+    `images` rides on the first attempt only. A repair round is a correction of the
+    model's own JSON, and re-uploading the picture with it would pay for the image
+    twice to fix a bracket.
+    """
     from .models import Difficulty
 
     difficulty = difficulty or Difficulty.EASY
@@ -192,7 +198,8 @@ def ask(
     convo.append({"role": "user", "content": instruction(schema)})
     last_raw, last_errors, source, usages = "", [], "", []
     for attempt in range(1, retries + 2):
-        res = router.generate(convo, difficulty)
+        extra = {"images": images} if images and attempt == 1 else {}
+        res = router.generate(convo, difficulty, **extra)
         usages.append(res.usage)
         last_raw = res.text
         source = f"{res.provider}:{res.model}"

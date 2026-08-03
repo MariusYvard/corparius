@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass
 
 from . import cfg, structured
+from .llm import _split
 from .models import AgentRole, Difficulty, ToolResult
 from .permissions import risk_of
 from .safety import BudgetExceeded, LoopGuard
@@ -304,6 +305,63 @@ class Executor:
             done.append(f"backlog #{task['id']} returned to backlog")
         return stop
 
+    def _pictures_for(self, tool, spec, ctx) -> list:
+        """The company's images, for the turns where they are worth their price.
+
+        Three conditions, all required, cheapest to check first:
+
+        1. the tool asked (`sees_images`) — a capture helps a design brief and does
+           nothing for reconciling Stripe;
+        2. the company has one on file;
+        3. the model can read one. **Measured first, declared second**: a preflight
+           verdict outranks the catalogue, because this project already knows what
+           a capability claim is worth. With neither, nothing is sent — a picture
+           mailed to a text-only model is paid for and thrown away by the provider.
+        """
+        if not getattr(tool, "sees_images", False):
+            return []
+        pictures = list(getattr(ctx, "images", []) or [])
+        if not pictures:
+            return []
+        # Asked of the router, not read off the settings: `spec.model` is None for
+        # nine of the ten roles and the tier decides, so reading the tier here is
+        # how this would come to disagree with the call it reasons about.
+        model = self.router.resolve_model(spec.difficulty, spec.model)
+        if not self._model_reads_images(model, ctx):
+            log.info(
+                "[%s] %s: %s reads no images, %d not sent",
+                spec.role.value,
+                tool.name,
+                model,
+                len(pictures),
+            )
+            return []
+        return pictures
+
+    def _model_reads_images(self, model: str, ctx) -> bool:
+        """Measured verdict if there is one, the catalogue's claim otherwise."""
+        # Mock mode has no model to be wrong about, and the mock reports what it
+        # was handed — letting pictures through is what makes an offline run
+        # exercise this path instead of skipping it.
+        if getattr(self.router.settings, "llm_mock", False):
+            return True
+        _, name = _split(model)
+        store = getattr(ctx, "store", None)
+        if store is None:
+            return False
+        try:
+            for row in store.known_probes():
+                if row["model"] == name and row.get("vision_ok") is not None:
+                    return bool(row["vision_ok"])
+        except Exception:  # noqa: BLE001 - a probe table that cannot be read is not a verdict
+            pass
+        try:
+            from . import modelinfo
+
+            return bool(modelinfo.describe(model, modelinfo.cached(store))["vision_declared"])
+        except Exception:  # noqa: BLE001 - no catalogue means no claim, not a crash
+            return False
+
     def _invoke(self, company, spec, ctx, tool_name, loop):
         """Run one tool through budget, draft, loop guards and the HITL gate.
         Returns (result, stop); stop=True means a guard tripped, halt the turn."""
@@ -345,11 +403,21 @@ class Executor:
             return ToolResult(ok=True, output=skip), False
         draft = ""
         ctx.structured = None
+        pictures = self._pictures_for(tool, spec, ctx)
+        # Omitted rather than passed empty, for the reason HybridRouter._carry
+        # spells out: a router or provider written before images existed — a test
+        # double, a plugin — must keep working, and "no keyword" says "no images"
+        # exactly as well as an empty list.
+        carry = {"images": pictures} if pictures else {}
         if tool.needs_draft and tool.schema:
             # Same shape out, whatever model answered. The harness may spend more
             # than one call (a repair round), but it accounts for every one.
             result = structured.ask(
-                self.router, _messages(spec, ctx, tool), tool.schema, difficulty=spec.difficulty
+                self.router,
+                _messages(spec, ctx, tool),
+                tool.schema,
+                difficulty=spec.difficulty,
+                **carry,
             )
             for used in result.usages:  # a repair round is a real call; bill it
                 ctx.budget.record_usage(used.input_tokens, used.output_tokens, used.cost)
@@ -364,7 +432,10 @@ class Executor:
                 return None, True
         elif tool.needs_draft:
             res = self.router.generate(
-                _messages(spec, ctx, tool), difficulty=spec.difficulty, model=spec.model
+                _messages(spec, ctx, tool),
+                difficulty=spec.difficulty,
+                model=spec.model,
+                **carry,
             )
             ctx.budget.record_usage(res.usage.input_tokens, res.usage.output_tokens, res.usage.cost)
             ctx.breaker.record(res.usage.total)

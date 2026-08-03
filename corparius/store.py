@@ -89,6 +89,7 @@ CREATE INDEX IF NOT EXISTS decisions_by_company ON decisions (company, ts);
 CREATE TABLE IF NOT EXISTS model_probes (
     provider TEXT, model TEXT, state TEXT, detail TEXT, status INTEGER, ms INTEGER, ts REAL,
     tok_s REAL, json_ok INTEGER, samples INTEGER, failures INTEGER, measured_at REAL,
+    vision_ok INTEGER,
     PRIMARY KEY (provider, model)
 );
 """
@@ -97,7 +98,7 @@ CREATE TABLE IF NOT EXISTS model_probes (
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -316,6 +317,24 @@ def _migration_15(db: sqlite3.Connection) -> None:
 
 
 # version -> callable(db). Applied in order for any version above the DB's own.
+def _migration_16(db: sqlite3.Connection) -> None:
+    """Whether a model can actually read an image, as opposed to claiming it can.
+
+    The catalogue's word was never enough for JSON — one model in the owner's own
+    fallback chain announces `structured_outputs` and cannot produce an object —
+    and there is no reason to trust it here either. Measured on the live
+    catalogue: 180 of 337 entries declare image input.
+
+    NULL is a third state and the column keeps it: never asked. It is not the
+    same answer as "cannot see", and collapsing the two would make the console
+    tell an operator their model is blind because nobody has checked.
+    """
+    try:
+        db.execute("ALTER TABLE model_probes ADD COLUMN vision_ok INTEGER")
+    except sqlite3.OperationalError:
+        pass  # already there: fresh stores get it from SCHEMA
+
+
 MIGRATIONS = {
     1: _migration_1,
     2: _migration_2,
@@ -332,6 +351,7 @@ MIGRATIONS = {
     13: _migration_13,
     14: _migration_14,
     15: _migration_15,
+    16: _migration_16,
 }
 
 
@@ -947,24 +967,31 @@ class Store:
         self.db.commit()
 
     @_locked
-    def record_measurement(self, provider, model, tok_s, json_ok, samples, failures) -> None:
+    def record_measurement(
+        self, provider, model, tok_s, json_ok, samples, failures, vision_ok=None
+    ) -> None:
         """Attach performance to a model already proved callable.
 
         Kept separate from `record_probe` because the two cost different things:
         availability is one small call across a whole catalogue, performance is
         several larger ones and is only worth paying for on models a tier might
         actually be routed to.
+
+        `vision_ok` stays None when nobody asked, and a later measurement that did
+        not ask must not erase an answer an earlier one got — hence COALESCE on
+        that column alone rather than the plain overwrite the others take.
         """
         self.db.execute(
             "INSERT INTO model_probes"
             " (provider, model, state, detail, status, ms, ts,"
-            "  tok_s, json_ok, samples, failures, measured_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
+            "  tok_s, json_ok, samples, failures, measured_at, vision_ok)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
             " ON CONFLICT(provider, model) DO UPDATE SET"
             " tok_s=excluded.tok_s, json_ok=excluded.json_ok,"
             " samples=COALESCE(model_probes.samples,0)+excluded.samples,"
             " failures=COALESCE(model_probes.failures,0)+excluded.failures,"
-            " measured_at=excluded.measured_at",
+            " measured_at=excluded.measured_at,"
+            " vision_ok=COALESCE(excluded.vision_ok, model_probes.vision_ok)",
             (
                 provider,
                 model,
@@ -978,6 +1005,7 @@ class Store:
                 int(samples),
                 int(failures),
                 time.time(),
+                None if vision_ok is None else int(bool(vision_ok)),
             ),
         )
         self.db.commit()

@@ -112,6 +112,14 @@ def fetch(timeout: int = 20) -> dict[str, dict]:
         if not ident:
             continue
         params = row.get("supported_parameters") or []
+        # What a model takes in, which the response has always carried and this
+        # function used to drop on the floor. The product told operators an image
+        # was "offered to the models that accept images" while holding nothing
+        # that could tell one from the other — measured on the live catalogue:
+        # 180 of 337 entries declare image input, and only 5 of those are free.
+        # Given, not Measured: a catalogue says what a model claims. What it can
+        # actually do is preflight's business.
+        modalities = (row.get("architecture") or {}).get("input_modalities") or []
         entry = {
             "id": ident,
             "context": int(row.get("context_length") or 0),
@@ -119,6 +127,7 @@ def fetch(timeout: int = 20) -> dict[str, dict]:
             "reasoning": "reasoning" in params,
             "structured": "structured_outputs" in params or "response_format" in params,
             "tools": "tools" in params,
+            "vision": "image" in modalities,
             "params_b": size_b(ident),
         }
         # First wins: the catalogue lists variants of the same model and the
@@ -210,6 +219,11 @@ def describe(
         "created": given.get("created", 0.0),
         "reasoning": bool(given.get("reasoning")),
         "structured_declared": bool(given.get("structured")),
+        # `_declared` for the same reason as structured: this is the claim, and
+        # the claim and the measurement disagree often enough that the two must
+        # never share a name. A model absent from the catalogue reads False, which
+        # is "nothing says it can" and not "it cannot".
+        "vision_declared": bool(given.get("vision")),
         "tools": bool(given.get("tools")),
         # The catalogue's own parsed size where it matched, otherwise the name.
         "params_b": given.get("params_b") or estimated,

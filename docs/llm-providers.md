@@ -36,6 +36,19 @@ Cette dernière ligne est le cœur du dispositif. Les paliers gratuits sur lesqu
 
 Ce que le préflight ne peut pas prouver est **nommé, pas ignoré** : `claudecode:` passe par le CLI local et `local:` par Ollama, aucun des deux ne parle cette API. Un préflight qui couvre trois paliers sur six et annonce que tout va bien serait pire qu'un qui avoue sa portée.
 
+### Et lire une image, aussi
+
+Le même raisonnement s'applique aux modalités. Le catalogue déclare `architecture.input_modalities`, et une déclaration n'est pas une capacité — c'est déjà vrai pour `structured_outputs`, qu'un modèle du repli réel du propriétaire annonce sans savoir produire un objet. Le préflight envoie donc une vraie image de test aux modèles qui *prétendent* la lire : un carré bleu sur jaune, 79 octets, généré en code, et la question porte sur les deux couleurs **dans l'ordre** — une seule serait devinable par un modèle qui ne voit rien.
+
+La ligne de mesure gagne alors un fragment, et seulement quand la question a été posée — « jamais demandé » et « ne sait pas lire » ne doivent pas se ressembler :
+
+```text
+     … · JSON ok · 100% of 3 samples · reads images
+     … · JSON ok · 100% of 3 samples · CLAIMS images and cannot read one
+```
+
+Le verdict va dans `model_probes.vision_ok` et vieillit comme les autres. `NULL` y est un troisième état — jamais demandé — qui n'est pas « ne voit pas ». Mesuré sur le catalogue réel : **180 entrées sur 337 déclarent l'image en entrée, dont 5 seulement en palier gratuit.** Voir `docs/documents.md` pour ce qu'une entreprise en fait.
+
 ### Balayer un catalogue entier, et s'en souvenir
 
 ```text

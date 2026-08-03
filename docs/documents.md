@@ -25,7 +25,7 @@ Aucune dépendance nouvelle. Un PDF et un `.docx` sont des conteneurs zip dont l
 | `.pdf` | les opérateurs de texte non compressés que la plupart des exporteurs émettent |
 | `.docx` `.pptx` `.xlsx` | le zip et son XML, mêmes trois lignes pour les trois |
 | `.csv` | l'en-tête et un échantillon: mille lignes dans une invite sont du bruit |
-| `.png` `.jpg` `.jpeg` `.webp` `.gif` | proposé aux modèles qui acceptent les images, jamais décrit ici |
+| `.png` `.jpg` `.jpeg` `.webp` `.gif` | envoyé tel quel à un modèle qui sait le lire, jamais décrit ici (voir « Les images » plus bas) |
 
 ## Ce qui n'est pas inventé
 
@@ -38,10 +38,10 @@ Donc chaque échec porte un nom plutôt qu'un silence:
 | `no-text-layer` | scanné ou compressé: aucune couche de texte à lire |
 | `no-extractor` | aucun extracteur pour ce format |
 | `empty` | aucun texte dedans |
-| `image` | proposé aux modèles qui acceptent les images |
+| `image` | envoyé comme image à un modèle qui sait la lire |
 | `os-error` | n'a pas pu être ouvert, avec ce que le système a répondu |
 
-Un PDF scanné répond « aucune couche de texte » au lieu de rendre du bruit. Décrire une image demande un appel multimodal, donc l'image est proposée aux modèles qui la prennent et ignorée par les autres — jamais silencieusement jetée, jamais légendée par personne.
+Un PDF scanné répond « aucune couche de texte » au lieu de rendre du bruit. Aucun texte n'est inventé pour une image : décrire une image demande un modèle qui la voit, donc c'est le fichier lui-même qui part.
 
 L'état voyage comme un **code**, pas comme une phrase. La console parle deux langues, et la phrase, elle, part dans une invite dont la langue est l'anglais: une seule des deux se traduit.
 
@@ -57,6 +57,26 @@ Deux plafonds, chacun dit à voix haute:
 **C'est ce second plafond qui compte pour l'exploitant.** Une entreprise peut avoir douze documents au dossier et n'en donner que deux à ses agents. Mesuré sur neuf fichiers réels: quatre atteignent les agents, trois specs parfaitement lisibles sont hors budget et rien ne les lit. Rien dans le produit ne le disait avant que la carte existe.
 
 `context()` et l'inventaire de la console partagent **une seule boucle de sélection**. Écrite deux fois elle aurait dérivé, et une console qui se porte garante d'un document qu'aucun agent n'a jamais vu coûte plus cher que le silence qu'elle remplace.
+
+## Les images
+
+Pendant deux versions, ce module, la console, cette page et le README annonçaient tous qu'une image était « proposée aux modèles qui acceptent les images ». C'était faux : `documents.images()` n'avait aucun appelant, aucun signal de capacité vision n'existait, et rien n'envoyait jamais d'image à un modèle. Elle était listée, nommée, puis jetée. Ce qui suit décrit ce qui se passe désormais.
+
+**Trois conditions, toutes requises.** Une image ne part que si :
+
+1. **l'outil l'a demandée** — `Tool(sees_images=True)`, déclaré outil par outil. Une capture sert un brief de design et ne sert à rien pour rapprocher des paiements Stripe. Aujourd'hui : `draft_design_brief` et `scan_competitors` ;
+2. **l'entreprise en a une** dans son dossier ;
+3. **le modèle sait la lire.** Mesuré d'abord, déclaré ensuite.
+
+**Mesuré bat déclaré, ici comme partout.** `corparius preflight` envoie une vraie image de test — un carré bleu sur jaune, généré en code, 79 octets, aucun binaire en dépôt — et demande les deux couleurs dans l'ordre. Une seule couleur serait devinable par un modèle qui ne voit rien, et une sonde qu'un modèle aveugle réussit ne mesure rien. Le verdict va dans `model_probes.vision_ok`, et **`NULL` est un troisième état** : « jamais demandé » n'est pas « ne voit pas », et confondre les deux ferait dire à la console qu'un modèle est aveugle parce que personne n'a vérifié.
+
+À défaut de mesure, le catalogue : `architecture.input_modalities` arrivait déjà dans la réponse que `modelinfo.fetch` lisait, et était jeté. Mesuré sur le catalogue réel : **180 entrées sur 337 déclarent l'image en entrée, et seulement 5 d'entre elles sont gratuites** — ce qui compte pour un projet qui route vers le gratuit. Sans mesure ni déclaration, rien n'est envoyé : une image postée à un modèle textuel est payée puis jetée par le fournisseur.
+
+**Chaque fournisseur dans son dialecte.** `content` reste une chaîne dans `messages` — `_flatten`, le Mock et le `system` d'Anthropic la joignent — donc les images voyagent dans un argument à part, jamais glissées dans un message. OpenAI-compatible : `image_url` en URI `data:`. Anthropic : un bloc `source` en base64. Ollama : son tableau `images`. Le CLI Claude Code ne peut pas en porter, le déclare (`accepts_images = False`) et n'en reçoit donc pas. `base64` est dans la bibliothèque standard : toujours deux dépendances.
+
+Un fournisseur fourni par un greffon et écrit avant les images continue de fonctionner : le mot-clé est **absent** plutôt que passé vide, ce qui n'appelle jamais une signature à trois arguments avec un quatrième.
+
+**Borné, et dit.** Deux images par appel au plus, 3 Mio chacune avant base64 — qui coûte un tiers de plus. Ce qui dépasse n'est pas envoyé et est **nommé** dans le journal avec sa taille réelle, parce que « pas de troncature silencieuse » couvre une image laissée de côté comme un document coupé. Une image manquant en silence d'une invite, c'est un tour qui raisonne sur ce qu'il ne voit pas.
 
 ## Les agents écrivent aussi
 

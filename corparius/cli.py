@@ -306,14 +306,27 @@ def cmd_preflight(args) -> None:
     usable = [p for p in report.probes if p.state == preflight.USABLE]
     if usable and not getattr(args, "quick", False):
         print(f"\nMeasuring {len(usable)} model(s), {preflight.MEASURE_SAMPLES} samples each…")
+        # The catalogue's claim decides whether the picture is worth sending: a
+        # model that never said it takes images has nothing to be caught out on,
+        # and testing the ones that do say it is where the lie lives.
+        catalogue = modelinfo.cached(store)
         for p in usable:
-            m = preflight.measure(p.provider, p.model, timeout=args.timeout)
+            claims_vision = bool(modelinfo.describe(p.model, catalogue)["vision_declared"])
+            m = preflight.measure(p.provider, p.model, timeout=args.timeout, vision=claims_vision)
             preflight.save_measurement(store, m)
             schema = "JSON ok" if m.json_ok else "CANNOT return JSON"
+            # Said only when it was asked. "not asked" and "cannot see" are
+            # different answers and the line must not merge them.
+            if m.vision_ok is True:
+                sight = " · reads images"
+            elif m.vision_ok is False:
+                sight = " · CLAIMS images and cannot read one"
+            else:
+                sight = ""
             print(
                 f"  {p.provider}:{p.model}\n"
                 f"     {m.ms} ms median · {m.tok_s} tok/s · {schema} · "
-                f"{m.reliability:.0%} of {m.samples} samples"
+                f"{m.reliability:.0%} of {m.samples} samples{sight}"
             )
     if report.blocking:
         print(

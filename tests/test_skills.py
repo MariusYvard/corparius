@@ -152,9 +152,11 @@ def test_the_shipped_example_skill_names_real_tools():
     Shipping one like that would teach the wrong thing by example."""
     from corparius import paths
 
-    path = paths.companies_dir() / "example" / "skills" / "outreach-voice" / "SKILL.md"
-    if not path.is_file():
-        pytest.skip("a wheel install without the example seeded yet")
+    # The shipped source, not whatever an operator's home happens to hold. This
+    # asked companies_dir() and skipped when it came up empty, so the moment the
+    # suite stopped pointing that at the checkout the test went quiet instead of
+    # failing — a claim about what ships has to read what ships.
+    path = paths.example_company_src() / "skills" / "outreach-voice" / "SKILL.md"
     skill = parse(path)
     assert isinstance(skill, Skill)
     assert skill.allowed_tools
@@ -210,9 +212,8 @@ def test_every_shipped_example_skill_is_well_formed():
     from corparius import paths
     from corparius.skills import DEFAULT_MAX_CHARS, SkillLoader
 
-    base = paths.companies_dir() / "example" / "skills"
-    if not base.is_dir():
-        pytest.skip("a wheel install without the example seeded yet")
+    # The shipped source, for the same reason as above.
+    base = paths.example_company_src() / "skills"
     loader = SkillLoader([(base, "example")])
     assert len(loader.skills) >= 3
     for skill in loader.skills:

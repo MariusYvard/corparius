@@ -1,17 +1,30 @@
 """The MCP server's logic must work through its plain functions, with no `mcp`
 dependency imported (only build_server needs it)."""
 
+import shutil
+
 import pytest
 
 from corparius import mcp_server
 from corparius.store import Store
 
+from .conftest import EXAMPLE_COMPANY
+
 
 @pytest.fixture(autouse=True)
-def _reset_store_singleton():
+def _reset_store_singleton(tmp_path, monkeypatch):
     """The server caches one Store for the process. Each test points settings at
     a fresh tmp_path, so the cached instance must be cleared or a test would
-    reuse the previous test's (now closed) connection."""
+    reuse the previous test's (now closed) connection.
+
+    And a private home, because `run_company("example", ticks=1)` below is a real
+    tick: its tools save the company config and write documents, and with no
+    CORP_HOME set they landed in the checkout's own tracked example — comments
+    gone, `site:` block gone, four written documents rewritten.
+    """
+    home = tmp_path / "home"
+    shutil.copytree(EXAMPLE_COMPANY, home / "companies" / "example")
+    monkeypatch.setenv("CORP_HOME", str(home))
     mcp_server._store_singleton = None
     yield
     mcp_server._store_singleton = None

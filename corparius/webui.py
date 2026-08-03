@@ -13,6 +13,7 @@ Secrets are write-only: the API only ever reports whether one is set.
 
 from __future__ import annotations
 
+import base64
 import hmac
 import json
 import logging
@@ -31,6 +32,7 @@ from . import (
     cfg,
     claudecli,
     deploy,
+    documents,
     hardware,
     i18n,
     mailbox,
@@ -1291,6 +1293,100 @@ def _route_drafts_post(ctx):
     }
 
 
+def _route_documents_get(ctx):
+    """What the company has on file, and what of it an agent actually reads.
+
+    The folder shipped, the agents write into it, and nothing in the console
+    showed either half. So the operator could not read a brief their own design
+    agent had written, and could not see that ten of their twelve documents were
+    sitting past the prompt budget, never reaching a turn.
+
+    Deliberately off the 5s poll — this opens and extracts every file it lists,
+    and a PDF regex on a polled path is the same mistake as a network probe on
+    one. The page loads it on arrival, on a company change, when a run ends, and
+    when somebody presses the button.
+    """
+    # `slug in _companies()` is the path-traversal guard, as everywhere else:
+    # `documents.folder` builds a path out of this name.
+    if ctx.slug not in _companies():
+        return 404, {"ok": False, "error": "no such company"}
+    return 200, {"ok": True, **documents.inventory(ctx.slug)}
+
+
+def _route_documents_post(ctx):
+    """Store one file the operator dropped on the console.
+
+    One file per request, deliberately. A batch would need a body ceiling sized
+    for the worst case it might ever carry, would collapse ten outcomes into one
+    answer, and would make per-file progress on the page a thing the page made up.
+
+    A refused file is not a failed request: `ok` qualifies the request, and asking
+    to store a .zip is a perfectly well-formed thing to ask. The answer is
+    `stored: False` with the reason, and the operator learns which file and why.
+    """
+    if ctx.slug not in _companies():
+        return 404, {"ok": False, "error": "no such company"}
+    try:
+        # validate=True, so a body that is not base64 says so here rather than
+        # writing whatever survived a lenient decode into the operator's folder.
+        data = base64.b64decode(str(ctx.body.get("data", "")), validate=True)
+    except ValueError:  # binascii.Error subclasses it
+        return 400, {"ok": False, "error": "the file did not arrive as valid base64"}
+    name = str(ctx.body.get("name", ""))
+    try:
+        path, replaced = documents.save(ctx.slug, name, data)
+    except documents.Refused as refused:
+        return 200, {
+            "ok": True,
+            "stored": False,
+            "name": name,
+            "reason": refused.reason,
+            "detail": refused.detail,
+            **documents.inventory(ctx.slug),
+        }
+    # The refreshed inventory rides back with the result, so the card the operator
+    # is looking at is the folder as it now stands rather than as it was.
+    return 200, {
+        "ok": True,
+        "stored": True,
+        "replaced": replaced,
+        "name": path.name,
+        **documents.inventory(ctx.slug),
+    }
+
+
+def _route_documents_delete(ctx):
+    """Take one document out of the folder.
+
+    A drop zone with no way back is a folder that only grows, and an operator who
+    dropped the wrong quarter's price list had to go find the directory by hand.
+    Moved aside rather than erased, like a deleted company: the answer says where
+    it went, so a misread badge is recoverable.
+
+    No typed confirmation, unlike deleting a company. That gate exists because a
+    company is the whole thing; a document is one file that is still on disk
+    afterwards, and friction on a routine action buys nothing here.
+    """
+    if ctx.slug not in _companies():
+        return 404, {"ok": False, "error": "no such company"}
+    try:
+        moved = documents.remove(ctx.slug, str(ctx.body.get("path", "")))
+    except documents.Refused as refused:
+        return 200, {
+            "ok": True,
+            "removed": False,
+            "reason": refused.reason,
+            "detail": refused.detail,
+            **documents.inventory(ctx.slug),
+        }
+    return 200, {
+        "ok": True,
+        "removed": True,
+        "trashed": moved.name,
+        **documents.inventory(ctx.slug),
+    }
+
+
 def _route_site_get(ctx):
     site = paths.site_index(_fresh_settings().data_path, ctx.slug)
     return 200, {
@@ -1829,6 +1925,11 @@ class Route:
     handler: Callable
     public: bool = False
     needs_slug: bool = False  # no company named -> fall through to 404
+    # Per-endpoint body ceiling. One endpoint carries a file and the rest carry a
+    # handful of fields, so the choice belongs next to the endpoint that needs it
+    # rather than raised for everybody — a global ceiling wide enough for a 6 MB
+    # PDF is a global ceiling wide enough for a flood through every other route.
+    max_body: int = MAX_BODY
 
 
 # Exact matches, checked first.
@@ -1843,6 +1944,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/company", _route_company_get, needs_slug=True),
     Route("GET", "/api/ollama", _route_ollama_get),
     Route("GET", "/api/drafts", _route_drafts_get, needs_slug=True),
+    Route("GET", "/api/documents", _route_documents_get, needs_slug=True),
     Route("GET", "/api/site", _route_site_get, needs_slug=True),
     Route("GET", "/api/payments", _route_payments_get),
     Route("GET", "/api/doctor", _route_doctor),
@@ -1854,6 +1956,18 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/companies", _route_companies_post),
     Route("POST", "/api/approvals", _route_approvals_post),
     Route("POST", "/api/drafts", _route_drafts_post, needs_slug=True),
+    # base64 costs a third on the way in, so the ceiling is documents.MAX_UPLOAD
+    # plus that plus the JSON envelope. Stated as arithmetic rather than a round
+    # number, so raising the file limit cannot silently leave the route behind.
+    Route(
+        "POST",
+        "/api/documents",
+        _route_documents_post,
+        needs_slug=True,
+        max_body=documents.MAX_UPLOAD * 4 // 3 + (1 << 16),
+    ),
+    # Keeps the tight default ceiling: it carries a path, not a file.
+    Route("POST", "/api/documents/delete", _route_documents_delete, needs_slug=True),
     Route("POST", "/api/rules", _route_rules_post, needs_slug=True),
     Route("POST", "/api/memory", _route_memory_post),
     Route("POST", "/api/inbox", _route_inbox_post),
@@ -1920,7 +2034,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _json_body(self) -> dict:
+    def _json_body(self, ceiling: int = MAX_BODY) -> dict:
         # Chunked bodies are not decoded by http.server, so Content-Length is
         # absent and the ceiling below would be trivially bypassable. The page
         # never sends chunked; refusing is safer than reading an unbounded body.
@@ -1935,13 +2049,13 @@ class Handler(BaseHTTPRequestHandler):
             raise _RequestRefused(400, "malformed Content-Length") from None
         if length < 0:
             raise _RequestRefused(400, "malformed Content-Length")
-        if length > MAX_BODY:
+        if length > ceiling:
             # Refused without reading, which deliberately breaks the
             # read-before-refuse rule documented in _dispatch. That rule exists
             # so the page reliably sees a 401; it does not need to hold for a
             # client announcing four gigabytes, and honouring it there is the
             # denial of service. Do not "fix" this back.
-            raise _RequestRefused(413, f"body larger than {MAX_BODY} bytes")
+            raise _RequestRefused(413, f"body larger than {ceiling} bytes")
         if not length:
             return {}
         try:
@@ -2042,10 +2156,16 @@ class Handler(BaseHTTPRequestHandler):
             # refuse: closing the connection on an unread body makes the client
             # see a reset instead of our 401, and the page needs the 401 to know
             # it should ask for a token.
-            body = self._json_body() if method == "POST" else {}
+            # The route is matched before the body is read, because the ceiling
+            # the body is measured against belongs to the route. Matching touches
+            # nothing but the method and the path, so this does not weaken the
+            # read-before-refuse rule below: an unmatched path still has its body
+            # read at the default ceiling before it gets its 404.
+            route = _match(method, url.path)
+            ceiling = route.max_body if route is not None else MAX_BODY
+            body = self._json_body(ceiling) if method == "POST" else {}
             source = body if method == "POST" else query
             lang = str(source.get("lang", ""))
-            route = _match(method, url.path)
             slug = str(source.get("company", ""))
             if route is None or (route.needs_slug and not slug):
                 self._send(404, {"ok": False, "error": "not found"})

@@ -8,7 +8,7 @@ import threading
 import pytest
 import yaml
 
-from corparius import cfg, webui
+from corparius import cfg, paths, webui
 from corparius import company as company_mod
 from corparius.config import Settings
 from corparius.store import Store
@@ -26,7 +26,11 @@ def server(tmp_path, monkeypatch):
     (root / "companies" / "acme" / "company.yaml").write_text(
         "slug: acme\nname: Acme\noffer:\n  product: Widgets\n", encoding="utf-8"
     )
-    monkeypatch.setattr(company_mod, "ROOT", root)
+    # CORP_HOME, not a patched module attribute. `companies/` resolves through
+    # paths.companies_dir() on every call now, so this is the one lever — and it
+    # is the same one an operator pulls, which is why the test can no longer be
+    # green while the product disagrees with it.
+    monkeypatch.setenv("CORP_HOME", str(root))
     cfg.set_dotenv_path(tmp_path / ".env")
     cfg.invalidate()
     srv = webui.build_server(Settings(), host="127.0.0.1", port=0, env_file=tmp_path / ".env")
@@ -156,13 +160,13 @@ def test_delete_needs_the_slug_typed_and_only_moves_the_config(server):
     status, d = _call(server, "POST", "/api/company/delete", {"company": "acme", "confirm": "acme"})
     assert status == 200 and d["ok"] and "acme" not in d["companies"]
     # Moved aside, never destroyed: a mistyped slug must be recoverable.
-    trashed = list((company_mod.ROOT / "companies" / ".trash").glob("acme-*"))
+    trashed = list((paths.companies_dir() / ".trash").glob("acme-*"))
     assert trashed and (trashed[0] / "company.yaml").is_file()
 
 
 def test_a_broken_company_file_opens_for_repair_instead_of_crashing(server):
-    (company_mod.ROOT / "companies" / "blank").mkdir()
-    (company_mod.ROOT / "companies" / "blank" / "company.yaml").write_text("", encoding="utf-8")
+    (paths.companies_dir() / "blank").mkdir()
+    (paths.companies_dir() / "blank" / "company.yaml").write_text("", encoding="utf-8")
     status, d = _call(server, "GET", "/api/company?company=blank")
     # This used to raise AttributeError from inside setdefault() on None. A 404
     # would be no better: it would strand the operator with a listed company and
@@ -176,8 +180,8 @@ def test_a_broken_company_file_opens_for_repair_instead_of_crashing(server):
     assert status == 200 and d["ok"] and not d["problems"]
 
     # A file that is not a mapping at all is refused rather than half-read.
-    (company_mod.ROOT / "companies" / "wrong").mkdir()
-    (company_mod.ROOT / "companies" / "wrong" / "company.yaml").write_text(
+    (paths.companies_dir() / "wrong").mkdir()
+    (paths.companies_dir() / "wrong" / "company.yaml").write_text(
         "- just\n- a list\n", encoding="utf-8"
     )
     status, d = _call(server, "GET", "/api/company?company=wrong")

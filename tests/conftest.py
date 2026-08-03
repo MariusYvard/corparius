@@ -11,11 +11,62 @@ a throwaway directory, and pin mock mode. Tests that want a different value set
 it with monkeypatch.setenv, which lands in layer 1 and outranks all of this.
 """
 
+import hashlib
 import socket
+from pathlib import Path
 
 import pytest
 
 from corparius import cfg
+
+# The checkout's own companies/, and the one company inside it that git tracks.
+# The rest of that directory is gitignored, which is exactly why nobody noticed
+# the `d`, `m` and `t` accumulating beside the example — every one of them
+# written by a test, and invisible to git by design.
+CHECKOUT_COMPANIES = Path(__file__).resolve().parent.parent / "companies"
+EXAMPLE_COMPANY = CHECKOUT_COMPANIES / "example"
+
+
+def _checkout_digest() -> dict[str, str]:
+    """Every file under the checkout's companies/, hashed.
+
+    The whole directory, not just the tracked example. Watching `example` alone is
+    how `companies/d`, `companies/m` and `companies/t` went on being written run
+    after run: `companies/*` is gitignored apart from the example, so nothing —
+    not git, not the guard — was looking at them.
+    """
+    if not CHECKOUT_COMPANIES.is_dir():
+        return {}
+    return {
+        p.relative_to(CHECKOUT_COMPANIES).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(CHECKOUT_COMPANIES.rglob("*"))
+        if p.is_file()
+    }
+
+
+@pytest.fixture(scope="session", autouse=True)
+def guard_the_checkout():
+    """Fail the run if a test wrote into the checkout's companies/ directory.
+
+    A backstop, not the defence: `hermetic_settings` gives every test an empty
+    private home, so nothing should reach here at all. It exists because the
+    setting that aims those writes has been wrong in two different directions
+    already — at the developer's real installation, then at the working tree —
+    and because both times the evidence was a file nobody was looking at.
+
+    One pass over ten small files per session, against 768 ms a test for the
+    copy-based alternative.
+    """
+    before = _checkout_digest()
+    yield
+    after = _checkout_digest()
+    touched = sorted(set(before) ^ set(after)) + sorted(
+        k for k in before.keys() & after.keys() if before[k] != after[k]
+    )
+    assert not touched, (
+        f"a test wrote into the checkout's companies/: {touched}. "
+        "Give the fixture its own CORP_HOME."
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -52,13 +103,24 @@ def hermetic_settings(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_LLM_MOCK", "true")
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
     monkeypatch.delenv("CORP_UI_TOKEN", raising=False)
-    # Removed, not pinned. CORP_HOME is what `companies/`, `skills/` and .env
-    # hang off, and it is set on the machine of anyone actually running
-    # corparius — so on a developer's own box three tests failed and any test
-    # writing under user_home() reached into their real installation. Deleting
-    # it gives every test the same answer a clean checkout gives; the tests that
-    # need a home set their own, which still wins over this.
-    monkeypatch.delenv("CORP_HOME", raising=False)
+    # An empty private home, which is neither of the two places this setting has
+    # already been wrong.
+    #
+    # CORP_HOME is what `companies/`, `skills/` and .env hang off, and it is set
+    # on the machine of anyone actually running corparius: left alone, tests wrote
+    # into a real installation. Deleting it fixed that and aimed them at the
+    # checkout instead, which is also writable — so tests calling tools with the
+    # slugs `t`, `d` and `m` left companies/t, companies/d and companies/m sitting
+    # in the working tree, gitignored and therefore unnoticed, while a real
+    # orchestrator tick rewrote the tracked companies/example/company.yaml.
+    #
+    # Empty and not a copy: copying companies/ into each home closes the same hole
+    # and measured 768 ms a test, three times the suite's whole runtime. The few
+    # fixtures that need the bundled company copy it themselves, which is also the
+    # honest shape — a test that runs a company should say which company.
+    home = tmp_path / "home"
+    home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("CORP_HOME", str(home))
     cfg.set_dotenv_path(tmp_path / "absent.env")
     cfg.invalidate()
     yield

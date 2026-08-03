@@ -130,14 +130,17 @@ select, input[type="text"], input[type="password"], input[type="number"], textar
 input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, [role="tab"]:focus-visible {
   outline: 2px solid var(--select); outline-offset: 2px;
 }
-button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border-ui);
+/* .filebtn rides in the same rule rather than in one of its own: it is a label
+   standing in for a file input, and a second button language for one control is
+   how a console starts looking assembled from parts. */
+button, .filebtn { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border-ui);
   background: transparent; color: var(--text); padding: 7px 14px;
   transition: background-color var(--t-feedback) var(--ease),
               border-color var(--t-feedback) var(--ease),
               transform var(--t-feedback) var(--ease),
               opacity var(--t-feedback) var(--ease); }
-button:hover { background: var(--raised); border-color: var(--muted); }
-button:active:not(:disabled) { transform: translateY(1px); }
+button:hover, .filebtn:hover { background: var(--raised); border-color: var(--muted); }
+button:active:not(:disabled), .filebtn:active { transform: translateY(1px); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600;
   position: relative; overflow: hidden; }
@@ -363,6 +366,32 @@ tr:last-child td { border-bottom: 0; }
 .chip.on { background: var(--select-soft); border-color: var(--select); color: var(--select); }
 .link-quiet { background: none; border: 0; color: var(--select); padding: 4px 6px; font: inherit; cursor: pointer; }
 .link-quiet:hover { text-decoration: underline; background: none; }
+/* Where a file lands. A dashed border says "this is a target" the way a solid one
+   cannot, and the dragover state changes colour rather than moving anything: the
+   pointer is already carrying a file, and a target that shifts under it is a
+   target you miss. Both states reuse token pairs whose contrast is already
+   calculated (--select on --select-soft), because nothing here is eyeballed. */
+.dropzone { border: 2px dashed var(--border-ui); border-radius: 10px; padding: 26px 20px;
+  text-align: center; background: var(--raised);
+  transition: background-color var(--t-feedback) var(--ease), border-color var(--t-feedback) var(--ease); }
+.dropzone.over { border-color: var(--select); background: var(--select-soft); }
+.dropzone-line { margin: 0 0 10px; color: var(--text); font-size: 15px; }
+.dropzone.over .dropzone-line { color: var(--select); }
+.dropzone-pick { margin: 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  justify-content: center; color: var(--muted); font-size: 14px; }
+/* Hidden from sight, never from the keyboard. The native file input paints its
+   own grey button and an "Aucun fichier choisi" beside it, which is the browser's
+   language and not this console's — so the label carries the look and the input
+   keeps the behaviour. `display:none` or `hidden` here would drop the control out
+   of the tab order and make the whole tab mouse-only, which is the trade this
+   pattern exists to avoid. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* The ring has to land on the label, because the element actually taking focus is
+   invisible. Without this the tab stop is silent — worse than ugly. */
+.dropzone-pick:focus-within .filebtn { outline: 2px solid var(--select); outline-offset: 2px; }
+.dropzone .note { margin: 12px 0 0; }
+.doc-result { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 13.5px; }
 .empty { padding: 28px 20px; text-align: center; color: var(--muted); font-size: 14px; }
 .empty .mono { display: inline-block; margin-top: 8px; background: var(--raised);
   padding: 4px 10px; border-radius: 6px; overflow-wrap: anywhere; }
@@ -524,6 +553,7 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
   <div class="wrap" role="tablist">
     <button role="tab" aria-selected="true" aria-controls="tab-overview" id="t-overview"><span data-i18n="nav.overview">Overview</span></button>
     <button role="tab" aria-selected="false" aria-controls="tab-operations" id="t-operations"><span data-i18n="nav.operations">Operations</span><span class="badge warn" id="ops-count" hidden style="margin-left:8px; padding:1px 8px"></span></button>
+    <button role="tab" aria-selected="false" aria-controls="tab-documents" id="t-documents"><span data-i18n="nav.documents">Documents</span></button>
     <button role="tab" aria-selected="false" aria-controls="tab-providers" id="t-providers"><span data-i18n="nav.providers">Providers</span></button>
     <button role="tab" aria-selected="false" aria-controls="tab-ceo" id="t-ceo"><span>CEO</span></button>
     <button role="tab" aria-selected="false" aria-controls="tab-settings" id="t-settings"><span data-i18n="nav.settings">Settings</span></button>
@@ -680,6 +710,28 @@ tr.fresh > td { animation: arrive 240ms var(--ease) both; }
       <h2 data-i18n="ops.log">Action log</h2>
       <p class="desc" data-i18n="ops.logDesc">Every tool call, auditable.</p>
       <div style="overflow-x:auto"><table id="log"></table></div>
+    </div>
+  </section>
+
+  <section id="tab-documents" role="tabpanel" aria-labelledby="t-documents" class="stack" hidden>
+    <div class="card">
+      <h2 data-i18n="docs.dropTitle">Add documents</h2>
+      <p class="desc" data-i18n="docs.dropDesc">A pitch deck, a spec, a price list, a screenshot of a competitor's page. The text is extracted here on your machine and nothing is uploaded anywhere.</p>
+      <div id="doc-drop" class="dropzone">
+        <p class="dropzone-line" data-i18n="docs.dropHere">Drag files here</p>
+        <p class="dropzone-pick">
+          <span data-i18n="docs.dropOr">or</span>
+          <label class="filebtn" for="doc-file" data-i18n="docs.dropPick">Choose files</label>
+          <input type="file" id="doc-file" class="sr-only" multiple>
+        </p>
+        <p class="note" id="doc-accepts"></p>
+      </div>
+      <div id="doc-out" class="stack" style="gap:6px; margin-top:14px"></div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="docs.title">What the company has on file</h2>
+      <p class="desc" data-i18n="docs.desc">Files you dropped in, and files its agents wrote. Only what fits the prompt budget reaches a turn — anything past it is on disk and nothing reads it.</p>
+      <div id="documents" class="stack" style="gap:12px"></div>
     </div>
   </section>
 
@@ -861,7 +913,7 @@ en: {
   "prov.anthropicKey":"Anthropic API key","ceo.newReply":"CEO replied:",
   "run.h3":"3 hours","run.h6":"quarter day (6h)","run.h12":"half day (12h)","run.h24":"full day (24h)",
   "run.button":"Run","run.title":"Runs the scheduled agents for the selected simulated time, in the background",
-  "nav.overview":"Overview","nav.operations":"Operations","nav.providers":"Providers","nav.settings":"Settings","nav.plugins":"Plugins",
+  "nav.overview":"Overview","nav.operations":"Operations","nav.documents":"Documents","nav.providers":"Providers","nav.settings":"Settings","nav.plugins":"Plugins",
   "pl.title":"Plugins","pl.intro":"Plugins extend corparius with extra providers, tools, templates and agents. Verified plugins come from the curated registry and are checked against a SHA-256.",
   "pl.off":"Plugins are off. Turn them on in Settings (Enable plugins), then restart.","pl.openSettings":"Open Settings",
   "pl.installed":"Installed","pl.available":"Available in the registry",
@@ -1046,6 +1098,33 @@ en: {
   "dft.none":"Nothing written yet.","dft.copy":"Copy","dft.copied":"Copied","dft.published":"Mark published","dft.discard":"Discard",
   "dft.queued":"{n} of {cap} waiting","dft.full":"The queue is full, so the social agent has stopped writing until you clear some.",
   "dft.state.draft":"draft","dft.state.queued":"waiting","dft.state.published":"published","dft.state.discarded":"discarded",
+  "docs.title":"What the company has on file","docs.desc":"Files you dropped in, and files its agents wrote. Only what fits the prompt budget reaches a turn — anything past it is on disk and nothing reads it.",
+  "docs.none":"Nothing on file yet. Drop a PDF, a deck, a spreadsheet or a note into the folder below and its text becomes context the agents can use.",
+  "docs.folder":"Folder","docs.reload":"Read the folder again","docs.reading":"Reading…",
+  "docs.head":"{n} on file · {r} reach the agents · {u} of {b} characters used",
+  "docs.more":"{n} more on file, not listed here.",
+  "docs.read":"Read what the agents see","docs.copy":"Copy","docs.copied":"Copied",
+  "docs.remove":"Remove","docs.removed":"{name} moved out of the folder",
+  "docs.no.no-such-document":"{name} was not removed: it is not in the folder.",
+  "docs.no.outside":"{name} was not removed: that path is not inside the folder.",
+  "docs.written":"written by the company","docs.dropped":"you dropped it in",
+  "docs.why.prompt":"reaches the agents",
+  "docs.why.cut":"reaches the agents: first {n} of {total} characters",
+  "docs.why.budget":"on file, past the budget — no agent reads it",
+  "docs.why.image":"offered to models that accept images",
+  "docs.why.no-text-layer":"scanned or compressed: no text layer to read",
+  "docs.why.no-extractor":"no extractor for this format",
+  "docs.why.empty":"no text in it","docs.why.os-error":"could not be opened",
+  "docs.dropTitle":"Add documents","docs.dropDesc":"A pitch deck, a spec, a price list, a screenshot of a competitor's page. The text is extracted here on your machine and nothing is uploaded anywhere.",
+  "docs.dropHere":"Drag files here","docs.dropOr":"or","docs.dropPick":"Choose files",
+  "docs.accepts":"Accepted: {list}. Up to {mb} MB per file.",
+  "docs.sending":"Sending {name}…",
+  "docs.stored":"{name} is on file","docs.replaced":"{name} replaced the file already there",
+  "docs.no.bad-name":"{name} was not stored: that name would be written and then never read.",
+  "docs.no.no-extractor":"{name} was not stored: nothing here can read {detail}, so it could never become context.",
+  "docs.no.empty-file":"{name} was not stored: the file is empty.",
+  "docs.no.too-large":"{name} was not stored: it is larger than the {mb} MB limit.",
+  "docs.no.write-failed":"{name} was not stored: it could not be written. {detail}",
   "bk.run":"Back up now","bk.running":"Zipping…","bk.done":"Backup written",
   "task.edit":"Edit","task.save":"Save","task.cancel":"Cancel","task.saved":"Task updated",
   "token.needed":"This console requires an access token.","token.placeholder":"CORP_UI_TOKEN",
@@ -1059,7 +1138,7 @@ fr: {
   "prov.anthropicKey":"Clé API Anthropic","ceo.newReply":"Réponse du CEO :",
   "run.h3":"3 heures","run.h6":"quart de journée (6 h)","run.h12":"demi-journée (12 h)","run.h24":"journée complète (24 h)",
   "run.button":"Lancer","run.title":"Exécute les agents planifiés pour la durée simulée choisie, en arrière-plan",
-  "nav.overview":"Vue d'ensemble","nav.operations":"Opérations","nav.providers":"Providers","nav.settings":"Réglages","nav.plugins":"Plugins",
+  "nav.overview":"Vue d'ensemble","nav.operations":"Opérations","nav.documents":"Documents","nav.providers":"Providers","nav.settings":"Réglages","nav.plugins":"Plugins",
   "pl.title":"Plugins","pl.intro":"Les plugins étendent corparius avec des providers, outils, gabarits et agents supplémentaires. Les plugins vérifiés viennent du registre curaté et sont contrôlés par un SHA-256.",
   "pl.off":"Les plugins sont désactivés. Activez-les dans Réglages (Activer les plugins), puis redémarrez.","pl.openSettings":"Ouvrir les Réglages",
   "pl.installed":"Installés","pl.available":"Disponibles dans le registre",
@@ -1222,6 +1301,33 @@ fr: {
   "dft.none":"Rien d’écrit pour l’instant.","dft.copy":"Copier","dft.copied":"Copié","dft.published":"Marquer publié","dft.discard":"Jeter",
   "dft.queued":"{n} sur {cap} en attente","dft.full":"La file est pleine : l’agent social a cessé d’écrire en attendant que vous en libériez.",
   "dft.state.draft":"brouillon","dft.state.queued":"en attente","dft.state.published":"publié","dft.state.discarded":"jeté",
+  "docs.title":"Ce que l’entreprise a sur ses dossiers","docs.desc":"Les fichiers que vous déposez, et ceux que ses agents écrivent. Seul ce qui tient dans le budget d’invite atteint un tour : au-delà, c’est sur le disque et rien ne le lit.",
+  "docs.none":"Rien pour l’instant. Déposez un PDF, une présentation, un tableur ou une note dans le dossier ci-dessous et son texte devient du contexte pour les agents.",
+  "docs.folder":"Dossier","docs.reload":"Relire le dossier","docs.reading":"Lecture…",
+  "docs.head":"{n} au dossier · {r} atteignent les agents · {u} caractères sur {b}",
+  "docs.more":"{n} autres au dossier, non listés ici.",
+  "docs.read":"Lire ce que voient les agents","docs.copy":"Copier","docs.copied":"Copié",
+  "docs.remove":"Retirer","docs.removed":"{name} sorti du dossier",
+  "docs.no.no-such-document":"{name} n’a pas été retiré : il n’est pas dans le dossier.",
+  "docs.no.outside":"{name} n’a pas été retiré : ce chemin n’est pas dans le dossier.",
+  "docs.written":"écrit par l’entreprise","docs.dropped":"déposé par vous",
+  "docs.why.prompt":"atteint les agents",
+  "docs.why.cut":"atteint les agents : les {n} premiers caractères sur {total}",
+  "docs.why.budget":"au dossier, hors budget — aucun agent ne le lit",
+  "docs.why.image":"proposé aux modèles qui acceptent les images",
+  "docs.why.no-text-layer":"scanné ou compressé : aucune couche de texte à lire",
+  "docs.why.no-extractor":"aucun extracteur pour ce format",
+  "docs.why.empty":"aucun texte dedans","docs.why.os-error":"n’a pas pu être ouvert",
+  "docs.dropTitle":"Ajouter des documents","docs.dropDesc":"Une présentation, un cahier des charges, un tarif, une capture de la page d’un concurrent. Le texte est extrait ici, sur votre machine, et rien n’est envoyé ailleurs.",
+  "docs.dropHere":"Glissez des fichiers ici","docs.dropOr":"ou","docs.dropPick":"Choisir des fichiers",
+  "docs.accepts":"Acceptés : {list}. {mb} Mo maximum par fichier.",
+  "docs.sending":"Envoi de {name}…",
+  "docs.stored":"{name} est au dossier","docs.replaced":"{name} a remplacé le fichier déjà présent",
+  "docs.no.bad-name":"{name} n’a pas été enregistré : ce nom serait écrit puis jamais relu.",
+  "docs.no.no-extractor":"{name} n’a pas été enregistré : rien ici ne sait lire {detail}, il ne pourrait donc jamais devenir du contexte.",
+  "docs.no.empty-file":"{name} n’a pas été enregistré : le fichier est vide.",
+  "docs.no.too-large":"{name} n’a pas été enregistré : il dépasse la limite de {mb} Mo.",
+  "docs.no.write-failed":"{name} n’a pas été enregistré : l’écriture a échoué. {detail}",
   "bk.run":"Sauvegarder maintenant","bk.running":"Compression…","bk.done":"Sauvegarde écrite",
   "task.edit":"Modifier","task.save":"Enregistrer","task.cancel":"Annuler","task.saved":"Tâche modifiée",
   "token.needed":"Cette console exige un token d'accès.","token.placeholder":"CORP_UI_TOKEN",
@@ -1444,7 +1550,7 @@ async function boot() {
     sel.addEventListener("change", () => {
       if (sel.value === "__new__") { $("#wizard").hidden = false; $("#wizard").scrollIntoView({behavior:"smooth"}); sel.value = state.company; return; }
       state.company = sel.value; localStorage.setItem("corparius-company", sel.value);
-      refresh(); loadChat(); loadSite(); loadCompany();
+      refresh(); loadChat(); loadSite(); loadCompany(); loadDocuments();
     });
     if (!companies.length) {
       $$("[role=tabpanel]").forEach(pn => { if (pn.id !== "tab-settings") pn.hidden = true; });
@@ -1455,7 +1561,7 @@ async function boot() {
     if (!companies.includes(state.company)) state.company = companies[0];
     sel.value = state.company;
     await Promise.all([refresh(), loadProviders(), loadChat(), loadSite(), loadPayments(),
-                       loadCompany(), loadPlugins()]);
+                       loadCompany(), loadPlugins(), loadDocuments()]);
     state.timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
     checkDoctor();
     checkUpdate();
@@ -1853,9 +1959,14 @@ document.addEventListener("click", (ev) => {
 });
 
 let seenActs = null;   // keys of activity rows shown last poll; null until primed
+let wasRunning = null;  // null until the first poll, so landing mid-run fires nothing
 function render(d) {
   renderOnboard(d);
   loadGolive();
+  // A run is what writes documents. Read the folder once when one ends, instead
+  // of extracting every file in it every five seconds.
+  if (wasRunning && !d.running) loadDocuments();
+  wasRunning = d.running;
   $("#run-badge").innerHTML = d.running
     ? `<span class="badge ok"><span class="dot"></span>${t(d.stopping ? "badge.stopping" : (d.loop ? "badge.looping" : "badge.running"))}</span>`
     : "";
@@ -2065,6 +2176,203 @@ document.addEventListener("click", async (e) => {
       company: state.company, id: Number(act.dataset.draftId), state: act.dataset.draftState,
     }));
   } finally { act.disabled = false; }
+});
+
+/* What the company has on file, and what of it an agent actually reads.
+
+   The folder shipped, the agents write into it, and nothing showed either half:
+   a brief the design agent had just written was on disk, was in context, and was
+   unreadable by the person paying for it.
+
+   The number worth reading here is not the file count. `context` stops at the
+   prompt budget, so documents past it never reach a turn — they carry a badge
+   that says so rather than sitting in the same list looking like the ones that
+   do. */
+function renderDocuments(d) {
+  const box = $("#documents");
+  const docs = d.documents || [];
+  // What the payload deliberately left behind, said out loud.
+  const offdisk = (d.total || 0) - docs.length;
+  const foot = `<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding-top:2px">
+      <button data-doc-reload>${t("docs.reload")}</button>
+      <span class="note" style="overflow-wrap:anywhere">${t("docs.folder")}: ${esc(d.folder || "")}</span>
+    </div>`;
+  if (!docs.length) { box.innerHTML = `<div class="empty">${t("docs.none")}</div>` + foot; return; }
+  const locale = lang === "fr" ? "fr-FR" : "en-GB";
+  box.innerHTML = `<p class="note" style="margin:0">${
+    t("docs.head").replace("{n}", d.total).replace("{r}", d.reaching)
+      .replace("{u}", d.used).replace("{b}", d.budget)
+  }</p>` + docs.map((x, i) => `
+      <div class="approval">
+        <div class="head">
+          <span class="badge ${x.reaches ? "ok" : x.kind === "image" ? "dim" : x.kind === "unreadable" ? "danger" : "warn"}">${
+            x.reason === "cut"
+              ? t("docs.why.cut").replace("{n}", x.chars).replace("{total}", x.total)
+              : t("docs.why." + x.reason)
+          }</span>
+          <span class="badge dim">${x.written ? t("docs.written") : t("docs.dropped")}</span>
+          <strong style="overflow-wrap:anywhere">${esc(x.path)}</strong>
+          ${x.mtime ? `<span class="note">${new Date(x.mtime * 1000).toLocaleString(locale)}</span>` : ""}
+        </div>
+        ${/* The badge already says every other state in the operator's language.
+              This one carries an OS message, which is data and untranslatable. */
+          x.reason === "os-error" && x.note ? `<div class="note">${esc(x.note)}</div>` : ""}
+        ${x.text ? `<details class="approval-more">
+          <summary>${t("docs.read")}</summary>
+          <div class="approval-draft" data-doc-body="${i}">${esc(x.text)}</div>
+        </details>` : ""}
+        <div class="actions">
+          ${x.text ? `<button data-doc-copy="${i}">${t("docs.copy")}</button>` : ""}
+          <!-- Outside the disclosure, and on every row including the ones with no
+               text to read: a scanned PDF nothing can extract is exactly the row
+               an operator most wants gone. -->
+          <button class="quiet-danger" data-doc-remove="${esc(x.path)}">${t("docs.remove")}</button>
+        </div>
+      </div>`).join("")
+    + (offdisk > 0 ? `<div class="note">${t("docs.more").replace("{n}", offdisk)}</div>` : "")
+    + foot;
+}
+/* Never on the 5s poll: this opens and extracts every file in the folder. It
+   loads on arrival, on a company change, when a run ends, and on the button. */
+async function loadDocuments() {
+  if (!state.company) return;
+  try {
+    const d = await api(`/api/documents?company=${encodeURIComponent(state.company)}`);
+    renderDocuments(d);
+    describeDrop(d);
+  } catch (e) {}
+}
+
+const MB = 1024 * 1024;
+/* What the drop zone may accept, said before the operator drags anything, and
+   taken from the server that decides it. A second copy of the list in this file
+   would be a promise the server gets to break. */
+function describeDrop(d) {
+  const accepts = d.accepts || [];
+  state.maxUpload = d.max_upload || 0;
+  $("#doc-accepts").textContent = t("docs.accepts")
+    .replace("{list}", accepts.join(" "))
+    .replace("{mb}", Math.round(state.maxUpload / MB));
+  $("#doc-file").setAttribute("accept", accepts.join(","));
+}
+
+/* base64 in the JSON body the console already parses: no multipart parser, and
+   so no third dependency. Chunked, because String.fromCharCode(...bytes) on a
+   six-megabyte file exceeds the argument limit and throws — which would reach
+   the operator as a broken drop rather than as a size. */
+async function toBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function docRefusal(d) {
+  return `<span class="badge warn">${
+    t("docs.no." + d.reason)
+      .replace("{name}", esc(d.name || ""))
+      .replace("{detail}", esc(d.detail || ""))
+      .replace("{mb}", Math.round((state.maxUpload || 0) / MB))
+  }</span>`;
+}
+
+/* One file per request. A batch would report one outcome for ten files, and the
+   per-file line below would be something the page invented. */
+async function sendDocuments(files) {
+  const out = $("#doc-out");
+  for (const file of files) {
+    const line = document.createElement("div");
+    line.className = "doc-result note";
+    line.textContent = t("docs.sending").replace("{name}", file.name);
+    out.prepend(line);
+    // Refused here rather than after a six-megabyte round trip, and with the
+    // real limit named: "too large" without a number is a dead end.
+    if (state.maxUpload && file.size > state.maxUpload) {
+      line.innerHTML = docRefusal({ name: file.name, reason: "too-large" });
+      continue;
+    }
+    try {
+      const d = await api("/api/documents", {
+        company: state.company, name: file.name, data: await toBase64(file),
+      });
+      // A refused file is not a failed request, so it arrives here and not in
+      // the catch. `ok` qualifies the request; `stored` carries the verdict.
+      line.innerHTML = d.stored
+        ? `<span class="badge ok">${
+            t(d.replaced ? "docs.replaced" : "docs.stored").replace("{name}", esc(d.name))
+          }</span>`
+        : docRefusal(d);
+      // The answer carries the folder as it now stands, so the list below is
+      // never one drop behind what the operator just did.
+      renderDocuments(d);
+      describeDrop(d);
+    } catch (e) {
+      line.textContent = e.message;
+      line.style.color = "var(--danger)";
+    }
+  }
+}
+
+{
+  const zone = $("#doc-drop");
+  ["dragenter", "dragover"].forEach(ev => zone.addEventListener(ev, e => {
+    e.preventDefault();          // without this the drop event never fires
+    zone.classList.add("over");
+  }));
+  zone.addEventListener("dragleave", e => {
+    // dragleave also fires when the pointer crosses onto a child, so testing
+    // containment is what stops the highlight flickering over its own text.
+    if (!zone.contains(e.relatedTarget)) zone.classList.remove("over");
+  });
+  zone.addEventListener("drop", e => {
+    e.preventDefault();
+    zone.classList.remove("over");
+    sendDocuments([...(e.dataTransfer?.files || [])]);
+  });
+  $("#doc-file").addEventListener("change", e => {
+    sendDocuments([...e.target.files]);
+    e.target.value = "";   // so dropping the same file twice still fires
+  });
+  /* A file dropped anywhere else would make the browser navigate to it, throwing
+     away the console for a PDF viewer. Nothing outside the zone accepts a drop,
+     so refusing it everywhere else is the whole fix. */
+  ["dragover", "drop"].forEach(ev => window.addEventListener(ev, e => {
+    if (!e.target.closest?.("#doc-drop")) e.preventDefault();
+  }));
+}
+document.addEventListener("click", async (e) => {
+  const again = e.target.closest("[data-doc-reload]");
+  if (again) {
+    const was = again.textContent;
+    again.disabled = true; again.textContent = t("docs.reading");
+    // A successful reload replaces this button; a failed one has to give it back.
+    try { await loadDocuments(); } finally { again.disabled = false; again.textContent = was; }
+    return;
+  }
+  const gone = e.target.closest("[data-doc-remove]");
+  if (gone) {
+    const name = gone.dataset.docRemove;
+    gone.disabled = true;
+    try {
+      const d = await api("/api/documents/delete", { company: state.company, path: name });
+      // `ok` qualified the request; `removed` carries the verdict.
+      toast(d.removed
+        ? t("docs.removed").replace("{name}", name)
+        : t("docs.no." + d.reason).replace("{name}", name).replace("{detail}", d.detail || ""),
+        !d.removed);
+      renderDocuments(d);
+      describeDrop(d);
+    } catch (err) { toast(err.message, true); gone.disabled = false; }
+    return;
+  }
+  const copy = e.target.closest("[data-doc-copy]");
+  if (!copy) return;
+  const body = $(`[data-doc-body="${copy.dataset.docCopy}"]`);
+  try { await navigator.clipboard.writeText(body.textContent); } catch (err) {}
+  const was = copy.textContent; copy.textContent = t("docs.copied");
+  setTimeout(() => { copy.textContent = was; }, 1200);
 });
 
 // How many rows a column shows before it folds. Finished work only ever grows —
@@ -2761,7 +3069,7 @@ $("#wiz-create").addEventListener("click", async () => {
     // wizard only asks two questions, so the very next thing an operator does is
     // fill in the rest, and every panel they land on must be live.
     await Promise.all([refresh(), loadChat(), loadCompany(), loadSite(),
-                       loadProviders(), loadPayments()]);
+                       loadProviders(), loadPayments(), loadDocuments()]);
     if (!state.timer) state.timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
   } catch (e) { toast(e.message, true); }
   finally { btn.disabled = false; }

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import requests
 
@@ -133,6 +133,54 @@ def cadence_overrides(store, slug: str) -> dict[str, int]:
     return out
 
 
+def model_overrides(store, slug: str) -> dict[str, str]:
+    """Per-role model pins the operator set, as `{role: "target:name"}`.
+
+    The gap this closes: only three tiers are configurable, and nine of the ten
+    roles take theirs from one of them. So giving the design agent a model that can
+    read a picture meant moving the whole normal tier — measured on the owner's own
+    configuration, that trades 535 tok/s for 49 across the CEO, outreach, support
+    and design to gain vision on one of them. The alternative was editing
+    `agents.py`, which is not configuration.
+
+    Validated here rather than trusted: an unknown provider prefix would make every
+    turn of that role fall through the chain to local, which looks like a slow day
+    rather than a typo.
+    """
+    if store is None:
+        return {}
+    out: dict[str, str] = {}
+    try:
+        for d in store.directives(slug, "model"):
+            role, model = d.get("target"), str(d.get("note") or "").strip()
+            if role and model and _known_target(model):
+                out[role] = model
+    except Exception:  # noqa: BLE001 - an unreadable directive must not stop a run
+        return {}
+    return out
+
+
+def _known_target(model: str) -> bool:
+    """`target:name` with a target this build routes to, prefix spelled out.
+
+    Deliberately **not** written on top of `llm._split`, which defaults an unknown
+    prefix to local so that a bare Ollama tag like `gemma4:e4b` works in the tier
+    settings. That default makes `opnerouter:typo` indistinguishable from an Ollama
+    tag — both come back as local — so a pin validated through it would accept the
+    typo and quietly send every turn of that role to Ollama.
+
+    A pin therefore has to name its target: `local:gemma4:e4b`, not `gemma4:e4b`.
+    The refusal is reported, so the operator learns the prefix rather than
+    wondering why one role got slow.
+    """
+    from .llm import OPENAI_COMPAT_PROVIDERS
+
+    prefix, sep, rest = str(model or "").partition(":")
+    if not sep or not rest.strip():
+        return False
+    return prefix in ("local", "cloud", "claudecode") or prefix in OPENAI_COMPAT_PROVIDERS
+
+
 def paused_roles(store, slug: str) -> set[str]:
     """Roles under a live `pause` directive. Read fresh every tick, so telling
     the CEO to stop takes effect on the next one rather than on a restart."""
@@ -207,6 +255,10 @@ class Runtime:
                         log.info("tick %d: pictures on file but CORP_IMAGE_MAX_PER_CALL is 0", tick)
                 for reason in tick_skipped:
                     log.info("tick %d image not sent — %s", tick, reason)
+                # Read fresh every tick, like the cadence and pause directives:
+                # pinning a role's model in the CEO chat takes effect on the next
+                # tick rather than on a restart.
+                pins = model_overrides(self.store, slug)
                 # Answers arrive between ticks, from whichever surface the
                 # operator happened to be in front of. Reading them back here is
                 # what turns "held" into "moving again" without the run having
@@ -245,6 +297,14 @@ class Runtime:
                     # exactly once per launch.
                     session_start=(ran == 0 and offset == 0),
                 ):
+                    # A pinned model replaces the tier's, for this role only. The
+                    # roster spec is shared, so it is copied rather than mutated —
+                    # writing to it would pin the model for every company in the
+                    # process, which the console runs several of.
+                    pinned = pins.get(spec.role.value)
+                    if pinned and pinned != spec.model:
+                        spec = replace(spec, model=pinned)
+                        log.info("tick %d [%s] pinned to %s", tick, spec.role.value, pinned)
                     try:
                         for line in executor.run_turn(slug, spec, ctx):
                             log.info("tick %d [%s] %s", tick, spec.role.value, line)

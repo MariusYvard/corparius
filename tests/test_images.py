@@ -412,6 +412,79 @@ def test_the_refusal_is_in_the_registry_so_the_console_shows_it():
     assert row.label_en and row.label_fr
 
 
+# --- reaching the capability without wrecking the rest ------------------------
+
+
+def test_a_role_can_be_pinned_to_its_own_model(tmp_path):
+    """The capability was unreachable by configuration.
+
+    Only three tiers are settable and nine of the ten roles take theirs from one
+    of them, so giving the design agent a model that reads pictures meant moving
+    the whole normal tier. Measured on a real configuration: 535 tok/s down to 49
+    across the CEO, outreach, support and design, to gain vision on one of them.
+    The only other route was editing agents.py, which is not configuration.
+    """
+    from corparius.orchestrator import model_overrides
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    store.add_directive("acme", "model", "design", "openrouter:nvidia/nemotron-omni:free")
+    assert model_overrides(store, "acme") == {"design": "openrouter:nvidia/nemotron-omni:free"}
+    store.close()
+
+
+@pytest.mark.parametrize(
+    "pinned,accepted",
+    [
+        ("groq:llama-3.3-70b-versatile", True),
+        ("openrouter:nvidia/nemotron-omni:free", True),  # a colon inside the name
+        ("local:gemma4:e4b", True),
+        ("cloud:claude-opus-5", True),
+        ("opnerouter:typo", False),  # the typo this exists to catch
+        ("gemma4:e4b", False),  # a bare Ollama tag: say local:
+        ("groq:", False),
+        ("", False),
+    ],
+)
+def test_a_pin_must_name_a_target_this_build_routes_to(pinned, accepted):
+    """`llm._split` defaults an unknown prefix to local, on purpose, so that a bare
+    Ollama tag works in the tier settings. That makes `opnerouter:typo` and
+    `gemma4:e4b` the same shape to it — both come back local — so validating a pin
+    through `_split` would accept the typo and send every turn of that role to
+    Ollama, which reads as a slow day rather than as a mistake.
+
+    A pin therefore spells its target out, and the refusal is reported.
+    """
+    from corparius.orchestrator import _known_target
+
+    assert _known_target(pinned) is accepted
+
+
+def test_a_refused_pin_is_not_stored_as_a_working_one(tmp_path):
+    from corparius.orchestrator import model_overrides
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    store.add_directive("acme", "model", "design", "opnerouter:typo")
+    store.add_directive("acme", "model", "social", "groq:llama-3.3-70b-versatile")
+    assert model_overrides(store, "acme") == {"social": "groq:llama-3.3-70b-versatile"}
+    store.close()
+
+
+def test_pinning_one_role_leaves_the_others_on_their_tier():
+    """The whole reason this is per role: the other three EASY roles must not be
+    dragged onto a model ten times slower to give one of them eyes."""
+    from dataclasses import replace as _replace
+
+    design = _replace(ROSTER[AgentRole.DESIGN], model="openrouter:seer:free")
+    assert design.model == "openrouter:seer:free"
+    # The shared roster entry is untouched, or every company in the process would
+    # inherit the pin — the console runs several.
+    assert ROSTER[AgentRole.DESIGN].model is None
+    for role in (AgentRole.CEO, AgentRole.OUTREACH, AgentRole.SUPPORT):
+        assert ROSTER[role].model is None
+
+
 # --- end to end, offline -----------------------------------------------------
 
 

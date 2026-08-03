@@ -52,7 +52,7 @@ from .doctor import run_checks
 from .integrations import smtp_check, stripe_check, stripe_payments
 from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, _split, connected_providers
 from .models import AgentRole
-from .orchestrator import Runtime
+from .orchestrator import Runtime, _known_target
 from .store import Store
 from .tools import TOOLS
 
@@ -423,6 +423,13 @@ _CEO_SCHEMA = {
     # {"social": 24} — hours between turns, per role. The alternative was editing
     # company.yaml, which is not a thing anyone does mid-conversation.
     "cadence": {"type": "dict", "default": {}},
+    # {"design": "openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"} —
+    # one role's model, without moving a whole tier. Only three tiers are
+    # configurable and nine roles take theirs from one of them, so giving the
+    # design agent a model that can read a picture used to mean moving the normal
+    # tier: measured on a real configuration, 535 tok/s down to 49 across four
+    # roles to gain vision on one.
+    "model": {"type": "dict", "default": {}},
     # Bonus, and deliberately narrow: name a tool whose pending request the
     # operator is approving in words. The console button stays exactly as it is;
     # this is a second door, not a replacement.
@@ -476,6 +483,24 @@ def _apply_directives(store, slug: str, data: dict, lang: str) -> str:
                 store.add_directive(slug, "cadence", role, str(hours))
                 cadence[role] = hours
 
+    # One role's model. Refused rather than stored when the prefix is not a
+    # provider this build routes to: an unknown target makes every turn of that
+    # role fall through the chain to local, which reads as a slow day and not as a
+    # typo. The refusal is named in the reply below, because a pin the operator
+    # believes they set is worse than one they know was rejected.
+    pins, refused_pins = {}, []
+    raw_models = data.get("model")
+    if isinstance(raw_models, dict):
+        for role, model in raw_models.items():
+            role, model = str(role).strip().lower(), str(model).strip()
+            if role not in PAUSABLE or not model:
+                continue
+            if _known_target(model):
+                store.add_directive(slug, "model", role, model)
+                pins[role] = model
+            else:
+                refused_pins.append(f"{role} → {model}")
+
     # Bonus: approving in words. Narrow on purpose — it approves a request that
     # already exists and was already shown, and the console button is untouched.
     approved = []
@@ -506,13 +531,28 @@ def _apply_directives(store, slug: str, data: dict, lang: str) -> str:
         spelled = ", ".join(f"{r} every {h}h" for r, h in cadence.items())
         spelled_fr = ", ".join(f"{r} toutes les {h} h" for r, h in cadence.items())
         parts.append(i18n.pick(lang, f"Cadence: {spelled}.", f"Cadence : {spelled_fr}."))
+    if pins:
+        spelled = ", ".join(f"{r} on {m}" for r, m in pins.items())
+        spelled_fr = ", ".join(f"{r} sur {m}" for r, m in pins.items())
+        parts.append(i18n.pick(lang, f"Model: {spelled}.", f"Modèle : {spelled_fr}."))
+    if refused_pins:
+        # Named, not swallowed. A pin the operator believes they set is worse than
+        # one they know was refused.
+        joined = ", ".join(refused_pins)
+        parts.append(
+            i18n.pick(
+                lang,
+                f"Refused, no provider by that name: {joined}.",
+                f"Refusé, aucun fournisseur de ce nom : {joined}.",
+            )
+        )
     if approved:
         parts.append(
             i18n.pick(
                 lang, f"Approved: {', '.join(approved)}.", f"Approuvé : {', '.join(approved)}."
             )
         )
-    if any((paused, resumed, focus, cadence, approved)):
+    if any((paused, resumed, focus, cadence, pins, refused_pins, approved)):
         log.info(
             "%s: CEO paused=%s resumed=%s focus=%r cadence=%s approved=%s",
             slug,

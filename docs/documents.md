@@ -72,6 +72,16 @@ Pendant deux versions, ce module, la console, cette page et le README annonçaie
 
 À défaut de mesure, le catalogue : `architecture.input_modalities` arrivait déjà dans la réponse que `modelinfo.fetch` lisait, et était jeté. Mesuré sur le catalogue réel : **180 entrées sur 337 déclarent l'image en entrée, et seulement 5 d'entre elles sont gratuites** — ce qui compte pour un projet qui route vers le gratuit. Sans mesure ni déclaration, rien n'est envoyé : une image postée à un modèle textuel est payée puis jetée par le fournisseur.
 
+**Donner des yeux à un seul rôle.** C'est là que la capacité était inatteignable : seuls trois paliers sont réglables, et neuf rôles sur dix prennent le leur dans l'un d'eux. Router l'agent de design vers un modèle multimodal voulait donc dire déplacer tout le palier normal. Mesuré sur une configuration réelle, l'échange était mauvais : **535 tok/s vers 49** pour le CEO, la prospection, le support *et* le design, afin de donner la vue à un seul d'entre eux.
+
+Un rôle peut désormais être épinglé, dans la conversation avec le CEO, comme la cadence et la mise en veille :
+
+> « pour le design, utilise openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free »
+
+Le pin est une directive `(kind="model", target=rôle, note=modèle)` par entreprise, relue à chaque tour — il prend effet au tour suivant, pas au redémarrage. Le reste du roster ne bouge pas.
+
+**Le préfixe doit être écrit.** `local:gemma4:e4b`, pas `gemma4:e4b`. `llm._split` rabat exprès un préfixe inconnu sur `local` pour que les étiquettes Ollama fonctionnent dans les paliers — ce qui rend `opnerouter:typo` indiscernable d'une étiquette Ollama. Un pin validé par ce chemin accepterait la faute de frappe et enverrait tous les tours de ce rôle vers Ollama, ce qui se lit comme une journée lente et non comme une erreur. Le refus est donc **nommé dans la réponse**, pour que l'exploitant apprenne le préfixe au lieu de se demander pourquoi un rôle a ralenti.
+
 **Chaque fournisseur dans son dialecte.** `content` reste une chaîne dans `messages` — `_flatten`, le Mock et le `system` d'Anthropic la joignent — donc les images voyagent dans un argument à part, jamais glissées dans un message. OpenAI-compatible : `image_url` en URI `data:`. Anthropic : un bloc `source` en base64. Ollama : son tableau `images`. Le CLI Claude Code ne peut pas en porter, le déclare (`accepts_images = False`) et n'en reçoit donc pas. `base64` est dans la bibliothèque standard : toujours deux dépendances.
 
 Un fournisseur fourni par un greffon et écrit avant les images continue de fonctionner : le mot-clé est **absent** plutôt que passé vide, ce qui n'appelle jamais une signature à trois arguments avec un quatrième.

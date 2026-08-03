@@ -194,7 +194,17 @@ class Runtime:
                 # Said when something is left behind: a picture over the size cap
                 # or past the per-call limit is named in the log rather than
                 # vanishing between the folder and the prompt.
-                tick_images, tick_skipped = llm.read_images(documents.images(slug))
+                allowed = max(0, int(getattr(self.settings, "image_max_per_call", llm.MAX_IMAGES)))
+                if allowed:
+                    tick_images, tick_skipped = llm.read_images(
+                        documents.images(slug), limit=allowed
+                    )
+                else:
+                    # The operator said never. Not read, not encoded, not counted
+                    # as skipped-for-size: refused on purpose, and said once.
+                    tick_images, tick_skipped = [], []
+                    if documents.images(slug):
+                        log.info("tick %d: pictures on file but CORP_IMAGE_MAX_PER_CALL is 0", tick)
                 for reason in tick_skipped:
                     log.info("tick %d image not sent — %s", tick, reason)
                 # Answers arrive between ticks, from whichever surface the

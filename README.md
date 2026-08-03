@@ -433,8 +433,14 @@ will be read: the tool has to have asked for it (a design brief and a competitor
 scan do; reconciling Stripe does not) and the model has to be able to read one.
 Which models can is **measured, not believed** — `corparius preflight` sends a
 real two-colour test image and stores the verdict, and that verdict outranks the
-catalogue's claim. Measured on the live catalogue: 180 of 337 entries declare image
-input, and only 5 of those are free.
+catalogue's claim. Measured on a real key, on the three free models the catalogue
+says take images: **one reads a picture, one claims it and cannot, one gave no
+answer at all** — and that last one is recorded as "never proved", not as "blind".
+
+`CORP_IMAGE_MAX_PER_CALL` bounds it, and **0 sends none, ever**. A document's text
+is extracted on your machine; a picture has to leave it to be read, and a
+screenshot may hold a customer's data. Turning every cloud provider off was the
+only refusal available before — and that gives up the text too.
 
 The agents write here too, which is the half that is easy to miss: a design brief,
 a competitor scan, a pricing note and the end-of-day summary used to be produced,

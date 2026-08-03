@@ -8,6 +8,25 @@ was released.
 
 ## Non publié
 
+- **Added : `CORP_IMAGE_MAX_PER_CALL`, et zéro veut dire jamais.** La capacité
+  ci-dessous fait sortir un fichier de l'exploitant vers un tiers, et il n'avait
+  aucun moyen de le refuser. Le texte d'un document est extrait sur sa machine —
+  le module s'en vante — mais une image doit en sortir pour être lue, et une
+  capture d'écran peut contenir les données d'un client. Le seul refus disponible
+  était `CORP_CLOUD_ENABLED=false`, qui coupe aussi tout le texte : rien ne
+  permettait de garder le texte dans le cloud en refusant les images, alors que
+  l'image est la plus sensible des deux. C'est donc un contrôle de confidentialité,
+  pas un bouton de réglage fin — et c'est pour ça que c'est un réglage et non une
+  constante, contrairement au plafond d'octets qui reste une décision de forme
+  comme `MAX_UPLOAD`. À zéro, les fichiers ne sont ni lus ni encodés, et le journal
+  le dit une fois par tour au lieu de laisser croire qu'il n'y avait rien à
+  envoyer.
+- **Fixed : `sees_images` ne peut plus être posé sur un outil qui n'appelle aucun
+  modèle.** Le drapeau n'est lu que sur le chemin de rédaction, donc le mettre sur
+  un outil sans `needs_draft` ne fait rien — en silence. `produce_mockup` est le
+  piège : c'est le travail visuel évident de l'agent de design et il ne fait aucun
+  appel de modèle, il aurait donc eu l'air branché sans l'être jamais. Un drapeau
+  mort se lit comme une fonctionnalité par la personne suivante qui le cherche.
 - **Fixed : une image déposée est enfin envoyée à un modèle. Pendant deux
   versions, le produit disait qu'elle l'était.** `documents.images()` n'avait
   **aucun appelant**, aucun signal de capacité vision n'existait, et rien dans

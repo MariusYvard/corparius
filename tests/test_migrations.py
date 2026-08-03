@@ -123,7 +123,11 @@ def test_the_doctor_fails_on_a_store_from_the_future(tmp_path, monkeypatch):
     db.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
     db.commit()
     db.close()
-    level, name, message = doctor._check_store(Settings())
+    store = Store(str(tmp_path))
+    try:
+        level, name, message = doctor._check_store(Settings(), store)
+    finally:
+        store.close()
     assert (level, name) == ("fail", "store")
     assert "newer corparius" in message and "restore the backup" in message
 
@@ -133,8 +137,11 @@ def test_the_doctor_is_quiet_about_a_store_at_the_right_version(tmp_path, monkey
     from corparius.config import Settings
 
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
-    Store(str(tmp_path)).close()
-    level, _, message = doctor._check_store(Settings())
+    store = Store(str(tmp_path))
+    try:
+        level, _, message = doctor._check_store(Settings(), store)
+    finally:
+        store.close()
     assert level == "ok" and "writable" in message
 
 

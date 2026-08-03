@@ -1345,6 +1345,14 @@ class Store:
         return [dict(r) for r in rows]
 
     @_locked
+    def get_task(self, task_id) -> dict:
+        """One task by id, or {}. The console edits a task by id alone, so it had
+        no way to read the row it was about to approve — and approving without
+        reading it is how tasks reached an agent with no tool to run."""
+        row = self.db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        return dict(row) if row else {}
+
+    @_locked
     def claim_next_task(self, company, target):
         row = self.db.execute(
             "SELECT * FROM tasks WHERE company=? AND target=? AND status='approved'"

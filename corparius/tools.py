@@ -835,10 +835,15 @@ def _set_roster(ctx, draft: str = "") -> str:
         parts.append("on: " + ", ".join(on))
     if off:
         parts.append("off: " + ", ".join(off))
+    if not parts:
+        # A refusal is not a change. This reported "Roster changed — left off, you
+        # stood them down: social" on turn after turn while the roster was exactly
+        # as the operator left it, which reads as the CEO doing something.
+        if kept:
+            return "Roster unchanged: " + ", ".join(kept) + " stays off, you stood them down"
+        return "Roster unchanged"
     if kept:
         parts.append("left off, you stood them down: " + ", ".join(kept))
-    if not parts:
-        return "Roster unchanged"
     return "Roster changed — " + "; ".join(parts)
 
 
@@ -868,8 +873,33 @@ ROLE_TOOL = {
     "outreach": "send_outreach",
     "social": "draft_social_post",
     "support": "draft_support_reply",
-    "design": "build_sales_site",
+    # The tool that can change what the site says, not the one that renders it.
+    # `build_sales_site` reads the copy out of company.yaml and writes HTML, so a
+    # task like "remove the unverified badge from the landing page" completed
+    # through it rebuilds the same page, byte for byte, and reports success.
+    # Rendering happens anyway: it is the last step of the design playbook every
+    # turn. What a backlog task needs is the step that changes something.
+    "design": "write_site_content",
 }
+
+
+def executable_fields(task: dict) -> dict:
+    """What has to be set on an approved task for it to actually run.
+
+    Two paths approve a proposal — the CEO's `review_proposals` and the operator's
+    own button in the console — and only the CEO's reached this registry. Measured
+    in a real store: **24 tasks for one role with no tool, 22 of them closed
+    "done (no tool mapped)"** having done nothing at all. The condition that
+    produced them therefore survived, so the agent proposed it again, and again;
+    six near-identical proposals about one badge on one landing page.
+
+    So it lives in one function that both ends call. `test_registries` asserts the
+    keys and values are real; this is the other half of the same rule.
+    """
+    if task.get("tool"):
+        return {}
+    target = (task.get("target") or "").strip()
+    return {"tool": ROLE_TOOL[target]} if target in ROLE_TOOL else {}
 
 
 def _create_tasks(ctx) -> str:
@@ -916,7 +946,9 @@ def _create_tasks(ctx) -> str:
         queue("Contact the freshly found leads", "outreach", "send_outreach", 2)
     kpis = store.recent_outputs(slug, "review_kpis", 1)
     if kpis and ("flat" in kpis[0].lower() or "conversion" in kpis[0].lower()):
-        queue("Refresh the landing page to lift conversion", "design", "build_sales_site", 2)
+        # write_site_content, not build_sales_site: rebuilding the page from copy
+        # nobody changed produces the same page and reports success. See ROLE_TOOL.
+        queue("Refresh the landing page to lift conversion", "design", "write_site_content", 2)
     # The baseline is what fills a quiet day. Under a stated priority it is the
     # wrong thing to fill it with: an operator who said "focus on the prototype"
     # does not want two housekeeping tasks queued on top of it every cycle.
@@ -944,8 +976,7 @@ def _review_proposals(ctx) -> str:
             fields: dict[str, object] = {}  # priority is int, tool is str
             if task["priority"] < 2:
                 fields["priority"] = 2  # CEO re-prioritises the suggestion
-            if not task.get("tool") and task["target"] in ROLE_TOOL:
-                fields["tool"] = ROLE_TOOL[task["target"]]  # make it executable
+            fields.update(executable_fields(task))  # make it executable
             if fields:
                 store.update_task(task["id"], **fields)
                 modified += 1
@@ -1006,10 +1037,11 @@ def _propose_task(ctx) -> str:
         # how five identical rows happened in the first place.
         return f"{role} already proposed that: {title}"
 
+    owner, note = _owner_for(ctx, role, fields.get("owner"))
     store.add_task(
         slug,
         title,
-        role,
+        owner,
         priority=1,
         status="proposed",
         created_by=role,
@@ -1018,7 +1050,28 @@ def _propose_task(ctx) -> str:
         # is not an instruction: `_review_proposals` attaches the tool when the
         # CEO approves it, so nothing an agent writes arrives executable.
     )
-    return f"{role} proposed to the CEO: {title}"
+    return f"{role} proposed to the CEO{note}: {title}"
+
+
+def _owner_for(ctx, role: str, asked) -> tuple[str, str]:
+    """Which role the proposal is for, and what to say about it.
+
+    The proposer used to be the owner, always. Support therefore owned "remove the
+    unverified badge from the landing page" — and support's tool drafts a support
+    reply, so the badge stayed and the task was marked done. Six times.
+
+    A role the company has switched off is refused rather than silently swapped:
+    the agent asked for something, and a proposal quietly retargeted to whoever
+    happens to be running is a decision nobody made.
+    """
+    owner = " ".join(str(asked or "").split()).lower().strip(",.;:")
+    if not owner or owner == role:
+        return role, ""
+    if owner not in company_mod.ROLES:
+        return role, f" (asked for '{owner[:20]}', which is not a role, so it stays with {role})"
+    if not (ctx.company.get("agents", {}) or {}).get(owner):
+        return role, f" (asked for {owner}, which this company has off, so it stays with {role})"
+    return owner, f" for {owner}"
 
 
 def _kaizen(ctx) -> str:
@@ -1117,12 +1170,21 @@ _ALL = [
             f"Propose one concrete task for {_name(c)}, drawn from what you have just seen "
             "in your own work. `idea`: the task itself, as an instruction someone could act "
             "on — name the thing, not the category. `why`: one sentence on what prompted it. "
+            f"`owner`: which role should carry it out, one of {', '.join(company_mod.ROLES)} — "
+            "the role whose job it is, not necessarily yours. "
             "If nothing in this turn warrants a task, leave `idea` empty rather than "
             "inventing something to file."
         ),
         schema={
             "idea": {"type": "str", "default": "", "max_len": 90},
             "why": {"type": "str", "default": "", "max_len": 200},
+            # Which role does the work. Measured: support proposed "remove the
+            # unverified badge from the landing page" six times over; every one was
+            # targeted at support, because the target was the proposer, and support's
+            # tool drafts a support reply. So the site kept the badge, a support
+            # reply about something else was written instead, and the task was
+            # marked done. An idea about the site belongs to design.
+            "owner": {"type": "str", "default": "", "max_len": 20},
         },
         effect=lambda c, d: _ok(_propose_task(c)),
     ),

@@ -8,6 +8,44 @@ was released.
 
 ## Non publié
 
+- **Fixed : le CLI Claude recevait le prompt sur la ligne de commande, et
+  Windows la coupe à 8191 caractères.** **Mesuré** sur le CLI installé
+  (2.1.220) : un prompt de 8000 caractères atteint le modèle, 8100 échoue avec
+  `claude CLI exited 1: La ligne de commande est trop longue`. Ce n'est pas un
+  cas limite — une entreprise qui a des documents et des skills le dépasse au
+  premier tour de l'agent design. Et l'échec arrivait comme une erreur de
+  fournisseur ordinaire, donc le routeur faisait ce qu'il fait d'un fournisseur
+  en panne : il passait à l'étape suivante, un modèle gratuit incapable de
+  produire du JSON. `write_site_content` répondait « no JSON object in the
+  reply », le site n'était jamais réécrit, et **l'exploitant avait pin Opus sur
+  le design : Opus n'a jamais tourné une seule fois.** Rien dans le journal ne
+  racontait ça. Le prompt passe maintenant sur stdin — **mesuré : 25 268
+  caractères, rc 0** — et il ne reste que les drapeaux sur la ligne de commande.
+  Le prompt système y reste tant qu'il tient ; sinon il est replié dans le
+  prompt plutôt que perdu, parce qu'un appel qui perd en silence les règles de
+  la maison répond avec assurance dans la mauvaise voix.
+- **Fixed : une tâche que rien ne peut exécuter était fermée « done ».** Le
+  registre `ROLE_TOOL` rend une tâche approuvée exécutable, et **un seul des
+  deux chemins d'approbation l'atteignait** : le `review_proposals` du CEO
+  attachait l'outil, le bouton de la console non — et c'est celui que
+  l'exploitant utilise. **Mesuré dans une vraie base : 24 tâches d'un même rôle
+  sans outil, dont 22 fermées avec la note « done (no tool mapped) »**, sans que
+  rien n'ait eu lieu. Comme rien n'avait eu lieu, la condition qui avait produit
+  la tâche était toujours là au tour suivant : six propositions
+  quasi-identiques sur un seul badge d'une seule page, chacune approuvée,
+  chacune fermée, rien de fait. Un tableau vert et un site inchangé.
+  Trois choses corrigées : les deux bouts du fil passent par la même fonction
+  (`tools.executable_fields`) ; une tâche que rien ne peut exécuter est
+  **retenue** avec un avis qui dit où aller, au lieu d'être fermée ; et
+  l'agent qui propose **nomme le rôle qui doit faire le travail** — support
+  possédait « retirer le badge non vérifié de la landing » alors que son outil
+  rédige une réponse au support. `ROLE_TOOL["design"]` pointe désormais sur
+  `write_site_content` : `build_sales_site` régénère la page à partir d'un texte
+  que personne n'a changé et annonce une réussite, ce qui est le même mensonge
+  par un autre chemin.
+- **Fixed : un refus du roster annoncé comme un changement.** « Roster changed —
+  left off, you stood them down: social », tour après tour, alors que le roster
+  était exactement tel que l'exploitant l'avait laissé.
 - **Fixed : le doctor ouvrait sept connexions à la base et n'en fermait que
   trois.** Sept vérifications ouvraient chacune la leur ; quatre fuitaient à
   chaque appel — et cette fonction tourne à chaque démarrage du lanceur et est

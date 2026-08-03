@@ -199,8 +199,22 @@ Limites relevées en juin et juillet 2026. Elles évoluent, la documentation du 
 | siliconflow | api.siliconflow.cn/v1 | SILICONFLOW_API_KEY | 3 modèles gratuits, 30 req/min, 50 req/jour | Données traitées en Chine |
 | cloudflare | CF_AI_BASE_URL (endpoint du compte) | CLOUDFLARE_API_TOKEN | 10 000 neurons/jour | Endpoint propre au compte, format dans .env.example |
 | custom | CORP_CUSTOM_LLM_URL | CORP_CUSTOM_LLM_KEY | selon le service | OmniRoute, LiteLLM, vLLM, LM Studio ou tout endpoint OpenAI-compatible |
-| claudecode | CLI local "claude -p" | aucune (connexion du CLI) | limites de l'abonnement Claude | Aucun crédit API. CLI installé et connecté requis. CORP_CLAUDE_CODE=true |
+| claudecode | CLI local "claude -p" | aucune (connexion du CLI) | limites de l'abonnement Claude | Aucun crédit API. CLI installé et connecté requis. CORP_CLAUDE_CODE=true. Le prompt part sur stdin, pas sur la ligne de commande — voir la note ci-dessous |
 | cloud | api.anthropic.com | ANTHROPIC_API_KEY | payant (crédits API) | Provider historique du tier hard |
+
+### Le prompt de `claudecode` part sur stdin
+
+Sur Windows, le CLI installé par npm est `claude.CMD`, donc chaque appel passe par
+cmd.exe, qui **coupe la ligne de commande à 8191 caractères**. Mesuré sur le CLI
+2.1.220 : 8000 caractères de prompt atteignent le modèle, 8100 échouent avec
+`La ligne de commande est trop longue`. Une entreprise qui a des documents et des
+skills dépasse ça au premier tour de son agent design — et l'échec ressemblait à
+une panne de fournisseur, donc le routeur passait au modèle suivant.
+
+Le prompt part donc sur stdin (`claude -p` sans argument de prompt) : mesuré,
+25 268 caractères passent. Seuls les drapeaux restent sur la ligne de commande.
+Le prompt système reste dans `--append-system-prompt` tant qu'il tient dans le
+budget ; au-delà il est replié dans le prompt, et le journal le dit.
 
 ## Obtenir les clés
 

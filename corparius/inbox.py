@@ -58,6 +58,10 @@ FIXES = {
     # notice told them to run a terminal command from inside a web console.
     "preflight": "providers",
     "plugins": "plugins",
+    # Operations tab, where the Backlog is. A task no tool can carry out is held
+    # there rather than closed as done — the operator sets the agent and the tool,
+    # or rejects it.
+    "backlog": "operations",
 }
 
 

@@ -288,8 +288,7 @@ class Executor:
         """Run a backlog task's tool for real. Returns True if a guard tripped."""
         tool_name = (task.get("tool") or "").strip()
         if tool_name not in TOOLS:
-            self.store.complete_task(task["id"], "done (no tool mapped)")
-            done.append(f"backlog #{task['id']} {task['title']} (symbolic)")
+            self._hold_untooled(company, task, done)
             return False
         result, stop = self._invoke(company, spec, ctx, tool_name, loop)
         if result is not None and result.ok and not result.pending:
@@ -308,6 +307,43 @@ class Executor:
             self.store.set_task_status(task["id"], "approved", "returned to backlog")
             done.append(f"backlog #{task['id']} returned to backlog")
         return stop
+
+    def _hold_untooled(self, company, task, done) -> None:
+        """A task nothing can run is held for the operator, not closed as done.
+
+        It used to be completed with the note "done (no tool mapped)". Measured in
+        a real store: **22 tasks closed that way**, every one of them having done
+        nothing — and because nothing was done, the condition that produced the
+        task was still there on the next turn, so the agent proposed it again. Six
+        near-identical proposals about one badge on one landing page, each approved,
+        each closed, none of it happening. A board of green rows and no work.
+
+        `waiting` rather than left approved: `claim_next_task` orders by priority
+        then age, so a task that can never run and stays in the queue would be
+        picked first for that role forever and starve everything behind it.
+        `release_waiting_tasks` ignores a note that names no blocker, so it stays
+        put until somebody decides — which is the honest state.
+        """
+        from . import inbox
+
+        self.store.set_task_status(
+            task["id"], "waiting", "no tool: needs an owner or a tool before it can run"
+        )
+        done.append(
+            f"backlog #{task['id']} held, nothing can run it: {task['title'][:60]} "
+            f"(target {task.get('target') or '?'} has no tool for this)"
+        )
+        inbox.notify(
+            self.store,
+            company,
+            task.get("target") or "ceo",
+            "A task is waiting for an owner",
+            f"“{task['title'][:90]}” was approved, but no tool on {task.get('target') or 'that role'} "
+            "can carry it out, so nothing would happen if it ran. Open the backlog, set the "
+            "agent and the tool that should do it — or reject it. It used to be marked done "
+            "instead, which is why the same idea kept coming back.",
+            fix="backlog",
+        )
 
     def _pictures_for(self, tool, spec, ctx) -> list:
         """The company's images, for the turns where they are worth their price.

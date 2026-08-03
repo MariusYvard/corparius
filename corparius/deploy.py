@@ -179,6 +179,8 @@ class SSHProvider(DeployProvider):
             ["rsync", "-az", site_dir.rstrip("/\\") + "/", target],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=180,
         )
         if out.returncode != 0:

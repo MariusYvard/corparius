@@ -970,6 +970,12 @@ en: {
   "mem.pin":"Pin","mem.unpin":"Unpin","mem.forget":"Forget","mem.pinned":"pinned",
   "ib.question":"asks you","ib.notification":"notice","ib.answer":"Your answer","ib.send":"Answer","ib.dismiss":"Dismiss",
   "ib.fix.mail":"Set up email","ib.fix.payments":"Set up payments","ib.fix.providers":"Open providers","ib.fix.plugins":"Open plugins",
+  "ib.fix.preflight":"Prove these models",
+  "ib.next.preflight":"Press this and corparius calls each configured model for eight tokens, then tells you which ones your key can still use — and which tier to move.",
+  "ib.next.mail":"This opens the Mail group of Settings, where the account is set up and tested for real.",
+  "ib.next.payments":"This opens Settings, where the Stripe read key goes.",
+  "ib.next.plugins":"This opens the Plugins tab, where one is enabled or installed.",
+  "ib.next.providers":"This opens the Providers tab, where a key is pasted and a tier is pointed at a model.",
   "risk.read":"read","risk.write_local":"local write","risk.external":"external","risk.code":"code","risk.money":"money",
   "col.proposed":"Proposed, your call","col.approved":"Approved","col.in_progress":"In progress","col.waiting":"Held, waiting on you","col.done":"Done","col.empty":"Empty",
   "col.more":"Show {n} more","col.less":"Show fewer","col.rest":"{n} older ones stay in the store",
@@ -1196,6 +1202,12 @@ fr: {
   "mem.pin":"Épingler","mem.unpin":"Désépingler","mem.forget":"Oublier","mem.pinned":"épinglé",
   "ib.question":"vous demande","ib.notification":"avis","ib.answer":"Votre réponse","ib.send":"Répondre","ib.dismiss":"Écarter",
   "ib.fix.mail":"Configurer l'email","ib.fix.payments":"Configurer le paiement","ib.fix.providers":"Ouvrir les fournisseurs","ib.fix.plugins":"Ouvrir les greffons",
+  "ib.fix.preflight":"Prouver ces modèles",
+  "ib.next.preflight":"Ce bouton appelle chaque modèle configuré sur huit jetons, puis vous dit lesquels votre clé peut encore utiliser — et quel palier déplacer.",
+  "ib.next.mail":"Ouvre le groupe Courrier des Réglages, où le compte se configure et se teste pour de vrai.",
+  "ib.next.payments":"Ouvre les Réglages, où se met la clé de lecture Stripe.",
+  "ib.next.plugins":"Ouvre l'onglet Greffons, où l'on en active ou installe un.",
+  "ib.next.providers":"Ouvre l'onglet Providers, où l'on colle une clé et où l'on pointe un palier vers un modèle.",
   "risk.read":"lecture","risk.write_local":"écriture locale","risk.external":"extérieur","risk.code":"code","risk.money":"argent",
   "col.proposed":"Proposées, à arbitrer","col.approved":"Approuvées","col.in_progress":"En cours","col.waiting":"Retenues, en attente de vous","col.done":"Terminées","col.empty":"Vide",
   "col.more":"Voir les {n} autres","col.less":"Voir moins","col.rest":"{n} plus anciennes restent dans le journal",
@@ -2073,6 +2085,11 @@ function render(d) {
       <div class="head"><span class="badge ${m.kind === "question" ? "warn" : "dim"}">${t("ib." + m.kind)}</span>
         <strong>${esc(m.title)}</strong><span class="note">${agentIcon(m.agent)} ${esc(m.agent)}</span></div>
       ${m.body ? `<div class="note" style="overflow-wrap:anywhere">${esc(m.body)}</div>` : ""}
+      ${/* What to do about it, in the operator's language, written here rather than
+            in the agent's note. A notice that says "run `corparius preflight`" is a
+            terminal instruction given to somebody looking at a web page — and this
+            console has had the button all along. */
+        m.fix && I18N[lang]["ib.next." + m.fix] ? `<div class="note"><strong>${t("ib.next." + m.fix)}</strong></div>` : ""}
       <div class="actions">
         ${m.kind === "question" ? `<input type="text" placeholder="${t("ib.answer")}" aria-label="${t("ib.answer")}" data-ib-note="${esc(m.id)}">` : ""}
         ${m.fix ? `<button class="primary" data-ib-fix="${esc(m.fix)}">${esc(t("ib.fix." + m.fix))}</button>` : ""}
@@ -2548,6 +2565,18 @@ document.addEventListener("click", async e => {
         const group = $$("#settings-groups details").find(d => d.dataset.group === "mail");
         if (group) { group.open = true; group.scrollIntoView({block: "center", behavior: "smooth"}); }
       }, 120);
+    }
+    if (b.dataset.ibFix === "preflight") {
+      // Land on the control and press it. The button that opened this tab says
+      // "Prove these models", which is the label of the one below — a fix that
+      // drops the operator in front of nine provider rows and stops has told them
+      // where to look and not what to do.
+      setTimeout(() => {
+        const run = $("#run-preflight");
+        if (!run) return;
+        run.scrollIntoView({block: "center", behavior: "smooth"});
+        run.click();
+      }, 160);
     }
     return;
   }

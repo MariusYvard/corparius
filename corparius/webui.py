@@ -422,14 +422,14 @@ _CEO_SCHEMA = {
     "focus": {"type": "str", "default": "", "max_len": 200},
     # {"social": 24} — hours between turns, per role. The alternative was editing
     # company.yaml, which is not a thing anyone does mid-conversation.
-    "cadence": {"type": "dict", "default": {}},
+    "cadence": {"type": "dict", "default": {}, "shape": '{"social": 24}'},
     # {"design": "openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"} —
     # one role's model, without moving a whole tier. Only three tiers are
     # configurable and nine roles take theirs from one of them, so giving the
     # design agent a model that can read a picture used to mean moving the normal
     # tier: measured on a real configuration, 535 tok/s down to 49 across four
     # roles to gain vision on one.
-    "model": {"type": "dict", "default": {}},
+    "model": {"type": "dict", "default": {}, "shape": '{"design": "claudecode:opus"}'},
     # Bonus, and deliberately narrow: name a tool whose pending request the
     # operator is approving in words. The console button stays exactly as it is;
     # this is a second door, not a replacement.
@@ -600,6 +600,15 @@ def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
         f"`focus`: one short sentence when they say what the company should concentrate "
         f"on; it replaces the routine backlog until they change it. Empty string clears it. "
         f'`cadence`: {{"social": 24}} to change how many hours between a role\'s turns. '
+        # Added to the schema and to _apply_directives without ever being named
+        # here, so the CEO could not know the power existed. Asked to put design
+        # on claudecode:opus it answered "J'approuve l'utilisation de Claudecode
+        # Opus pour le design" and wrote nothing — the empty promise, arriving
+        # through the field meant to end it. A power the model is not told about
+        # is a power nothing can reach.
+        f'`model`: {{"design": "claudecode:opus"}} to put one role on one model, '
+        f"without moving a whole tier. The value must carry the provider prefix "
+        f"(`local:`, `cloud:`, `claudecode:` or a provider name), or it is refused. "
         f"`approve`: tool names whose pending request they are approving in words. "
         f"Never claim to have done any of these unless you put it in the field, and never "
         f"name a role that is not in the list above. Leave them empty for an ordinary "

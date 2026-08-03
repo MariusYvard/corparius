@@ -50,6 +50,8 @@ def _git(args: list[str], cwd: str, check: bool = True) -> subprocess.CompletedP
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=GIT_TIMEOUT,
     )
     if check and out.returncode != 0:
@@ -150,6 +152,8 @@ class GitHubProvider(RepoProvider):
                 ["gh", "repo", "create", name, "--private", "--description", description],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=GIT_TIMEOUT,
             )
             if out.returncode != 0 and "already exists" not in (out.stderr or "").lower():
@@ -158,6 +162,8 @@ class GitHubProvider(RepoProvider):
                 ["gh", "api", "user", "--jq", ".login"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=GIT_TIMEOUT,
             )
             login = who.stdout.strip()
@@ -247,6 +253,8 @@ class SSHRemoteProvider(RepoProvider):
             ["ssh", host, f"git init --bare -q {path} && echo ok"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=GIT_TIMEOUT,
         )
         if out.returncode != 0:
@@ -273,6 +281,8 @@ class LocalBareProvider(RepoProvider):
                 ["git", "init", "--bare", "-q", path],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=GIT_TIMEOUT,
             )
             if out.returncode != 0:

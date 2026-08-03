@@ -4,6 +4,7 @@ apply decisions, guard mutations with the optional token and never leak keys."""
 import json
 import logging
 import os
+import shutil
 import threading
 import time
 from http.client import HTTPConnection
@@ -14,6 +15,8 @@ from corparius import cfg, webui
 from corparius.config import Settings
 from corparius.models import ApprovalRequest
 
+from .conftest import EXAMPLE_COMPANY
+
 
 @pytest.fixture()
 def server(tmp_path, monkeypatch):
@@ -23,6 +26,13 @@ def server(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     monkeypatch.setenv("CORP_LLM_MOCK", "true")
     monkeypatch.delenv("CORP_UI_TOKEN", raising=False)
+    # This fixture runs real ticks against `example`, and an agent tool that saves
+    # a company config would otherwise save the checkout's own — which it did,
+    # stripping the comments and the `site:` block out of a tracked file. So the
+    # example is copied into a private home and these tests write to the copy.
+    home = tmp_path / "home"
+    shutil.copytree(EXAMPLE_COMPANY, home / "companies" / "example")
+    monkeypatch.setenv("CORP_HOME", str(home))
     cfg.invalidate()
     settings = Settings()
     srv = webui.build_server(settings, host="127.0.0.1", port=0, env_file=tmp_path / ".env")
@@ -233,11 +243,13 @@ def test_doctor_endpoint_reports_checks(server):
 
 
 def test_company_wizard_creates_and_lists(server, tmp_path, monkeypatch):
-    # corparius/company.py owns where a company lives now, so that the CLI, the console
-    # and the MCP server cannot disagree about it.
-    import corparius.company as company_mod
-
-    monkeypatch.setattr(company_mod, "ROOT", tmp_path)
+    # corparius/company.py owns where a company lives now, so that the CLI, the
+    # console and the MCP server cannot disagree about it — and it resolves that
+    # place through paths.companies_dir() on every call, so CORP_HOME is the lever
+    # rather than a module attribute this test used to reach in and rewrite.
+    # paths.user_home() reads the environment directly, so there is no cache to
+    # invalidate here — and `cfg` is a local further down this test anyway.
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
     (tmp_path / "companies").mkdir()
     status, data = _call(
         server,
@@ -326,7 +338,11 @@ def _i18n_tables() -> tuple[set, set]:
     page = Path("corparius/webui.html").read_text(encoding="utf-8")
     block = page[page.index("const I18N = {") : page.index("const urlq =")]
     english, french = block[block.index("en:") : block.index("fr:")], block[block.index("fr:") :]
-    key = r"\"([a-zA-Z]+\.[A-Za-z]+)\":"
+    # Three segments and hyphens both count. The pattern used to be two bare
+    # segments, which quietly exempted every key the console reaches by building
+    # its name — `dft.state.*`, `ib.fix.*`, `doc.why.*` — from the one test that
+    # claims to guard translation parity.
+    key = r"\"([a-zA-Z][\w.-]*\.[\w.-]+)\":"
     return set(re.findall(key, english)), set(re.findall(key, french))
 
 
@@ -338,6 +354,31 @@ def test_the_two_translation_tables_carry_the_same_keys():
     assert english - french == set(), "missing from FR"
     assert french - english == set(), "missing from EN"
     assert len(english) > 300
+
+
+def test_no_key_is_defined_twice_inside_one_table():
+    """A JS object literal keeps the last of two identical keys and says nothing.
+
+    `doc.` was the doctor's prefix and got reused for the documents card, so
+    `doc.title` and `doc.desc` were each declared twice: both cards then rendered
+    "Diagnostics", and the Documents tab carried the doctor's description. The
+    parity test above compares the two tables to each other and was perfectly
+    happy — the duplicate was in both languages. Only opening the page in a
+    browser found it, which is not a test.
+    """
+    import re
+    from pathlib import Path
+
+    page = Path("corparius/webui.html").read_text(encoding="utf-8")
+    block = page[page.index("const I18N = {") : page.index("const urlq =")]
+    key = r"\"([a-zA-Z][\w.-]*\.[\w.-]+)\":"
+    for name, table in (
+        ("en", block[block.index("en:") : block.index("fr:")]),
+        ("fr", block[block.index("fr:") :]),
+    ):
+        found = re.findall(key, table)
+        dupes = sorted({k for k in found if found.count(k) > 1})
+        assert not dupes, f"{name} declares these twice, and the last one wins: {dupes}"
 
 
 def test_no_key_survives_the_thing_that_used_it():

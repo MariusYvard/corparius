@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from corparius import company as company_mod
-from corparius import paths
+from corparius import documents, paths
 
 REPO_ROOT = Path(paths.__file__).resolve().parent.parent
 
@@ -17,7 +17,12 @@ REPO_ROOT = Path(paths.__file__).resolve().parent.parent
 # --- source checkout: everything resolves to the repo layout, unchanged --------
 
 
-def test_source_mode_resolves_to_repo_root():
+def test_source_mode_resolves_to_repo_root(monkeypatch):
+    # These three describe what resolves with no CORP_HOME set, so they take it
+    # away themselves. The suite-wide fixture points it at an empty private home
+    # precisely so no other test lands on the layout asserted here — the
+    # checkout, which is writable and was being written to.
+    monkeypatch.delenv("CORP_HOME", raising=False)
     assert paths.is_frozen() is False
     assert paths.user_home() == REPO_ROOT
     assert paths.resource_dir() == REPO_ROOT
@@ -27,9 +32,10 @@ def test_source_mode_resolves_to_repo_root():
     assert paths.example_company_src() == REPO_ROOT / "companies" / "example"
 
 
-def test_source_mode_default_data_dir_is_cwd_relative():
+def test_source_mode_default_data_dir_is_cwd_relative(monkeypatch):
     # The historical default; the tests never reach it because conftest sets
     # CORP_DATA_PATH, but start.py / docker rely on it staying "./data".
+    monkeypatch.delenv("CORP_HOME", raising=False)
     assert paths.default_data_dir() == "./data"
 
 
@@ -57,6 +63,7 @@ def test_corp_home_override(monkeypatch, tmp_path):
 
 
 def test_frozen_mode(monkeypatch, tmp_path):
+    monkeypatch.delenv("CORP_HOME", raising=False)
     bundle = tmp_path / "bundle"
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(bundle), raising=False)
@@ -133,11 +140,40 @@ def test_company_apps_dir_sits_next_to_the_config_it_belongs_to(monkeypatch, tmp
     assert paths.company_apps_dir("t").parent == paths.company_skills_dir("t").parent
 
 
-def test_the_suite_is_hermetic_against_a_developer_who_runs_corparius():
+def test_where_a_company_lives_is_resolved_per_call_not_snapshotted(monkeypatch, tmp_path):
+    """The third module to learn this, after backup.py and cli._store(): a
+    module-level snapshot of a layered setting is a snapshot of the wrong layer.
+
+    company.ROOT was captured at import while paths.companies_dir() resolved on
+    every call, so the two agreed only as long as CORP_HOME was set before the
+    import. The console had already grown an endpoint guarding a slug against one
+    of them and building a path from the other. One source now, so they cannot
+    disagree — and moving the folder is the same lever an operator pulls.
+    """
+    from corparius import company as mod
+
+    assert not hasattr(mod, "ROOT"), "an import-time snapshot is what caused this"
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    (tmp_path / "companies" / "late").mkdir(parents=True)
+    (tmp_path / "companies" / "late" / "company.yaml").write_text("slug: late\n", encoding="utf-8")
+    # Set after the module was imported, and still honoured by both.
+    assert mod.list_slugs() == ["late"]
+    assert mod.path_for("late").parent == documents.folder("late").parent
+
+
+def test_the_suite_is_hermetic_against_a_developer_who_runs_corparius(tmp_path):
     """CORP_HOME is what companies/, skills/ and .env hang off, and it is set on
-    the machine of anyone actually using corparius. Left alone, three tests here
-    failed on such a machine and any test writing under user_home() reached into
-    a real installation — someone's actual companies."""
+    the machine of anyone actually using corparius.
+
+    This has been wrong in both directions. Left alone, tests wrote into a real
+    installation. Deleted, they wrote into the checkout instead — companies/t,
+    companies/d and companies/m sat in the working tree gitignored, and a real
+    orchestrator tick rewrote the tracked companies/example/company.yaml. What it
+    points at now is an empty directory belonging to this test and nothing else.
+    """
     import os
 
-    assert "CORP_HOME" not in os.environ, "the hermetic fixture must remove it"
+    home = Path(os.environ["CORP_HOME"])
+    assert home == tmp_path / "home", "the hermetic fixture must own it"
+    assert home != paths._REPO_ROOT, "the checkout is writable; tests must not land there"
+    assert not (home / "companies").exists(), "empty: a copy cost 768 ms a test"

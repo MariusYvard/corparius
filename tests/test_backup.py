@@ -54,7 +54,9 @@ def test_a_data_dir_outside_the_home_is_still_archived(tmp_path, monkeypatch):
     walk falls back to the directory's own name. Without that branch the store
     would be dropped from the archive without a word."""
     monkeypatch.setenv("CORP_HOME", str(tmp_path / "home"))
-    (tmp_path / "home").mkdir()
+    # exist_ok: tmp_path/"home" is the private home the hermetic fixture already
+    # made, which is what keeps every test off the checkout.
+    (tmp_path / "home").mkdir(exist_ok=True)
     outside = tmp_path / "elsewhere"
     outside.mkdir()
     (outside / "corparius.sqlite").write_text("db", encoding="utf-8")

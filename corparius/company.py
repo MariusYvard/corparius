@@ -23,11 +23,13 @@ import yaml
 
 from . import paths, permissions
 
-# The writable home under which `companies/` lives. In a source checkout this is
-# the repository root (unchanged); frozen, it is a per-OS directory that
-# seed_examples() populates from the bundled example on first run. Kept as a
-# module attribute so the tests can monkeypatch it.
-ROOT = paths.user_home()
+# `companies/` used to be resolved from a module attribute set at import time,
+# next to `paths.companies_dir()` which resolves on every call. Two sources for
+# one directory, agreeing only as long as CORP_HOME was set before this module
+# was imported — and the console had already grown an endpoint that guarded a
+# slug against one of them while building a path from the other. There is now one
+# source, so they cannot disagree; tests move the folder by setting CORP_HOME,
+# which is what an operator does too.
 
 SLUG_RE = re.compile(r"[^a-z0-9]+")
 
@@ -214,11 +216,11 @@ def slugify(name: str) -> str:
 
 
 def path_for(slug: str) -> Path:
-    return ROOT / "companies" / slug / "company.yaml"
+    return paths.companies_dir() / slug / "company.yaml"
 
 
 def list_slugs(root: Path | None = None) -> list[str]:
-    base = (root or ROOT) / "companies"
+    base = (root / "companies") if root else paths.companies_dir()
     if not base.is_dir():
         return []
     return sorted(
@@ -590,7 +592,7 @@ def dump(cfg: dict, path) -> Path:
 def trash(slug: str, root: Path | None = None) -> Path:
     """Move a company aside instead of deleting it. The operator's config is not
     ours to destroy, and a mistyped slug should be recoverable."""
-    base = (root or ROOT) / "companies"
+    base = (root / "companies") if root else paths.companies_dir()
     src = base / slug
     if not (src / "company.yaml").is_file():
         raise FileNotFoundError(slug)
@@ -608,7 +610,7 @@ def seed_examples(root: Path | None = None) -> list[str]:
     Returns the resulting slug list."""
     import shutil
 
-    base = (root or ROOT) / "companies"
+    base = (root / "companies") if root else paths.companies_dir()
     src = paths.example_company_src()
     dest = base / src.name
     if (dest / "company.yaml").is_file() or not (src / "company.yaml").is_file():

@@ -8,6 +8,125 @@ was released.
 
 ## Non publié
 
+- **Added : on peut retirer un document depuis la console.** Une zone de dépôt
+  sans retour est un dossier qui ne fait que grossir, et l'exploitant qui avait
+  déposé le tarif du mauvais trimestre devait aller trouver le répertoire à la
+  main. Le bouton est sur chaque ligne, y compris celles qu'aucun extracteur ne
+  sait lire — un PDF scanné est justement la ligne qu'on veut voir partir, et
+  c'est la seule qui n'a pas de dépli où cacher un bouton. Déplacé de côté, pas
+  effacé : les fichiers de l'exploitant ne sont pas à nous, c'est la réponse que
+  reçoit déjà une entreprise supprimée, et la console dit où le fichier est parti.
+  Pas de confirmation à retaper, contrairement à la suppression d'une entreprise :
+  cette barrière existe parce qu'une entreprise est le tout, alors qu'un document
+  est un fichier qui reste sur le disque après coup. Le chemin arrive dans un
+  corps de requête, donc il est résolu et comparé au dossier plutôt que cru sur
+  parole pour être venu de notre page une seconde plus tôt.
+- **Fixed : un dossier caché dans `documents/` était lu.** Le parcours ne testait
+  que `p.name`, c'est-à-dire le nom du fichier — pas les segments au-dessus. Un
+  `.git` ou un `.obsidian` posé là voyait donc tout son contenu partir dans les
+  invites, et le `.trash` du retrait ci-dessus aurait renvoyé dans l'invite le
+  document que l'exploitant venait précisément d'en sortir.
+- **Added : un onglet « Documents », et on y dépose ses fichiers au glisser.**
+  La carte a son onglet, et au-dessus une zone de dépôt. Un fichier part seul
+  dans sa requête, en base64 dans le corps JSON que la console analyse déjà :
+  pas de parseur multipart, donc toujours deux dépendances. Un fichier par
+  requête et non un lot, parce qu'un lot rendrait un seul verdict pour dix
+  fichiers et que la ligne de résultat par fichier serait alors inventée par la
+  page. Un refus n'est pas une requête ratée — `ok` qualifie la requête, et
+  demander à ranger un .zip est une demande parfaitement formée : la réponse est
+  `stored: false`, avec lequel de vos fichiers et pourquoi. Le nom est réduit à
+  son dernier segment avant toute chose, barres obliques inverses repliées
+  d'abord puisqu'elles sont légales dans un nom POSIX ; un fichier caché est
+  refusé plutôt qu'écrit, parce que `load` l'ignorerait ensuite pour toujours.
+  Le plafond de corps devient un réglage par route : un PDF de 6 Mo ne passe pas
+  sous le 1 Mio global, et relever ce plafond pour tout le monde aurait élargi
+  du même geste tous les autres points d'API. La page annonce les formats
+  acceptés et la taille limite avant qu'on glisse quoi que ce soit, en les
+  tenant du serveur qui les décide.
+- **Fixed : le préfixe `doc.` appartenait au docteur.** Réutilisé pour la carte
+  des documents, il a fait déclarer `doc.title` et `doc.desc` deux fois : dans un
+  littéral JS la dernière gagne en silence, si bien que la carte des documents
+  s'intitulait « Diagnostics » et portait la description du docteur. Le test de
+  parité compare les deux tables entre elles et n'y voyait rien — le doublon
+  était dans les deux langues. Seule l'ouverture de la page dans un navigateur
+  l'a trouvé, ce qui n'est pas un test : il y en a un maintenant.
+- **Fixed : le bouton d'ajout de fichier était celui du navigateur.** Widget
+  natif gris et son « Aucun fichier choisi », au milieu d'une console qui a sa
+  propre langue visuelle. L'étiquette porte désormais l'apparence et entre dans
+  la même règle CSS que `button`, plutôt que d'en inventer une seconde ; le champ
+  garde le comportement, masqué à l'œil et jamais au clavier, avec l'anneau de
+  focus reporté sur l'étiquette — `display:none` l'aurait sorti de l'ordre de
+  tabulation et rendu l'onglet utilisable à la souris seulement.
+- **Fixed : la suite de tests écrivait dans le dépôt.** `CORP_HOME` était
+  *supprimé* par la fixture d'hermétisme, ce qui écartait bien les tests d'une
+  installation réelle mais les pointait sur le checkout, qui est writable. Deux
+  fixtures y lançaient un vrai tour d'orchestrateur sur `example` :
+  `companies/example/company.yaml` revenait reformaté, commentaires et bloc
+  `site:` disparus, avec ses quatre documents écrits réécrits. Et les tests qui
+  appellent les outils avec les slugs `t`, `d` et `m` laissaient `companies/t`,
+  `companies/d` et `companies/m` dans l'arbre de travail — gitignorés, donc
+  invisibles pour git, donc jamais remarqués. Tant que `companies/` se résolvait
+  à l'import, la même écriture partait dans l'installation réelle du
+  développeur, où rien ne l'aurait jamais montrée : le réglage était faux dans
+  les deux directions.
+  Chaque test reçoit désormais un home privé **vide** ; les rares fixtures qui
+  ont besoin de l'entreprise livrée la copient elles-mêmes, ce qui est aussi la
+  forme honnête — un test qui fait tourner une entreprise devrait dire laquelle.
+  Copier `companies/` dans chaque home fermait le même trou et a été mesuré à
+  768 ms par test, trois fois la durée de toute la suite. Un garde-fou de session
+  compare l'empreinte de **tout** le dossier à la fin du run, pas seulement du
+  fichier suivi : ne regarder qu'`example` est précisément ce qui a laissé `d`,
+  `m` et `t` s'accumuler. Il nomme le fichier et le remède.
+- **Fixed : deux tests sur les compétences livrées se sont mis à sauter.** Ils
+  lisaient `companies_dir()` et sautaient quand il était vide, si bien qu'au
+  moment où la suite a cessé de pointer là le test s'est tu au lieu d'échouer.
+  Une affirmation sur ce qui est livré doit lire ce qui est livré : ils prennent
+  la source, plus le home d'exécution, et le saut a disparu.
+- **Fixed : `companies/` avait deux sources.** `company.ROOT` était un
+  instantané pris à l'import et `paths.companies_dir()` se résout à chaque
+  appel ; les deux ne s'accordaient qu'aussi longtemps que `CORP_HOME` était posé
+  avant l'import, et la console avait déjà un point d'API qui gardait un slug
+  contre l'un en construisant un chemin depuis l'autre. Troisième module à
+  apprendre la leçon après `backup.py` et `cli._store()` : l'instantané d'un
+  réglage en couches est l'instantané de la mauvaise couche. Une seule source
+  désormais, et les tests déplacent le dossier avec le levier qu'un exploitant
+  utilise.
+- **Fixed : deux documents de même nom étaient une seule chose dans l'invite.**
+  Le bloc les nommait par leur nom de fichier, donc un `design-brief.md` déposé
+  et un `design-brief.md` écrit par l'agent de design donnaient deux en-têtes
+  identiques dans la même invite, sans rien pour les distinguer. C'est le chemin
+  relatif qui les nomme maintenant, ce qui apprend au modèle lequel des deux
+  l'entreprise a écrit elle-même, gratuitement.
+- **Added : la console montre les documents, et dit lesquels un agent lit
+  vraiment.** Le dossier par entreprise fonctionnait et rien ne l'affichait :
+  le brief que l'agent de design venait d'écrire était sur le disque, était dans
+  l'invite du tour suivant, et restait illisible pour la personne qui le paie —
+  la même forme que les quatre livrables coupés à 120 caractères, un étage plus
+  haut. Une carte dans « Opérations » liste les deux provenances, celle que vous
+  déposez et celle que l'entreprise écrit, avec le texte extrait derrière un
+  dépli. Le nombre qui compte n'est pas le nombre de fichiers : `context`
+  s'arrête au budget d'invite, donc une entreprise peut en avoir douze au
+  dossier et n'en donner que deux à ses agents. Mesuré sur neuf documents
+  réels : **quatre atteignent les agents, trois specs parfaitement lisibles
+  sont hors budget** et rien ne les lit. Elles portent désormais une pastille
+  qui le dit, au lieu de figurer dans la même liste que celles qui passent. La
+  sélection au budget est devenue une seule boucle partagée par `context` et
+  `inventory` : écrite deux fois, elle aurait dérivé, et une console qui se
+  porte garante d'un document qu'aucun agent n'a jamais vu coûte plus cher que
+  le silence qu'elle remplace. L'état d'un document voyage comme un code et non
+  comme une phrase, parce que la console parle deux langues et que la phrase,
+  elle, part dans une invite en anglais. La vraie longueur voyage comme un
+  nombre : elle n'existait que dans cette phrase, si bien qu'un lecteur du
+  payload voyait 4 000 caractères sans pouvoir apprendre que le document en
+  faisait trois fois plus. Le point d'API n'est pas sur le sondage de 5 s — il
+  ouvre et extrait chaque fichier qu'il liste.
+- **Fixed : le test de parité en/fr ne regardait pas les clés qu'il comptait le
+  plus.** Sa regex n'acceptait que deux segments, ce qui exemptait en silence
+  toutes les clés que la console atteint en fabriquant leur nom — `dft.state.*`,
+  `ib.fix.*`, `prov.pf.*`, `risk.write_local`, `col.in_progress`. Trente-trois
+  clés, dont neuf antérieures à ce changement, n'avaient jamais été vérifiées
+  par le seul test qui prétend garantir qu'une console française ne contient pas
+  une phrase anglaise. Aucune ne manquait ; c'est la chance, pas le test.
 - **Added : un dossier de documents par entreprise, lu *et* écrit.** Déposez un
   PDF, un .docx, un .pptx, un .xlsx, un CSV, une note ou une capture dans
   `companies/<slug>/documents/` et le texte devient du contexte pour les agents,

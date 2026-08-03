@@ -34,6 +34,12 @@ was released.
   est un troisième état — jamais demandé, ce qui n'est pas « ne voit pas » — et où
   une mesure ultérieure qui n'a pas posé la question n'efface pas un verdict
   acquis.
+  **Et la sonde a immédiatement payé.** Mesurée sur une vraie clé, sur les trois
+  modèles gratuits que le catalogue annonce capables de lire une image : **un la
+  lit, un l'annonce et n'y arrive pas, un ne répond rien** — ce dernier restant
+  `NULL`, parce qu'une absence de réponse n'est pas un verdict. Un modèle gratuit
+  sur trois mentait sur sa propre fiche, et le troisième état a servi dès la
+  première mesure.
   **`content` reste une chaîne.** `_flatten`, le Mock et le `system` d'Anthropic
   la joignent tous : glisser des blocs façon OpenAI dans `messages` aurait cassé
   quatre chemins d'un coup et en silence. Les images voyagent donc dans un

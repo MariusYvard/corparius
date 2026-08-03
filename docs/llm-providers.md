@@ -47,7 +47,17 @@ La ligne de mesure gagne alors un fragment, et seulement quand la question a ét
      … · JSON ok · 100% of 3 samples · CLAIMS images and cannot read one
 ```
 
-Le verdict va dans `model_probes.vision_ok` et vieillit comme les autres. `NULL` y est un troisième état — jamais demandé — qui n'est pas « ne voit pas ». Mesuré sur le catalogue réel : **180 entrées sur 337 déclarent l'image en entrée, dont 5 seulement en palier gratuit.** Voir `docs/documents.md` pour ce qu'une entreprise en fait.
+Le verdict va dans `model_probes.vision_ok` et vieillit comme les autres. `NULL` y est un troisième état — jamais demandé — qui n'est pas « ne voit pas ».
+
+Mesuré sur le catalogue réel : **180 entrées sur 337 déclarent l'image en entrée** (172 sur 316 après normalisation des noms), **dont 3 seulement en palier gratuit**. Et sur ces trois, sondés pour de vrai avec une clé réelle :
+
+| Modèle gratuit annonçant la vision | Mesuré |
+| --- | --- |
+| `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` | lit l'image |
+| `nvidia/nemotron-3.5-content-safety:free` | **l'annonce et n'y arrive pas** |
+| `nvidia/nemotron-nano-12b-v2-vl:free` | aucune réponse — pas un verdict, reste `NULL` |
+
+Un sur trois mentait sur sa propre fiche. C'est la même leçon que `cerebras:gpt-oss-120b` avec `structured_outputs`, sur une deuxième capacité. Voir `docs/documents.md` pour ce qu'une entreprise fait de tout ça.
 
 ### Balayer un catalogue entier, et s'en souvenir
 

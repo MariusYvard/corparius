@@ -802,6 +802,34 @@ def _stop_useless_work(ctx) -> str:
         store.add_directive(slug, "pause", "support", "no mailbox connected")
         stopped.append("support (no mailbox)")
 
+    # Outreach with no source of leads at all. This is the loop the operator
+    # reported, in its purest form: one real run logged `find_targets: No lead
+    # found. Sources configured: none.` **more than forty times**, while the CEO
+    # queued a fresh outreach task every cycle on top of it. Every line was true
+    # and every one was rediscovered.
+    #
+    # NanoCorp's worker handles the same shape once and then stops: on a blocked
+    # channel it recorded the exact blocker and wrote "so the next task can focus
+    # narrowly on account access instead of rediscovery". Same idea, through the
+    # mechanism this file already has — a stand-down the CEO can see, cleared the
+    # moment a source appears.
+    # Measured, not declared: the trigger is a run of real turns that found
+    # nobody, not merely an empty configuration. My first version stood outreach
+    # down the moment no source was configured, and it fired on the first tick of
+    # a fresh company — a role stood down before it has had a chance, which is a
+    # different and worse mistake. `tests/test_tasks.py` caught it.
+    sources = leadsource.configured_sources()
+    tried = store.recent_outputs(slug, "find_targets", TRIES_BEFORE_STAND_DOWN)
+    fruitless = [o for o in tried if "no lead found" in (o or "").lower()]
+    if not sources and len(fruitless) >= TRIES_BEFORE_STAND_DOWN and "outreach" not in already:
+        store.add_directive(slug, "pause", "outreach", NO_LEAD_SOURCE)
+        stopped.append(f"outreach ({len(fruitless)} turns found nobody, and no source is set)")
+    elif sources:
+        for d in store.directives(slug, "pause"):
+            if d["target"] == "outreach" and (d.get("note") or "") == NO_LEAD_SOURCE:
+                store.clear_directive(d["id"])
+                restarted.append(f"outreach, {', '.join(sources)} now configured")
+
     if stopped:
         return "Stood down: " + ", ".join(stopped) + ". Nothing consumes what they produce."
     if restarted:
@@ -843,6 +871,16 @@ def _check_providers(ctx) -> str:
 # different one — and the whole reason this project grew standing directives was
 # that a role the operator stood down kept being re-armed.
 CEO_STAND_DOWN = "stood down by the CEO"
+
+# The note that marks the one stand-down `_stop_useless_work` writes for outreach,
+# and the only one it is allowed to clear. Exact-matched rather than searched for,
+# so an operator's own pause of the same role is never mistaken for this one.
+NO_LEAD_SOURCE = "no lead source configured, so there is nobody to find"
+
+# How many consecutive fruitless searches before outreach is stood down. Three,
+# not one: the evidence for this was forty identical lines in one session, and a
+# role stood down on its first empty turn is a role that never got a chance.
+TRIES_BEFORE_STAND_DOWN = 3
 
 
 def _set_roster(ctx, draft: str = "") -> str:

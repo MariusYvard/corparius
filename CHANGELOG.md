@@ -8,6 +8,24 @@ was released.
 
 ## Non publié
 
+- **Fixed : « aucun lead trouvé », quarante fois, redécouvert chaque fois.** C'est
+  la boucle rapportée par l'exploitant, dans sa forme la plus pure : une seule
+  session a journalisé `find_targets: No lead found. Sources configured: none.`
+  **plus de quarante fois**, pendant que le CEO mettait en file une nouvelle tâche
+  outreach à chaque cycle et que `stop_useless_work` répondait « Every role still
+  has somewhere for its work to go ». Chaque ligne était vraie, et chaque ligne
+  était redécouverte. Le worker NanoCorp fait l'inverse sur un canal bloqué : il
+  enregistre le blocage exact et écrit « pour que la prochaine tâche se concentre
+  sur l'accès au compte plutôt que sur une redécouverte ». Le mécanisme existait
+  déjà ici — `_stop_useless_work` met un rôle en pause par une directive que le
+  CEO lit, et `_create_tasks` refuse de mettre en file un rôle en pause. Social
+  l'avait, outreach non.
+  **Le déclencheur est mesuré, pas déclaré** : trois tours réels qui n'ont trouvé
+  personne, pas une configuration vide. Ma première version se déclenchait dès
+  qu'aucune source n'était configurée et arrêtait donc outreach au premier tick
+  d'une entreprise neuve — un rôle stoppé avant d'avoir eu sa chance, ce qui est
+  une autre erreur et une pire. `tests/test_tasks.py` l'a attrapée.
+
 - **Fixed : le site de l'entreprise était invisible pour le produit censé
   l'entretenir.** Rétro-ingénierie des journaux d'exécution NanoCorp
   (`docs/reverse-engineering/nanocorp.md`) : leur worker travaille sur le dépôt —

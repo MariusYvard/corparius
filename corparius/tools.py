@@ -21,6 +21,7 @@ from . import (
     paths,
     permissions,
     signals,
+    sitecheck,
     sitegen,
 )
 from . import (
@@ -233,7 +234,22 @@ def _review_ad_budget(ctx) -> str:
 
 def _build_site(ctx, draft: str) -> str:
     company = ctx.company
-    out_dir = paths.site_dir(ctx.data_path, company.get("slug", "company"))
+    slug = company.get("slug", "company")
+    owned = paths.owned_site(slug)
+    if owned is not None:
+        # Generating a competing page here is worse than doing nothing. Measured
+        # on a real install: the company had six hand-built pages under
+        # `companies/vigil/site/public/` and this tool rewrote a single page from
+        # four config fields, every design turn, then reported "Sales site built"
+        # — and it was that page the deploy published. Say what the site is, and
+        # leave it alone.
+        pages = sorted(p.name for p in owned.glob("*.html"))
+        return (
+            f"This company has its own site at {owned} ({len(pages)} page(s): "
+            f"{', '.join(pages[:6])}), so the generator did not overwrite it. "
+            "Edit those files to change the site; deploy_site publishes them."
+        )
+    out_dir = paths.site_dir(ctx.data_path, slug)
     # A mock draft is the echoed prompt, not a headline. Offline is the default
     # first run, so feeding it as the site's H1 makes the product look broken;
     # fall back to the company's own tagline instead.
@@ -249,12 +265,53 @@ def _deploy_site(ctx) -> ToolResult:
     to be wrapped in _ok() and recorded in the action log as a success."""
     company = ctx.company
     slug = company.get("slug", "company")
-    out_dir = paths.site_dir(ctx.data_path, slug)
-    if not paths.site_index(ctx.data_path, slug).exists():
-        sitegen.build_site(company, str(out_dir), store=ctx.store)
+    owned = paths.owned_site(slug)
+    if owned is not None:
+        out_dir = owned
+    else:
+        out_dir = paths.site_dir(ctx.data_path, slug)
+        if not paths.site_index(ctx.data_path, slug).exists():
+            sitegen.build_site(company, str(out_dir), store=ctx.store)
+    # Before anything leaves: markers a human was supposed to replace, and
+    # crawler files naming a different host than site.url. Measured on a real
+    # install, publishing would have put `REMPLACER@TON-DOMAINE.fr` on the live
+    # contact line and pointed sitemap.xml at a domain five times over. Refused
+    # rather than warned: the whole point of the check is that it happens before.
+    url = (company.get("site") or {}).get("url", "")
+    left_over = sitecheck.placeholders(out_dir, url)
+    if left_over:
+        inbox.notify(
+            ctx.store,
+            slug,
+            "design",
+            "The site still carries placeholders",
+            "Publishing was stopped because the site would go live with text left for "
+            "a human to replace, or with robots.txt/sitemap.xml naming a different "
+            "host than site.url: " + "; ".join(left_over[:8]) + ". Edit those files, "
+            "then run the publish again.",
+        )
+        return _fail(
+            f"Site not published: {len(left_over)} placeholder(s) would have gone live — "
+            + "; ".join(left_over[:6])
+            + ("; …" if len(left_over) > 6 else "")
+        )
     res = deploy.deploy_result(str(out_dir))
     if res["ok"]:
-        return _ok(f"Site published: {res['provider']} -> {res['result']}")
+        which = "its own site" if owned is not None else "the generated page"
+        line = f"Site published ({which}): {res['provider']} -> {res['result']}"
+        # And then look, once. A provider that accepts an upload and serves
+        # something else — an old cache, a 404, a build error page — used to be
+        # indistinguishable from a working publish, because nothing ever fetched
+        # the address. Borrowed from NanoCorp's vercel-deploy-verify: one bounded
+        # wait, one check, report either way, never a loop of reloads.
+        index = out_dir / "index.html"
+        local = index.read_text(encoding="utf-8", errors="replace") if index.is_file() else ""
+        check = sitecheck.verify(url, local)
+        # `ok` qualifies the request, not the verdict: the upload did happen, so
+        # this stays ok whatever the live address says, and the sentence carries
+        # the difference. A stale CDN is not a failed deploy, and it is not a
+        # successful publish either.
+        return _ok(f"{line}. {sitecheck.line(check)}")
     if res["errors"]:
         return _fail("Site not published, every provider failed: " + "; ".join(res["errors"]))
     # Not a failure of the agent: it did its part and is missing something only

@@ -135,6 +135,26 @@ def company_skills_dir(slug: str) -> Path:
     return companies_dir() / (slug or "company") / "skills"
 
 
+def company_site_dir(slug: str) -> Path:
+    """A site the company owns, checked in next to its config.
+
+    The generator writes one page under `data/sites/<slug>/` from `company.yaml`.
+    That is the right thing for a company that has no site, and it is the wrong
+    thing for one that has outgrown it — and nothing here could tell the
+    difference. Measured on the owner's own install: `companies/vigil/site/`
+    held six hand-built pages, a stylesheet, a serverless function, robots.txt
+    and sitemap.xml, versioned in the company's own git repository — while the
+    design agent regenerated a single page from four config fields every turn
+    and `deploy_site` published *that*. The operator's site was invisible to the
+    product that was supposedly maintaining it.
+
+    So this is looked for first. `netlify.toml` and its `publish` key are
+    honoured, because a company that wrote one has already said which folder is
+    the site.
+    """
+    return companies_dir() / (slug or "company") / "site"
+
+
 def company_apps_dir(slug: str) -> Path:
     """Apps that use the company's LLM providers for something other than the
     roster. Next to its skills and its config, for the same reason: an operator
@@ -169,6 +189,34 @@ def site_dir(data_path: str, slug: str) -> Path:
 
 def site_index(data_path: str, slug: str) -> Path:
     return site_dir(data_path, slug) / "index.html"
+
+
+def owned_site(slug: str) -> Path | None:
+    """The company's own publishable folder, or None if it has no site of its own.
+
+    Honours `netlify.toml`'s `publish` key when there is one: a company that
+    wrote `publish = "public"` has already said which folder is the site, and
+    publishing the repository root instead would push its config files and its
+    serverless sources to the web.
+    """
+    base = company_site_dir(slug)
+    if not base.is_dir():
+        return None
+    toml = base / "netlify.toml"
+    if toml.is_file():
+        try:
+            for line in toml.read_text(encoding="utf-8").splitlines():
+                key, _, value = line.partition("=")
+                if key.strip() == "publish":
+                    named = base / value.strip().strip("'\"").rstrip("/")
+                    if named.is_dir():
+                        return named
+        except OSError:
+            pass
+    for guess in ("public", "dist", "build", "_site"):
+        if (base / guess).is_dir():
+            return base / guess
+    return base if any(base.glob("*.html")) else None
 
 
 def published_dir(site_dir_path: str) -> str:

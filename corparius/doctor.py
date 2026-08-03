@@ -341,14 +341,46 @@ def _check_site(s: Settings) -> tuple:
         cfg, _, _ = company_mod.validate(company_mod.load(company_mod.path_for(slug), slug))
         if not (cfg.get("site") or {}).get("url"):
             missing.append(slug)
+    # What would actually be published, per company. A company that ships its own
+    # site folder publishes that; everything else gets the generated page. This
+    # used to be unsayable: `build_sales_site` reported "Sales site built" for a
+    # page nobody had asked for while six hand-written ones sat in the company's
+    # own repository, and nothing anywhere named the difference.
+    from . import sitecheck
+
+    owned = {slug: paths.owned_site(slug) for slug in slugs}
+    mine = [f"{slug} ({len(sorted(p.glob('*.html')))} page(s))" for slug, p in owned.items() if p]
+    # Markers a human was meant to replace, in a site that is ready to go out.
+    # Read from disk only; no request leaves here — this function is served over
+    # HTTP and runs on every launcher start.
+    blocked = []
+    for slug, folder in owned.items():
+        if folder is None:
+            continue
+        cfg_, _, _ = company_mod.validate(company_mod.load(company_mod.path_for(slug), slug))
+        left = sitecheck.placeholders(folder, (cfg_.get("site") or {}).get("url", ""))
+        if left:
+            blocked.append(f"{slug}: {len(left)} ({left[0]})")
+    own_note = f" Own site: {', '.join(mine)}." if mine else ""
+    if blocked:
+        return (
+            "warn",
+            "site",
+            f"A publish would put placeholders live — {'; '.join(blocked)}. Edit those files "
+            "first; deploy_site refuses until they are gone." + own_note,
+        )
     if not missing:
-        return ("ok", "site", f"{len(slugs)} company(ies), every one with a site.url")
+        return (
+            "ok",
+            "site",
+            f"{len(slugs)} company(ies), every one with a site.url.{own_note}",
+        )
     return (
         "warn",
         "site",
         f"No site.url for {', '.join(missing)}. The generated page still builds, but with no "
         "canonical link, no og:url, no sitemap.xml and no robots.txt — set it to the address "
-        "the page is hosted at once you have deployed it.",
+        "the page is hosted at once you have deployed it." + own_note,
     )
 
 

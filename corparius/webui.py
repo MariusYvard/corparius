@@ -952,9 +952,16 @@ def _deploy(state: UiState, slug: str) -> tuple[int, dict]:
     if company is None:
         return 404, {"ok": False, "error": f"unknown company '{slug}'"}
     data_path = _fresh_settings().data_path
-    out_dir = paths.site_dir(data_path, slug)
-    if not paths.site_index(data_path, slug).exists():
-        sitegen.build_site(company, str(out_dir), store=state.store())
+    # The company's own site wins, exactly as it does for the agent's deploy tool.
+    # The console publishing a different folder than the roster does would be the
+    # worst of both.
+    owned = paths.owned_site(slug)
+    if owned is not None:
+        out_dir = owned
+    else:
+        out_dir = paths.site_dir(data_path, slug)
+        if not paths.site_index(data_path, slug).exists():
+            sitegen.build_site(company, str(out_dir), store=state.store())
     res = deploy.deploy_result(str(out_dir))
     if res["ok"]:
         # Remember where it went, so the "go live" card can show the live URL
@@ -1477,20 +1484,31 @@ def _route_documents_delete(ctx):
 
 
 def _route_site_get(ctx):
-    site = paths.site_index(_fresh_settings().data_path, ctx.slug)
+    owned = paths.owned_site(ctx.slug)
+    site = (
+        (owned / "index.html") if owned else paths.site_index(_fresh_settings().data_path, ctx.slug)
+    )
     return 200, {
         "ok": True,
         "built": site.is_file(),
         "mtime": site.stat().st_mtime if site.is_file() else None,
+        # Which site the console is showing, so the preview cannot silently be a
+        # different page from the one that gets published.
+        "owned": owned is not None,
+        "pages": sorted(p.name for p in owned.glob("*.html")) if owned else [],
     }
 
 
 def _route_site_serve(ctx):
     parts = ctx.path.split("/")
     slug = parts[2] if len(parts) > 2 else ""
-    site = paths.site_index(_fresh_settings().data_path, slug)
-    # `slug in _companies()` is the path-traversal guard, as everywhere else.
-    if slug in _companies() and site.is_file():
+    # `slug in _companies()` is the path-traversal guard, as everywhere else, and
+    # it runs before any path is built from the slug.
+    if slug not in _companies():
+        return 404, {"ok": False, "error": "site not built yet"}
+    owned = paths.owned_site(slug)
+    site = (owned / "index.html") if owned else paths.site_index(_fresh_settings().data_path, slug)
+    if site.is_file():
         return 200, site.read_bytes(), "text/html"
     return 404, {"ok": False, "error": "site not built yet"}
 

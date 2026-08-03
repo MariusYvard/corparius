@@ -6,7 +6,18 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
-## Non publié
+## 0.3.2 — voir ce que l'entreprise sait, et ce qu'un agent en lit vraiment
+
+Un dossier de documents qui fonctionne et que rien n'affiche est un dossier dont
+personne ne connaît l'état. Mesuré sur neuf fichiers réels : **quatre atteignent
+les agents, trois specs parfaitement lisibles sont hors du budget d'invite** et
+rien ne les lit — un état que le produit n'avait aucun moyen de dire. La console
+a maintenant son onglet, on y dépose au glisser et on en retire.
+
+Et deux leçons dont le prix était déjà payé ailleurs : **33 clés de traduction**
+que le test de parité exemptait en silence, dont neuf antérieures à cette
+version ; et une suite de tests qui écrivait dans le dépôt qu'elle teste, faute
+d'un réglage qui a été faux dans les deux directions successives.
 
 - **Added : on peut retirer un document depuis la console.** Une zone de dépôt
   sans retour est un dossier qui ne fait que grossir, et l'exploitant qui avait

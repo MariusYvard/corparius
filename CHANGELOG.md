@@ -6,6 +6,33 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
+## Non publié
+
+- **Fixed : le README décrivait une version antérieure du produit.** Un audit
+  ligne à ligne a trouvé : toute la capacité documents absente — pas de section,
+  pas de module dans le plan, pas de `docs/documents.md`, rien dans
+  `docs/console.md` — `corparius preflight` jamais nommé alors qu'il est le titre
+  d'une version, **13 des 28 commandes CLI** manquantes, « 12 free tiers » imprimé
+  trois fois contre un registre qui en tient 14, deux préfixes de cible
+  indocumentés (`alibaba:`, `openai:`), le défaut HITL annonçant deux outils là où
+  le code en nomme trois, cinq sections absentes du sommaire, `versionnement.md`
+  introuvable depuis l'index, et l'affirmation que les clés enregistrées depuis la
+  console dorment en clair — écrite après que `corparius secrets on` existe pour
+  les chiffrer.
+  Rien de tout cela ne pouvait échouer : la dérive de documentation est invisible
+  par construction. **Dix tests la rendent visible**, chacun comparant le README au
+  code qu'il décrit dans le sens qui pourrit — les docs dans les deux directions,
+  les commandes lues sur le parser, les préfixes lus sur le registre, le compte de
+  fournisseurs, les défauts HITL, les ancres du sommaire et les sections qu'il
+  omet, les onglets de la console, et la paire de captures clair/sombre. Vérifiés
+  non vacants : chacun tire sur le README tel qu'il était.
+- **Added : `docs/documents.md`, et la capture d'écran en deux thèmes.** La page
+  qui manquait au seul sous-système qui n'en avait pas. La capture datait d'avant
+  l'onglet ; elle est reprise sur la console réelle après une journée simulée, en
+  clair et en sombre depuis une seule session — les deux images ne diffèrent que
+  par la couleur, jamais par les chiffres — et GitHub choisit selon le thème du
+  lecteur.
+
 ## 0.3.2 — voir ce que l'entreprise sait, et ce qu'un agent en lit vraiment
 
 Un dossier de documents qui fonctionne et que rien n'affiche est un dossier dont

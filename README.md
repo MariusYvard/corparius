@@ -26,8 +26,10 @@ LLMs are an opt-in escalation, never a requirement. Ship nothing you cannot audi
 > Status: working MVP. The orchestrator, the safety firewall, the human-in-the-loop
 > gate, the operator console and the ten-agent roster run end to end against a
 > deterministic mock LLM, so you can watch a full company day with no network and
-> no API keys. Live providers (Ollama, Anthropic, 12 free tiers, Claude Code CLI,
-> any OpenAI-compatible gateway) are wired in and selected by config.
+> no API keys. Live providers (Ollama, Anthropic, 14 free tiers, Claude Code CLI,
+> any OpenAI-compatible gateway) are wired in and selected by config, and
+> `corparius preflight` proves by one real call which of them your account can
+> actually reach — a catalogue lists models that exist, not models you may call.
 
 ## Contents
 
@@ -40,8 +42,14 @@ LLMs are an opt-in escalation, never a requirement. Ship nothing you cannot audi
 [Human in the loop](#human-in-the-loop) ·
 [Compliance](#compliance-france--eu) ·
 [Project layout](#project-layout) ·
+[Plugins](#plugins) ·
+[Skills](#skills) ·
+[Documents](#documents) ·
+[Company apps](#company-apps) ·
 [Documentation](#documentation) ·
-[Contributing](#contributing)
+[Support](#support) ·
+[Contributing](#contributing) ·
+[License](#license)
 
 ## How it works
 
@@ -132,10 +140,21 @@ docker run -d -p 127.0.0.1:8600:8600 -v corparius_data:/app/data ghcr.io/mariusy
 ```
 
 The console walks you through creating your first company; `python -m corparius.cli
-doctor` diagnoses the installation and says what to fix. The CLI covers
-everything the console does: `run`, `status`, `tasks`, `board`, `flow`,
-`approvals`, `site`, `deploy`, `backup`, `bench`, `skills`, `apps`. Compose profiles: `--profile loop`
-adds the background company loop, `--profile extras` adds Postgres and n8n.
+doctor` diagnoses the installation and says what to fix. Compose profiles:
+`--profile loop` adds the background company loop, `--profile extras` adds
+Postgres and n8n.
+
+The CLI covers everything the console does, and `corparius <command> --help`
+explains each one:
+
+| | |
+| --- | --- |
+| Run a company | `init` `run` `status` `board` `flow` `tasks` `task` |
+| Decide | `approvals` `approve` `reject` `rules` `inbox` `memory` |
+| Ship | `site` `deploy` `repo` `apps` |
+| Models | `bench` `preflight` `claude` |
+| Extend | `plugin` `skills` |
+| Keep it running | `doctor` `ui` `backup` `restore` `update` `secrets` |
 
 ## Operator console
 
@@ -143,7 +162,12 @@ adds the background company loop, `--profile extras` adds Postgres and n8n.
 `http://127.0.0.1:8600` (Python standard library only, single HTML file, dark
 and light themes).
 
-![corparius operator console](docs/screenshots/console.png)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/console-dark.png">
+    <img src="docs/screenshots/console.png" alt="corparius operator console: the count of decisions waiting on you in display scale, then recent agent activity, spend per agent in tokens, payments, task progress and lean flow metrics" width="100%">
+  </picture>
+</p>
 
 The interface leads with what needs you: a status band puts the count of decisions
 waiting on your approval in display scale, warm and unmissable, above everything
@@ -154,7 +178,9 @@ inline approve and reject, the CEO-governed backlog as a kanban you can arbitrat
 and edit in place, run control (a burst of ticks or a loop you can stop), the
 sales site with a headline and a publish button, backups, and a chat with the CEO
 agent (given a face and a set of one-click openers) that answers from live company
-state.
+state. A Documents tab holds what the company knows in files — drag one in, read
+what the agents actually see of it, take one back out. The console is in English
+and French, both tables carrying the same keys.
 
 Nothing here needs a text editor. The company editor covers every field of the
 company config; Settings covers everything corparius reads, from provider keys to
@@ -185,9 +211,21 @@ than accepting an edit that would do nothing. Bootstrap keys (`CORP_DATA_PATH`,
 readable before the database opens, so they live in `.env` and apply on restart.
 
 `.env` is read by corparius itself, not injected into the environment — which is
-why `docker-compose.yml` mounts it instead of using `env_file:`. Keys saved from
-the console are stored in the clear in `data/corparius.sqlite` (as they were in
-`.env` before) and are included in `cli.py backup` zips.
+why `docker-compose.yml` mounts it instead of using `env_file:`.
+
+Keys saved from the console land in `data/corparius.sqlite`, in the clear by
+default (as they were in `.env` before), which the panel and the doctor both say.
+Set a passphrase and they are encrypted at rest:
+
+```bash
+corparius secrets on      # encrypts the keys already stored, then new ones
+corparius secrets status
+```
+
+`CORP_SECRET_KEY` is the passphrase and is a bootstrap key, so it lives in `.env`
+or the process environment — never in the database it protects. A backup zip never
+carries a plaintext secret either way: encrypted values ride along as ciphertext,
+and unencrypted ones are blanked with `REDACTED.txt` naming what to re-enter.
 
 ## LLM routing
 
@@ -199,7 +237,8 @@ Flip a prefix to move a tier between providers; keep any tier fully on-prem.
 | `local:` | Ollama on your machine | nothing but the model |
 | `cloud:` | Anthropic API | `ANTHROPIC_API_KEY` (paid credits) |
 | `claudecode:` | Claude Code CLI, subscription auth | the CLI logged in, no API credits |
-| `groq:` `cerebras:` `openrouter:` `mistral:` `gemini:` `nvidia:` `github:` `cohere:` `huggingface:` `ovh:` `zhipu:` `siliconflow:` `cloudflare:` | 12 free-tier providers, OpenAI-compatible | one API key each, free |
+| `groq:` `cerebras:` `openrouter:` `mistral:` `gemini:` `nvidia:` `github:` `cohere:` `huggingface:` `ovh:` `zhipu:` `siliconflow:` `cloudflare:` `alibaba:` | 14 OpenAI-compatible providers on a free tier or a free trial quota | one API key each, free |
+| `openai:` | OpenAI, OpenAI-compatible | `OPENAI_API_KEY` (billed from the first call) |
 | `custom:` | any OpenAI-compatible gateway (OmniRoute, LiteLLM, vLLM, LM Studio) | `CORP_CUSTOM_LLM_URL` |
 
 ```bash
@@ -211,8 +250,27 @@ CORP_LLM_FALLBACK=cerebras:gpt-oss-120b,mistral:mistral-small-latest
 
 When a remote call fails (rate limit, outage), the router walks the
 `CORP_LLM_FALLBACK` chain in order; local Ollama always ends the chain, so the
-company keeps working offline. Free-tier limits, signup links and privacy notes
-per provider: `docs/llm-providers.md`.
+company keeps working offline. A provider that refuses goes to the end of the
+chain rather than being dropped, and comes back once it is rested. Free-tier
+limits, signup links and privacy notes per provider: `docs/llm-providers.md`.
+
+### Measured, not declared
+
+A provider's catalogue lists models that exist, not models your account may call,
+and a model card that advertises structured output is not proof that the model can
+produce JSON. `corparius preflight` settles it with one real 8-token call per
+model and stores the verdict:
+
+```bash
+corparius preflight                       # the models your tiers and fallback name
+corparius preflight --provider openrouter # sweep a whole catalogue
+```
+
+Measured on a real key: **10 of 18 sampled NVIDIA catalogue entries answer 404**,
+and **two of four models in a working fallback chain cannot produce JSON**. The
+recommended routing refuses to pick a model measured dead, verdicts age so a
+provider blocked six months ago gets another chance, and the console has the same
+thing behind a button. `docs/llm-providers.md` carries the per-model table.
 
 <p align="center">
   <picture>
@@ -239,10 +297,10 @@ See `docs/securite.md` for the model and thresholds.
 ## Human in the loop
 
 Some actions never run unattended. Any tool named in `CORP_HITL_TOOLS`
-(`send_financial_transaction` and `publish_production_code` by default) pauses the
-run and files an approval request with the full tool name and parameters. Approve
-or reject from the console, the CLI or the MCP server. A rejection is handed back
-to the agent as a normal, recoverable tool error.
+(`send_financial_transaction`, `publish_production_code` and `deploy_site` by
+default) pauses the run and files an approval request with the full tool name and
+parameters. Approve or reject from the console, the CLI or the MCP server. A
+rejection is handed back to the agent as a normal, recoverable tool error.
 
 ## Compliance (France / EU)
 
@@ -269,16 +327,26 @@ corparius/
   company.py       the company config: one loader, one validator, one writer
   paths.py         where things live on disk
   models.py        typed records: agents, actions, approvals, LLM results
-  llm.py           HybridRouter + Ollama, Anthropic, 12 free OpenAI-compatible
-                   providers, Claude Code CLI and Mock
+  llm.py           HybridRouter + Ollama, Anthropic, 14 free OpenAI-compatible
+                   providers, OpenAI, Claude Code CLI and Mock
   safety.py        TokenBudget, LoopGuard, CircuitBreaker
+  permissions.py   what a role may call, and what waits for you
   tools.py         the business toolbox, with HITL flags
+  documents.py     the company's own files: extraction, prompt budget, writing
   mailbox.py       IMAP reading, read-only: support triage and prospect replies
+  inbox.py         what an agent asks you, and what you answer
   structured.py    provider-agnostic output harness: same shape, whatever model
   claudecli.py     one-press Claude subscription setup (claudecode: target)
   provider_check.py test any provider with one real minimal call
+  preflight.py     prove by a real 8-token call what an account can call
+  modelinfo.py     the provider catalogues, cached; never dialled from a poll
+  hardware.py      what this machine can run locally, measured
   ollama_setup.py  Ollama status and background model pulls from the console
+  secretbox.py     encrypt the stored keys at rest (CORP_SECRET_KEY)
   backup.py        zip the store and the company configs
+  selfupdate.py    replace this build with the newest release
+  doctor.py        diagnose the installation and say what to fix
+  i18n.py          the console and the agents in English or French
   sitegen.py       single-file sales-page generator
   deploy.py        interchangeable deploy providers (local, Netlify, S3, SSH)
   leadsource.py    interchangeable lead sources (local dataset, headless browser)
@@ -286,6 +354,10 @@ corparius/
   deliverability.py outreach guard (suppression list, daily cap / warmup)
   signals.py       buying-signal watcher (local feed, headless browser)
   agents.py        the ten-agent roster + the turn executor
+  skills.py        what the company knows, in prose (SKILL.md)
+  plugins.py       the curated registry, install and load
+  apps.py          the company's own LLM apps (+ appserver, appexport, appcli)
+  companyrepo.py   give a company its own git repository
   hitl.py          approval gate and queue
   orchestrator.py  scheduler (cadences) + runtime (the tick loop)
   store.py         SQLite persistence
@@ -293,7 +365,7 @@ corparius/
   webui.html       operator console page (single file, no build step)
   cli.py           init / run / status / tasks / board / flow / site / deploy / ui
   mcp_server.py    optional MCP server (drive corparius from an MCP host)
-companies/example/ a sample company config
+companies/example/ a sample company config, its skills, apps and documents
 docs/              architecture, safety, compliance, and the RE dossier
 tests/             guards, routing, backlog, console, settings layering, pipeline
 ```
@@ -335,6 +407,38 @@ skills that apply to it and nothing else. Start from
 [`packaging/skill-template/`](packaging/skill-template/); the example company
 ships one. Full guide: [`docs/skills.md`](docs/skills.md).
 
+## Documents
+
+Skills are what the company knows in prose. **Documents** are what it already has
+in files: the pitch deck, the spec, the price list, a screenshot of a competitor's
+page. Drop them in the Documents tab — or straight into the folder — and the text
+becomes context its agents can use.
+
+```
+companies/<slug>/documents/            what you dropped in
+companies/<slug>/documents/written/    what its agents wrote
+```
+
+**No new dependency.** A PDF, a `.docx`, a `.pptx`, an `.xlsx`, a CSV, a Markdown
+note and a plain text file are all read with the standard library. **And nothing
+is invented**: a scanned PDF answers "no text layer this build can read" rather
+than returning noise, an image is offered to the models that accept images instead
+of being silently dropped, and a format with no extractor is named rather than
+guessed. Nothing is uploaded anywhere — extraction happens in your process, and
+what reaches a provider is the text you put there.
+
+The agents write here too, which is the half that is easy to miss: a design brief,
+a competitor scan, a pricing note and the end-of-day summary used to be produced,
+logged as 120 characters, and thrown away. They are documents now, so the design
+agent can read on Tuesday what it decided on Monday — and so can you.
+
+**The console says which ones an agent actually reads.** The prompt block is
+bounded, so a company holding twelve documents can be feeding two of them to its
+agents. Each row carries its state: reaches the agents, reaches them truncated at
+*n* of *m* characters, or on file and past the budget — that last one being the
+thing nothing used to say out loud. Full guide:
+[`docs/documents.md`](docs/documents.md).
+
 ## Company apps
 
 The providers corparius already talks to, used for something other than the
@@ -364,9 +468,11 @@ time, or on request through `corparius apps serve` (off by default, bound to
 | `docs/mcp.md` | driving corparius from any MCP host |
 | `docs/plugins.md` | writing, installing and proposing plugins |
 | `docs/skills.md` | teaching a company its trade in prose (SKILL.md) |
+| `docs/documents.md` | the company's own files: what is read, and what reaches a prompt |
 | `docs/apps.md` | the company's own apps on its own providers |
 | `docs/memoire.md` | yesterday vs what stays true: durable memory |
 | `docs/install.md` | download/run per OS, data locations, updates |
+| `docs/versionnement.md` | how a version is decided, stamped and released |
 | `docs/roadmap-90j.md` | the 90-day build cycle |
 | `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia, Uclic, OpenWorker and knowledge-work-plugins |
 

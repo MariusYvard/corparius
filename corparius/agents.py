@@ -119,6 +119,11 @@ ROSTER: dict[AgentRole, AgentSpec] = {
             # Write the sections first, then render them: building the page
             # before deciding what goes on it is how it stayed one screen.
             "write_site_content",
+            # For a company that ships its own site, the one above skips itself and
+            # this one has the say. Both are on the playbook because which applies
+            # is a fact about the company, not a setting: exactly one of them ever
+            # runs, and each says why when it is the other's turn.
+            "review_site",
             "draft_design_brief",
             "produce_mockup",
             "build_sales_site",

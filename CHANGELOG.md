@@ -8,6 +8,22 @@ was released.
 
 ## Non publié
 
+- **Fixed : un modèle pin pouvait être écarté par un délai de repos.** Le routeur
+  déplaçait derrière tous les autres toute cible « au repos » — y compris la cible
+  *demandée*. **Mesuré sur un vrai tour** : le rôle design était pin sur
+  `claudecode:opus`, le journal disait `[design] pinned to claudecode:opus`, et la
+  réponse venait de `cerebras:gpt-oss-120b` — qui ne sait pas produire de JSON,
+  donc l'outil répondait « no model returned usable structure » et ne faisait
+  rien. Le pin avait été rétrogradé parce que claudecode avait refusé une fois
+  plus tôt dans le même run et se trouvait dans sa fenêtre de repos de 45
+  secondes. Un délai de repos est une indication, un modèle pin est une
+  instruction — et une instruction que le routeur réordonne en silence, c'est
+  encore la forme « déclaré mais pas honoré ». La cible demandée garde donc sa
+  place en tête ; seules les étapes de repli sont réordonnées, ce qui préserve
+  entièrement la raison d'être du mécanisme. Coût d'essayer une cible au repos :
+  un appel qui échoue, que la chaîne gère déjà. Coût de ne pas l'essayer : le
+  choix explicite de l'exploitant ne tourne jamais.
+
 - **Added : `review_site`, parce que le rôle design n'avait plus rien à faire.**
   Conséquence directe du correctif précédent, et pas un vieux bug :
   `write_site_content` écrit du texte dans `company.yaml`, que le générateur rend

@@ -1075,6 +1075,20 @@ SPEC: list[FieldSpec] = [
         help_fr="Où le provider « local » copie le site. Par défaut data/sites/published.",
     ),
     _f(
+        "CORP_DEPLOY_VERIFY_WAIT",
+        "publishing",
+        default="20",
+        label_en="Wait before checking",
+        label_fr="Attente avant contrôle",
+        help_en="Seconds to wait after publishing, before the single check of the live "
+        "address. One check, then it stops either way. 0 checks immediately; a host that "
+        "builds (Netlify, Vercel) needs longer than one that copies files.",
+        help_fr="Secondes d'attente après publication, avant l'unique contrôle de l'adresse "
+        "en ligne. Un seul contrôle, puis on s'arrête dans tous les cas. 0 contrôle "
+        "immédiatement ; un hôte qui construit (Netlify, Vercel) demande plus qu'un qui "
+        "copie des fichiers.",
+    ),
+    _f(
         "NETLIFY_AUTH_TOKEN",
         "publishing",
         type="password",

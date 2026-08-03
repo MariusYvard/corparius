@@ -8,6 +8,42 @@ was released.
 
 ## Non publié
 
+- **Fixed : le site de l'entreprise était invisible pour le produit censé
+  l'entretenir.** Rétro-ingénierie des journaux d'exécution NanoCorp
+  (`docs/reverse-engineering/nanocorp.md`) : leur worker travaille sur le dépôt —
+  il lit de vrais fichiers, les édite, construit, pousse, vérifie la production.
+  Corparius dérivait la page d'un fichier de configuration. **Mesuré sur
+  l'installation du propriétaire :** `companies/vigil/site/` contenait six pages
+  HTML écrites à la main, une feuille de style, une fonction serverless,
+  `robots.txt` et `sitemap.xml`, versionnées dans le dépôt privé de l'entreprise
+  — et corparius ne voyait rien. `build_sales_site` régénérait une page unique à
+  partir de quatre champs de `company.yaml` à chaque tour de l'agent design et
+  annonçait « Sales site built » ; `deploy_site` publiait *celle-là*. L'exploitant
+  demandait pourquoi son site restait mauvais : le produit n'avait jamais touché
+  son site. `paths.owned_site()` le trouve maintenant, en honorant la clé
+  `publish` d'un `netlify.toml` ; le générateur refuse de l'écraser et dit ce
+  qu'il contient ; la console prévisualise et publie le même dossier.
+- **Added : un déploiement est vérifié, une fois.** `corparius/sitecheck.py`,
+  copié de la compétence `vercel-deploy-verify` de NanoCorp : attente bornée
+  (`CORP_DEPLOY_VERIFY_WAIT`, plafond 180 s), **une** requête, un verdict parmi
+  `fresh` / `stale` / `unreachable` / `unverified`, et une phrase qui dit d'où il
+  vient. Jamais de reprise. Ce que ça vaut est dans leur journal : un push réussi,
+  une route déployée, et la production répondant « la variable est absente » —
+  sans le contrôle, cette tâche finissait en succès. Corparius annonçait `Site
+  published` sur la parole du fournisseur et n'allait jamais chercher l'adresse.
+  Le marqueur est le `<title>`, pas un hachage des octets : une page générée porte
+  un horodatage de build, donc chaque contrôle lirait « périmé ».
+- **Added : un site ne part pas en ligne avec des marqueurs à remplacer.**
+  **Mesuré :** publier Vigil aurait mis `REMPLACER@TON-DOMAINE.fr` sur la ligne
+  de contact de la page d'accueil, deux fois. `deploy_site` refuse et nomme les
+  fichiers ; le doctor le dit avant qu'on essaie. Deuxième famille : un
+  `robots.txt` ou un `sitemap.xml` qui pointe un crawler vers un hôte autre que
+  `site.url` — c'est le raisonnement que `sitegen` applique déjà au lien
+  canonique. La première version de ce détecteur signalait
+  `www.sitemaps.org`, l'espace de noms XML présent dans tout sitemap ; il ne lit
+  plus que les `<loc>` et la directive `Sitemap:`. Trouvé en l'exécutant sur un
+  vrai site, pas en le relisant.
+
 - **Fixed : `local` était le premier fournisseur de publication par défaut, et il
   est toujours disponible.** Donc il gagnait toujours, et netlify, s3 et ssh ne
   tournaient jamais. Un exploitant qui posait `NETLIFY_AUTH_TOKEN` et

@@ -144,6 +144,14 @@ class Settings:
     memory_enabled: bool = field(
         default_factory=lambda: cfg.get_bool("CORP_MEMORY_ENABLED", "true")
     )
+    # How many of the company's own pictures may ride on one model call. Zero is
+    # the point of it being a setting at all: a document's text is extracted on
+    # this machine, but a picture has to leave it to be read, and a screenshot may
+    # hold a customer's data. Before this the only refusal available was turning
+    # every cloud provider off, which also gives up the text.
+    image_max_per_call: int = field(
+        default_factory=lambda: cfg.get_int("CORP_IMAGE_MAX_PER_CALL", 2)
+    )
     memory_top_k: int = field(default_factory=lambda: cfg.get_int("CORP_MEMORY_TOP_K", 5))
     # Ceiling on stored facts per company. Oldest unpinned are pruned first; a
     # pinned fact is the operator saying "this one stays" and is never pruned.

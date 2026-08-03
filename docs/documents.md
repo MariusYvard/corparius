@@ -76,7 +76,11 @@ Pendant deux versions, ce module, la console, cette page et le README annonçaie
 
 Un fournisseur fourni par un greffon et écrit avant les images continue de fonctionner : le mot-clé est **absent** plutôt que passé vide, ce qui n'appelle jamais une signature à trois arguments avec un quatrième.
 
-**Borné, et dit.** Deux images par appel au plus, 3 Mio chacune avant base64 — qui coûte un tiers de plus. Ce qui dépasse n'est pas envoyé et est **nommé** dans le journal avec sa taille réelle, parce que « pas de troncature silencieuse » couvre une image laissée de côté comme un document coupé. Une image manquant en silence d'une invite, c'est un tour qui raisonne sur ce qu'il ne voit pas.
+**Borné, et dit.** `CORP_IMAGE_MAX_PER_CALL` images par appel — deux par défaut — et 3 Mio chacune avant base64, qui coûte un tiers de plus. Ce qui dépasse n'est pas envoyé et est **nommé** dans le journal avec sa taille réelle, parce que « pas de troncature silencieuse » couvre une image laissée de côté comme un document coupé. Une image manquant en silence d'une invite, c'est un tour qui raisonne sur ce qu'il ne voit pas.
+
+**Et zéro veut dire jamais.** C'est la raison d'être du réglage, plus que le nombre lui-même. Le texte d'un document est extrait sur votre machine ; une image, elle, doit en sortir pour être lue — et une capture d'écran peut contenir les données d'un client. Avant ce réglage, le seul refus disponible était `CORP_CLOUD_ENABLED=false`, qui coupe aussi tout le texte : rien ne permettait de garder le texte dans le cloud en refusant les images, alors que l'image est la plus sensible des deux. À zéro, les fichiers ne sont ni lus, ni encodés, et le journal le dit une fois par tour plutôt que de laisser croire qu'il n'y avait rien à envoyer.
+
+Le plafond d'octets reste une constante : c'est une décision de forme, comme la taille maximale d'un dépôt. Le nombre d'images est un réglage parce que l'exploitant a une raison d'y toucher.
 
 ## Les agents écrivent aussi
 

@@ -823,6 +823,20 @@ SPEC: list[FieldSpec] = [
         "journée qu'une exécution relit toujours.",
     ),
     _f(
+        "CORP_IMAGE_MAX_PER_CALL",
+        "safety",
+        type="int",
+        default="2",
+        label_en="Pictures sent to a model per call",
+        label_fr="Images envoyées à un modèle par appel",
+        help_en="0 never sends one. A document's text is extracted on this machine, but a "
+        "picture has to leave it to be read — and a screenshot may hold a customer's data. "
+        "Turning cloud off entirely was the only refusal available before this.",
+        help_fr="0 n'en envoie jamais. Le texte d'un document est extrait sur cette machine, "
+        "mais une image doit en sortir pour être lue — et une capture peut contenir les "
+        "données d'un client. Couper tout le cloud était le seul refus possible avant ceci.",
+    ),
+    _f(
         "CORP_MEMORY_TOP_K",
         "safety",
         type="int",

@@ -300,6 +300,22 @@ def test_the_tools_that_ask_are_the_ones_whose_job_is_visual():
     assert asking == ["draft_design_brief", "scan_competitors"]
 
 
+def test_the_flag_cannot_be_set_on_a_tool_that_calls_no_model():
+    """`sees_images` is only ever read on the drafting path, so setting it on a
+    tool with `needs_draft=False` does nothing — silently.
+
+    `produce_mockup` is the trap: it is the design agent's obviously visual job
+    and it makes no model call at all, so it would look wired and never be. A
+    dead flag reads as a feature to the next person who greps for it.
+    """
+    dead = sorted(
+        name
+        for name, tool in TOOLS.items()
+        if getattr(tool, "sees_images", False) and not tool.needs_draft
+    )
+    assert not dead, f"these declare sees_images but call no model, so it is never read: {dead}"
+
+
 def test_a_model_with_no_verdict_and_no_claim_gets_nothing(monkeypatch):
     """Neither measured nor declared means not sent: a picture mailed to a
     text-only model is paid for and thrown away by the provider."""
@@ -348,6 +364,52 @@ def test_never_asked_is_not_the_same_stored_answer_as_cannot_see(tmp_path):
     assert rows["unasked"] is None
     assert rows["seer"] == 1
     store.close()
+
+
+# --- the operator's right to refuse ------------------------------------------
+
+
+def test_zero_means_never_and_is_the_reason_this_is_a_setting(tmp_path, monkeypatch):
+    """A document's text is extracted on this machine. A picture has to leave it to
+    be read, and a screenshot may hold a customer's data.
+
+    Before this setting the only refusal available was turning every cloud
+    provider off, which also gives up the text — so there was no way to keep cloud
+    text and decline cloud pictures, the more sensitive of the two.
+    """
+    from corparius.config import Settings
+
+    monkeypatch.setenv("CORP_IMAGE_MAX_PER_CALL", "0")
+    from corparius import cfg
+
+    cfg.invalidate()
+    assert Settings().image_max_per_call == 0
+
+    monkeypatch.setenv("CORP_IMAGE_MAX_PER_CALL", "1")
+    cfg.invalidate()
+    assert Settings().image_max_per_call == 1
+    # And the cap it feeds is honoured, not merely stored.
+    paths = []
+    for i in range(3):
+        path = tmp_path / f"s{i}.png"
+        path.write_bytes(preflight.vision_png())
+        paths.append(path)
+    carried, skipped = llm.read_images(paths, limit=Settings().image_max_per_call)
+    assert len(carried) == 1 and len(skipped) == 2
+
+
+def test_the_refusal_is_in_the_registry_so_the_console_shows_it():
+    """A privacy control an operator cannot find is a control they do not have."""
+    from corparius.settings_spec import BY_KEY, WRITABLE
+
+    row = BY_KEY.get("CORP_IMAGE_MAX_PER_CALL")
+    assert row is not None, "the setting is not in the registry, so the console cannot write it"
+    assert row.type == "int" and row.default == "2"
+    assert "CORP_IMAGE_MAX_PER_CALL" in WRITABLE, "the console would refuse to save it"
+    # Both languages, and both have to say what zero does — a control whose off
+    # position is undocumented is a control nobody uses.
+    assert "0" in row.help_en and "0" in row.help_fr
+    assert row.label_en and row.label_fr
 
 
 # --- end to end, offline -----------------------------------------------------

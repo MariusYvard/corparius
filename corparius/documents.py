@@ -153,8 +153,12 @@ def _from_csv(path: Path) -> str:
     return "\n".join(", ".join(cell for cell in row if cell) for row in keep if any(row))
 
 
-def read(path: Path) -> Document:
-    """One file, extracted as far as it honestly can be."""
+def read(path: Path, max_chars: int = MAX_CHARS) -> Document:
+    """One file, extracted as far as it honestly can be.
+
+    `max_chars=0` lifts the cut. It exists for the console, which shows an operator
+    a file they own and has no reason to apply a prompt's budget to a person.
+    """
     suffix = path.suffix.lower()
     if suffix in IMAGE_SUFFIXES:
         return Document(
@@ -201,11 +205,11 @@ def read(path: Path) -> Document:
     if not text:
         return Document(path, "unreadable", note="no text found", reason="empty")
     note, total = "", len(text)
-    if total > MAX_CHARS:
+    if max_chars and total > max_chars:
         # Said, not hidden: an agent reasoning about a truncated document should
         # know it was truncated.
-        note = f"first {MAX_CHARS} of {total} characters"
-        text = text[:MAX_CHARS]
+        note = f"first {max_chars} of {total} characters"
+        text = text[:max_chars]
     return Document(
         path,
         "text",
@@ -214,6 +218,33 @@ def read(path: Path) -> Document:
         reason="cut" if note else "",
         total=total,
     )
+
+
+def full_text(slug: str, rel: str) -> Document | None:
+    """One document, extracted with no prompt budget applied.
+
+    `MAX_CHARS` exists so a thirty-page deck cannot swallow an agent's turn. It has
+    no business standing between an operator and a file they own — but the console
+    read the same truncated text, so somebody wanting to reread their own
+    12 000-character brief could see 4 000 of it and had to go open the file.
+
+    The reading surface and the prompt budget are different questions, so this
+    answers the first one. Same traversal guard as `remove`: the path arrives in a
+    request.
+    """
+    base = folder(slug).resolve()
+    target = (base / str(rel or "")).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        return None
+    if target == base or not target.is_file():
+        return None
+    if any(part.startswith(".") for part in target.relative_to(base).parts):
+        return None  # hidden, and `load` does not list it either
+    doc = read(target, max_chars=0)
+    doc.rel = target.relative_to(base).as_posix()
+    return doc
 
 
 def load(slug: str) -> list[Document]:

@@ -2,15 +2,15 @@
 # your own tap) once a release exists. Fill the two sha256 values from the
 # release's SHA256SUMS; `livecheck` keeps the version current afterwards.
 cask "corparius" do
-  version "0.3.2"
+  version "0.3.3"
   arch arm: "arm64", intel: "x64"
 
   on_arm do
-    sha256 "cfbfea72dcd45ce2415b66f8b4cafd54f97e8747e453a38c8ed3a7d5fbe2ab52"
+    sha256 "8d809619b0fa0569b7f52613c3cd61d203cf0963441260550046cc79291a0cde"
     url "https://github.com/MariusYvard/corparius/releases/download/v#{version}/corparius-macos-arm64.zip"
   end
   on_intel do
-    sha256 "72a7214f4537fc59e1cfe6531714577e59cab56733ac9041ad7be73177338d6c"
+    sha256 "b5775a6892b819680ba02533b283dda3e6e6515429868779821db2a6e6ee72de"
     url "https://github.com/MariusYvard/corparius/releases/download/v#{version}/corparius-macos-x64.zip"
   end
 

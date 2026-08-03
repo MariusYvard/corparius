@@ -273,6 +273,21 @@ def _overview(state: UiState, slug: str) -> dict:
         # The true count, not the number of rows sent: the column header must
         # not read 60 when the company has completed three hundred.
         "done_total": done_total,
+        # Whether a proposal is actually the operator's to decide.
+        #
+        # It normally is not: the CEO reviews proposals on its own cadence, which
+        # is the point of having a CEO. But the console counted every proposal in
+        # the "needs you" badge and labelled the column "your call", so an agent
+        # noticing something small — "the landing page claims 12 early-access
+        # users and nothing backs it" — read as the company stopping to ask
+        # permission for trivia. The operator said the plain version of it: these
+        # are decisions it could make on its own.
+        #
+        # It becomes the operator's only when nobody else will look: a CEO the
+        # company switched off, or one the operator stood down. Then the proposals
+        # really would sit there forever, and saying nothing would be worse.
+        "proposals_need_you": not (company_cfg.get("agents", {}) or {}).get("ceo", True)
+        or any(d.get("target") == "ceo" for d in store.directives(slug, "pause")),
         "approvals": approvals,
         "rules": store.list_rules(slug),
         "inbox": store.list_inbox(slug, "pending"),
@@ -1548,6 +1563,10 @@ def _route_plugins_get(ctx):
                 "unknown_tools": [t for t in sk.allowed_tools if t not in TOOLS],
                 "chars": len(sk.instructions),
                 "unscoped": sk.unscoped,
+                # Whether the author said so. An always-on guardrail is still
+                # reported — it is not free — but a warning badge on a choice
+                # somebody made deliberately is a warning they learn to ignore.
+                "always": sk.always,
                 "truncated": len(sk.instructions) > s.skill_max_chars,
                 "path": str(sk.path),
             }

@@ -8,7 +8,9 @@ Quatre cibles sont fournies. Le fournisseur local copie le site vers une racine 
 
 ## Ordre et repli
 
-CORP_DEPLOY_PROVIDERS fixe l'ordre, par défaut "local,netlify,s3,ssh". Un fournisseur non configuré est ignoré, le suivant est tenté. Pour publier d'abord sur un hôte externe tout en gardant une copie locale de secours, placez cet hôte avant local, par exemple "netlify,local". Le local restant en fin de chaîne, une panne de l'hôte externe n'empêche pas la publication.
+CORP_DEPLOY_PROVIDERS fixe l'ordre, par défaut "netlify,s3,ssh,local". Un fournisseur non configuré est ignoré, le suivant est tenté, et **local vient en dernier parce qu'il est toujours disponible** : tout ce qui le suivrait ne tournerait jamais. C'est la règle du routeur LLM appliquée à la publication. Une panne de l'hôte externe n'empêche donc pas la publication, elle retombe sur la copie locale.
+
+Avant la 0.3.4 le défaut était "local,netlify,s3,ssh", et un exploitant qui avait posé NETLIFY_AUTH_TOKEN et NETLIFY_SITE_ID obtenait une copie locale et une ligne de journal annonçant une publication. Mesuré sur une vraie installation : un site est resté non publié plusieurs jours pendant que chaque déploiement se déclarait réussi.
 
 ## Validation humaine
 

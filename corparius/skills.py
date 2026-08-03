@@ -50,6 +50,15 @@ class Skill:
     instructions: str = ""
     allowed_tools: list[str] = field(default_factory=list)
     scope: str = "global"  # global | <company slug>, for display only
+    # `always: true` in the frontmatter: the author states that this really does
+    # belong in every prompt of every agent. A house rule about what the product
+    # may never claim is exactly that, and before this there was no way to say so
+    # — the doctor called it an omission and the only way to quiet it was to
+    # narrow the rule, which is the opposite of what it is for.
+    #
+    # It changes nothing about how the skill is applied. It changes who is told
+    # they made a mistake.
+    always: bool = False
 
     def applies_to(self, tool_name: str) -> bool:
         """No `allowed-tools` means the skill is background knowledge about the
@@ -65,6 +74,13 @@ class Skill:
         Nothing showed this, so it failed silently in the direction that costs
         the most: every prompt, every turn."""
         return not self.allowed_tools
+
+    @property
+    def undeclared_unscoped(self) -> bool:
+        """Unscoped *and* nobody said it should be. This is the one worth a
+        warning: the cost of the other kind is still reported, but as a fact
+        about the company rather than as somebody's mistake."""
+        return self.unscoped and not self.always
 
 
 def _split(text: str) -> tuple[str, str]:
@@ -107,6 +123,11 @@ def parse(path: Path, scope: str = "global") -> Skill | None:
         tools = [str(t).strip() for t in tools_in if str(t).strip()]
     else:
         tools = []
+    # `always` or `always-on`, either spelling, and only a real yes counts: a
+    # string "false" is a no, because YAML hands it over as a truthy string.
+    declared = meta.get("always", meta.get("always-on", False))
+    if isinstance(declared, str):
+        declared = declared.strip().lower() in ("true", "yes", "1", "on")
     return Skill(
         name=name,
         description=str(meta.get("description", "")).strip(),
@@ -114,6 +135,7 @@ def parse(path: Path, scope: str = "global") -> Skill | None:
         instructions=body.strip(),
         allowed_tools=tools,
         scope=scope,
+        always=bool(declared),
     )
 
 

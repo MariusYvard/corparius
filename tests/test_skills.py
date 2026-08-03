@@ -333,3 +333,73 @@ def test_the_wheel_and_the_frozen_build_are_told_to_carry_it():
     assert '"/packaging/skill-pack-starter",' in pyproject
     spec = Path("packaging/corparius.spec").read_text(encoding="utf-8")
     assert "skill-pack-starter" in spec
+
+
+# --- a skill that really is meant for every prompt ---------------------------
+
+
+def _front(name, *extra):
+    """Frontmatter with no allowed-tools, so the skill applies to every tool."""
+    return "---\n" + "\n".join([f"name: {name}", *extra]) + "\n---\n"
+
+
+def test_a_skill_can_declare_that_it_belongs_in_every_prompt(tmp_path):
+    """The doctor treats "no allowed-tools" as an omission, and usually it is. A
+    guardrail that opens with "applies to every output of every agent, without
+    exception" is not — and there was no way to say so, so the only way to quiet
+    the warning was to narrow the rule, which is the opposite of what it is for."""
+    sk = parse(_write(tmp_path, "promesse", "No diagnosis.", _front("promesse", "always: true")))
+    assert sk.always is True
+    assert sk.unscoped is True, "it still applies to every tool; that is the point"
+    assert sk.undeclared_unscoped is False, "and it is no longer somebody's mistake"
+
+
+def test_forgetting_to_scope_a_skill_is_still_a_mistake(tmp_path):
+    sk = parse(_write(tmp_path, "notes", "Background.", _front("notes")))
+    assert sk.always is False and sk.undeclared_unscoped is True
+
+
+def test_a_string_that_is_not_a_yes_is_a_no(tmp_path):
+    """YAML hands "false" over as a truthy string, so `always: "false"` must not
+    turn a skill always-on by accident."""
+    no = parse(_write(tmp_path, "n", "x", _front("n", 'always: "false"')))
+    yes = parse(_write(tmp_path, "y", "x", _front("y", 'always: "yes"')))
+    assert no.always is False and yes.always is True
+
+
+def test_declaring_it_does_not_change_which_tools_it_applies_to(tmp_path):
+    """It changes who is told they made a mistake, not how the skill behaves."""
+    front = _front("s", "always: true", "allowed-tools: send_outreach")
+    scoped = parse(_write(tmp_path, "s", "x", front))
+    assert scoped.applies_to("send_outreach") and not scoped.applies_to("build_sales_site")
+
+
+def test_the_doctor_stops_calling_it_an_omission_but_still_prices_it(tmp_path, monkeypatch):
+    from corparius import doctor, paths
+    from corparius.config import Settings
+
+    base = tmp_path / "companies"
+    (base / "c").mkdir(parents=True)
+    (base / "c" / "company.yaml").write_text("slug: c\n", encoding="utf-8")
+    _write(base / "c" / "skills", "promesse", "R" * 400, _front("promesse", "always: true"))
+    monkeypatch.setattr(paths, "companies_dir", lambda: base)
+
+    level, name, message = doctor._check_skills(Settings())
+    assert (level, name) == ("ok", "skills"), message
+    assert "always-on by declaration" in message, message
+    assert "400 characters" in message, "declared is not free, and the price must be said"
+
+
+def test_an_undeclared_one_still_warns(tmp_path, monkeypatch):
+    from corparius import doctor, paths
+    from corparius.config import Settings
+
+    base = tmp_path / "companies"
+    (base / "c").mkdir(parents=True)
+    (base / "c" / "company.yaml").write_text("slug: c\n", encoding="utf-8")
+    _write(base / "c" / "skills", "notes", "R" * 400, _front("notes"))
+    monkeypatch.setattr(paths, "companies_dir", lambda: base)
+
+    level, _, message = doctor._check_skills(Settings())
+    assert level == "warn"
+    assert "always: true" in message, "the warning has to name the way out of it"

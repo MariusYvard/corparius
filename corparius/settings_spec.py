@@ -1058,13 +1058,13 @@ SPEC: list[FieldSpec] = [
     _f(
         "CORP_DEPLOY_PROVIDERS",
         "publishing",
-        default="local,netlify,s3,ssh",
+        default="netlify,s3,ssh,local",
         label_en="Provider order",
         label_fr="Ordre des providers",
-        help_en="Tried in order, first that works wins. 'local' is always available, so "
-        "put it last if you want to publish anywhere else.",
+        help_en="Tried in order, first that works wins. 'local' is always available, so it "
+        "comes last: anything after it would never run.",
         help_fr="Essayés dans l'ordre, le premier qui marche gagne. « local » est toujours "
-        "disponible : mettez-le en dernier pour publier ailleurs.",
+        "disponible, donc il est en dernier : ce qui le suit ne tournerait jamais.",
     ),
     _f(
         "CORP_DEPLOY_LOCAL_DIR",

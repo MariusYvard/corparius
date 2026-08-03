@@ -249,3 +249,67 @@ def test_a_refused_roster_change_is_not_reported_as_a_change(store):
 def test_a_real_roster_change_still_reports_one(store):
     out = tools._set_roster(_Ctx(store, role="ceo"), "-social")
     assert out.startswith("Roster changed") and "off: social" in out
+
+
+# --- and who a proposal is actually for --------------------------------------
+
+
+def test_a_proposal_is_not_counted_as_the_operators_when_a_ceo_reviews_them(tmp_path, monkeypatch):
+    """The console counted every proposal in its "needs you" badge and labelled
+    the column "your call". So an agent noticing that the landing page claimed 12
+    early-access users with nothing behind it read, to the operator, as the company
+    stopping to ask permission for trivia. The CEO reviews proposals; that is what
+    a CEO is for."""
+    from corparius import webui
+
+    monkeypatch.setattr(
+        webui, "_load_company", lambda slug: {"slug": slug, "agents": {"ceo": True}}
+    )
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    try:
+        state.store().add_task("c", "Remove the unverified badge", "design", status="proposed")
+        assert webui._overview(state, "c")["proposals_need_you"] is False
+    finally:
+        state.close()
+
+
+def test_it_is_the_operators_when_no_ceo_will_look(tmp_path, monkeypatch):
+    """A CEO switched off, and the proposals really would sit there forever.
+    Saying nothing then is worse than one badge too many."""
+    from corparius import webui
+
+    monkeypatch.setattr(
+        webui, "_load_company", lambda slug: {"slug": slug, "agents": {"ceo": False}}
+    )
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    try:
+        state.store().add_task("c", "A", "design", status="proposed")
+        assert webui._overview(state, "c")["proposals_need_you"] is True
+    finally:
+        state.close()
+
+
+def test_it_is_the_operators_when_the_ceo_is_stood_down(tmp_path, monkeypatch):
+    from corparius import webui
+
+    monkeypatch.setattr(
+        webui, "_load_company", lambda slug: {"slug": slug, "agents": {"ceo": True}}
+    )
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    try:
+        state.store().add_directive("c", "pause", "ceo", "paused by the operator")
+        assert webui._overview(state, "c")["proposals_need_you"] is True
+    finally:
+        state.close()
+
+
+def test_the_column_has_a_label_for_both_cases_in_both_languages():
+    from pathlib import Path
+
+    html = Path("corparius/webui.html").read_text(encoding="utf-8")
+    assert html.count('"col.proposedCeo"') == 3, "en, fr, and the one place that reads it"
+    assert '"col.proposedCeo":"Proposed, for the CEO"' in html
+    assert '"col.proposedCeo":"Proposées, pour le CEO"' in html

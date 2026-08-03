@@ -33,6 +33,8 @@ allowed-tools: send_outreach, draft_support_reply
 
 `allowed-tools` est la partie qui décide de tout: le corps du fichier n'entre dans l'invite que si l'outil sur le point de tourner y figure. Omettre la clé rend la compétence applicable à tous les outils, ce qui convient à une connaissance générale sur l'entreprise et ne convient pas à des instructions sur un métier précis.
 
+`always: true` dit que c'est voulu. Le doctor traite l'absence d'`allowed-tools` comme un oubli, et c'en est un la plupart du temps — mais une règle qui commence par « s'applique à toute sortie de tout agent, sans exception » n'en est pas un. Sans moyen de le déclarer, le seul moyen de faire taire l'avertissement était de restreindre la règle, c'est-à-dire l'inverse de ce qu'elle demande ; et un avertissement sur lequel on ne peut rien faire est un avertissement qu'on apprend à ignorer. La déclaration **ne change rien** au comportement : elle change qui se fait dire qu'il s'est trompé. Le prix reste annoncé — le doctor dit combien de caractères voyagent sur chaque invite — parce qu'une déclaration ne le rend pas gratuit.
+
 Un fichier sans en-tête est lu entièrement comme corps, et prend le nom de son dossier. Une note écrite à la main reste donc utilisable avant que son auteur ait lu quoi que ce soit de cette page.
 
 ## Comment la sélection est faite

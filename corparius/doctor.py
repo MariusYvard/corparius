@@ -387,7 +387,11 @@ def _check_skills(s: Settings) -> tuple:
     # Two silent failures, both easy to create by copying a skill written for
     # another host: one that names no tool applies to every prompt of every
     # agent, and one longer than the cap is cut without the operator being told.
-    unscoped = [f"{s_.name} ({len(s_.instructions)} chars)" for s_ in found.values() if s_.unscoped]
+    unscoped = [
+        f"{s_.name} ({len(s_.instructions)} chars)"
+        for s_ in found.values()
+        if s_.undeclared_unscoped
+    ]
     over = [
         f"{s_.name} ({len(s_.instructions)} > {s.skill_max_chars})"
         for s_ in found.values()
@@ -401,15 +405,25 @@ def _check_skills(s: Settings) -> tuple:
             "Shorten them, or raise CORP_SKILL_MAX_CHARS.",
         )
     if unscoped:
-        always_on = sum(len(s_.instructions) for s_ in found.values() if s_.unscoped)
+        cost = sum(len(s_.instructions) for s_ in found.values() if s_.undeclared_unscoped)
         return (
             "warn",
             "skills",
             f"{len(found)} loaded, but {', '.join(unscoped)} declare no allowed-tools, so "
-            f"{always_on} characters ride on every prompt of every agent. Name the tools they "
-            "belong to unless they really are background knowledge.",
+            f"{cost} characters ride on every prompt of every agent. Name the tools they "
+            "belong to — or add `always: true` to say that is what you meant.",
         )
-    return ("ok", "skills", f"{len(found)} loaded across {len(slugs) or 1} company(ies)")
+    # A declared always-on skill is not a mistake, and its price is not zero
+    # either. Said plainly rather than warned about: the operator chose this.
+    declared = [f"{s_.name} ({len(s_.instructions)} chars)" for s_ in found.values() if s_.always]
+    note = f"{len(found)} loaded across {len(slugs) or 1} company(ies)"
+    if declared:
+        total = sum(len(s_.instructions) for s_ in found.values() if s_.always)
+        note += (
+            f"; always-on by declaration: {', '.join(declared)} — {total} characters on "
+            "every prompt of every agent, which is what `always: true` asks for"
+        )
+    return ("ok", "skills", note)
 
 
 def _check_inbox(s: Settings, store: Store | None) -> tuple:
@@ -644,7 +658,7 @@ def _check_deploy_order() -> tuple:
     footgun this catches."""
     from . import deploy as deploy_mod
 
-    order = cfg.get_csv("CORP_DEPLOY_PROVIDERS", "local,netlify,s3,ssh")
+    order = cfg.get_csv("CORP_DEPLOY_PROVIDERS", "netlify,s3,ssh,local")
     unknown = [n for n in order if n not in deploy_mod.REGISTRY]
     if unknown:
         return (

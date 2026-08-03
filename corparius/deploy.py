@@ -194,7 +194,20 @@ REGISTRY: dict[str, DeployProvider] = {
 
 
 def _order() -> list[str]:
-    raw = cfg.get("CORP_DEPLOY_PROVIDERS", "local,netlify,s3,ssh")
+    """Configured providers first, `local` last.
+
+    `local` is always available, so anything ordered after it never runs — and it
+    was first by default. An operator who set NETLIFY_AUTH_TOKEN and
+    NETLIFY_SITE_ID got a local copy and a log line saying the site was published;
+    measured on a real install, that is why a site sat unpublished for days while
+    every deploy reported success. The doctor warned about it, which is not the
+    same as the default being right.
+
+    This is the router's rule, in the other half of the product: local always ends
+    the chain, never begins it. An unconfigured provider is skipped, so a plain
+    install with no keys still lands on `local` exactly as before.
+    """
+    raw = cfg.get("CORP_DEPLOY_PROVIDERS", "netlify,s3,ssh,local")
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 

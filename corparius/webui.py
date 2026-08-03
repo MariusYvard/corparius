@@ -1479,7 +1479,10 @@ def _route_payments_get(ctx):
 
 
 def _route_doctor(ctx):
-    return 200, {"ok": True, "checks": run_checks(_fresh_settings())}
+    # Lends the console's own connection. Seven checks used to open one each and
+    # close only three, so answering this poll opened seven and leaked four — and
+    # on a slow runner it pushed this endpoint past the page's own timeout.
+    return 200, {"ok": True, "checks": run_checks(_fresh_settings(), ctx.store())}
 
 
 def _route_update(ctx):

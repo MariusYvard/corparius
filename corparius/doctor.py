@@ -16,6 +16,7 @@ import requests
 from . import cfg, paths, permissions
 from .config import Settings
 from .llm import OPENAI_COMPAT_PROVIDERS, _split, list_models
+from .store import SCHEMA_VERSION, Store
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -52,14 +53,14 @@ def _check_env_file() -> tuple:
     )
 
 
-def _check_settings_source(s: Settings) -> tuple:
+def _check_settings_source(s: Settings, store: Store | None) -> tuple:
     """Console settings that the process environment overrides. Silently losing
     an operator's saved value is the one thing this layering must never do."""
+    if store is None:
+        return ("ok", "settings", "no store yet to read saved settings from")
     try:
-        from .store import Store
-
-        stored = Store(s.data_path).all_settings()
-    except Exception:
+        stored = store.all_settings()
+    except Exception:  # noqa: BLE001 - an unreadable store has its own check
         return ("ok", "settings", "no settings saved from the console yet")
     if not stored:
         return ("ok", "settings", "no settings saved from the console yet")
@@ -168,7 +169,7 @@ def _check_companies() -> tuple:
     )
 
 
-def _check_store(s: Settings) -> tuple:
+def _check_store(s: Settings, store: Store | None) -> tuple:
     try:
         os.makedirs(s.data_path, exist_ok=True)
         probe = Path(s.data_path) / ".doctor-probe"
@@ -184,12 +185,10 @@ def _check_store(s: Settings) -> tuple:
     # rolling back is the recovery path when an update goes wrong — but running
     # on it can write values a later schema means differently, and nothing else
     # would ever say so.
-    from .store import SCHEMA_VERSION, Store
-
+    if store is None:
+        return ("fail", "store", f"{s.data_path} is writable, but no store will open there")
     try:
-        store = Store(s.data_path)
         found = store.schema_version()
-        store.close()
     except Exception:  # noqa: BLE001 - the writability answer above still stands
         return ("ok", "store", f"writable at {s.data_path}")
     if found > SCHEMA_VERSION:
@@ -413,15 +412,11 @@ def _check_skills(s: Settings) -> tuple:
     return ("ok", "skills", f"{len(found)} loaded across {len(slugs) or 1} company(ies)")
 
 
-def _check_inbox(s: Settings) -> tuple:
+def _check_inbox(s: Settings, store: Store | None) -> tuple:
     """A company stopped on an unanswered question looks, from every automated
     angle, exactly like a company with nothing to do. The doctor is where an
     operator asks "is anything wrong", so it has to be one of the answers."""
-    try:
-        from .store import Store
-
-        store = Store(s.data_path)
-    except Exception:
+    if store is None:
         return ("ok", "inbox", "no store yet")
     base = paths.companies_dir()
     slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
@@ -444,7 +439,7 @@ def _check_inbox(s: Settings) -> tuple:
     return ("ok", "inbox", "nothing waiting on you")
 
 
-def _check_memory(s: Settings) -> tuple:
+def _check_memory(s: Settings, store: Store | None) -> tuple:
     if not s.memory_enabled:
         return ("ok", "memory", "off (CORP_MEMORY_ENABLED=false)")
     if s.memory_top_k <= 0:
@@ -454,11 +449,7 @@ def _check_memory(s: Settings) -> tuple:
             "on, but CORP_MEMORY_TOP_K is 0, so nothing is ever recalled. Agents write "
             "facts nobody reads back.",
         )
-    try:
-        from .store import Store
-
-        store = Store(s.data_path)
-    except Exception:
+    if store is None:
         return ("ok", "memory", "no store yet")
     base = paths.companies_dir()
     slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
@@ -470,7 +461,7 @@ def _check_memory(s: Settings) -> tuple:
     )
 
 
-def _check_machine(s: Settings) -> tuple:
+def _check_machine(s: Settings, store: Store | None) -> tuple:
     """What this machine measured, and what it implies.
 
     Reads the cache and never measures. A measurement costs a real generation —
@@ -483,11 +474,7 @@ def _check_machine(s: Settings) -> tuple:
     spec = hardware.specs()
     cores = spec["cores"] or "?"
     ram = f"{spec['ram_total'] / 1e9:.1f} GB" if spec["ram_total"] else "unknown RAM"
-    try:
-        from .store import Store
-
-        store = Store(s.data_path)
-    except Exception:
+    if store is None:
         return ("ok", "machine", f"{cores} cores, {ram}; no store yet to read a measurement from")
     prof = hardware.profile(store, max_age_days=s.bench_max_age_days)
     if not prof:
@@ -718,7 +705,7 @@ def _check_tier_coherence(s: Settings) -> tuple:
     return ("ok", "routing", "every tier resolves to a configured provider")
 
 
-def _check_pinned_models(s: Settings) -> tuple:
+def _check_pinned_models(s: Settings, store: Store | None) -> tuple:
     """Per-role model pins, which the tier check cannot see.
 
     A role can be pinned to its own model — that exists so the design agent can get
@@ -735,33 +722,27 @@ def _check_pinned_models(s: Settings) -> tuple:
         return ("ok", "pins", "mock mode: pinned models are not used")
     from . import company as company_mod
     from .orchestrator import model_overrides
-    from .store import Store
 
-    try:
-        store = Store(s.data_path)
-    except Exception:  # noqa: BLE001 - the store has its own check
+    if store is None:
         return ("ok", "pins", "store unavailable, nothing to read")
     unusable, total = [], 0
-    try:
-        for slug in company_mod.list_slugs():
-            for role, model in model_overrides(store, slug).items():
-                total += 1
-                target, _ = _split(model)
-                if target in ("local", "claudecode"):
-                    continue
-                if target == "cloud":
-                    if not cfg.get("ANTHROPIC_API_KEY", "").strip():
-                        unusable.append(f"{slug}/{role} → {model}")
-                elif target in OPENAI_COMPAT_PROVIDERS:
-                    spec = OPENAI_COMPAT_PROVIDERS[target]
-                    configured = cfg.get(spec["key_env"], "").strip() or (
-                        spec.get("key_optional")
-                        and (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base"))
-                    )
-                    if not configured:
-                        unusable.append(f"{slug}/{role} → {model}")
-    finally:
-        store.close()
+    for slug in company_mod.list_slugs():
+        for role, model in model_overrides(store, slug).items():
+            total += 1
+            target, _ = _split(model)
+            if target in ("local", "claudecode"):
+                continue
+            if target == "cloud":
+                if not cfg.get("ANTHROPIC_API_KEY", "").strip():
+                    unusable.append(f"{slug}/{role} → {model}")
+            elif target in OPENAI_COMPAT_PROVIDERS:
+                spec = OPENAI_COMPAT_PROVIDERS[target]
+                configured = cfg.get(spec["key_env"], "").strip() or (
+                    spec.get("key_optional")
+                    and (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base"))
+                )
+                if not configured:
+                    unusable.append(f"{slug}/{role} → {model}")
     if unusable:
         return (
             "warn",
@@ -775,7 +756,7 @@ def _check_pinned_models(s: Settings) -> tuple:
     return ("ok", "pins", f"{total} pinned role(s), all on a configured provider")
 
 
-def _check_preflight(s: Settings) -> tuple:
+def _check_preflight(s: Settings, store: Store | None) -> tuple:
     """What the last real preflight proved. Reads the cache; never probes.
 
     A probe is a real generation on a real account, and this function runs on
@@ -791,16 +772,9 @@ def _check_preflight(s: Settings) -> tuple:
 
     if s.llm_mock:
         return ("ok", "preflight", "mock mode: nothing to prove")
-    try:
-        from .store import Store
-
-        store = Store(s.data_path)
-    except Exception:
+    if store is None:
         return ("ok", "preflight", "no store to read a previous run from")
-    try:
-        report = preflight.load(store)
-    finally:
-        store.close()
+    report = preflight.load(store)
     if not report.probes:
         return (
             "ok",
@@ -878,24 +852,62 @@ def _check_model_catalog(s: Settings) -> tuple:
     return ("ok", "models", f"{checked} tier(s) name a model the provider still lists")
 
 
-def run_checks(settings: Settings | None = None) -> list[dict]:
+def run_checks(settings: Settings | None = None, store: Store | None = None) -> list[dict]:
+    """Every check, in order, over exactly one store connection.
+
+    Seven checks used to open one each and only three closed it, so every call
+    leaked four connections. This function runs on every launcher start and is
+    served over HTTP; on a Windows CI runner the leak pushed the console's own
+    poll past its timeout, which is how it was noticed, days after shipping.
+
+    `store` lets a caller that already holds one lend it: the console keeps a
+    single connection for its whole life and has no business opening a second on
+    the same file to answer a poll. A lent store is never closed here.
+
+    The seven checks that need it take it as a required argument with no default.
+    It had one, and two tests then called those checks without it and got a
+    cheerful "ok, nothing to see" in place of the stale measurement and the
+    from-the-future schema they had just written. Required turns that silence
+    into a TypeError.
+    """
     s = settings or Settings()
-    checks = [
+    lent, opened = store is not None, None
+    if store is None:
+        try:
+            opened = store = Store(s.data_path)
+        except Exception:  # noqa: BLE001 - _check_store says so, in its own words
+            store = None
+    try:
+        checks = _all_checks(s, store)
+    finally:
+        if opened is not None and not lent:
+            opened.close()
+    out = []
+    for c in checks:
+        entry = {"level": c[0], "name": c[1], "message": c[2]}
+        if len(c) > 3 and c[3]:  # an optional one-click fix hint for the console
+            entry["fix"] = c[3]
+        out.append(entry)
+    return out
+
+
+def _all_checks(s: Settings, store: Store | None) -> list[tuple]:
+    return [
         _check_python(),
         _check_env_file(),
-        _check_settings_source(s),
+        _check_settings_source(s, store),
         _check_mode(s),
         _check_exposure(s),
         _check_permissions(s),
-        _check_store(s),
+        _check_store(s, store),
         _check_secrets_at_rest(s),
         _check_companies(),
-        _check_machine(s),
+        _check_machine(s, store),
         _check_ollama(s),
         _check_providers(s),
         _check_tier_coherence(s),
-        _check_pinned_models(s),
-        _check_preflight(s),
+        _check_pinned_models(s, store),
+        _check_preflight(s, store),
         _check_model_catalog(s),
         _check_network(s),
         _check_claude_cli(s),
@@ -905,16 +917,9 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_apps(s),
         _check_budgets(s),
         _check_site(s),
-        _check_memory(s),
-        _check_inbox(s),
+        _check_memory(s, store),
+        _check_inbox(s, store),
     ]
-    out = []
-    for c in checks:
-        entry = {"level": c[0], "name": c[1], "message": c[2]}
-        if len(c) > 3 and c[3]:  # an optional one-click fix hint for the console
-            entry["fix"] = c[3]
-        out.append(entry)
-    return out
 
 
 def main(quiet: bool = False) -> int:

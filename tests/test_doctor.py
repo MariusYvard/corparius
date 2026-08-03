@@ -12,6 +12,69 @@ def _s(tmp_path, **kw):
     return s
 
 
+def test_one_run_opens_one_store_and_closes_it(tmp_path, monkeypatch):
+    """Seven checks used to open a connection each and only three closed it, so
+    every doctor call opened seven and leaked four. Nothing failed — the leak is
+    invisible until a slow runner makes the console's own poll time out, which is
+    how it was finally noticed, in CI, days later.
+
+    A count is the only thing that sees it, so this counts.
+    """
+    from corparius import doctor
+    from corparius import store as store_mod
+
+    opened, closed = [], []
+    real = store_mod.Store
+
+    class Counting(real):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            opened.append(self)
+
+        def close(self):
+            closed.append(self)
+            super().close()
+
+    monkeypatch.setattr(store_mod, "Store", Counting)
+    monkeypatch.setattr(doctor, "Store", Counting, raising=False)
+    run_checks(_s(tmp_path, llm_mock=True))
+    assert len(opened) == 1, f"the doctor opened {len(opened)} store connections, not 1"
+    assert closed == opened, "the doctor opened a store it never closed"
+
+
+def test_a_lent_store_is_not_closed_under_its_owner(tmp_path):
+    """The console holds one connection for its whole life and lends it to answer
+    a poll. Closing somebody else's store would break every later request."""
+    from corparius.store import Store
+
+    store = Store(str(tmp_path))
+    try:
+        run_checks(_s(tmp_path, llm_mock=True), store)
+        assert store.all_settings() == {}  # still usable, so still open
+    finally:
+        store.close()
+
+
+def test_every_check_that_needs_a_store_is_handed_one(tmp_path):
+    """The store has no default on purpose. It had one, and two tests called
+    those checks without it and got a cheerful "ok, nothing to see" instead of
+    the stale measurement and the from-the-future schema they had just written.
+    A required argument turns that silence into a TypeError."""
+    import inspect
+
+    from corparius import doctor
+
+    for name, fn in vars(doctor).items():
+        if not name.startswith("_check_"):
+            continue
+        params = inspect.signature(fn).parameters
+        if "store" not in params:
+            continue
+        assert params["store"].default is inspect.Parameter.empty, (
+            f"{name} defaults its store, so a caller that forgets it gets a wrong answer"
+        )
+
+
 def test_mock_mode_is_green_without_network(tmp_path):
     results = run_checks(_s(tmp_path, llm_mock=True))
     by = {r["name"]: r for r in results}

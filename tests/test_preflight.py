@@ -285,18 +285,20 @@ def test_the_doctor_reads_the_cache_and_never_calls_a_provider(tmp_path, monkeyp
     )
 
     s = Settings()
-    level, name, message = _check_preflight(s)[:3]
-    assert (level, name) == ("ok", "preflight") and "never run" in message
-
     store = Store(str(tmp_path))
-    preflight.save(
-        store,
-        preflight.Report(
-            ts=1.0, probes=[preflight.Probe("groq", "a", "normal", BLOCKED, "HTTP 404", 404)]
-        ),
-    )
-    store.close()
-    level, _, message = _check_preflight(s)[:3]
+    try:
+        level, name, message = _check_preflight(s, store)[:3]
+        assert (level, name) == ("ok", "preflight") and "never run" in message
+
+        preflight.save(
+            store,
+            preflight.Report(
+                ts=1.0, probes=[preflight.Probe("groq", "a", "normal", BLOCKED, "HTTP 404", 404)]
+            ),
+        )
+        level, _, message = _check_preflight(s, store)[:3]
+    finally:
+        store.close()
     assert level == "warn" and "groq:a" in message
 
 
@@ -318,8 +320,10 @@ def test_a_cold_provider_does_not_make_the_doctor_complain(tmp_path, monkeypatch
             ],
         ),
     )
-    store.close()
-    level, _, message = _check_preflight(Settings())[:3]
+    try:
+        level, _, message = _check_preflight(Settings(), store)[:3]
+    finally:
+        store.close()
     assert level == "ok"
     assert "rate-limited or cold" in message and "not rejected" in message
 

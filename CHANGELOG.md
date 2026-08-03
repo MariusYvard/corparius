@@ -8,6 +8,23 @@ was released.
 
 ## Non publié
 
+- **Fixed : le doctor ouvrait sept connexions à la base et n'en fermait que
+  trois.** Sept vérifications ouvraient chacune la leur ; quatre fuitaient à
+  chaque appel — et cette fonction tourne à chaque démarrage du lanceur et est
+  servie en HTTP. Rien n'échouait : la fuite est restée invisible jusqu'à ce
+  qu'elle fasse expirer le sondage de la console elle-même sur un runner
+  Windows, en intégration continue, quelques jours après la publication.
+  **Mesuré : une connexion par appel maintenant, ouverte et fermée au même
+  endroit.** La console prête la sienne — elle en garde une pour toute sa vie et
+  n'a rien à faire d'en ouvrir une seconde sur le même fichier pour répondre à
+  un sondage — et une connexion prêtée n'est jamais refermée sous son
+  propriétaire. Le `store` est un argument **requis, sans valeur par défaut** :
+  il en avait une, et deux tests appelaient alors ces vérifications sans le
+  passer et recevaient un « ok, rien à signaler » enjoué à la place de la mesure
+  périmée et du schéma venu du futur qu'ils venaient d'écrire. Requis, ce
+  silence devient une erreur. Trois tests le tiennent : le compte des
+  connexions, le fait qu'une connexion prêtée survive à l'appel, et l'absence de
+  valeur par défaut.
 - **Added : une règle, appliquée à chaque registre — vérifier les deux bouts du
   fil.** Le défaut a une forme et deux faces, et il a coûté neuf bugs à ce projet.
   *Produit et jamais consommé* : `usage.cost`, les timings d'Ollama,

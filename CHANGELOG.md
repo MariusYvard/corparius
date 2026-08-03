@@ -8,6 +8,35 @@ was released.
 
 ## Non publié
 
+- **Fixed : `local` était le premier fournisseur de publication par défaut, et il
+  est toujours disponible.** Donc il gagnait toujours, et netlify, s3 et ssh ne
+  tournaient jamais. Un exploitant qui posait `NETLIFY_AUTH_TOKEN` et
+  `NETLIFY_SITE_ID` obtenait une copie locale et une ligne de journal annonçant
+  une publication ; **mesuré sur une vraie installation, un site est resté non
+  publié pendant des jours pendant que chaque déploiement se déclarait réussi.**
+  Le défaut est maintenant `netlify,s3,ssh,local` — la règle du routeur LLM,
+  appliquée à la publication : local termine la chaîne, il ne la commence pas. Un
+  fournisseur non configuré est ignoré, donc une installation sans aucune clé
+  retombe sur `local` exactement comme avant. Le signe que le défaut était faux
+  était dans les tests : chacun de ceux qui voulaient une vraie publication
+  réécrivait l'ordre à la main.
+- **Changed : une proposition n'est plus comptée comme une décision de
+  l'exploitant.** La console additionnait chaque proposition dans sa pastille
+  « à faire » et intitulait la colonne « à arbitrer ». Un agent qui remarquait
+  quelque chose de mineur — « la landing affiche 12 inscrits en accès anticipé et
+  rien ne l'étaye » — se lisait donc comme l'entreprise s'arrêtant pour demander
+  la permission sur une broutille. C'est le CEO qui arbitre les propositions,
+  c'est à ça qu'il sert. Elles ne comptent que si personne d'autre ne les
+  regardera : un CEO désactivé, ou mis en pause par l'exploitant.
+- **Added : `always: true` dans l'en-tête d'une compétence.** Le doctor traite
+  l'absence d'`allowed-tools` comme un oubli, et c'en est un la plupart du temps
+  — mais pas quand la règle commence par « s'applique à toute sortie de tout
+  agent, sans exception ». Sans moyen de le déclarer, le seul moyen de faire
+  taire l'avertissement était de restreindre la règle, c'est-à-dire l'inverse de
+  ce qu'elle demande ; et un avertissement inactionnable est un avertissement
+  qu'on apprend à ignorer. La déclaration ne change rien au comportement, elle
+  change qui se fait dire qu'il s'est trompé — et **le prix reste annoncé**,
+  parce que déclarer ne rend pas gratuit.
 - **Fixed : le CLI Claude recevait le prompt sur la ligne de commande, et
   Windows la coupe à 8191 caractères.** **Mesuré** sur le CLI installé
   (2.1.220) : un prompt de 8000 caractères atteint le modèle, 8100 échoue avec

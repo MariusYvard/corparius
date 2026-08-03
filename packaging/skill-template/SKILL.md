@@ -26,6 +26,13 @@ read into the prompt only when the tool about to run is named there. Omit it and
 the skill applies to every tool, which is right for background knowledge about
 the company and wrong for instructions about one job.
 
+`always: true` says you meant it. A house rule about what the product may never
+claim genuinely does belong in every prompt, and without a way to say so the only
+way to quiet the doctor's warning was to narrow the rule — the opposite of what
+it is for. It changes nothing about how the skill is applied, only who is told
+they made a mistake. The doctor still reports how many characters ride on every
+prompt, because declaring it does not make it free.
+
 The tool names are the ones in the action log — `send_outreach`,
 `draft_social_post`, `draft_support_reply`, `update_pricing`, and so on. A name
 that matches no tool is reported by `corparius doctor`; it does not fail the run,
@@ -82,4 +89,5 @@ skill-to-skill handoffs. Two of their habits break here:
 - **A "next skill" or "handoff" section does nothing.** Corparius decides which
   skill applies from `allowed-tools`, in code. A skill cannot call another one.
 - **Omitting `allowed-tools`** makes the skill apply to every tool of every
-  agent. `corparius doctor` warns about it, but write the list.
+  agent. `corparius doctor` warns about it, but write the list — or add
+  `always: true` if every prompt is genuinely where it belongs.

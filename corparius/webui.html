@@ -923,7 +923,7 @@ en: {
   "sk.none":"None written yet. Copy packaging/skill-template into companies/<slug>/skills/ to teach a company its own trade.",
   "sk.off":"Skills are off. Turn them on in Settings (Company skills).",
   "sk.applies":"Applies to","sk.everyTool":"every tool","sk.chars":"chars","sk.unknown":"names no such tool: {n}",
-  "sk.unscoped":"applies to every prompt","sk.truncated":"cut short in every prompt",
+  "sk.unscoped":"applies to every prompt","sk.alwaysDeclared":"always on, by declaration","sk.truncated":"cut short in every prompt",
   "sk.alwaysOn":"{n} characters ride on every prompt of every agent, whatever the tool.",
   "sk.scopeIt":"Scope this skill","sk.scopeSave":"Save scope","sk.scopeNone":"Tick at least one tool.","sk.scopeSaved":"Scope saved.","sk.scopeHelp":"It costs {n} characters on every prompt of every agent. Tick the tools it is about, and it will only travel with those.",
   "pl.verified":"verified","pl.unverifiedTag":"UNVERIFIED","pl.disabled":"disabled","pl.loaded":"loaded",
@@ -978,7 +978,7 @@ en: {
   "ib.next.backlog":"This opens the Backlog, where you set which agent and which tool should carry the task out — or reject it.",
   "ib.next.providers":"This opens the Providers tab, where a key is pasted and a tier is pointed at a model.",
   "risk.read":"read","risk.write_local":"local write","risk.external":"external","risk.code":"code","risk.money":"money",
-  "col.proposed":"Proposed, your call","col.approved":"Approved","col.in_progress":"In progress","col.waiting":"Held, waiting on you","col.done":"Done","col.empty":"Empty",
+  "col.proposed":"Proposed, your call","col.proposedCeo":"Proposed, for the CEO","col.approved":"Approved","col.in_progress":"In progress","col.waiting":"Held, waiting on you","col.done":"Done","col.empty":"Empty",
   "col.more":"Show {n} more","col.less":"Show fewer","col.rest":"{n} older ones stay in the store",
   "th.time":"Time","th.agent":"Agent","th.tool":"Tool","th.state":"State","th.output":"Output",
   "badge.ok":"ok","badge.fail":"fail","badge.held":"held","badge.mock":"mock mode","badge.localOnly":"local only",
@@ -1156,7 +1156,7 @@ fr: {
   "sk.none":"Aucune écrite pour l'instant. Copiez packaging/skill-template dans companies/<slug>/skills/ pour apprendre son métier à une entreprise.",
   "sk.off":"Les compétences sont désactivées. Activez-les dans Réglages (Compétences de l'entreprise).",
   "sk.applies":"S'applique à","sk.everyTool":"tous les outils","sk.chars":"caractères","sk.unknown":"ne nomme aucun outil existant : {n}",
-  "sk.unscoped":"s'applique à chaque invite","sk.truncated":"tronquée dans chaque invite",
+  "sk.unscoped":"s'applique à chaque invite","sk.alwaysDeclared":"toujours active, par déclaration","sk.truncated":"tronquée dans chaque invite",
   "sk.alwaysOn":"{n} caractères partent dans chaque invite de chaque agent, quel que soit l'outil.",
   "sk.scopeIt":"Cadrer cette compétence","sk.scopeSave":"Enregistrer la portée","sk.scopeNone":"Cochez au moins un outil.","sk.scopeSaved":"Portée enregistrée.","sk.scopeHelp":"Elle pèse {n} caractères sur chaque invite de chaque agent. Cochez les outils qu'elle concerne : elle ne partira plus qu'avec eux.",
   "pl.verified":"vérifié","pl.unverifiedTag":"NON VÉRIFIÉ","pl.disabled":"désactivé","pl.loaded":"chargé",
@@ -1211,7 +1211,7 @@ fr: {
   "ib.next.backlog":"Ouvre le Backlog, où vous désignez l'agent et l'outil qui doivent faire la tâche — ou la refusez.",
   "ib.next.providers":"Ouvre l'onglet Providers, où l'on colle une clé et où l'on pointe un palier vers un modèle.",
   "risk.read":"lecture","risk.write_local":"écriture locale","risk.external":"extérieur","risk.code":"code","risk.money":"argent",
-  "col.proposed":"Proposées, à arbitrer","col.approved":"Approuvées","col.in_progress":"En cours","col.waiting":"Retenues, en attente de vous","col.done":"Terminées","col.empty":"Vide",
+  "col.proposed":"Proposées, à arbitrer","col.proposedCeo":"Proposées, pour le CEO","col.approved":"Approuvées","col.in_progress":"En cours","col.waiting":"Retenues, en attente de vous","col.done":"Terminées","col.empty":"Vide",
   "col.more":"Voir les {n} autres","col.less":"Voir moins","col.rest":"{n} plus anciennes restent dans le journal",
   "th.time":"Heure","th.agent":"Agent","th.tool":"Outil","th.state":"État","th.output":"Sortie",
   "badge.ok":"ok","badge.fail":"échec","badge.held":"retenu","badge.mock":"mode mock","badge.localOnly":"local seul",
@@ -1678,21 +1678,24 @@ async function loadPlugins() {
             : t("sk.everyTool");
           const flags = [];
           if (s.unknown_tools.length) flags.push(t("sk.unknown").replace("{n}", esc(s.unknown_tools.join(", "))));
-          if (s.unscoped) flags.push(t("sk.unscoped"));
+          if (s.unscoped && !s.always) flags.push(t("sk.unscoped"));
           if (s.truncated) flags.push(t("sk.truncated"));
+          const declared = s.always
+            ? `<br><span class="badge">${t("sk.alwaysDeclared")}</span>`
+            : "";
           const bad = flags.length
             ? `<br>${flags.map(f => `<span class="badge warn">${f}</span>`).join(" ")}`
             : "";
           /* Saying "this rides on every prompt" and stopping there leaves the
              operator to find the file and hand-edit YAML. Naming the tools is
              the whole fix, so offer it here. */
-          const fix = s.unscoped ? `<details class="sk-scope"><summary>${esc(t("sk.scopeIt"))}</summary>
+          const fix = s.unscoped && !s.always ? `<details class="sk-scope"><summary>${esc(t("sk.scopeIt"))}</summary>
               <p class="note">${esc(t("sk.scopeHelp").replace("{n}", s.chars))}</p>
               <div class="sk-tools">${(st.tool_names || []).map(n =>
                 `<label><input type="checkbox" value="${esc(n)}"> <span class="mono">${esc(n)}</span></label>`).join("")}</div>
               <button class="primary" data-sk-scope="${esc(s.name)}">${esc(t("sk.scopeSave"))}</button>
             </details>` : "";
-          return `<div class="kv"><span><strong>${esc(s.name)}</strong> <span class="muted">${esc(s.scope)} · ${s.chars} ${t("sk.chars")}</span>${s.description ? `<br><span class="muted">${esc(s.description)}</span>` : ""}<br><span class="muted">${t("sk.applies")} ${tools}</span>${bad}${fix}</span>
+          return `<div class="kv"><span><strong>${esc(s.name)}</strong> <span class="muted">${esc(s.scope)} · ${s.chars} ${t("sk.chars")}</span>${s.description ? `<br><span class="muted">${esc(s.description)}</span>` : ""}<br><span class="muted">${t("sk.applies")} ${tools}</span>${declared}${bad}${fix}</span>
             <span class="mono muted" style="overflow-wrap:anywhere">${esc(s.path)}</span></div>`;
         }).join("") + (st.skills_always_on_chars
             ? `<p class="note">${t("sk.alwaysOn").replace("{n}", st.skills_always_on_chars)}</p>`
@@ -1990,8 +1993,12 @@ function render(d) {
   $("#stop").hidden = !d.running;
   $("#stop").disabled = d.stopping;
   // Questions count as much as approvals: both are the company stopped,
-  // waiting on this person.
-  const needsYou = d.approvals.length + (d.inbox || []).length + (d.tasks.proposed || []).length;
+  // waiting on this person. Proposals are not: the CEO reviews them on its own
+  // cadence, and counting them here turned an agent noticing something small
+  // into the company asking permission for trivia. They only count when nobody
+  // else will look — a CEO switched off or stood down (proposals_need_you).
+  const needsYou = d.approvals.length + (d.inbox || []).length
+    + (d.proposals_need_you ? (d.tasks.proposed || []).length : 0);
   $("#ops-count").hidden = !needsYou;
   $("#ops-count").textContent = needsYou;
   $("#chat-mock-note").hidden = !d.llm_mock;
@@ -2434,7 +2441,8 @@ function renderKanban(d) {
     // operator only discovers by pressing it.
     const more = items.length - shown.length;
     const offscreen = total - items.length;
-    return `<div class="kcol"><h3>${t("col." + key)}<span class="mono" style="color:var(--muted)">${total}</span></h3>
+    const label = key === "proposed" && !d.proposals_need_you ? t("col.proposedCeo") : t("col." + key);
+    return `<div class="kcol"><h3>${label}<span class="mono" style="color:var(--muted)">${total}</span></h3>
       ${shown.map(x => `
         <div class="kcard"><span>${esc(x.title)}</span>
           ${x.why ? `<span class="knote">${esc(x.why)}</span>` : ""}

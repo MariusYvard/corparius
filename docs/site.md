@@ -10,7 +10,7 @@ Là où NullToHero est une boîte à outils large de conception et d'audit, ce m
 
 En ligne de commande, `python -m corparius.cli site --company example` écrit la page dans data/sites/<slug>/index.html et affiche le chemin. L'option --headline force l'accroche. Le bouton pointe vers offer.payment_link de la config, sinon vers CORP_STRIPE_PAYMENT_LINK, sinon vers l'ancre de la section prix.
 
-Dans la boucle autonome, l'agent design rédige une accroche puis régénère la page à chaque cycle via l'outil build_sales_site. La page reste un artefact de données, hors du dépôt.
+Dans la boucle autonome, l'agent design rédige une accroche puis régénère la page à chaque cycle via l'outil build_sales_site. La page reste un artefact de données, hors du dépôt. **Une tâche du backlog visant le site passe par `write_site_content`, pas par `build_sales_site`** : régénérer la page à partir d'un texte que personne n'a changé produit la même page et annonce une réussite. C'est l'outil qui écrit le texte dans company.yaml qui change quelque chose.
 
 ## Contenu
 

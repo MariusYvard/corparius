@@ -54,7 +54,7 @@ from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, _split, connected_provid
 from .models import AgentRole
 from .orchestrator import Runtime, _known_target
 from .store import Store
-from .tools import TOOLS
+from .tools import TOOLS, executable_fields
 
 log = logging.getLogger("corparius.webui")
 
@@ -919,6 +919,12 @@ def _edit_task(store, body: dict) -> tuple[int, dict]:
         fields["tool"] = tool
     if not fields and decision is None:
         return 400, {"ok": False, "error": "nothing to change"}
+    if decision == "approved":
+        # The same thing the CEO does on approval. This is the end of the wire that
+        # was missing: measured in a real store, 24 tasks for one role carried no
+        # tool and 22 closed "done (no tool mapped)" without doing anything, so the
+        # agent kept re-proposing the same work. See tools.executable_fields.
+        fields = {**executable_fields({**store.get_task(task_id), **fields}), **fields}
     if fields:
         store.update_task(task_id, **fields)
     if decision:

@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import re
 import subprocess
 import time
@@ -37,6 +38,13 @@ class ProviderError(Exception):
 
 def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
+
+
+def _argv_chars(cmd: list[str]) -> int:
+    """Roughly what a command line costs, quoting included. Two characters per
+    argument for quotes and one for the separating space — an over-estimate on
+    purpose, because the failure it guards is a hard truncation."""
+    return sum(len(a) + 3 for a in cmd)
 
 
 def _flatten(messages: list[dict]) -> str:
@@ -705,10 +713,28 @@ class ClaudeCodeProvider(LLMProvider):
 
     name = "claudecode"
 
-    # The CLI takes a prompt string on argv. There is no shape here for a picture,
+    # The CLI takes text on stdin or argv. There is no shape here for a picture,
     # so `accepts_images` stays False and the router does not hand it one — rather
     # than this method taking an argument it would quietly drop.
     accepts_images = False
+
+    # How much of a command line this platform will actually carry.
+    #
+    # On Windows the CLI npm installs is `claude.CMD`, so every call goes through
+    # cmd.exe, which truncates the whole command line at 8191 characters.
+    # Measured on the installed CLI (2.1.220): an 8000-character prompt reaches
+    # the model, 8100 fails with `claude CLI exited 1: La ligne de commande est
+    # trop longue`. That is not a corner case — a company with documents and
+    # skills passes it on the design agent's very first turn, and the failure
+    # looked like a provider outage, so the router fell through to a free model
+    # that cannot produce JSON and the site was never rewritten. Nobody could
+    # have read that story out of the log.
+    #
+    # The prompt now goes on stdin, which the CLI reads (`claude -p` with no
+    # prompt argument): measured, a 25 268-character prompt returns rc 0. Only
+    # the flags are left on argv, and this budget is what decides whether the
+    # system prompt can stay there too.
+    ARGV_BUDGET = 7800 if os.name == "nt" else 128_000
 
     def __init__(self, timeout: int = 300):
         self.timeout = timeout
@@ -729,14 +755,34 @@ class ClaudeCodeProvider(LLMProvider):
         # The resolved path, not "claude": on Windows the CLI is a .cmd that
         # subprocess cannot launch by bare name. See claudecli.resolve.
         exe = claudecli.resolve() or "claude"
-        cmd = [exe, "-p", prompt, "--output-format", "json"]
+        cmd = [exe, "-p", "--output-format", "json"]
         if model:
             cmd += ["--model", model]
         if system:
-            cmd += ["--append-system-prompt", system]
+            # The system prompt belongs in --append-system-prompt, and stays there
+            # while it fits. When it does not, it is folded into the prompt rather
+            # than dropped: a call that silently loses the company's skills and
+            # house rules would answer confidently in the wrong voice, which is
+            # worse than a longer prompt.
+            if (
+                _argv_chars(cmd) + len(system) + len("--append-system-prompt") + 2
+                <= self.ARGV_BUDGET
+            ):
+                cmd += ["--append-system-prompt", system]
+            else:
+                log.info(
+                    "claudecode: system prompt is %d chars, past this platform's %d-char "
+                    "command line; folding it into the prompt on stdin",
+                    len(system),
+                    self.ARGV_BUDGET,
+                )
+                prompt = f"{system}\n\n---\n\n{prompt}"
         try:
             proc = subprocess.run(
                 cmd,
+                # The prompt on stdin, not on argv: see ARGV_BUDGET. There is no
+                # length limit worth naming here — 25k characters is measured.
+                input=prompt,
                 capture_output=True,
                 text=True,
                 # utf-8 explicitly: `text=True` alone decodes with the locale

@@ -44,10 +44,17 @@ class Tool:
         prompt: Callable | None = None,
         schema: dict | None = None,
         skip_when: Callable | None = None,
+        sees_images: bool = False,
     ):
         self.name = name
         self.description = description
         self.hitl = hitl
+        # Whether the company's own pictures are worth sending to this tool. Opt
+        # in, per tool, for the same reason `skip_when` exists: an image is the
+        # most expensive thing a turn can carry, and a screenshot of a competitor's
+        # page helps a design brief and does nothing at all for reconciling Stripe.
+        # Declared here so it is greppable, rather than inferred from the role.
+        self.sees_images = sees_images
         # What this tool does to the world outside the process, which is what
         # corparius/permissions.py weighs against the operator's threshold.
         # `hitl` stays separate and stronger: it is a gate declared by name,
@@ -1159,6 +1166,9 @@ _ALL = [
         "Scan and summarise competitors",
         risk=permissions.EXTERNAL,
         needs_draft=True,
+        # The operator drops a capture of a rival's page precisely so this job can
+        # read it.
+        sees_images=True,
         prompt=lambda c: f"Name one competitor risk for {_name(c)} in a sentence.",
         effect=lambda c, d: _ok(_keep(c, "Competitor scan", d, f"Competitor scan: {d[:120]}")),
     ),
@@ -1186,6 +1196,10 @@ _ALL = [
         "draft_design_brief",
         "Draft a visual direction or brief",
         needs_draft=True,
+        # A screenshot in the company's folder is the whole input to this job: a
+        # visual direction argued from a description of a picture is worth less
+        # than one argued from the picture.
+        sees_images=True,
         prompt=lambda c: f"Describe a visual direction for {_name(c)} in one sentence.",
         effect=lambda c, d: _ok(_keep(c, "Design brief", d, f"Design brief drafted: {d[:120]}")),
     ),

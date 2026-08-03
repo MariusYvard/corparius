@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 import requests
 
-from . import documents, inbox
+from . import documents, inbox, llm
 from .agents import ROSTER, AgentSpec, Executor
 from .config import Settings
 from .hitl import ApprovalGate
@@ -43,6 +43,14 @@ class RunContext:
     # a price list: knowledge that had no way into a prompt at all before —
     # only the config, a hand-written skill, or nothing.
     documents: str = ""
+    # The pictures among them, read and ready to send. The product said an image
+    # was "offered to the models that accept images" for two releases while
+    # `documents.images()` had no caller at all and nothing here could have sent
+    # one. This is the field that makes the sentence true.
+    images: list = field(default_factory=list)
+    # What could not be sent, and why. Carried rather than dropped, because "no
+    # silent truncation" covers a picture left behind as much as a cut document.
+    images_skipped: list = field(default_factory=list)
 
 
 def _load_skills(settings, slug: str):
@@ -182,6 +190,13 @@ class Runtime:
                     break
                 tick = start + offset
                 done_ticks = offset + 1
+                # Read alongside the text, once per tick and not once per agent.
+                # Said when something is left behind: a picture over the size cap
+                # or past the per-call limit is named in the log rather than
+                # vanishing between the folder and the prompt.
+                tick_images, tick_skipped = llm.read_images(documents.images(slug))
+                for reason in tick_skipped:
+                    log.info("tick %d image not sent — %s", tick, reason)
                 # Answers arrive between ticks, from whichever surface the
                 # operator happened to be in front of. Reading them back here is
                 # what turns "held" into "moving again" without the run having
@@ -208,6 +223,8 @@ class Runtime:
                     # touches the disk, and every agent in a tick sees the
                     # same files.
                     documents=documents.context(slug),
+                    images=tick_images,
+                    images_skipped=tick_skipped,
                 )
                 for spec in due_roles(
                     tick,

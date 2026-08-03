@@ -9,12 +9,18 @@ So: a folder per company. Drop a PDF, a Word file, a spreadsheet, a Markdown
 note or a photo into `companies/<slug>/documents/` and it becomes context the
 agents can use.
 
-**Text is extracted, images are not described.** Extraction is done here with
-the standard library and the two dependencies this project already has — a PDF
-and a .docx are both zip containers with readable parts, and a CSV is a CSV.
-Images are a different promise: describing one needs a multimodal call, so an
-image is offered to the models that accept images and skipped by the ones that
-do not, rather than being silently dropped or silently invented.
+**Text is extracted here; a picture is sent instead of described.** Extraction
+uses the standard library and the two dependencies this project already has — a
+PDF and a .docx are both zip containers with readable parts, and a CSV is a CSV.
+No text is invented for an image, because describing one needs a model that can
+see it. So the file itself travels: `images()` lists them, `llm.read_images`
+loads what is under the size cap and names what is not, and a turn carries them
+when the tool asked (`Tool.sees_images`) and the model can read one — measured by
+`preflight` first, declared by the catalogue second, nothing sent otherwise.
+
+For two releases this module said an image was "offered to the models that accept
+images" while `images()` had no caller anywhere and no capability signal existed.
+It was listed, then dropped. The sentence above is now the code.
 
 Nothing is uploaded anywhere. The files stay on disk, the extraction happens in
 this process, and what reaches a provider is the text the operator put there.
@@ -154,7 +160,7 @@ def read(path: Path) -> Document:
         return Document(
             path,
             "image",
-            note="offered to models that accept images; not described here",
+            note="sent as a picture to a model that can read one; no text extracted here",
             reason="image",
         )
     text = ""

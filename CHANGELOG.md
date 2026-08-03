@@ -8,6 +8,56 @@ was released.
 
 ## Non publié
 
+- **Fixed : deux outils que rien ne pouvait appeler, et le garde-fou de la
+  classe.** Trouvés en balayant pour le défaut qui avait produit le bug des
+  images : `ask_operator` et `set_roster` étaient dans `TOOLS`, sur aucun playbook,
+  dans aucune file, nommés par aucun autre module. Le CHANGELOG affirmait pourtant
+  que « `ask_operator` is a mappable tool so the CEO can queue "ask about X" » —
+  or `ROLE_TOOL` associe un **rôle** à son outil par défaut, `ask_operator`
+  n'appartient à aucun rôle, et `create_tasks` ne peut poser que six triplets
+  codés en dur. La docstring et le CHANGELOG se trompaient tous les deux.
+  L'un des deux l'était par conception : son invite est écrite pour une tâche
+  (« ce que *cette tâche* ne peut pas faire sans »), comme `deploy_site`. Ces deux
+  outils le **déclarent** maintenant (`by_task_only`), parce que « sur aucun
+  playbook » est aussi ce à quoi ressemble un outil oublié, et rien ne pouvait les
+  distinguer. L'autre l'était par omission : « la décision la plus CEO qui
+  existe », d'après sa propre docstring, et aucun CEO ne pouvait la prendre.
+  `tests/test_tool_reach.py` exige désormais que **chaque outil ait un chemin** —
+  playbook, file du CEO, outil par défaut d'un rôle, ou tâche déclarée. Vérifié non
+  vacant : sans le drapeau, les deux ressortent.
+- **Fixed : `set_roster` aurait défait les mises en veille de l'exploitant.**
+  Le brancher tel quel sur le playbook du CEO aurait fait effacer, deux fois par
+  jour, les pauses posées par l'exploitant lui-même — l'échec exact que les
+  directives permanentes avaient été introduites pour finir, arrivant par l'outil
+  censé les respecter. Il ne peut plus lever que les mises en veille qu'il a
+  écrites, la distinction existait déjà dans la donnée (`note`), et un rôle laissé
+  éteint est **dit** au lieu d'être rapporté comme rallumé. Son invite demande
+  aussi de ne nommer que ce qui change, et rien du tout si le roster est bon :
+  nommer tous les rôles à chaque tour est la façon dont une décision devient du
+  bruit.
+- **Fixed : le doctor ne voyait pas les modèles épinglés par rôle.** Le pin
+  ajouté hier vit dans une directive par entreprise, et toutes les vérifications
+  lisent les trois réglages de palier — un pin vers un fournisseur sans clé faisait
+  donc retomber **tous les tours de ce rôle** sur local, pendant que le diagnostic
+  annonçait que tout allait bien. Le levier avait été ajouté sans le diagnostic qui
+  existe précisément pour ça. Il lit les directives et les clés ; il ne sonde rien.
+- **Added : la console sert le texte entier d'un document.** `MAX_CHARS` existe
+  pour qu'une présentation de trente pages n'avale pas un tour d'agent. Il n'a
+  rien à faire entre l'exploitant et un fichier qui est à lui — or la carte
+  réutilisait le texte tronqué de l'agent, donc relire son propre brief de 12 000
+  caractères en montrait 4 000 et renvoyait ouvrir le fichier à la main. Honnête,
+  la pastille le disait, et quand même la mauvaise réponse : la surface de lecture
+  et le budget d'invite sont deux questions différentes. Le bouton n'apparaît que
+  si quelque chose a été coupé et disparaît une fois servi. Prouvé dans un vrai
+  navigateur : 4 000 puis 20 999 caractères, et le fichier court ne le propose pas.
+- **Mesuré et laissé tel quel : `documents.context()` ne met rien en cache.** Il
+  est rappelé à chaque tour et ré-extrait tout le dossier, ce qui sentait le
+  problème. Mesuré sur un dossier réaliste — une présentation de 40 diapos, un
+  cahier des charges, un tarif de 2 000 lignes, six notes : **10 ms par appel,
+  0,24 s pour une journée simulée de 24 tours.** Un cache par `(chemin, mtime)` ne
+  rachèterait rien et ajouterait un état à invalider. Noté pour que ça cesse
+  d'être un soupçon.
+
 - **Added : un modèle par rôle, parce que la capacité images n'était atteignable
   par personne.** Trois paliers sont réglables et neuf rôles sur dix prennent le
   leur dans l'un d'eux : donner à l'agent de design un modèle qui lit une image

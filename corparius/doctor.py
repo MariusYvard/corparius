@@ -718,6 +718,63 @@ def _check_tier_coherence(s: Settings) -> tuple:
     return ("ok", "routing", "every tier resolves to a configured provider")
 
 
+def _check_pinned_models(s: Settings) -> tuple:
+    """Per-role model pins, which the tier check cannot see.
+
+    A role can be pinned to its own model — that exists so the design agent can get
+    a model that reads pictures without dragging the CEO, outreach and support onto
+    one ten times slower. But the pin lives in a per-company directive, and every
+    check above reads the three tier settings, so a pin at a provider with no key
+    made every turn of that role fall through to local while this reported that all
+    was well. The lever was added and the diagnosis that exists for exactly this
+    was not.
+
+    Reads directives and keys; probes nothing.
+    """
+    if s.llm_mock:
+        return ("ok", "pins", "mock mode: pinned models are not used")
+    from . import company as company_mod
+    from .orchestrator import model_overrides
+    from .store import Store
+
+    try:
+        store = Store(s.data_path)
+    except Exception:  # noqa: BLE001 - the store has its own check
+        return ("ok", "pins", "store unavailable, nothing to read")
+    unusable, total = [], 0
+    try:
+        for slug in company_mod.list_slugs():
+            for role, model in model_overrides(store, slug).items():
+                total += 1
+                target, _ = _split(model)
+                if target in ("local", "claudecode"):
+                    continue
+                if target == "cloud":
+                    if not cfg.get("ANTHROPIC_API_KEY", "").strip():
+                        unusable.append(f"{slug}/{role} → {model}")
+                elif target in OPENAI_COMPAT_PROVIDERS:
+                    spec = OPENAI_COMPAT_PROVIDERS[target]
+                    configured = cfg.get(spec["key_env"], "").strip() or (
+                        spec.get("key_optional")
+                        and (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base"))
+                    )
+                    if not configured:
+                        unusable.append(f"{slug}/{role} → {model}")
+    finally:
+        store.close()
+    if unusable:
+        return (
+            "warn",
+            "pins",
+            f"pinned to a provider with no key, so every turn of that role falls "
+            f"through to local: {', '.join(unusable)}. Set the key, or pin it again "
+            "in the CEO chat.",
+        )
+    if not total:
+        return ("ok", "pins", "no role is pinned; every role takes its tier")
+    return ("ok", "pins", f"{total} pinned role(s), all on a configured provider")
+
+
 def _check_preflight(s: Settings) -> tuple:
     """What the last real preflight proved. Reads the cache; never probes.
 
@@ -837,6 +894,7 @@ def run_checks(settings: Settings | None = None) -> list[dict]:
         _check_ollama(s),
         _check_providers(s),
         _check_tier_coherence(s),
+        _check_pinned_models(s),
         _check_preflight(s),
         _check_model_catalog(s),
         _check_network(s),

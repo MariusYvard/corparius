@@ -313,6 +313,54 @@ def test_dropping_into_an_unknown_company_is_refused(server):
 
 
 # --------------------------------------------------------------------------
+# Reading the whole thing
+# --------------------------------------------------------------------------
+
+
+def test_the_console_can_read_past_the_prompt_budget(drop, server):
+    """`MAX_CHARS` keeps a thirty-page deck from swallowing a turn. It has no
+    business standing between an operator and a file they own — and the card reused
+    the agent's truncated text, so rereading a 12 000-character brief showed 4 000
+    of it and sent the operator to open the file by hand."""
+    (drop / "big.md").write_text("z" * 12000, encoding="utf-8")
+
+    listed = _by_path(_get(server)[1])["big.md"]
+    assert listed["chars"] == documents.MAX_CHARS and listed["total"] == 12000
+
+    status, whole = _call(server, "GET", "/api/document/text?company=acme&path=big.md")
+    assert status == 200 and whole["ok"]
+    assert len(whole["text"]) == 12000, "the reading surface still applied a prompt budget"
+    assert whole["path"] == "big.md"
+    # And the prompt itself is untouched: the budget is not a display setting.
+    assert len(documents.load("acme")[0].text) == documents.MAX_CHARS
+
+
+def test_the_whole_text_of_an_agents_own_document_is_readable(drop, server):
+    documents.write("acme", "Design brief", "A severe visual identity. " * 400)
+    status, whole = _call(
+        server, "GET", "/api/document/text?company=acme&path=written/design-brief.md"
+    )
+    assert status == 200 and len(whole["text"]) > documents.MAX_CHARS
+
+
+@pytest.mark.parametrize(
+    "path", ["../company.yaml", "..\\company.yaml", "", ".", "never-existed.md"]
+)
+def test_reading_cannot_reach_outside_the_folder(drop, server, path):
+    """Same guard as removal: the path arrives in a request, so it is resolved and
+    compared rather than trusted."""
+    (drop.parent / "company.yaml").write_text("slug: acme\n", encoding="utf-8")
+    status, payload = _call(server, "GET", f"/api/document/text?company=acme&path={path}")
+    assert status == 404 and payload["ok"] is False
+
+
+def test_reading_is_a_get_and_needs_no_wide_body_ceiling(server):
+    route = webui._match("GET", "/api/document/text")
+    assert route is not None and route.public is False
+    assert route.max_body == webui.MAX_BODY
+
+
+# --------------------------------------------------------------------------
 # Taking one back out
 # --------------------------------------------------------------------------
 

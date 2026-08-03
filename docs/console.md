@@ -46,9 +46,11 @@ La carte "Site de vente" de la vue d'ensemble montre un aperçu réduit du site 
 
 ## API
 
-GET `/api/companies`, `/api/overview?company=`, `/api/company?company=`, `/api/settings`, `/api/session`, `/api/providers`, `/api/doctor`, `/api/site?company=`, `/api/documents?company=`, `/api/payments`, `/api/chat?company=`, `/site/<slug>/`.
+GET `/api/companies`, `/api/overview?company=`, `/api/company?company=`, `/api/settings`, `/api/session`, `/api/providers`, `/api/doctor`, `/api/site?company=`, `/api/documents?company=`, `/api/document/text?company=&path=`, `/api/payments`, `/api/chat?company=`, `/site/<slug>/`.
 
 POST `/api/companies` {name, product, agents, session_tokens}, `/api/company` {company, config}, `/api/company/delete` {company, confirm, purge_store}, `/api/settings` {values, unset}, `/api/providers` {values}, `/api/site` {company, headline}, `/api/deploy` {company}, `/api/backup`, `/api/run` {company, ticks, loop}, `/api/run/stop` {company}, `/api/approvals` {id, decision, note, remember}, `/api/rules` {company, tool}, `/api/memory` {id, action}, `/api/inbox` {id, answer}, `/api/tasks` {id, decision | title, priority, target, tool}, `/api/chat` {company, message}, `/api/documents` {company, name, data}, `/api/documents/delete` {company, path}, `/api/test/mail` {to}, `/api/test/payments`.
+
+`/api/document/text` sert le texte **entier** d'un document, sans le plafond `documents.MAX_CHARS`. Ce plafond existe pour qu'une présentation de trente pages n'avale pas un tour d'agent ; il n'a rien à faire entre l'exploitant et un fichier qui est à lui. La carte réutilisait le texte tronqué de l'agent, donc relire son propre brief de 12 000 caractères en montrait 4 000 — honnête, la pastille le disait, et quand même la mauvaise réponse. La surface de lecture et le budget d'invite sont deux questions différentes. Le bouton n'apparaît que si quelque chose a été coupé.
 
 Deux détails de `/api/documents`. Le plafond de corps est **par route**: celle-ci porte un fichier en base64 et vaut donc `documents.MAX_UPLOAD` plus le tiers que l'encodage coûte, là où toutes les autres gardent le 1 Mio global — élargir ce plafond pour tout le monde aurait élargi du même geste tous les autres points d'API. Et le GET n'est jamais sur le sondage de 5 secondes, parce qu'il ouvre et extrait chaque fichier qu'il liste: la page le recharge à l'arrivée, au changement d'entreprise, à la fin d'un run et sur le bouton.
 

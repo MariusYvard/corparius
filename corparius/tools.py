@@ -45,6 +45,7 @@ class Tool:
         schema: dict | None = None,
         skip_when: Callable | None = None,
         sees_images: bool = False,
+        by_task_only: bool = False,
     ):
         self.name = name
         self.description = description
@@ -55,6 +56,16 @@ class Tool:
         # page helps a design brief and does nothing at all for reconciling Stripe.
         # Declared here so it is greppable, rather than inferred from the role.
         self.sees_images = sees_images
+        # This tool runs only when a task names it, never from a playbook. Its
+        # prompt is written for a task ("what *this task* cannot proceed without"),
+        # so a playbook turn would ask it with no task to be about.
+        #
+        # Declared rather than deduced, because "on no playbook" is exactly what a
+        # forgotten tool looks like too: `ask_operator` and `set_roster` sat there
+        # for months, one by design and one by omission, and nothing could tell
+        # them apart. `tests/test_tool_reach.py` now demands that every tool have a
+        # path, and this flag is how a tool says its path is a task.
+        self.by_task_only = by_task_only
         # What this tool does to the world outside the process, which is what
         # corparius/permissions.py weighs against the operator's threshold.
         # `hitl` stays separate and stronger: it is a gate declared by name,
@@ -684,11 +695,24 @@ def _check_providers(ctx) -> str:
     return note
 
 
+# What `_set_roster` writes when it stands a role down, and the only note it is
+# allowed to clear. The operator's own stand-down, set in the CEO chat, carries a
+# different one — and the whole reason this project grew standing directives was
+# that a role the operator stood down kept being re-armed.
+CEO_STAND_DOWN = "stood down by the CEO"
+
+
 def _set_roster(ctx, draft: str = "") -> str:
     """Hire and fire. The most CEO decision there is, and it lived in a YAML file.
 
     `design -social` turns design on and social off. A role nobody has is
     dropped rather than promised.
+
+    **It cannot undo the operator.** Turning a role back on clears only the
+    stand-downs this tool wrote. Left as it was, putting this on the CEO's playbook
+    would have had the CEO clearing the operator's own pauses twice a day — the
+    exact failure standing directives were introduced to end, arriving through the
+    tool meant to respect them.
     """
     store = getattr(ctx, "store", None)
     slug = ctx.company.get("slug", "company")
@@ -698,18 +722,38 @@ def _set_roster(ctx, draft: str = "") -> str:
     on = [w for w in words if not w.startswith("-") and w in roles]
     if not on and not off:
         return "No role named, so the roster is unchanged"
+    kept: list[str] = []
     if store is not None:
         for role in off:
-            store.add_directive(slug, "pause", role, "stood down by the CEO")
-        for role in on:
-            for d in store.directives(slug, "pause"):
-                if d["target"] == role:
-                    store.clear_directive(d["id"])
+            store.add_directive(slug, "pause", role, CEO_STAND_DOWN)
+        for role in list(on):
+            mine = [
+                d
+                for d in store.directives(slug, "pause")
+                if d["target"] == role and (d.get("note") or "") == CEO_STAND_DOWN
+            ]
+            theirs = [
+                d
+                for d in store.directives(slug, "pause")
+                if d["target"] == role and (d.get("note") or "") != CEO_STAND_DOWN
+            ]
+            if theirs:
+                # Said, not silently ignored: a CEO that reports turning a role
+                # back on while it stays off is the empty promise again.
+                on.remove(role)
+                kept.append(role)
+                continue
+            for d in mine:
+                store.clear_directive(d["id"])
     parts = []
     if on:
         parts.append("on: " + ", ".join(on))
     if off:
         parts.append("off: " + ", ".join(off))
+    if kept:
+        parts.append("left off, you stood them down: " + ", ".join(kept))
+    if not parts:
+        return "Roster unchanged"
     return "Roster changed — " + "; ".join(parts)
 
 
@@ -957,6 +1001,7 @@ _ALL = [
         "ask_operator",
         "Ask the operator for something only they can supply",
         needs_draft=True,
+        by_task_only=True,
         prompt=lambda c: (
             f"In one sentence, ask the operator of {_name(c)} for the one piece of "
             "information or access this task cannot proceed without."
@@ -1103,8 +1148,10 @@ _ALL = [
         "Turn a role on or off",
         needs_draft=True,
         prompt=lambda c: (
-            "Name the roles to run, and prefix with - the ones to stand down. "
-            "Answer with role names only, e.g. `design coder -social`."
+            "Name only the roles that should change, prefixing with - the ones to "
+            "stand down, e.g. `coder -social`. Answer with role names only, and "
+            "answer with nothing at all if the roster is right as it is — naming "
+            "every role every turn is how a decision becomes noise."
         ),
         effect=lambda c, d: _ok(_set_roster(c, d)),
     ),
@@ -1221,6 +1268,9 @@ _ALL = [
         "Publish the sales site to the configured hosts",
         risk=permissions.EXTERNAL,
         hitl=True,
+        # Publishing is a decision, not a cadence. It waits for a task that says
+        # to publish, so no daily design turn ever pushes a site on its own.
+        by_task_only=True,
         effect=lambda c, d: _deploy_site(c),
     ),
 ]

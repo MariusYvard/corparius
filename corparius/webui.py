@@ -1395,6 +1395,25 @@ def _route_documents_post(ctx):
     }
 
 
+def _route_document_text(ctx):
+    """One document's whole extracted text, with no prompt budget applied.
+
+    The card reused the text an agent gets, which is capped at
+    `documents.MAX_CHARS` so a thirty-page deck cannot swallow a turn. Honest — the
+    badge says "first 4000 of 12000" — and still the wrong answer for a person
+    rereading their own brief, who had to go open the file. The reading surface and
+    the prompt budget are different questions.
+
+    A GET, because it reads; and off the 5s poll, because it extracts a file.
+    """
+    if ctx.slug not in _companies():
+        return 404, {"ok": False, "error": "no such company"}
+    doc = documents.full_text(ctx.slug, str(ctx.query.get("path", "")))
+    if doc is None:
+        return 404, {"ok": False, "error": "no such document"}
+    return 200, {"ok": True, "path": doc.label, **doc.as_dict(), "text": doc.text}
+
+
 def _route_documents_delete(ctx):
     """Take one document out of the folder.
 
@@ -1985,6 +2004,7 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/ollama", _route_ollama_get),
     Route("GET", "/api/drafts", _route_drafts_get, needs_slug=True),
     Route("GET", "/api/documents", _route_documents_get, needs_slug=True),
+    Route("GET", "/api/document/text", _route_document_text, needs_slug=True),
     Route("GET", "/api/site", _route_site_get, needs_slug=True),
     Route("GET", "/api/payments", _route_payments_get),
     Route("GET", "/api/doctor", _route_doctor),

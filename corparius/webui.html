@@ -1104,6 +1104,7 @@ en: {
   "docs.head":"{n} on file · {r} reach the agents · {u} of {b} characters used",
   "docs.more":"{n} more on file, not listed here.",
   "docs.read":"Read what the agents see","docs.copy":"Copy","docs.copied":"Copied",
+  "docs.readAll":"Read all {n} characters",
   "docs.remove":"Remove","docs.removed":"{name} moved out of the folder",
   "docs.no.no-such-document":"{name} was not removed: it is not in the folder.",
   "docs.no.outside":"{name} was not removed: that path is not inside the folder.",
@@ -1307,6 +1308,7 @@ fr: {
   "docs.head":"{n} au dossier · {r} atteignent les agents · {u} caractères sur {b}",
   "docs.more":"{n} autres au dossier, non listés ici.",
   "docs.read":"Lire ce que voient les agents","docs.copy":"Copier","docs.copied":"Copié",
+  "docs.readAll":"Lire les {n} caractères",
   "docs.remove":"Retirer","docs.removed":"{name} sorti du dossier",
   "docs.no.no-such-document":"{name} n’a pas été retiré : il n’est pas dans le dossier.",
   "docs.no.outside":"{name} n’a pas été retiré : ce chemin n’est pas dans le dossier.",
@@ -2220,6 +2222,12 @@ function renderDocuments(d) {
         ${x.text ? `<details class="approval-more">
           <summary>${t("docs.read")}</summary>
           <div class="approval-draft" data-doc-body="${i}">${esc(x.text)}</div>
+          ${/* Only when there is more: the prompt budget cut this text, and a
+                person rereading their own file has no reason to inherit it. */
+            x.total > x.chars
+              ? `<div class="actions"><button class="quiet" data-doc-all="${esc(x.path)}"
+                   data-doc-into="${i}">${t("docs.readAll").replace("{n}", x.total)}</button></div>`
+              : ""}
         </details>` : ""}
         <div class="actions">
           ${x.text ? `<button data-doc-copy="${i}">${t("docs.copy")}</button>` : ""}
@@ -2349,6 +2357,18 @@ document.addEventListener("click", async (e) => {
     again.disabled = true; again.textContent = t("docs.reading");
     // A successful reload replaces this button; a failed one has to give it back.
     try { await loadDocuments(); } finally { again.disabled = false; again.textContent = was; }
+    return;
+  }
+  const all = e.target.closest("[data-doc-all]");
+  if (all) {
+    all.disabled = true;
+    try {
+      const d = await api(`/api/document/text?company=${encodeURIComponent(state.company)}`
+        + `&path=${encodeURIComponent(all.dataset.docAll)}`);
+      const body = $(`[data-doc-body="${all.dataset.docInto}"]`);
+      if (body) body.textContent = d.text;
+      all.remove();   // nothing left to ask for
+    } catch (err) { toast(err.message, true); all.disabled = false; }
     return;
   }
   const gone = e.target.closest("[data-doc-remove]");

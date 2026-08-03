@@ -49,6 +49,10 @@ ROSTER: dict[AgentRole, AgentSpec] = {
             "weekly_review",
             "check_providers",
             "stop_useless_work",
+            # The deliberate counterpart to stop_useless_work, which is the
+            # automatic one. It was built, described as the most CEO decision
+            # there is, and left on no playbook — so no CEO could ever take it.
+            "set_roster",
             "set_daily_plan",
             "review_proposals",
             "create_tasks",

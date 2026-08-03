@@ -8,6 +8,25 @@ was released.
 
 ## Non publié
 
+- **Added : un modèle par rôle, parce que la capacité images n'était atteignable
+  par personne.** Trois paliers sont réglables et neuf rôles sur dix prennent le
+  leur dans l'un d'eux : donner à l'agent de design un modèle qui lit une image
+  demandait de déplacer tout le palier normal. **Mesuré sur une configuration
+  réelle : 535 tok/s vers 49** pour le CEO, la prospection, le support *et* le
+  design, afin de donner la vue à un seul d'entre eux. La seule autre porte était
+  d'éditer `agents.py`, ce qui n'est pas de la configuration. Une capacité livrée
+  que les réglages ne savent pas atteindre.
+  Un rôle s'épingle désormais dans la conversation avec le CEO, exactement comme
+  la cadence et la mise en veille : une directive par entreprise, relue à chaque
+  tour, effet au tour suivant. Le spec du roster est **copié et non muté** — y
+  écrire épinglerait le modèle pour toutes les entreprises du processus, et la
+  console en fait tourner plusieurs.
+  **Le préfixe doit être écrit**, et le refus est nommé. `llm._split` rabat exprès
+  un préfixe inconnu sur `local` pour que les étiquettes Ollama fonctionnent dans
+  les paliers, ce qui rend `opnerouter:typo` indiscernable de `gemma4:e4b` : une
+  validation bâtie dessus aurait accepté la faute de frappe et envoyé tous les
+  tours de ce rôle vers Ollama — une journée lente, pas une erreur visible. Trouvé
+  parce que le test l'a attrapé, pas en relisant le code.
 - **Added : `CORP_IMAGE_MAX_PER_CALL`, et zéro veut dire jamais.** La capacité
   ci-dessous fait sortir un fichier de l'exploitant vers un tiers, et il n'avait
   aucun moyen de le refuser. Le texte d'un document est extrait sur sa machine —

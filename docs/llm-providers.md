@@ -57,7 +57,17 @@ Mesuré sur le catalogue réel : **180 entrées sur 337 déclarent l'image en en
 | `nvidia/nemotron-3.5-content-safety:free` | **l'annonce et n'y arrive pas** |
 | `nvidia/nemotron-nano-12b-v2-vl:free` | aucune réponse — pas un verdict, reste `NULL` |
 
-Un sur trois mentait sur sa propre fiche. C'est la même leçon que `cerebras:gpt-oss-120b` avec `structured_outputs`, sur une deuxième capacité. Voir `docs/documents.md` pour ce qu'une entreprise fait de tout ça.
+Un sur trois mentait sur sa propre fiche. C'est la même leçon que `cerebras:gpt-oss-120b` avec `structured_outputs`, sur une deuxième capacité.
+
+### Un modèle pour un seul rôle
+
+Trois paliers sont réglables et neuf rôles sur dix prennent le leur dans l'un d'eux. Donner un modèle multimodal à l'agent de design demandait donc de déplacer tout le palier normal — mesuré sur une configuration réelle, **535 tok/s vers 49** pour le CEO, la prospection, le support et le design, pour donner la vue à un seul.
+
+Un rôle s'épingle donc à part, dans la conversation avec le CEO, comme la cadence :
+
+> « pour le design, utilise openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free »
+
+Le préfixe doit être écrit — `local:gemma4:e4b`, pas `gemma4:e4b` — parce que `_split` rabat un préfixe inconnu sur `local` pour que les étiquettes Ollama marchent dans les paliers, ce qui rendrait `opnerouter:typo` indiscernable de l'une d'elles. Un pin refusé est **nommé dans la réponse** au lieu d'être avalé. Voir `docs/documents.md`.
 
 ### Balayer un catalogue entier, et s'en souvenir
 

@@ -6,7 +6,26 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
-## Non publié
+## 0.3.3 — construit et jamais atteint
+
+Onze entrées, un seul fil. Une capacité annoncée en **sept endroits** que rien
+n'implémentait : `documents.images()` n'avait aucun appelant, aucun signal de
+capacité vision n'existait, et une image déposée était listée, nommée, puis jetée.
+Deux de ces sept phrases avaient été écrites le jour de la 0.3.2.
+
+En la construisant, la même forme est réapparue trois fois de plus. La capacité
+elle-même n'était atteignable par aucun réglage. Deux outils étaient dans `TOOLS`
+sans qu'aucun chemin ne mène à eux, dont un que le CHANGELOG affirmait pourtant
+joignable par le CEO. Et le diagnostic ne voyait pas le levier ajouté la veille.
+
+**Mesuré, pas cru** : sur les trois modèles gratuits que le catalogue annonce
+capables de lire une image, **un la lit, un l'annonce et n'y arrive pas, un ne
+répond rien**. Le troisième reste `NULL` — jamais demandé n'est pas « ne voit
+pas ». C'est la leçon de `cerebras:gpt-oss-120b` avec `structured_outputs`, sur une
+deuxième capacité.
+
+Chacun de ces trous est désormais gardé par un test qui échoue si la promesse
+repart sans son chemin.
 
 - **Fixed : deux outils que rien ne pouvait appeler, et le garde-fou de la
   classe.** Trouvés en balayant pour le défaut qui avait produit le bug des

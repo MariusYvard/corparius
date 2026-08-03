@@ -8,6 +8,28 @@ was released.
 
 ## Non publié
 
+- **Added : `review_site`, parce que le rôle design n'avait plus rien à faire.**
+  Conséquence directe du correctif précédent, et pas un vieux bug :
+  `write_site_content` écrit du texte dans `company.yaml`, que le générateur rend
+  — et une entreprise qui publie du HTML écrit à la main n'en reçoit rien. Une
+  fois que `deploy_site` s'est mis à publier le vrai dossier, l'agent design n'avait
+  plus **aucun** outil capable de changer quoi que ce soit. Exactement le motif
+  « atteignable et jamais atteint », arrivé comme conséquence d'une correction.
+  Donc exactement l'un des deux tourne, et chacun dit pourquoi quand c'est le tour
+  de l'autre. `review_site` **ne réécrit pas le HTML** : éditer des pages écrites à
+  la main depuis une invite, sans build et sans test, transforme un site qui marche
+  en site cassé — corparius publie ce qu'une entreprise possède, il ne le compile
+  pas. Il lit les vraies pages et écrit une liste d'actions qui nomme les fichiers
+  et cite le texte, ce que fait le worker NanoCorp quand il ne peut pas agir.
+  **Prouvé sur le vrai site de Vigil**, via l'Opus pin : `source: claudecode:opus`,
+  une tentative, **19 changements concrets** écrits dans ses documents — dont le
+  plus important, que la page d'accueil vend au présent une tâche vocale que
+  `beta.html` reconnaît comme pas encore en service.
+  Deux défauts de ma part attrapés en le mesurant : trier les pages par taille
+  faisait que seul `tech.html` entrait dans le budget et que `index.html` n'était
+  **jamais** relue ; et l'invite pouvait revenir vide, ce qu'un test de contrat
+  existant a refusé.
+
 - **Fixed : « aucun lead trouvé », quarante fois, redécouvert chaque fois.** C'est
   la boucle rapportée par l'exploitant, dans sa forme la plus pure : une seule
   session a journalisé `find_targets: No lead found. Sources configured: none.`

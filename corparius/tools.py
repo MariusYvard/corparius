@@ -712,6 +712,131 @@ def _write_site_content(ctx, draft: str) -> str:
     return note
 
 
+# How much of the real site to put in front of the model, and how many pages.
+# A site is unbounded and a prompt is not: Vigil's four pages are 45 000 characters
+# of HTML, which is seven times the whole document budget.
+SITE_REVIEW_BUDGET = 7000
+SITE_REVIEW_PAGES = 4
+
+
+def _owned_pages(slug: str) -> list:
+    """The company's own pages, the home page first, or [] when it has none.
+
+    Ordering matters more than it looks. Sorting by size put Vigil's 7 674-character
+    `tech.html` first, it filled the whole budget on its own, and `index.html` — the
+    page an operator means when they say "the site" — was never reviewed at all.
+    Measured, then fixed: the home page leads, the rest follow by size.
+    """
+    folder = paths.owned_site(slug)
+    if folder is None:
+        return []
+    pages = sorted(
+        folder.glob("*.html"),
+        key=lambda p: (p.name.lower() != "index.html", -p.stat().st_size),
+    )
+    return pages[:SITE_REVIEW_PAGES]
+
+
+def _site_is_not_generated(ctx) -> str:
+    """Why drafting copy into company.yaml would reach nothing here."""
+    slug = ctx.company.get("slug", "company")
+    folder = paths.owned_site(slug)
+    if folder is None:
+        return ""
+    return (
+        f"this company publishes its own site from {folder}, so copy written into "
+        "company.yaml would not appear on it. review_site says what to change instead."
+    )
+
+
+def _site_text(slug: str) -> tuple[str, list[str]]:
+    """The visible text of the real pages, bounded, and which pages made it in.
+
+    Tags are stripped rather than sent: a model asked to review a page does not
+    need its class names, and 45 000 characters of markup would eat a whole turn
+    to say what 7 000 characters of prose says.
+    """
+    pages = _owned_pages(slug)
+    if not pages:
+        return "", []
+    # A share each, so every page is seen. Whatever one page leaves unused goes to
+    # the ones after it, which is why this walks in order and recomputes the share.
+    chunks, names = [], []
+    spent = 0
+    for i, page in enumerate(pages):
+        try:
+            raw = page.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", raw, flags=re.S | re.I)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = " ".join(text.split())
+        share = (SITE_REVIEW_BUDGET - spent) // max(1, len(pages) - i)
+        if share <= 200:
+            break
+        piece = text[:share]
+        spent += len(piece)
+        names.append(page.name)
+        cut = "" if len(piece) == len(text) else f", {len(piece)} shown"
+        chunks.append(f"--- {page.name} ({len(text)} chars{cut}) ---\n{piece}")
+    return "\n\n".join(chunks), names
+
+
+def _review_site_prompt(ctx) -> str:
+    """Never empty, like every other needs_draft prompt in this file.
+
+    `skip_when` is what stops this tool when the company has no site of its own;
+    the prompt's job is to be renderable, and `test_draft_prompts_render_without_a_model`
+    holds every tool to that. A prompt that can come back empty is a tool that can
+    call a model with nothing in it.
+    """
+    slug = ctx.company.get("slug", "company")
+    body, names = _site_text(slug)
+    if not body:
+        return (
+            f"{_name(ctx)} publishes no site of its own, so there is nothing here to "
+            "review. Leave `findings` empty and say so in `worst`."
+        )
+    return (
+        f"Below is the visible text of {_name(ctx)}'s live site, page by page. Review it as "
+        "the person responsible for it. `findings`: a list of concrete changes, each naming "
+        "the page and quoting the words to change — not a category, the actual text. "
+        "`worst`: the single change that matters most, and why in one sentence. "
+        "Judge what is there, not what is missing from your view: only part of each page is "
+        f"shown ({', '.join(names)}). Say nothing about pages you were not given.\n\n{body}"
+    )
+
+
+def _review_site(ctx) -> str:
+    """Read the company's own pages and write down what to change.
+
+    Not a rewrite. Editing hand-written HTML from a prompt, with no build and no
+    test, is how a working site becomes a broken one — and corparius publishes what
+    a company owns, it does not compile it (see docs/reverse-engineering/nanocorp.md).
+    What it can do honestly is read the pages and leave a punch list that names
+    files and quotes text, which is what the operator or a later task acts on.
+    """
+    slug = ctx.company.get("slug", "company")
+    pages = _owned_pages(slug)
+    if not pages:
+        return "No site of its own to review; the generated page is built from company.yaml"
+    result = getattr(ctx, "structured", None)
+    data = result.data if result else {}
+    findings = [" ".join(str(f).split()) for f in (data.get("findings") or []) if str(f).strip()]
+    worst = " ".join(str(data.get("worst", "")).split())
+    if not findings and not worst:
+        return _empty_draft(ctx, f"{len(pages)} page(s) read, nothing written down")
+    lines = [f"- {f}" for f in findings[:12]]
+    body = (f"Most important: {worst}\n\n" if worst else "") + "\n".join(lines)
+    documents.write(slug, "site-review", body)
+    return (
+        f"Site reviewed ({', '.join(p.name for p in pages)}): {len(findings)} change(s) "
+        f"written to documents. Worst: {worst[:110]}"
+        if worst
+        else f"Site reviewed: {len(findings)} change(s) written to documents"
+    )
+
+
 def _review_commitments(ctx) -> str:
     """Did the last plan happen? Compare what was promised to what was done.
 
@@ -1424,10 +1549,34 @@ _ALL = [
         effect=lambda c, d: _ok(_record_decision(c, d)),
     ),
     Tool(
+        "review_site",
+        "Read the company's own site and write down what to change",
+        needs_draft=True,
+        risk=permissions.WRITE_LOCAL,
+        # Nothing to review when the page is generated from company.yaml — that is
+        # what write_site_content is for, and the two are exclusive by design.
+        skip_when=lambda c: (
+            ""
+            if _owned_pages(c.company.get("slug", "company"))
+            else "this company has no site of its own; its page is generated from company.yaml"
+        ),
+        prompt=lambda c: _review_site_prompt(c),
+        schema={
+            "findings": {"type": "list", "default": []},
+            "worst": {"type": "str", "default": "", "max_len": 200},
+        },
+        effect=lambda c, d: _ok(_review_site(c)),
+    ),
+    Tool(
         "write_site_content",
         "Draft the site sections and write them into company.yaml",
         needs_draft=True,
         risk=permissions.WRITE_LOCAL,
+        # A company that publishes hand-written HTML gets nothing from copy written
+        # into company.yaml, and once deploy_site started publishing the real folder
+        # this tool became a turn spent on a file nothing renders. Skipped with the
+        # reason, and review_site is the one that has something to say.
+        skip_when=lambda c: _site_is_not_generated(c),
         schema={
             "steps": {"type": "list", "default": []},
             "privacy": {"type": "list", "default": []},

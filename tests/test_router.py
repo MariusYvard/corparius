@@ -139,3 +139,82 @@ def test_ollama_timeout_is_configurable():
     s.ollama_timeout = 900
     r = HybridRouter(s)
     assert r.local.timeout == 900
+
+
+# --- a cooldown is a hint; the requested model is an instruction ---------------
+
+
+def _asked_provider(monkeypatch, settings, model, resting=()):
+    """Which provider actually got the call, given a chain and a set of resting ones."""
+    import corparius.llm as llm_mod
+
+    asked: list[str] = []
+
+    class Fake(LLMProvider):
+        def __init__(self, name):
+            self.name = name
+
+        def generate(self, messages, model, max_tokens=512, images=None):
+            asked.append(self.name)
+            return LLMResult("ok", self.name, model, Usage(1, 1))
+
+    monkeypatch.setattr(llm_mod, "_resting", {p: float("inf") for p in resting})
+    monkeypatch.setattr(llm_mod, "_is_resting", lambda p: p in resting)
+    router = HybridRouter(settings)
+    monkeypatch.setattr(router, "_remote", lambda target: Fake(target))
+    router.generate([{"role": "user", "content": "x"}], model=model)
+    return asked
+
+
+def _live_settings():
+    s = Settings()
+    s.llm_mock = False
+    s.cloud_enabled = True
+    s.llm_fallback = ["cerebras:gpt-oss-120b", "groq:llama-3.3-70b-versatile"]
+    return s
+
+
+def test_a_resting_target_is_still_tried_first(monkeypatch):
+    """Measured on a real run: the design role was pinned to `claudecode:opus`, the
+    log said so, and the answer came from `cerebras:gpt-oss-120b` — which cannot
+    produce JSON, so the tool reported "no model returned usable structure" and did
+    nothing. The pin had been demoted because claudecode refused once earlier in the
+    same run and was inside its 45-second cooldown."""
+    asked = _asked_provider(
+        monkeypatch, _live_settings(), "claudecode:opus", resting=("claudecode",)
+    )
+    assert asked[0] == "claudecode", f"the pinned target was demoted: {asked}"
+
+
+def test_fallback_steps_are_still_reordered_by_cooldown(monkeypatch):
+    """The reordering keeps its purpose for the steps it was written for: a stale
+    cooldown must not be the reason nothing answers at all."""
+    s = _live_settings()
+
+    import corparius.llm as llm_mod
+
+    asked: list[str] = []
+
+    class Failing(LLMProvider):
+        def __init__(self, name):
+            self.name = name
+
+        def generate(self, messages, model, max_tokens=512, images=None):
+            asked.append(self.name)
+            if self.name in ("claudecode", "cerebras"):
+                raise llm_mod.ProviderError("nope")
+            return LLMResult("ok", self.name, model, Usage(1, 1))
+
+    monkeypatch.setattr(llm_mod, "_is_resting", lambda p: p == "cerebras")
+    router = HybridRouter(s)
+    monkeypatch.setattr(router, "_remote", lambda target: Failing(target))
+    router.generate([{"role": "user", "content": "x"}], model="claudecode:opus")
+    # claudecode first because it was asked for, then groq because cerebras is
+    # resting — and cerebras is never reached at all, since groq answers. That
+    # ordering is the whole point: `asked` says it exactly.
+    assert asked == ["claudecode", "groq"], f"chain order wrong: {asked}"
+
+
+def test_the_chain_order_is_otherwise_unchanged(monkeypatch):
+    asked = _asked_provider(monkeypatch, _live_settings(), "claudecode:opus")
+    assert asked == ["claudecode"], "a target that answers must end the chain"

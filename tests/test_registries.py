@@ -38,8 +38,32 @@ from corparius.llm import OPENAI_COMPAT_PROVIDERS
 from corparius.store import MIGRATIONS, SCHEMA_VERSION
 from corparius.tools import ROLE_TOOL, TOOLS
 
-SRC = {p.name: p.read_text(encoding="utf-8") for p in Path("corparius").glob("*.py")}
+# `rglob`, and keyed by path rather than by filename.
+#
+# This scanned `glob("*.py")` — flat — and keyed by `p.name`. The package is flat today, so
+# both spellings see the same 53 files and the difference is invisible. **The moment the
+# first subpackage exists, the flat glob silently sees fewer files and nothing fails**: every
+# "both ends of the wire" guarantee in this file quietly covers less, which would disarm the
+# mechanism protecting the whole restructuring. Keying by bare filename has a second edge:
+# two subpackages are eventually going to hold a `registry.py`, and one would overwrite the
+# other in this dict.
+#
+# The count is pinned so narrowing cannot happen unnoticed. Bump it deliberately when a
+# module is genuinely added or removed — never to make a red test go green.
+SOURCES = sorted(Path("corparius").rglob("*.py"))
+SRC = {p.relative_to("corparius").as_posix(): p.read_text(encoding="utf-8") for p in SOURCES}
 ALL_SRC = "\n".join(SRC.values())
+MODULE_COUNT = 53
+
+
+def test_every_source_file_is_scanned():
+    """The guard on the guard. Everything below reasons over `SRC`, so a `SRC` that
+    quietly shrank would weaken every assertion in this file without failing one."""
+    assert len(SRC) == MODULE_COUNT, (
+        f"{len(SRC)} modules scanned, expected {MODULE_COUNT}. If that is a real addition "
+        "or removal, bump MODULE_COUNT; if it is not, something stopped being scanned."
+    )
+    assert len(SRC) == len(SOURCES), "two files collided on the same key"
 
 
 # --- TOOLS: the mirror of test_tool_reach ------------------------------------

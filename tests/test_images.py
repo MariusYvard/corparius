@@ -34,10 +34,13 @@ def test_nothing_may_claim_a_model_sees_an_image_unless_a_path_sends_one():
     """
     from pathlib import Path
 
+    # `rglob`, not `glob`: the flat spelling stops seeing a caller the moment it moves into
+    # a subpackage, and this assertion would then pass for the wrong reason — it exists
+    # precisely because `documents.images()` once had no caller at all for two releases.
     root = Path("corparius")
     callers = [
-        p.name
-        for p in root.glob("*.py")
+        p.relative_to(root).as_posix()
+        for p in root.rglob("*.py")
         if p.name != "documents.py" and "documents.images(" in p.read_text(encoding="utf-8")
     ]
     assert callers, "documents.images() has no caller: nothing can send a picture"

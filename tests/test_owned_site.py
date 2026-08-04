@@ -441,3 +441,61 @@ def test_a_generated_page_still_previews(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(webui, "_fresh_settings", lambda: type("S", (), {"data_path": str(data)})())
     assert _served("c", "/")[0] == 200
+
+
+# --- the address a publish returns --------------------------------------------
+
+
+def _company(base, slug="c", site=None):
+    (base / slug).mkdir(parents=True, exist_ok=True)
+    text = f"slug: {slug}\nname: C\noffer:\n  product: p\nicp:\n  segment: s\n  pains: [x]\n"
+    if site:
+        text += "site:\n" + "".join(f"  {k}: {v}\n" for k, v in site.items())
+    (base / slug / "company.yaml").write_text(text, encoding="utf-8")
+
+
+def test_the_published_address_fills_an_empty_site_url(tmp_path, monkeypatch):
+    """`site.url` is the one SEO fact the generator cannot work out for itself, and
+    the operator cannot know it before the first publish — Netlify assigns it. The
+    provider already returned it and nothing read it back: data that arrives and is
+    thrown away, one more time."""
+    from corparius import company as cm
+    from corparius import tools
+
+    monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
+    _company(tmp_path)
+    said = tools._record_site_url("c", "netlify:https://vigil-abc123.netlify.app")
+    assert "https://vigil-abc123.netlify.app" in said
+    assert cm.load(cm.path_for("c"), "c")["site"]["url"] == "https://vigil-abc123.netlify.app"
+
+
+def test_a_domain_the_operator_chose_is_never_overwritten(tmp_path, monkeypatch):
+    """They decided. Replacing it with whatever the last deploy answered would take
+    the last word away from the person running the business."""
+    from corparius import company as cm
+    from corparius import tools
+
+    monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
+    _company(tmp_path, site={"url": "https://vigil.fr"})
+    assert tools._record_site_url("c", "netlify:https://other.netlify.app") == ""
+    assert cm.load(cm.path_for("c"), "c")["site"]["url"] == "https://vigil.fr"
+
+
+def test_a_result_with_no_address_records_nothing(tmp_path, monkeypatch):
+    """The local provider returns a filesystem path. Writing that into site.url
+    would put `/data/sites/published` in a canonical link."""
+    from corparius import company as cm
+    from corparius import tools
+
+    monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
+    _company(tmp_path)
+    assert tools._record_site_url("c", "local:/data/sites/published") == ""
+    assert tools._record_site_url("c", "ssh:deploy@host:/var/www") == ""
+    assert not (cm.load(cm.path_for("c"), "c").get("site") or {}).get("url")
+
+
+def test_a_missing_company_does_not_fail_the_publish(tmp_path, monkeypatch):
+    from corparius import tools
+
+    monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
+    assert tools._record_site_url("nosuch", "netlify:https://x.netlify.app") == ""

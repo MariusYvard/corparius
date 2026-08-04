@@ -547,10 +547,20 @@ def _check_machine(s: Settings, store: Store | None) -> tuple:
 
 
 def _check_ollama(s: Settings) -> tuple:
+    """Graded by what local actually does on this install.
+
+    `needs_local` used to read `... or True`, so the condition was dead and every
+    install was told to pull the local models. Measured on the owner's: all three
+    tiers are remote and every step of the fallback chain is remote, so Ollama is
+    reached only if *every* remote provider fails at once. Telling them to download
+    a 4.7 GB model for that is a chore dressed as a warning — and a warning nobody
+    can usefully act on is one they learn to scroll past.
+
+    So: a tier pointed at local and missing its model is a warning, because that
+    tier cannot run. Local as the last resort is a fact, said as one.
+    """
     tiers = [s.trivial_model, s.normal_model, s.hard_model]
-    needs_local = s.llm_mock is False and (
-        any(_split(m)[0] == "local" for m in tiers) or True
-    )  # local is always the fallback
+    serves_a_tier = [m for m in tiers if _split(m)[0] == "local"]
     try:
         r = requests.get(f"{s.ollama_url.rstrip('/')}/api/tags", timeout=3)
         r.raise_for_status()
@@ -562,10 +572,33 @@ def _check_ollama(s: Settings) -> tuple:
         missing = {w for w in wanted if w and w not in have and w.split(":")[0] not in have}
         if missing:
             pulls = " && ".join(f"ollama pull {m}" for m in sorted(missing))
+            blocking = {w for w in missing if w in {_split(m)[1] for m in serves_a_tier}}
+            if blocking:
+                return (
+                    "warn",
+                    "ollama",
+                    f"reachable, but a tier is pointed at {', '.join(sorted(blocking))} and "
+                    f"that is not installed, so those turns cannot run. Run: {pulls}",
+                )
+            # Nothing here is on the critical path: local is the last resort, and
+            # embeddings fall back to a dependency-free hash. Reported as the cost it
+            # is, not as a chore.
+            note = f"reachable at {s.ollama_url}, {len(have)} model(s); no tier uses it"
+            absent = sorted(missing)
+            if s.local_model in missing:
+                note += (
+                    f". {s.local_model} is not installed, so a simultaneous outage of every "
+                    "remote provider would have nowhere to fall back to"
+                )
+            if s.embed_model in missing:
+                note += (
+                    f". {s.embed_model} is not installed, so embeddings use the built-in hash "
+                    "— coarser for the repetition guard and for spotting a memory already held"
+                )
             return (
-                "warn",
+                "ok",
                 "ollama",
-                f"reachable, but missing models: {', '.join(sorted(missing))}. Run: {pulls}",
+                note + f". Optional: {' && '.join(f'ollama pull {m}' for m in absent)}",
             )
         from . import hardware
 
@@ -588,12 +621,30 @@ def _check_ollama(s: Settings) -> tuple:
                 )
         return ("ok", "ollama", f"reachable at {s.ollama_url}, {len(have)} models")
     except requests.RequestException:
-        level = "warn" if s.llm_mock else ("fail" if needs_local else "warn")
+        # Unreachable matters as much as the tiers say it does. A company with a tier
+        # on local cannot run those turns at all; one that only keeps local as the
+        # last resort has lost its safety net, which is a warning and not a failure.
+        if s.llm_mock:
+            return (
+                "warn",
+                "ollama",
+                f"not reachable at {s.ollama_url}, and mock mode does not need it. "
+                "Install from ollama.com or set CORP_OLLAMA_URL before going live.",
+            )
+        if serves_a_tier:
+            return (
+                "fail",
+                "ollama",
+                f"not reachable at {s.ollama_url}, and {', '.join(serves_a_tier)} is pointed "
+                "at it, so those turns cannot run. Install from ollama.com or set "
+                "CORP_OLLAMA_URL, or point that tier at a remote provider.",
+            )
         return (
-            level,
+            "warn",
             "ollama",
-            f"not reachable at {s.ollama_url}. Install from ollama.com or set CORP_OLLAMA_URL. "
-            "Mock mode works without it; live mode needs it as the local fallback.",
+            f"not reachable at {s.ollama_url}. No tier uses it, so nothing is blocked — but "
+            "it is the last resort when every remote provider fails, and right now there is "
+            "none. Install from ollama.com or set CORP_OLLAMA_URL.",
         )
 
 

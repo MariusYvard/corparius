@@ -260,6 +260,48 @@ def _build_site(ctx, draft: str) -> str:
     return f"Sales site built at {path}"
 
 
+def _record_site_url(slug: str, result: str) -> str:
+    """Write the published address into `site.url` if that field is still empty.
+
+    Returns a sentence for the log, or "" when there was nothing to record.
+
+    Only from a provider's own return value, and only into an empty field. An
+    operator who set their own domain has decided; overwriting it with whatever the
+    last deploy happened to answer would be the console taking the last word away
+    from the person running the business.
+    """
+    url = ""
+    for part in str(result or "").split(":", 1)[1:]:
+        candidate = part.strip()
+        if candidate.startswith("//"):
+            candidate = "https:" + candidate
+        if candidate.startswith(("http://", "https://")):
+            url = candidate
+    if not url:
+        return ""
+    path = company_mod.path_for(slug)
+    try:
+        raw = company_mod.load(path, slug)
+    except Exception:  # noqa: BLE001 - a publish must not fail over a config read
+        return ""
+    site = dict(raw.get("site") or {})
+    if str(site.get("url") or "").strip():
+        return ""
+    site["url"] = url
+    raw["site"] = site
+    cfg_out, errors, _ = company_mod.validate(raw)
+    if errors:
+        return ""
+    try:
+        company_mod.dump(cfg_out, path)
+    except OSError:
+        return ""
+    return (
+        f"site.url was empty and is now {url}, taken from what the provider returned. "
+        "The canonical link, og:url, sitemap.xml and robots.txt work from here on."
+    )
+
+
 def _deploy_site(ctx) -> ToolResult:
     """Returns a ToolResult, not a string: a deploy that published nothing used
     to be wrapped in _ok() and recorded in the action log as a success."""
@@ -299,6 +341,14 @@ def _deploy_site(ctx) -> ToolResult:
     if res["ok"]:
         which = "its own site" if owned is not None else "the generated page"
         line = f"Site published ({which}): {res['provider']} -> {res['result']}"
+        # The address only exists once something has published. Recorded here rather
+        # than asked for: the provider just returned it.
+        recorded = _record_site_url(slug, res["result"])
+        if recorded:
+            line += ". " + recorded
+            url = url or (company_mod.load(company_mod.path_for(slug), slug).get("site") or {}).get(
+                "url", ""
+            )
         # And then look, once. A provider that accepts an upload and serves
         # something else — an old cache, a 404, a build error page — used to be
         # indistinguishable from a working publish, because nothing ever fetched

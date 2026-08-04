@@ -2091,6 +2091,15 @@ function render(d) {
     `<div class="note">${t("ops.mode")}: <strong>${esc(d.permission_mode || "")}</strong>` +
     ` &middot; ${t("ops.askAbove")} <strong>${t("risk." + (d.ask_above || "external"))}</strong></div>`;
 
+  /* Which tool to preselect for a role. ROLE_TOOL first — it is the registry the
+     CEO uses on approval — then the first step of that role's own playbook.
+     "no tool" is offered but never preselected when the role has one: the operator
+     opened the editor because a task had no tool, and defaulting to none again is
+     the console shrugging. Reported: "I do not see it propose the agent and the
+     tool by itself." */
+  const toolFor = (d, role) =>
+    (d.role_tool || {})[role] || ((d.agent_tools || {})[role] || [])[0] || "";
+
   /* A notice can carry `task:<id>` in its options, which means it is about one
      backlog row and can be settled from here. */
   const ibTask = m => {
@@ -2116,7 +2125,7 @@ function render(d) {
       <label class="note">${t("ib.owner")}
         <select data-ib-owner="${esc(m.id)}">${opts(roles, current)}</select></label>
       <label class="note">${t("ib.tool")}
-        <select data-ib-tool="${esc(m.id)}">${opts(d.agent_tools[current] || [], (d.role_tool || {})[current] || "")}</select></label>
+        <select data-ib-tool="${esc(m.id)}">${opts(d.agent_tools[current] || [], toolFor(d, current))}</select></label>
       <button class="primary" data-ib-assign="${esc(m.id)}" data-task="${id}">${t("ib.assign")}</button>
     </div>`;
   };
@@ -2548,6 +2557,7 @@ function openTaskEditor(btn, id) {
     `<option value="${esc(v)}"${v === sel ? " selected" : ""}>${esc(v)}</option>`).join("");
   const owner = roles.includes(task.target) ? task.target : (roles[0] || "");
   const tools = (d.agent_tools || {})[owner] || [];
+  const suggested = task.tool || toolFor(d, owner);
   card.innerHTML = `
     <input data-f="title" value="${esc(task.title)}" style="width:100%">
     <span style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
@@ -2557,8 +2567,8 @@ function openTaskEditor(btn, id) {
         <select data-f="target" data-task-owner="${id}">${opts(roles, owner)}</select></label>
       <label class="note" style="font-size:12px">${t("ib.tool")}
         <select data-f="tool" data-task-tool="${id}">
-          <option value=""${task.tool ? "" : " selected"}>${t("task.noTool")}</option>
-          ${opts(tools, task.tool || "")}</select></label>` : ""}
+          <option value=""${suggested ? "" : " selected"}>${t("task.noTool")}</option>
+          ${opts(tools, suggested)}</select></label>` : ""}
       <button data-task-save="${id}">${t("task.save")}</button>
       <button data-task-cancel="1">${t("task.cancel")}</button>
     </span>`;
@@ -3394,7 +3404,7 @@ document.addEventListener("change", ev => {
   if (!box) return;
   const d = state.overview || {};
   const list = (d.agent_tools || {})[sel.value] || [];
-  const preferred = (d.role_tool || {})[sel.value] || "";
+  const preferred = toolFor(d, sel.value);
   box.innerHTML = `<option value="">${t("task.noTool")}</option>` + list.map(v =>
     `<option value="${esc(v)}"${v === preferred ? " selected" : ""}>${esc(v)}</option>`).join("");
 });
@@ -3406,7 +3416,7 @@ document.addEventListener("change", ev => {
   const d = state.overview || {};
   const list = (d.agent_tools || {})[owner.value] || [];
   if (!tool) return;
-  const preferred = (d.role_tool || {})[owner.value] || "";
+  const preferred = toolFor(d, owner.value);
   tool.innerHTML = list.map(v =>
     `<option value="${esc(v)}"${v === preferred ? " selected" : ""}>${esc(v)}</option>`).join("");
 });

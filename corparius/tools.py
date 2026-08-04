@@ -349,6 +349,20 @@ def _deploy_site(ctx) -> ToolResult:
             url = url or (company_mod.load(company_mod.path_for(slug), slug).get("site") or {}).get(
                 "url", ""
             )
+        if owned is not None and url:
+            # The crawler files and the absolute tags are generated infrastructure, and
+            # they were naming a host the operator does not own. Rebuilt from the real
+            # address and the pages that actually exist, then re-uploaded — a sitemap
+            # that disagrees with where the site lives tells a crawler to index
+            # somebody else.
+            for name, text in sitegen.companions_for_folder(out_dir, url).items():
+                (out_dir / name).write_text(text, encoding="utf-8")
+            pointed = sitegen.point_absolute_tags(out_dir, url)
+            again = deploy.deploy_result(str(out_dir))
+            line += (
+                f". robots.txt, sitemap.xml and {pointed} canonical tag(s) rebuilt for {url}"
+                + ("" if again["ok"] else "; the second upload failed, so they are not live yet")
+            )
         # And then look, once. A provider that accepts an upload and serves
         # something else — an old cache, a 404, a build error page — used to be
         # indistinguishable from a working publish, because nothing ever fetched

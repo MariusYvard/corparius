@@ -499,3 +499,189 @@ def test_a_missing_company_does_not_fail_the_publish(tmp_path, monkeypatch):
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
     assert tools._record_site_url("nosuch", "netlify:https://x.netlify.app") == ""
+
+
+# --- the crawler files follow the real address ---------------------------------
+
+
+def _pages(folder, robots=None, noindex=()):
+    for name in ("index.html", "tech.html", "merci.html"):
+        head = '<meta name="robots" content="noindex">' if name in noindex else ""
+        (folder / name).write_text(
+            f"<html><head><title>{name}</title>{head}"
+            f'<link rel="canonical" href="https://old-host.fr/{name}"></head></html>',
+            encoding="utf-8",
+        )
+    if robots is not None:
+        (folder / "robots.txt").write_text(robots, encoding="utf-8")
+
+
+def test_the_sitemap_lists_the_pages_that_exist(tmp_path):
+    from corparius import sitegen
+
+    _pages(tmp_path)
+    out = sitegen.companions_for_folder(tmp_path, "https://vigil-abc.netlify.app/")
+    assert "<loc>https://vigil-abc.netlify.app/</loc>" in out["sitemap.xml"]
+    assert "<loc>https://vigil-abc.netlify.app/tech.html</loc>" in out["sitemap.xml"]
+
+
+def test_nothing_is_written_without_an_address(tmp_path):
+    """The same line sitegen has always drawn: an absolute tag is omitted rather than
+    pointed at a guess, because a canonical link to the wrong address is worse for a
+    site than no canonical link at all."""
+    from corparius import sitegen
+
+    _pages(tmp_path)
+    assert sitegen.companions_for_folder(tmp_path, "") == {}
+    assert sitegen.point_absolute_tags(tmp_path, "") == 0
+
+
+def test_a_page_the_site_keeps_out_of_the_index_is_not_in_the_sitemap(tmp_path):
+    """Measured: `merci.html` is noindex and disallowed in robots.txt, and the first
+    version of this listed it anyway. A sitemap that contradicts the robots.txt beside
+    it is a defect a crawler reports back."""
+    from corparius import sitegen
+
+    _pages(tmp_path, robots="User-agent: *\nDisallow: /merci.html\n", noindex=("merci.html",))
+    out = sitegen.companions_for_folder(tmp_path, "https://x.fr")
+    assert "merci.html" not in out["sitemap.xml"]
+    assert "tech.html" in out["sitemap.xml"]
+
+
+def test_the_operators_robots_policy_is_preserved(tmp_path):
+    """Regenerating the file would have deleted a real decision: the owner's
+    robots.txt allows GPTBot, ClaudeBot, PerplexityBot and Google-Extended with a
+    comment explaining why. Overwriting that to fix a hostname would be the product
+    throwing away their SEO policy."""
+    from corparius import sitegen
+
+    policy = (
+        "User-agent: *\nAllow: /\nDisallow: /merci.html\n\n"
+        "# Generative engines: allowed, on purpose.\n"
+        "User-agent: GPTBot\nAllow: /\n\n"
+        "User-agent: ClaudeBot\nAllow: /\n\n"
+        "Sitemap: https://old-host.fr/sitemap.xml\n"
+    )
+    _pages(tmp_path, robots=policy)
+    out = sitegen.companions_for_folder(tmp_path, "https://vigil-abc.netlify.app")["robots.txt"]
+    assert "GPTBot" in out and "ClaudeBot" in out
+    assert "on purpose" in out, "the comment explaining the decision is part of it"
+    assert "Disallow: /merci.html" in out
+    assert out.count("Sitemap:") == 1, "the stale line has to go, not be joined"
+    assert "https://vigil-abc.netlify.app/sitemap.xml" in out and "old-host.fr" not in out
+
+
+def test_a_site_with_no_robots_gets_a_plain_one(tmp_path):
+    from corparius import sitegen
+
+    _pages(tmp_path)
+    out = sitegen.companions_for_folder(tmp_path, "https://x.fr")["robots.txt"]
+    assert out.startswith("User-agent: *") and "Sitemap: https://x.fr/sitemap.xml" in out
+
+
+def test_the_absolute_tags_are_pointed_at_the_real_host(tmp_path):
+    from corparius import sitegen
+
+    _pages(tmp_path)
+    (tmp_path / "index.html").write_text(
+        '<link rel="canonical" href="https://old-host.fr/">'
+        '<meta property="og:url" content="https://old-host.fr/">'
+        "<p>Voir https://old-host.fr dans la prose</p>",
+        encoding="utf-8",
+    )
+    assert sitegen.point_absolute_tags(tmp_path, "https://new.fr") >= 2
+    text = (tmp_path / "index.html").read_text(encoding="utf-8")
+    # The host is swapped and the path kept: `/tech.html` has to stay `/tech.html`.
+    assert 'rel="canonical" href="https://new.fr/"' in text
+    assert 'property="og:url" content="https://new.fr/"' in text
+    assert "Voir https://old-host.fr dans la prose" in text, "prose is not ours to rewrite"
+
+
+def test_the_deploy_rebuilds_them_after_recording_the_address(tmp_path, monkeypatch):
+    """The whole loop: publish, learn the address, make the generated files agree with
+    it, publish again. A sitemap that disagrees with where the site lives tells a
+    crawler to index somebody else."""
+    from corparius import company as cm
+    from corparius import deploy, tools
+
+    monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
+    _company(tmp_path)
+    folder = _site(tmp_path / "c", pages=("index.html",))
+    (folder / "index.html").write_text(
+        '<title>t</title><link rel="canonical" href="https://old.fr/">', encoding="utf-8"
+    )
+    uploads: list[str] = []
+    monkeypatch.setattr(
+        deploy,
+        "deploy_result",
+        lambda d: (
+            uploads.append(d)
+            or {
+                "ok": True,
+                "provider": "netlify",
+                "result": "netlify:https://c-abc.netlify.app",
+                "errors": [],
+                "skipped": [],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        sitecheck, "verify", lambda *a, **k: {"state": sitecheck.UNVERIFIED, "detail": "x"}
+    )
+
+    class Ctx:
+        company = cm.load(cm.path_for("c"), "c")
+        data_path = str(tmp_path / "data")
+        store = None
+
+    res = tools._deploy_site(Ctx())
+    assert res.ok and "rebuilt for https://c-abc.netlify.app" in res.output
+    assert len(uploads) == 2, "the corrected files have to be uploaded too"
+    assert "c-abc.netlify.app" in (folder / "sitemap.xml").read_text(encoding="utf-8")
+    assert 'href="https://c-abc.netlify.app/"' in (folder / "index.html").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_a_canonical_is_inserted_where_there_is_none(tmp_path):
+    """I removed Vigil's six canonical tags because they all named a domain the
+    operator does not own — right, by the rule that an absolute tag is omitted rather
+    than pointed at a guess. But a function that only *rewrites* would have left those
+    pages with no canonical at all once an address existed. Half a job."""
+    from corparius import sitegen
+
+    (tmp_path / "index.html").write_text("<html><head><title>t</title></head></html>", "utf-8")
+    (tmp_path / "tech.html").write_text("<html><head><title>t</title></head></html>", "utf-8")
+    (tmp_path / "blog").mkdir()
+    (tmp_path / "blog" / "index.html").write_text("<head><title>b</title></head>", "utf-8")
+
+    assert sitegen.point_absolute_tags(tmp_path, "https://x.fr") == 3
+    root = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert '<link rel="canonical" href="https://x.fr/">' in root
+    assert '<link rel="canonical" href="https://x.fr/tech.html">' in (
+        tmp_path / "tech.html"
+    ).read_text(encoding="utf-8")
+    assert '<link rel="canonical" href="https://x.fr/blog/">' in (
+        tmp_path / "blog" / "index.html"
+    ).read_text(encoding="utf-8")
+
+
+def test_an_existing_canonical_is_not_duplicated(tmp_path):
+    from corparius import sitegen
+
+    (tmp_path / "index.html").write_text(
+        '<head><link rel="canonical" href="https://old.fr/"></head>', encoding="utf-8"
+    )
+    sitegen.point_absolute_tags(tmp_path, "https://x.fr")
+    text = (tmp_path / "index.html").read_text(encoding="utf-8")
+    assert text.count('rel="canonical"') == 1 and "old.fr" not in text
+
+
+def test_nothing_is_inserted_into_markup_of_unknown_shape(tmp_path):
+    """No </head> means a fragment rather than a page, and a tag is not pushed blindly
+    into markup whose shape nobody knows."""
+    from corparius import sitegen
+
+    (tmp_path / "part.html").write_text("<p>a fragment</p>", encoding="utf-8")
+    assert sitegen.point_absolute_tags(tmp_path, "https://x.fr") == 0
+    assert (tmp_path / "part.html").read_text(encoding="utf-8") == "<p>a fragment</p>"

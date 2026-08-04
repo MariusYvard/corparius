@@ -22,27 +22,66 @@ class TokenBudget:
     every provider reports them. Money is the ceiling an operator actually cares
     about, and it only applies where a provider reports a cost — so it is opt-in
     (`max_cost=0` disables it) rather than a silent second way for a run to stop.
+
+    **A role may have its own ceiling, and then it also has that much reserved.**
+    One shared pool means the frequent role spends it and the rare one arrives to a
+    closed till: design runs once every 24 ticks, support every 3, and design's turn
+    is the most expensive in the company because it reads and reviews four real
+    pages. Measured on a real week, 830 069 tokens against a 120 000 session
+    ceiling, with support's turns landing first.
+
+    So `reserves` is two things at once, deliberately: a ceiling for the named role
+    and a floor nobody else can spend. Roles with no entry share what is left. The
+    session ceiling still stops a runaway — it is raised to cover the reserves,
+    because a reserve the session cannot pay for is a reserve that does nothing, and
+    silently ignoring it would be the declared-but-not-honoured shape again.
     """
 
-    def __init__(self, max_tokens: int, max_cost: float = 0.0):
-        self.max_tokens = max_tokens
+    def __init__(self, max_tokens: int, max_cost: float = 0.0, reserves: dict | None = None):
+        self.reserves = {str(k): max(0, int(v)) for k, v in (reserves or {}).items() if int(v) > 0}
+        reserved = sum(self.reserves.values())
+        self.max_tokens = max(max_tokens, reserved)
+        # What everybody without a reserve shares. Never negative: a company that
+        # reserved more than its session budget has had the session raised above.
+        self.shared_max = max(0, self.max_tokens - reserved)
         self.max_cost = max(0.0, max_cost)
         self.used = 0
         self.spent = 0.0
+        self.by_role: dict[str, int] = {}
 
-    def check_before(self, estimate: int = 0) -> None:
+    def _ledger(self, role: str) -> tuple[int, int, str]:
+        """(used, ceiling, label) for whichever ledger this role spends from."""
+        if role in self.reserves:
+            return self.by_role.get(role, 0), self.reserves[role], f"{role} budget"
+        shared = self.used - sum(self.by_role.get(r, 0) for r in self.reserves)
+        return max(0, shared), self.shared_max, "token budget"
+
+    def check_before(self, estimate: int = 0, role: str = "") -> None:
         if self.used + estimate >= self.max_tokens:
             raise BudgetExceeded(f"token budget spent: {self.used}/{self.max_tokens}")
+        if role or self.reserves:
+            used, ceiling, label = self._ledger(role)
+            if used + estimate >= ceiling:
+                raise BudgetExceeded(f"{label} spent: {used}/{ceiling}")
         if self.max_cost and self.spent >= self.max_cost:
             raise BudgetExceeded(f"cost budget spent: {self.spent:.4f}/{self.max_cost:.4f}")
 
-    def record_usage(self, input_tokens: int, output_tokens: int, cost: float = 0.0) -> None:
-        self.used += max(0, input_tokens) + max(0, output_tokens)
+    def record_usage(
+        self, input_tokens: int, output_tokens: int, cost: float = 0.0, role: str = ""
+    ) -> None:
+        total = max(0, input_tokens) + max(0, output_tokens)
+        self.used += total
         self.spent += max(0.0, cost)
+        if role:
+            self.by_role[role] = self.by_role.get(role, 0) + total
 
     @property
     def remaining(self) -> int:
         return max(0, self.max_tokens - self.used)
+
+    def remaining_for(self, role: str) -> int:
+        used, ceiling, _ = self._ledger(role)
+        return max(0, min(ceiling - used, self.remaining))
 
 
 def cosine(a: list[float], b: list[float]) -> float:

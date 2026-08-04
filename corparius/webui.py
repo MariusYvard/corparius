@@ -25,7 +25,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from . import (
     backup,
@@ -1516,18 +1516,73 @@ def _route_site_get(ctx):
     }
 
 
+# What the preview will serve, and nothing else. A site is HTML, styles, scripts,
+# images and fonts; anything not on this list is a source file or a secret that
+# happened to be in the folder, and the preview is not a general file server.
+SITE_TYPES: dict[str, str] = {
+    ".html": "text/html",
+    ".htm": "text/html",
+    ".css": "text/css",
+    ".js": "text/javascript",
+    ".mjs": "text/javascript",
+    ".json": "application/json",
+    ".txt": "text/plain",
+    ".xml": "application/xml",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".ico": "image/x-icon",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".map": "application/json",
+    ".webmanifest": "application/manifest+json",
+}
+
+
 def _route_site_serve(ctx):
-    parts = ctx.path.split("/")
+    """The preview, for a real site rather than a single page.
+
+    It used to serve `index.html` and nothing else, which was fine while the site
+    *was* one generated page. For a company that ships its own — Vigil's four pages
+    with a stylesheet, a script, a blog folder — every `/assets/style.css`,
+    `/tech.html` and `/blog/` came back 404, so the preview rendered the operator's
+    real copy in Times New Roman with blue underlined links. They sent a screenshot
+    of it and reasonably read it as the site being broken.
+
+    Two guards, both before any path is built: the slug must be a known company, and
+    the resolved file must still be inside the site folder. Only the extensions in
+    SITE_TYPES are served — the preview is not a general file server, and a company
+    folder holds sources and configuration next to the site.
+    """
+    parts = ctx.path.split("/", 3)  # ["", "site", slug, rest]
     slug = parts[2] if len(parts) > 2 else ""
-    # `slug in _companies()` is the path-traversal guard, as everywhere else, and
-    # it runs before any path is built from the slug.
+    rest = parts[3] if len(parts) > 3 else ""
+    # `slug in _companies()` is the path-traversal guard on the slug, as everywhere
+    # else, and it runs before any path is built from it.
     if slug not in _companies():
         return 404, {"ok": False, "error": "site not built yet"}
     owned = paths.owned_site(slug)
-    site = (owned / "index.html") if owned else paths.site_index(_fresh_settings().data_path, slug)
-    if site.is_file():
-        return 200, site.read_bytes(), "text/html"
-    return 404, {"ok": False, "error": "site not built yet"}
+    root = owned if owned else paths.site_dir(_fresh_settings().data_path, slug)
+    rest = unquote(rest.split("?", 1)[0].split("#", 1)[0]).lstrip("/")
+    if not rest or rest.endswith("/"):
+        rest += "index.html"
+    try:
+        # resolve() then a containment check: this is what stops `..%2f..%2f.env`,
+        # and it is checked on the resolved path rather than on the text of the URL.
+        target = (root / rest).resolve()
+        target.relative_to(Path(root).resolve())
+    except (ValueError, OSError):
+        return 404, {"ok": False, "error": "not part of this site"}
+    kind = SITE_TYPES.get(target.suffix.lower())
+    if kind is None:
+        return 404, {"ok": False, "error": f"{target.suffix or 'that file'} is not served"}
+    if not target.is_file():
+        return 404, {"ok": False, "error": "site not built yet"}
+    return 200, target.read_bytes(), kind
 
 
 def _route_payments_get(ctx):

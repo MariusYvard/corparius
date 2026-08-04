@@ -46,6 +46,7 @@ from . import (
 )
 from . import company as company_mod
 from . import inbox as inbox_mod
+from . import tools as tools_mod
 from .agents import ROSTER
 from .config import Settings
 from .doctor import run_checks
@@ -295,6 +296,22 @@ def _overview(state: UiState, slug: str) -> dict:
         # duplicated in the page: two copies of this table would drift, and the
         # failure mode is a button that silently does nothing.
         "inbox_fixes": inbox_mod.FIXES,
+        # Which agent could carry which tool, so a notice about a task with no owner
+        # can offer the real choices instead of sending the operator to find out
+        # what tool names exist. The playbook is the honest list: a tool that is not
+        # on a role's playbook is one that role never runs.
+        #
+        # Suggested, not decided: the default is what the roster would use for that
+        # role, and the operator picks. Inventing the answer from the task's wording
+        # would be a guess dressed as a recommendation.
+        "agent_tools": {
+            role.value: sorted(
+                set(spec.playbook) | {tools_mod.ROLE_TOOL.get(role.value, "")} - {""}
+            )
+            for role, spec in ROSTER.items()
+            if (company_cfg.get("agents", {}) or {}).get(role.value, False)
+        },
+        "role_tool": tools_mod.ROLE_TOOL,
         "memory": store.list_memory(slug) if s.memory_enabled else [],
         "memory_enabled": s.memory_enabled,
         "permission_mode": engine.mode,

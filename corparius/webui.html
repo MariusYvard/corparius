@@ -969,6 +969,7 @@ en: {
   "mem.none":"Nothing learned yet. The CEO and strategy agents write here as they run.","mem.off":"Durable memory is off. Turn it on in Settings.",
   "mem.pin":"Pin","mem.unpin":"Unpin","mem.forget":"Forget","mem.pinned":"pinned",
   "ib.question":"asks you","ib.notification":"notice","ib.answer":"Your answer","ib.send":"Answer","ib.dismiss":"Dismiss",
+  "ib.owner":"Agent","ib.tool":"Tool","ib.assign":"Assign and approve",
   "ib.fix.mail":"Set up email","ib.fix.payments":"Set up payments","ib.fix.providers":"Open providers","ib.fix.plugins":"Open plugins","ib.fix.backlog":"Open the backlog",
   "ib.fix.preflight":"Prove these models",
   "ib.next.preflight":"Press this and corparius calls each configured model for eight tokens, then tells you which ones your key can still use — and which tier to move.",
@@ -1040,7 +1041,7 @@ en: {
   "settings.title":"Console settings","settings.desc":"Stored in this browser only; they change nothing on the server.",
   "settings.language":"Interface language","settings.theme":"Theme","settings.dark":"Dark","settings.light":"Light",
   "settings.accent":"Accent colour","settings.intensity":"Intensity","settings.reset":"Reset",
-  "toast.approved":"Approved","toast.rejected":"Rejected","toast.remembered":"Approved, and no longer asked","toast.revoked":"Rule revoked","toast.memory":"Memory updated","toast.answered":"Answered","toast.taskApproved":"Task approved","toast.taskRejected":"Task rejected",
+  "toast.approved":"Approved","toast.rejected":"Rejected","toast.remembered":"Approved, and no longer asked","toast.revoked":"Rule revoked","toast.memory":"Memory updated","toast.answered":"Answered","toast.taskApproved":"Task approved","toast.taskAssigned":"Assigned and approved","toast.taskRejected":"Task rejected",
   "toast.runStarted":"Run started","toast.runDone":"Run finished:",
   "site.title":"Sales site","site.desc":"The single-file page the design agent builds from the company config.",
   "site.none":"Not built yet. Generate it, then the design agent keeps it fresh.",
@@ -1202,6 +1203,7 @@ fr: {
   "mem.none":"Rien d'appris pour l'instant. Le PDG et la stratégie écrivent ici au fil des exécutions.","mem.off":"La mémoire durable est désactivée. Activez-la dans Réglages.",
   "mem.pin":"Épingler","mem.unpin":"Désépingler","mem.forget":"Oublier","mem.pinned":"épinglé",
   "ib.question":"vous demande","ib.notification":"avis","ib.answer":"Votre réponse","ib.send":"Répondre","ib.dismiss":"Écarter",
+  "ib.owner":"Agent","ib.tool":"Outil","ib.assign":"Assigner et approuver",
   "ib.fix.mail":"Configurer l'email","ib.fix.payments":"Configurer le paiement","ib.fix.providers":"Ouvrir les fournisseurs","ib.fix.plugins":"Ouvrir les greffons","ib.fix.backlog":"Ouvrir le backlog",
   "ib.fix.preflight":"Prouver ces modèles",
   "ib.next.preflight":"Ce bouton appelle chaque modèle configuré sur huit jetons, puis vous dit lesquels votre clé peut encore utiliser — et quel palier déplacer.",
@@ -1348,7 +1350,7 @@ fr: {
   "task.edit":"Modifier","task.save":"Enregistrer","task.cancel":"Annuler","task.saved":"Tâche modifiée",
   "token.needed":"Cette console exige un token d'accès.","token.placeholder":"CORP_UI_TOKEN",
   "token.save":"Utiliser ce token","token.ok":"Token accepté",
-  "toast.approved":"Approuvé","toast.rejected":"Rejeté","toast.remembered":"Approuvé, et ne sera plus demandé","toast.revoked":"Règle révoquée","toast.memory":"Mémoire mise à jour","toast.answered":"Répondu","toast.taskApproved":"Tâche approuvée","toast.taskRejected":"Tâche rejetée",
+  "toast.approved":"Approuvé","toast.rejected":"Rejeté","toast.remembered":"Approuvé, et ne sera plus demandé","toast.revoked":"Règle révoquée","toast.memory":"Mémoire mise à jour","toast.answered":"Répondu","toast.taskApproved":"Tâche approuvée","toast.taskAssigned":"Assignée et approuvée","toast.taskRejected":"Tâche rejetée",
   "toast.runStarted":"Run lancé","toast.runDone":"Run terminé :",
   "site.title":"Site de vente","site.desc":"La page single-file que l'agent design construit depuis la config de la société.",
   "site.none":"Pas encore généré. Générez-le, l'agent design l'entretiendra ensuite.",
@@ -2089,6 +2091,36 @@ function render(d) {
     `<div class="note">${t("ops.mode")}: <strong>${esc(d.permission_mode || "")}</strong>` +
     ` &middot; ${t("ops.askAbove")} <strong>${t("risk." + (d.ask_above || "external"))}</strong></div>`;
 
+  /* A notice can carry `task:<id>` in its options, which means it is about one
+     backlog row and can be settled from here. */
+  const ibTask = m => {
+    const found = (m.options || []).find(o => String(o).startsWith("task:"));
+    return found ? +String(found).slice(5) : 0;
+  };
+
+  /* The agent and the tool, offered rather than looked up. The role list is the
+     company's enabled agents; the tool list is that role's playbook, because a
+     tool that is not on a playbook is one that role never runs. Defaults are the
+     roster's own, and the operator decides — guessing the answer from the task's
+     wording would be a guess dressed as a recommendation. */
+  const ibAssign = (m, d) => {
+    const roles = Object.keys(d.agent_tools || {});
+    if (!roles.length) return "";
+    const id = ibTask(m);
+    const task = ["proposed", "approved", "waiting", "in_progress"]
+      .flatMap(k => (d.tasks && d.tasks[k]) || []).find(x => +x.id === id);
+    const current = task && roles.includes(task.target) ? task.target : roles[0];
+    const opts = (list, sel) => list.map(v =>
+      `<option value="${esc(v)}"${v === sel ? " selected" : ""}>${esc(v)}</option>`).join("");
+    return `<div class="row" style="gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px">
+      <label class="note">${t("ib.owner")}
+        <select data-ib-owner="${esc(m.id)}">${opts(roles, current)}</select></label>
+      <label class="note">${t("ib.tool")}
+        <select data-ib-tool="${esc(m.id)}">${opts(d.agent_tools[current] || [], (d.role_tool || {})[current] || "")}</select></label>
+      <button class="primary" data-ib-assign="${esc(m.id)}" data-task="${id}">${t("ib.assign")}</button>
+    </div>`;
+  };
+
   $("#inbox").innerHTML = (d.inbox || []).map(m => `
     <div class="approval">
       <div class="head"><span class="badge ${m.kind === "question" ? "warn" : "dim"}">${t("ib." + m.kind)}</span>
@@ -2099,9 +2131,15 @@ function render(d) {
             terminal instruction given to somebody looking at a web page — and this
             console has had the button all along. */
         m.fix && I18N[lang]["ib.next." + m.fix] ? `<div class="note"><strong>${t("ib.next." + m.fix)}</strong></div>` : ""}
+      ${/* Settled here, on the tab it is shown on. The first version of the backlog
+            fix only switched tabs — and this notice renders on the very tab it
+            switched to, so pressing it did nothing at all. The operator reported
+            exactly that, twice, and asked for the agent and the tool to be offered
+            rather than looked up. So they are: real roles, real playbooks. */
+        ibTask(m) ? ibAssign(m, d) : ""}
       <div class="actions">
         ${m.kind === "question" ? `<input type="text" placeholder="${t("ib.answer")}" aria-label="${t("ib.answer")}" data-ib-note="${esc(m.id)}">` : ""}
-        ${m.fix ? `<button class="primary" data-ib-fix="${esc(m.fix)}">${esc(t("ib.fix." + m.fix))}</button>` : ""}
+        ${m.fix && !ibTask(m) ? `<button class="primary" data-ib-fix="${esc(m.fix)}">${esc(t("ib.fix." + m.fix))}</button>` : ""}
         <button class="${m.fix ? "" : "primary"}" data-ib="${esc(m.id)}">${m.kind === "question" ? t("ib.send") : t("ib.dismiss")}</button>
       </div>
     </div>`).join("");
@@ -2566,6 +2604,16 @@ document.addEventListener("click", async e => {
      and this opens it — including scrolling the mail group open, because
      landing on a Settings tab with nine collapsed groups is barely better than
      the log line was. */
+  if (b.dataset.ibAssign) {
+    const owner = $(`[data-ib-owner="${CSS.escape(b.dataset.ibAssign)}"]`);
+    const tool = $(`[data-ib-tool="${CSS.escape(b.dataset.ibAssign)}"]`);
+    const id = +b.dataset.task;
+    if (!id || !owner || !tool) return;
+    return act(async () => {
+      await api("/api/tasks", {id, target: owner.value, tool: tool.value, decision: "approved"});
+      await api("/api/inbox", {id: b.dataset.ibAssign, answer: `${owner.value}/${tool.value}`});
+    }, t("toast.taskAssigned"));
+  }
   if (b.dataset.ibFix) {
     const dest = (state.overview && state.overview.inbox_fixes || {})[b.dataset.ibFix];
     const tab = $("#t-" + dest);
@@ -2574,6 +2622,19 @@ document.addEventListener("click", async e => {
       setTimeout(() => {
         const group = $$("#settings-groups details").find(d => d.dataset.group === "mail");
         if (group) { group.open = true; group.scrollIntoView({block: "center", behavior: "smooth"}); }
+      }, 120);
+    }
+    if (b.dataset.ibFix === "backlog") {
+      /* A notice filed before the inline controls existed carries no task id, so
+         this is the fallback — and it has to do something visible, because the
+         destination is the tab the notice is already on. Unfold the column held
+         tasks live in and put it on screen. */
+      setTimeout(() => {
+        const open = state.kanbanOpen || (state.kanbanOpen = new Set());
+        open.add("waiting");
+        if (state.overview) renderKanban(state.overview);
+        const board = $("#kanban");
+        if (board) board.scrollIntoView({block: "center", behavior: "smooth"});
       }, 120);
     }
     if (b.dataset.ibFix === "preflight") {
@@ -3300,6 +3361,21 @@ function restoreMailPreset(d) {
 }
 
 // A local LLM server (LM Studio, Jan, llama.cpp…): pick it, the endpoint fills.
+/* Change the agent, get that agent's tools. Without this the tool list keeps
+   showing the previous role's playbook, and "Assign" would hand a task a tool the
+   chosen agent never runs — the untooled task again, wearing a different hat. */
+document.addEventListener("change", ev => {
+  const owner = ev.target.closest("[data-ib-owner]");
+  if (!owner) return;
+  const id = owner.dataset.ibOwner;
+  const tool = document.querySelector(`[data-ib-tool="${CSS.escape(id)}"]`);
+  const d = state.overview || {};
+  const list = (d.agent_tools || {})[owner.value] || [];
+  if (!tool) return;
+  const preferred = (d.role_tool || {})[owner.value] || "";
+  tool.innerHTML = list.map(v =>
+    `<option value="${esc(v)}"${v === preferred ? " selected" : ""}>${esc(v)}</option>`).join("");
+});
 document.addEventListener("change", ev => {
   const sel = ev.target.closest("[data-server-preset]");
   if (!sel || !sel.value) return;

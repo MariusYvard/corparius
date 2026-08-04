@@ -8,6 +8,25 @@ was released.
 
 ## Non publié
 
+- **Fixed : « Ouvrir le backlog » ne faisait rien, et se règle maintenant sur
+  place.** Le remède pointait vers l'onglet Opérations — **l'onglet même où l'avis
+  est affiché** — donc appuyer dessus était un non-événement par construction.
+  L'exploitant l'a signalé deux fois, et a demandé mieux : que la console propose
+  elle-même l'agent et l'outil au lieu de le renvoyer les chercher. C'est
+  maintenant le cas. L'avis porte l'identifiant de sa tâche (`options`), et rend
+  deux listes : les agents réellement activés de l'entreprise, et les outils du
+  **playbook** de l'agent choisi — parce qu'un outil absent d'un playbook est un
+  outil que ce rôle ne lance jamais. Changer d'agent recharge ses outils, sinon
+  « Assigner » donnerait à la tâche un outil que l'agent choisi n'exécute pas —
+  la tâche sans outil, déguisée. Défaut proposé : celui du registre `ROLE_TOOL` ;
+  **la décision reste à l'exploitant**, deviner la réponse d'après le libellé de
+  la tâche serait une supposition déguisée en recommandation. L'identifiant est
+  aussi passé dans le titre, parce que `notify` est idempotent sur le titre : deux
+  tâches retenues se fondaient en un seul avis, et en régler une laissait l'autre
+  invisible. Les dix fonctions du navigateur sont vérifiées **en les exécutant**
+  sur le HTML livré, pas en les relisant — la version précédente avait été
+  vérifiée en la relisant, et la relecture disait qu'elle marchait.
+
 - **Fixed : un modèle pin était perdu par tout outil à schéma.** `spec.model`
   porte le modèle épinglé d'un rôle. La branche « brouillon brut » d'`agents.py`
   l'a toujours transmis ; la branche structurée ne l'a **jamais** transmis, et

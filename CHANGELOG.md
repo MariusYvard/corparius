@@ -8,7 +8,23 @@ was released.
 
 ## Non publié
 
-- **Fixed : un modèle pin pouvait être écarté par un délai de repos.** Le routeur
+- **Fixed : un modèle pin était perdu par tout outil à schéma.** `spec.model`
+  porte le modèle épinglé d'un rôle. La branche « brouillon brut » d'`agents.py`
+  l'a toujours transmis ; la branche structurée ne l'a **jamais** transmis, et
+  `structured.ask` n'avait même pas de paramètre `model`. Donc un pin était honoré
+  pour de la prose et silencieusement ignoré pour tous les outils à schéma —
+  c'est-à-dire la plupart de ceux qu'on a une raison d'épingler. **Mesuré sur un
+  vrai tour** : design épinglé sur `claudecode:opus`, le journal affichait
+  `[design] pinned to claudecode:opus`, et `review_site` était répondu par
+  `cerebras:gpt-oss-120b` qui ne sait pas produire de JSON — l'outil répondait
+  « no model returned usable structure » et ne faisait rien. Deux tests tiennent
+  les deux bouts du fil.
+  **J'avais d'abord mal diagnostiqué**, en accusant le délai de repos du routeur,
+  et mon correctif a ramené la tempête de 429 que ce délai existait pour empêcher :
+  vingt-et-quelques `Too Many Requests` contre un seul modèle en quatre minutes,
+  vus dans un vrai run. La distinction juste n'est pas « cible demandée contre
+  repli » mais **« modèle nommé contre palier par défaut »**.
+- **Fixed : un modèle nommé n'est plus écarté par un délai de repos.** Le routeur
   déplaçait derrière tous les autres toute cible « au repos » — y compris la cible
   *demandée*. **Mesuré sur un vrai tour** : le rôle design était pin sur
   `claudecode:opus`, le journal disait `[design] pinned to claudecode:opus`, et la

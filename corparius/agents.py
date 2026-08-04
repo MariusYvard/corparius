@@ -462,6 +462,17 @@ class Executor:
                 _messages(spec, ctx, tool),
                 tool.schema,
                 difficulty=spec.difficulty,
+                # The pin, which this path used to drop on the floor. `spec.model`
+                # carries a per-role model set by a `model` directive; the raw-draft
+                # branch below has always passed it, and this one never did — so a
+                # pin was honoured for prose and silently ignored for every tool
+                # with a schema, which is most of the ones worth pinning.
+                #
+                # Measured on a real run: design pinned to `claudecode:opus`, the
+                # log said so, and `review_site` was answered by
+                # `cerebras:gpt-oss-120b`, which cannot produce JSON — so the tool
+                # reported "no model returned usable structure" and did nothing.
+                model=spec.model,
                 **carry,
             )
             for used in result.usages:  # a repair round is a real call; bill it

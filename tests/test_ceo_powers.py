@@ -203,3 +203,56 @@ def test_a_dict_power_carries_its_own_shape(field):
     if spec.get("type") != "dict":
         pytest.skip("not a dict field")
     assert spec.get("shape"), f"`{field}` is a dict with no shape for the model to copy"
+
+
+# --- a pin has to reach the tools worth pinning -------------------------------
+
+
+def test_the_pin_reaches_a_tool_with_a_schema(monkeypatch, tmp_path):
+    """A `model` directive was honoured for prose and dropped for every structured
+    tool — which is most of the ones worth pinning.
+
+    Measured on a real run: design pinned to `claudecode:opus`, the log said
+    `[design] pinned to claudecode:opus`, and `review_site` was answered by
+    `cerebras:gpt-oss-120b`, which cannot produce JSON. The tool reported "no model
+    returned usable structure" and did nothing, twice over, and nothing anywhere
+    said the pin had been ignored.
+    """
+    import json as _json
+
+    from corparius import structured
+    from corparius.models import LLMResult, Usage
+
+    seen: list = []
+
+    class Router:
+        def generate(self, messages, difficulty=None, model=None, max_tokens=512, images=None):
+            seen.append(model)
+            return LLMResult(_json.dumps({"findings": ["a"], "worst": "b"}), "p", "m", Usage(1, 1))
+
+        def embed(self, text):
+            return [0.0]
+
+    structured.ask(
+        Router(),
+        [{"role": "user", "content": "x"}],
+        {"findings": {"type": "list", "default": []}, "worst": {"type": "str", "default": ""}},
+        model="claudecode:opus",
+    )
+    assert seen == ["claudecode:opus"], f"structured.ask dropped the pin: {seen}"
+
+
+def test_the_agent_hands_the_pin_to_the_structured_path():
+    """The other end of the same wire: the branch in agents.py that calls
+    structured.ask must pass spec.model, exactly as the raw-draft branch beside it
+    has always done."""
+    import inspect
+
+    from corparius import agents
+
+    src = inspect.getsource(agents.Executor._invoke)
+    structured_call = src[src.index("structured.ask(") : src.index("elif tool.needs_draft")]
+    assert "model=spec.model" in structured_call, (
+        "the structured branch does not pass the pin, so a pinned role with a "
+        "schema tool silently gets its tier model"
+    )

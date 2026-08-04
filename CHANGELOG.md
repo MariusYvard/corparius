@@ -8,6 +8,38 @@ was released.
 
 ## Non publié
 
+- **Added : les fichiers pour crawlers d'un site possédé suivent l'adresse réelle.**
+  `sitegen` traçait cette ligne depuis toujours pour une page générée — une balise
+  absolue est **omise plutôt que pointée vers une supposition**, parce qu'un lien
+  canonique vers la mauvaise adresse est pire pour un site que pas de canonique du
+  tout. Un site que l'entreprise possède n'en bénéficiait pas : il livrait des
+  fichiers écrits à la main nommant un hôte, et aucune étape ne les faisait
+  s'accorder avec l'endroit où le site est publié. Maintenant qu'une publication
+  enregistre l'adresse qu'elle renvoie, l'étape de déploiement reconstruit
+  `robots.txt` et `sitemap.xml` depuis cette adresse et les pages qui existent
+  réellement, pointe les balises canoniques dessus, **en insère une là où il n'y en a
+  pas**, et renvoie le tout.
+  Trois défauts de ma part attrapés en l'exécutant, pas en le relisant : ma première
+  version **régénérait `robots.txt` en entier**, ce qui aurait supprimé une vraie
+  décision — l'exploitant y autorise GPTBot, ClaudeBot, PerplexityBot et
+  Google-Extended, avec un commentaire expliquant pourquoi ; seule la ligne
+  `Sitemap:` change désormais. Elle listait aussi `merci.html`, que ce même fichier
+  interdit et qui est `noindex` — un sitemap qui contredit le robots.txt à côté de
+  lui est un défaut qu'un crawler rapporte. Et elle ne faisait que *réécrire* les
+  balises existantes, alors que j'avais supprimé celles de Vigil : les pages
+  seraient revenues sans canonique du tout.
+- **Vigil : la revue de site appliquée, seize constats.** L'exploitant a posé la
+  règle — on ne vend pas ce que la companie n'a pas encore — et `review_site` avait
+  déjà nommé les changements en citant le texte. Le bloc d'état réel remonte au-dessus
+  de la section qui vend, « Essayer maintenant » devient « Essayer la démo texte », la
+  mention « produit par un modèle de langage » passe **avant** le bouton, le vocabulaire
+  d'étude clinique disparaît, la page tech cesse de se contredire au présent, son titre
+  anglais passe en français, et la promesse de contact nominatif est signée. Rien n'est
+  inventé : la biographie est celle de l'exploitant, verbatim de ses propres relances et
+  déjà plus bas sur la même page — je l'ai vérifiée avant de la mettre en avant.
+  `vigil-hq.fr`, domaine qu'il ne possède pas, est retiré des six balises absolues, du
+  sitemap et du JSON-LD. **Le site est publiable : `deploy_site` ne refuse plus.**
+
 - **Added : le CEO transforme en travail ce que ses agents ont écrit.** C'est le
   mécanisme NanoCorp que le document de rétro-ingénierie signalait et que je n'avais
   que constaté : leur synthèse paralinguistique de 15:45 engendre six tâches

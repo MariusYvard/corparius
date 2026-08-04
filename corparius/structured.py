@@ -192,6 +192,7 @@ def ask(
     retries: int = 1,
     fallback: dict | None = None,
     images: list | None = None,
+    model: str | None = None,
 ) -> Result:
     """Drive the router until the reply validates, then stop. On exhaustion,
     return the fallback (or the schema defaults) so the caller always gets the
@@ -209,7 +210,7 @@ def ask(
     last_raw, last_errors, source, usages = "", [], "", []
     for attempt in range(1, retries + 2):
         extra = {"images": images} if images and attempt == 1 else {}
-        res = router.generate(convo, difficulty, **extra)
+        res = router.generate(convo, difficulty, model=model, **extra)
         usages.append(res.usage)
         last_raw = res.text
         source = f"{res.provider}:{res.model}"

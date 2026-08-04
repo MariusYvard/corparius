@@ -218,3 +218,16 @@ def test_fallback_steps_are_still_reordered_by_cooldown(monkeypatch):
 def test_the_chain_order_is_otherwise_unchanged(monkeypatch):
     asked = _asked_provider(monkeypatch, _live_settings(), "claudecode:opus")
     assert asked == ["claudecode"], "a target that answers must end the chain"
+
+
+def test_a_tier_default_is_still_demoted_by_its_cooldown(monkeypatch):
+    """The other direction, and I got this wrong once. Putting a *tier* model at
+    the head regardless of its cooldown brought back the exact failure the cooldown
+    was written for: measured on a real run, twenty-odd `429 Too Many Requests`
+    against one model in four minutes, each one a wait the operator sat through.
+
+    Head-first is for a model somebody named, not for a default."""
+    s = _live_settings()
+    s.normal_model = "groq:llama-3.3-70b-versatile"
+    asked = _asked_provider(monkeypatch, s, None, resting=("groq",))
+    assert asked and asked[0] != "groq", f"the resting tier model was tried first: {asked}"

@@ -938,23 +938,23 @@ class HybridRouter:
             # Anything that refused a moment ago goes to the back rather than
             # being dropped: if every provider is resting, a stale cooldown must
             # not be the reason nothing answers at all.
-            # The requested target keeps its place at the head, resting or not.
-            # Only the fallback steps get reordered.
+            # An explicitly requested model keeps its place at the head of the
+            # chain even while resting; a tier default does not.
             #
-            # This mattered on a real run, measured: the design role was pinned to
-            # `claudecode:opus`, the log said `[design] pinned to claudecode:opus`,
-            # and the answer came back from `cerebras:gpt-oss-120b` — which cannot
-            # produce JSON, so the tool reported "no model returned usable
-            # structure" and did nothing. The pin was demoted because claudecode had
-            # refused once earlier in the same run and was inside its 45-second
-            # cooldown. A cooldown is a hint; a pinned model is an instruction, and
-            # an instruction the router silently reorders is the same
-            # declared-but-not-honoured shape this project keeps finding.
+            # The distinction is the whole point, and I got it wrong once in the
+            # other direction. Asking for a model by name — a `model` directive
+            # pinning a role — is an instruction, and an instruction the router
+            # silently reorders is the declared-but-not-honoured shape this project
+            # keeps finding. A tier model is a default, and putting *that* at the
+            # head regardless of its cooldown brought back the exact failure the
+            # cooldown was written for: measured on a real run, twenty-odd
+            # `429 Too Many Requests` against one model in four minutes, each one a
+            # wait the operator sat through.
             #
-            # The cost of trying a resting target first is one failed call, which
-            # the chain below already handles. The cost of not trying it is the
-            # operator's explicit choice never running.
-            head, tail = chain[:1], chain[1:]
+            # So: head-first only when the caller named a model. One failed call per
+            # turn for somebody's explicit choice is a fair price; twenty for a
+            # default is not.
+            head, tail = (chain[:1], chain[1:]) if model else ([], chain)
             ready = [s for s in tail if not _is_resting(s[0])]
             rested = [s for s in tail if _is_resting(s[0])]
             for step_target, step_name in head + ready + rested:

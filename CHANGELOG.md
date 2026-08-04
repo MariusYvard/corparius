@@ -8,6 +8,29 @@ was released.
 
 ## Non publié
 
+- **Fixed : le doctor réclamait des modèles locaux à des installations qui n'en
+  utilisent aucun.** `needs_local` valait `... or True` — la condition était morte,
+  donc chaque installation se faisait dire de télécharger les modèles locaux.
+  **Mesuré sur celle du propriétaire** : les trois paliers sont distants et chaque
+  étape de la chaîne de repli est distante, donc Ollama n'est atteint que si *tous*
+  les fournisseurs distants tombent en même temps. Lui demander 4,7 Go pour ça est
+  une corvée déguisée en avertissement — et un avertissement inactionnable est un
+  avertissement qu'on apprend à faire défiler. Le contrôle est donc gradué : un
+  palier pointé sur un modèle absent est un avertissement (ces tours ne peuvent pas
+  tourner) ; le local en dernier recours est un **fait**, dit comme tel, avec le prix
+  de son absence — plus de filet si tout tombe, et les embeddings sur le hachage
+  intégré, plus grossier pour le garde-fou anti-répétition et pour reconnaître un
+  souvenir déjà détenu. Les `ollama pull` sont proposés, pas exigés.
+- **Added : l'adresse qu'une publication renvoie est écrite dans `site.url`.**
+  C'est le seul fait SEO que le générateur ne peut pas déduire — lien canonique,
+  `og:url`, `sitemap.xml` et `robots.txt` en dépendent — et l'exploitant ne peut pas
+  le connaître avant la première publication, puisque c'est Netlify qui l'attribue.
+  Le fournisseur le renvoyait déjà (`netlify:<url>`) et personne ne le relisait :
+  encore la donnée qui arrive et qu'on jette. **Mesuré, jamais devinée** : écrite
+  uniquement depuis ce qu'un fournisseur a réellement répondu, et uniquement dans un
+  champ vide — un domaine que l'exploitant a choisi n'est jamais écrasé, parce qu'il
+  a décidé.
+
 - **Added : `write_note`, l'outil qui écrit le document qu'une tâche demande.**
   Cinq outils écrivaient déjà des documents — `draft_design_brief`,
   `update_pricing`, `scan_competitors`, `write_eod_summary`, `review_site` — chacun

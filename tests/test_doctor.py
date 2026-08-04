@@ -356,3 +356,94 @@ def test_the_operators_own_number_is_reported_never_overridden(tmp_path, monkeyp
     # Not raised to the 20000 the warning recommends. (A pre-existing floor of
     # 100 still applies to absurd values; that is not this check's doing.)
     assert cfg_after["budgets"]["tokens_per_minute"] == 8000
+
+
+# --- the local check says what local actually does here ------------------------
+
+
+def _routing(tmp_path, **models):
+    s = _s(tmp_path, llm_mock=False, cloud_enabled=True)
+    s.trivial_model = models.get("trivial", "groq:llama-3.3-70b-versatile")
+    s.normal_model = models.get("normal", "groq:llama-3.3-70b-versatile")
+    s.hard_model = models.get("hard", "claudecode:opus")
+    s.local_model = "qwen2.5:7b-instruct"
+    s.embed_model = "nomic-embed-text"
+    return s
+
+
+class _Tags:
+    def __init__(self, names=()):
+        self._names = names
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"models": [{"name": n} for n in self._names]}
+
+
+def test_a_missing_model_no_tier_uses_is_not_a_warning(tmp_path, monkeypatch):
+    """`needs_local` read `... or True`, so the condition was dead and every install
+    was told to pull the local models. Measured on the owner's: all three tiers are
+    remote and every fallback step is remote, so Ollama is reached only if every
+    remote provider fails at once. Telling them to download 4.7 GB for that is a
+    chore dressed as a warning."""
+    from corparius import doctor
+
+    monkeypatch.setattr(doctor.requests, "get", lambda *a, **k: _Tags(["gemma3:4b"]))
+    level, _, message = doctor._check_ollama(_routing(tmp_path))
+    assert level == "ok", message
+    assert "no tier uses it" in message
+    assert "Optional:" in message, "the pulls are offered, not demanded"
+    assert "nowhere to fall back to" in message, "and the cost of not doing it is said"
+
+
+def test_a_tier_pointed_at_a_missing_model_is_a_warning(tmp_path, monkeypatch):
+    """That tier cannot run, which is a different fact entirely."""
+    from corparius import doctor
+
+    monkeypatch.setattr(doctor.requests, "get", lambda *a, **k: _Tags(["gemma3:4b"]))
+    level, _, message = doctor._check_ollama(
+        _routing(tmp_path, trivial="local:qwen2.5:7b-instruct")
+    )
+    assert level == "warn"
+    assert "cannot run" in message and "ollama pull" in message
+
+
+def test_the_embedding_fallback_is_named_rather_than_implied(tmp_path, monkeypatch):
+    from corparius import doctor
+
+    monkeypatch.setattr(doctor.requests, "get", lambda *a, **k: _Tags(["qwen2.5:7b-instruct"]))
+    level, _, message = doctor._check_ollama(_routing(tmp_path))
+    assert level == "ok"
+    assert "built-in hash" in message and "repetition guard" in message
+
+
+def test_unreachable_fails_only_when_a_tier_depends_on_it(tmp_path, monkeypatch):
+    import requests as req
+
+    from corparius import doctor
+
+    def down(*a, **k):
+        raise req.ConnectionError("refused")
+
+    monkeypatch.setattr(doctor.requests, "get", down)
+    level, _, message = doctor._check_ollama(_routing(tmp_path))
+    assert level == "warn" and "nothing is blocked" in message
+    level, _, message = doctor._check_ollama(_routing(tmp_path, hard="local:qwen2.5:7b-instruct"))
+    assert level == "fail" and "cannot run" in message
+
+
+def test_mock_mode_never_demands_it(tmp_path, monkeypatch):
+    import requests as req
+
+    from corparius import doctor
+
+    def down(*a, **k):
+        raise req.ConnectionError("refused")
+
+    monkeypatch.setattr(doctor.requests, "get", down)
+    s = _routing(tmp_path)
+    s.llm_mock = True
+    level, _, message = doctor._check_ollama(s)
+    assert level == "warn" and "does not need it" in message

@@ -342,12 +342,18 @@ class Executor:
             self.store,
             company,
             task.get("target") or "ceo",
-            "A task is waiting for an owner",
+            # The id is in the title on purpose. `inbox.notify` is idempotent on the
+            # title, so one notice per *task* rather than one for all of them — two
+            # held tasks used to collapse into a single notice, and settling one left
+            # the other invisible.
+            f"Task #{task['id']} is waiting for an owner",
             f"“{task['title'][:90]}” was approved, but no tool on {task.get('target') or 'that role'} "
             "can carry it out, so nothing would happen if it ran. Open the backlog, set the "
             "agent and the tool that should do it — or reject it. It used to be marked done "
             "instead, which is why the same idea kept coming back.",
             fix="backlog",
+            # What the console needs to settle it without leaving the page.
+            options=(f"task:{task['id']}",),
         )
 
     def _pictures_for(self, tool, spec, ctx) -> list:

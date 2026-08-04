@@ -83,3 +83,51 @@ def test_the_provider_failure_notice_offers_to_run_the_preflight():
     assert '"prov.preflight":"Prove these models"' in html, "the two labels have drifted apart"
     # And the handler actually presses it.
     assert 'ibFix === "preflight"' in html and "#run-preflight" in html
+
+
+# --- a remedy on the tab it is shown on must actually do something -------------
+
+
+def test_the_backlog_remedy_is_settled_in_place_not_by_switching_tabs():
+    """Reported twice by the operator: "nothing happens when I click Open the
+    backlog". The notice renders on the Operations tab, and the remedy switched to
+    the Operations tab — so pressing it was a no-op by construction.
+
+    A fix whose destination is the tab the notice is already on cannot be a
+    tab switch. It has to carry controls."""
+    from corparius.inbox import FIXES
+
+    html = PAGE.read_text(encoding="utf-8")
+    # The notices are rendered into #inbox, which lives on the operations tab.
+    assert FIXES["backlog"] == "operations"
+    assert "ibAssign(m, d)" in html, "the notice does not render its own controls"
+    assert "data-ib-assign=" in html and "data-ib-owner=" in html and "data-ib-tool=" in html
+    # And the tab-switch button is suppressed for a notice that can be settled here,
+    # rather than sitting next to the controls doing nothing.
+    assert "m.fix && !ibTask(m) ?" in html
+
+
+def test_the_assignment_reaches_the_task_api_and_resolves_the_notice():
+    html = PAGE.read_text(encoding="utf-8")
+    handler = html[html.index("if (b.dataset.ibAssign)") : html.index("if (b.dataset.ibFix)")]
+    assert '"/api/tasks"' in handler and "decision:" in handler
+    assert "target: owner.value" in handler and "tool: tool.value" in handler
+    assert '"/api/inbox"' in handler, "the notice would stay pending after being settled"
+
+
+def test_changing_the_agent_re_offers_that_agents_tools():
+    """Otherwise Assign hands a task a tool the chosen agent never runs — the
+    untooled task again, wearing a different hat."""
+    html = PAGE.read_text(encoding="utf-8")
+    assert 'const owner = ev.target.closest("[data-ib-owner]")' in html
+    block = html[html.index('const owner = ev.target.closest("[data-ib-owner]")') :][:900]
+    assert "agent_tools" in block and "tool.innerHTML" in block
+
+
+def test_a_notice_can_carry_the_task_it_is_about():
+    """`inbox.notify` is idempotent on the title, so the id belongs in the title:
+    two held tasks used to collapse into one notice, and settling one left the
+    other invisible."""
+    src = Path("corparius/agents.py").read_text(encoding="utf-8")
+    assert "f\"Task #{task['id']} is waiting for an owner\"" in src
+    assert "options=(f\"task:{task['id']}\",)" in src

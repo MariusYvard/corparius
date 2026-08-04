@@ -106,7 +106,15 @@ def answer_to(ctx, title: str) -> str:
     return str(row["resolution"]) if row else ""
 
 
-def notify(store, company: str, agent: str, title: str, body: str = "", fix: str = "") -> str:
+def notify(
+    store,
+    company: str,
+    agent: str,
+    title: str,
+    body: str = "",
+    fix: str = "",
+    options: tuple | list = (),
+) -> str:
     """Something the operator should see, blocking nothing. Idempotent on the
     title, so a breaker that trips on three consecutive days leaves one live
     notice rather than a wall of them.
@@ -114,10 +122,16 @@ def notify(store, company: str, agent: str, title: str, body: str = "", fix: str
     `fix` is one of FIXES: the console turns it into a button that opens the
     place this is settled, instead of leaving the operator to work out that
     "no mailbox connected" means the Mail group of the Settings tab.
+
+    `options` carries whatever that button needs to settle it **in place**. The
+    first version of the `backlog` fix only switched tabs — and the notice is
+    rendered on the very tab it switched to, so pressing it did nothing at all.
+    The operator said the plain version of it twice: nothing happens, and it
+    should be able to propose the agent and the tool itself.
     """
     if store is None:
         return ""
     if fix and fix not in FIXES:
         log.warning("inbox notice %r names an unknown fix %r; no button will show", title, fix)
         fix = ""
-    return store.add_inbox(company, agent, NOTIFICATION, title, body, (), fix)
+    return store.add_inbox(company, agent, NOTIFICATION, title, body, tuple(options), fix)

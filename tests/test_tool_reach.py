@@ -68,12 +68,18 @@ def test_a_task_only_tool_is_never_on_a_playbook():
 
 
 def test_the_task_only_tools_are_the_ones_whose_prompt_is_task_shaped():
-    """`ask_operator` asks for what *this task* cannot proceed without, and
-    `deploy_site` publishes because something decided to. Neither belongs on a
-    cadence."""
+    """Each of these is meaningless without a task to be about, and the list is
+    spelled out so adding a fourth is a decision rather than a drift.
+
+    - `ask_operator` asks for what *this task* cannot proceed without.
+    - `deploy_site` publishes because something decided to.
+    - `write_note` writes the document a task asked for; on a playbook it would
+      write a note about nothing, every turn.
+    """
     assert sorted(n for n, t in TOOLS.items() if t.by_task_only) == [
         "ask_operator",
         "deploy_site",
+        "write_note",
     ]
 
 

@@ -8,6 +8,30 @@ was released.
 
 ## Non publié
 
+- **Added : `write_note`, l'outil qui écrit le document qu'une tâche demande.**
+  Cinq outils écrivaient déjà des documents — `draft_design_brief`,
+  `update_pricing`, `scan_competitors`, `write_eod_summary`, `review_site` — chacun
+  sous un nom fixe. Aucun n'écrivait *le* document qu'une tâche particulière
+  réclame, donc « rédiger une note de cadrage pour le contrat de licence
+  institutionnelle » n'avait nulle part où aller : strategy n'avait aucun outil
+  capable de produire un document, la tâche restait retenue, et quand le CEO l'a
+  placée quand même elle est tombée sur `write_site_content` — qui aurait écrit du
+  texte de site pour un contrat de licence. `ROLE_TOOL["strategy"]` pointe
+  désormais sur `write_note`, donc une tâche de strategy est exécutable à
+  l'approbation. **Prouvé sur la vraie tâche #80 de Vigil** : 3 232 caractères
+  écrits par l'Opus pin, gardés dans les documents de l'entreprise.
+  Il est `by_task_only` : sur un playbook il écrirait une note sur rien, à chaque
+  tour. Et l'invite lui demande d'étiqueter chaque chiffre Mesuré / Donné / Estimé,
+  parce que sa sortie entière est de la prose qui peut en contenir.
+- **Fixed : `ask_operator` parlait d'une tâche que le modèle ne pouvait pas voir.**
+  Son invite dit depuis toujours « ce que **cette tâche** ne peut pas faire sans » —
+  et rien n'avait jamais posé la tâche sur le contexte. Déclaré et inatteignable,
+  dans une invite au lieu du code. `ctx.task` existe maintenant, posé pour la durée
+  de l'appel et **effacé en sortant sur tous les chemins** : le contexte est partagé
+  sur tout le tour, donc une tâche oubliée là serait lue par chaque outil suivant.
+  Un test a posé l'invariant et a trouvé le chemin qui ne l'honorait pas — celui où
+  rien ne peut exécuter la tâche.
+
 - **Added : le CEO réattribue lui-même une tâche que rien ne peut exécuter.**
   C'est le sixième mécanisme des journaux NanoCorp, celui que
   `docs/reverse-engineering/nanocorp.md` désignait comme « le prochain candidat

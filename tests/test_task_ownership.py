@@ -140,7 +140,16 @@ def test_the_path_that_runs_a_task_is_the_one_that_holds_it(store):
     agent = Executor.__new__(Executor)
     agent.store = store
     done: list[str] = []
-    stop = agent._work_task("c", None, None, store.claim_next_task("c", "finance"), None, done)
+
+    class Ctx:
+        """`_work_task` sets and clears `ctx.task` on every path now, so it needs
+        somewhere to put it. Nothing else here is touched on the untooled path."""
+
+        task = None
+
+    ctx = Ctx()
+    stop = agent._work_task("c", None, ctx, store.claim_next_task("c", "finance"), None, done)
+    assert ctx.task is None, "the task must not outlive the call, even on this path"
     assert stop is False
     assert store.get_task(task_id)["status"] == "waiting"
     assert "(symbolic)" not in " ".join(done)

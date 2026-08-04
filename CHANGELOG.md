@@ -8,6 +8,22 @@ was released.
 
 ## Non publié
 
+- **Fixed : l'aperçu du site servait `index.html` et rien d'autre.** Ce qui allait
+  très bien tant que le site *était* une page générée. Pour une entreprise qui
+  livre le sien — les quatre pages de Vigil, une feuille de style, un script, un
+  dossier blog — chaque `/assets/style.css`, `/tech.html` et `/blog/` revenait en
+  404, donc l'aperçu affichait la vraie copie de l'exploitant en Times New Roman
+  avec des liens bleus soulignés. Il en a envoyé une capture et a logiquement lu ça
+  comme un site cassé ; **ce n'était pas une limite de jetons, c'était ma route
+  d'aperçu incomplète**. Elle sert maintenant le dossier, avec deux garde-fous
+  posés avant qu'aucun chemin ne soit construit : le slug doit être une entreprise
+  connue, et le fichier résolu doit rester dans le dossier du site — vérifié sur le
+  chemin **résolu**, pas sur le texte de l'URL. Seules les extensions déclarées dans
+  `SITE_TYPES` sortent : un dossier d'entreprise contient sa configuration et ses
+  sources à côté du site, et un aperçu n'est pas un serveur de fichiers. Mesuré sur
+  le vrai site : les huit ressources servies, les quatre tentatives de traversée
+  refusées.
+
 - **Fixed : « Ouvrir le backlog » ne faisait rien, et se règle maintenant sur
   place.** Le remède pointait vers l'onglet Opérations — **l'onglet même où l'avis
   est affiché** — donc appuyer dessus était un non-événement par construction.

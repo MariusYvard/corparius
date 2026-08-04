@@ -355,6 +355,39 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             cost_budget = max(0.0, float(budgets_in.get("cost_budget") or 0))
         except (TypeError, ValueError):
             warnings.append("budgets.cost_budget is not a number; the global setting applies")
+    # A ceiling for one role, which is also a floor nobody else can spend. The
+    # operator asked for this in plain terms — the agent that builds the site needs
+    # a much higher ceiling — and the reason is arithmetic: design runs once every
+    # 24 ticks with the most expensive turn in the company, support runs every 3,
+    # and one shared pool means support spends it first.
+    role_tokens: dict[str, int] = {}
+    reserves_in = budgets_in.get("role_tokens") or {}
+    if not isinstance(reserves_in, dict):
+        warnings.append("budgets.role_tokens was not a mapping; ignored")
+        reserves_in = {}
+    for role, value in reserves_in.items():
+        name = str(role).strip()
+        if name not in ROLES:
+            warnings.append(f"budgets.role_tokens: {name} is not a role, so it reserves nothing")
+            continue
+        amount = _int(value, 0)
+        if amount <= 0:
+            warnings.append(f"budgets.role_tokens.{name} must be above 0; ignored")
+            continue
+        capped = min(amount, TOKENS_MAX)
+        if capped != amount:
+            warnings.append(f"budgets.role_tokens.{name} clamped to {capped}")
+        if not agents.get(name):
+            warnings.append(f"budgets.role_tokens.{name} is set but that agent is off")
+        role_tokens[name] = capped
+    if role_tokens and sum(role_tokens.values()) >= session:
+        # Said, not silently resolved: the session ceiling will be raised to cover
+        # the reserves, which means the operator's own session number is no longer
+        # the number that stops the run.
+        warnings.append(
+            f"budgets.role_tokens reserve {sum(role_tokens.values())} of a "
+            f"{session} session, so the session ceiling rises to cover them"
+        )
     ads_eur = _int(budgets_in.get("daily_ad_spend_eur", 0), 0)
     if ads_eur < 0:
         warnings.append("budgets.daily_ad_spend_eur cannot be negative; set to 0")

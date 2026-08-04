@@ -59,6 +59,18 @@ class Skill:
     # It changes nothing about how the skill is applied. It changes who is told
     # they made a mistake.
     always: bool = False
+    # `always: <text>` instead of `always: true`: that text rides on every prompt
+    # while the body follows `allowed-tools`.
+    #
+    # A rule and its material are not the same thing. `promesse-clinique` must
+    # constrain every output — 3 815 characters of it, measured at roughly half of
+    # one real session's tokens — but "what is true and sufficient to sell" is only
+    # of use where copy is written, and `reconcile_stripe` cannot make a medical
+    # claim. Scoping the whole file would have meant narrowing a safety rule to save
+    # tokens; summarising it would have meant an unreviewed paraphrase deciding what
+    # a health product may claim. So the author writes the universal part themselves,
+    # in their own words, and nothing here rewrites it.
+    always_text: str = ""
 
     def applies_to(self, tool_name: str) -> bool:
         """No `allowed-tools` means the skill is background knowledge about the
@@ -74,6 +86,17 @@ class Skill:
         Nothing showed this, so it failed silently in the direction that costs
         the most: every prompt, every turn."""
         return not self.allowed_tools
+
+    def core_for(self, tool_name: str) -> str:
+        """What this skill contributes to that tool's prompt, body or core or "".
+
+        The body when the tool is in scope; otherwise the always-on text, if the
+        author wrote one. A skill with neither contributes nothing, which is the
+        default and must cost nothing.
+        """
+        if self.applies_to(tool_name):
+            return self.instructions
+        return self.always_text
 
     @property
     def undeclared_unscoped(self) -> bool:
@@ -123,11 +146,22 @@ def parse(path: Path, scope: str = "global") -> Skill | None:
         tools = [str(t).strip() for t in tools_in if str(t).strip()]
     else:
         tools = []
-    # `always` or `always-on`, either spelling, and only a real yes counts: a
-    # string "false" is a no, because YAML hands it over as a truthy string.
-    declared = meta.get("always", meta.get("always-on", False))
-    if isinstance(declared, str):
-        declared = declared.strip().lower() in ("true", "yes", "1", "on")
+    # `always` or `always-on`, either spelling. A bare yes means the whole body
+    # everywhere; a longer string is the universal part itself, and the body then
+    # follows `allowed-tools`. Only a real yes counts as a flag: YAML hands "false"
+    # over as a truthy string, so the words are checked rather than the truthiness.
+    raw_always = meta.get("always", meta.get("always-on", False))
+    always_text = ""
+    if isinstance(raw_always, str):
+        word = raw_always.strip()
+        if word.lower() in ("true", "yes", "1", "on"):
+            declared = True
+        elif word.lower() in ("false", "no", "0", "off", ""):
+            declared = False
+        else:
+            declared, always_text = True, " ".join(word.split())
+    else:
+        declared = bool(raw_always)
     return Skill(
         name=name,
         description=str(meta.get("description", "")).strip(),
@@ -136,6 +170,7 @@ def parse(path: Path, scope: str = "global") -> Skill | None:
         allowed_tools=tools,
         scope=scope,
         always=bool(declared),
+        always_text=always_text,
     )
 
 
@@ -298,7 +333,12 @@ class SkillLoader:
         return out
 
     def for_tool(self, tool_name: str) -> list[Skill]:
-        return [s for s in self.skills if s.applies_to(tool_name)]
+        """Every skill that contributes something to this tool's prompt.
+
+        Not the same as "in scope": a skill with an `always:` text contributes that
+        text to every tool, including the ones its `allowed-tools` leaves out.
+        """
+        return [s for s in self.skills if s.core_for(tool_name)]
 
     def context_for(self, tool_name: str) -> str:
         """The block injected into the agent's prompt, or "" when the company
@@ -308,8 +348,12 @@ class SkillLoader:
             return ""
         parts = []
         budget = self.max_chars
+        # The always-on parts first, so a budget that runs out cuts material rather
+        # than a rule. A claims guardrail truncated to make room for "what is true
+        # and sufficient to sell" would be exactly the wrong way round.
+        applicable = sorted(applicable, key=lambda s: not s.always_text)
         for skill in applicable:
-            body = skill.instructions
+            body = skill.core_for(tool_name)
             if not body:
                 continue
             if len(body) > budget:

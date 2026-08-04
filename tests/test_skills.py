@@ -386,7 +386,7 @@ def test_the_doctor_stops_calling_it_an_omission_but_still_prices_it(tmp_path, m
 
     level, name, message = doctor._check_skills(Settings())
     assert (level, name) == ("ok", "skills"), message
-    assert "always-on by declaration" in message, message
+    assert "whole body on every prompt" in message, message
     assert "400 characters" in message, "declared is not free, and the price must be said"
 
 
@@ -403,3 +403,104 @@ def test_an_undeclared_one_still_warns(tmp_path, monkeypatch):
     level, _, message = doctor._check_skills(Settings())
     assert level == "warn"
     assert "always: true" in message, "the warning has to name the way out of it"
+
+
+# --- a rule everywhere, its material in scope ----------------------------------
+
+
+def test_a_skill_can_put_a_short_rule_everywhere_and_its_body_in_scope(tmp_path):
+    """`promesse-clinique` must constrain every output — its own first line says so —
+    and it is 3 815 characters, measured at roughly half of one real session's
+    tokens. Its relevance is wildly uneven: `reconcile_stripe` cannot make a medical
+    claim and `write_site_content` can make five.
+
+    Scoping the whole file would have meant narrowing a safety rule to save tokens.
+    Summarising it would have meant an unreviewed paraphrase deciding what a health
+    product may claim. So the author writes the universal part themselves."""
+    front = (
+        "---\nname: p\nalways: >-\n  Never claim a diagnosis.\nallowed-tools: send_outreach\n---\n"
+    )
+    sk = parse(_write(tmp_path, "p", "The whole long rulebook.", front))
+    assert sk.always is True and sk.always_text == "Never claim a diagnosis."
+    assert sk.core_for("send_outreach") == "The whole long rulebook."
+    assert sk.core_for("reconcile_stripe") == "Never claim a diagnosis."
+
+
+def test_always_true_still_means_the_whole_body_everywhere(tmp_path):
+    """Nothing that exists changes."""
+    sk = parse(_write(tmp_path, "p", "Body.", "---\nname: p\nalways: true\n---\n"))
+    assert sk.always is True and sk.always_text == ""
+    assert sk.core_for("anything") == "Body."
+
+
+def test_the_words_are_checked_rather_than_the_truthiness(tmp_path):
+    """YAML hands "false" over as a truthy string, so a string has to be read as a
+    word before it can be read as a rule."""
+    for word in ("false", "no", "0", "off"):
+        sk = parse(
+            _write(tmp_path, "n" + word, "B", f'---\nname: n{word}\nalways: "{word}"\n---\n')
+        )
+        assert sk.always is False and sk.always_text == "", word
+    for word in ("true", "yes", "on"):
+        sk = parse(
+            _write(tmp_path, "y" + word, "B", f'---\nname: y{word}\nalways: "{word}"\n---\n')
+        )
+        assert sk.always is True and sk.always_text == "", word
+
+
+def test_a_skill_with_no_always_contributes_nothing_out_of_scope(tmp_path):
+    sk = parse(_write(tmp_path, "s", "B", "---\nname: s\nallowed-tools: send_outreach\n---\n"))
+    assert sk.core_for("send_outreach") == "B" and sk.core_for("reconcile_stripe") == ""
+
+
+def test_the_loader_carries_the_rule_to_a_tool_out_of_scope(tmp_path):
+    front = "---\nname: p\nalways: >-\n  The rule.\nallowed-tools: send_outreach\n---\n"
+    _write(tmp_path, "p", "The material.", front)
+    loader = _loader(tmp_path)
+    assert "The material." in loader.context_for("send_outreach")
+    out = loader.context_for("reconcile_stripe")
+    assert "The rule." in out and "The material." not in out
+
+
+def test_the_rule_survives_a_budget_the_material_does_not(tmp_path):
+    """A claims guardrail truncated to make room for "what is true and sufficient to
+    sell" would be exactly the wrong way round."""
+    # Scoped away from this tool, so only its always-on text applies — which is
+    # precisely the case where a rule competes with somebody else's bulk.
+    _write(
+        tmp_path,
+        "rule",
+        "R" * 50,
+        "---\nname: rule\nalways: >-\n  KEEPME\nallowed-tools: draft_social_post\n---\n",
+    )
+    _write(tmp_path, "bulk", "B" * 4000, "---\nname: bulk\n---\n")
+    out = _loader(tmp_path, max_chars=200).context_for("send_outreach")
+    assert "KEEPME" in out, "the rule lost its place to the material"
+    assert "[truncated]" in out, "and the material is the thing that got cut"
+
+
+def test_the_doctor_prices_the_two_kinds_apart(tmp_path, monkeypatch):
+    from corparius import doctor, paths
+    from corparius.config import Settings
+
+    base = tmp_path / "companies"
+    (base / "c").mkdir(parents=True)
+    (base / "c" / "company.yaml").write_text("slug: c\n", encoding="utf-8")
+    _write(
+        base / "c" / "skills",
+        "split",
+        "M" * 3000,
+        "---\nname: split\nalways: >-\n  short rule\nallowed-tools: send_outreach\n---\n",
+    )
+    monkeypatch.setattr(paths, "companies_dir", lambda: base)
+    level, _, message = doctor._check_skills(Settings())
+    assert level == "ok", message
+    assert "rule on every prompt, body in scope" in message
+    assert "10 of 3000" in message, "both numbers, or the measurement is a fiction"
+    assert "10 characters ride" in message
+
+
+def test_a_split_skill_is_not_reported_as_unscoped(tmp_path):
+    front = "---\nname: p\nalways: >-\n  R\nallowed-tools: send_outreach\n---\n"
+    sk = parse(_write(tmp_path, "p", "B", front))
+    assert sk.unscoped is False and sk.undeclared_unscoped is False

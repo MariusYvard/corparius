@@ -33,6 +33,14 @@ allowed-tools: send_outreach, draft_support_reply
 
 `allowed-tools` est la partie qui décide de tout: le corps du fichier n'entre dans l'invite que si l'outil sur le point de tourner y figure. Omettre la clé rend la compétence applicable à tous les outils, ce qui convient à une connaissance générale sur l'entreprise et ne convient pas à des instructions sur un métier précis.
 
+`always: <texte>` au lieu de `always: true` : ce texte voyage sur **chaque** invite, et le corps suit `allowed-tools`.
+
+Une règle et son matériel ne sont pas la même chose. `promesse-clinique` doit contraindre toute sortie — sa première ligne le dit — et pèse 3 815 caractères, mesurés à environ la moitié des jetons d'une vraie session. Mais sa pertinence est très inégale : `reconcile_stripe` ne peut pas faire une affirmation médicale, `write_site_content` peut en faire cinq.
+
+Ce qui a été écarté, et pourquoi. **Cadrer tout le fichier** perd la couverture sur tout outil non listé, c'est-à-dire l'inverse de ce que la règle demande — et cela voudrait dire restreindre une règle de sécurité pour économiser des jetons. **La raccourcir** : c'est la prose de l'exploitant sur ce que son produit a le droit d'affirmer, et chaque paragraphe y porte. **Faire résumer par un modèle et garder le résumé** : non. Tout l'intérêt de la règle est que *ces mots-là* contraignent ; une paraphrase par LLM d'un garde-fou de revendications médicales est un nouveau garde-fou, non relu.
+
+Donc l'auteur écrit lui-même la partie universelle, dans ses propres mots. Mesuré sur l'entreprise du propriétaire : 652 caractères partout au lieu de 3 815, le corps entier sur les 15 outils qui écrivent du texte public, **48 % de moins sur un passage complet des playbooks activés** — 66 423 caractères, environ 16 600 jetons — et la contrainte atteint toujours les 36 appels d'outil. Les parties universelles passent en premier dans l'invite : un garde-fou tronqué pour faire de la place à « ce qui est vrai et suffit à vendre » serait exactement dans le mauvais sens.
+
 `always: true` dit que c'est voulu. Le doctor traite l'absence d'`allowed-tools` comme un oubli, et c'en est un la plupart du temps — mais une règle qui commence par « s'applique à toute sortie de tout agent, sans exception » n'en est pas un. Sans moyen de le déclarer, le seul moyen de faire taire l'avertissement était de restreindre la règle, c'est-à-dire l'inverse de ce qu'elle demande ; et un avertissement sur lequel on ne peut rien faire est un avertissement qu'on apprend à ignorer. La déclaration **ne change rien** au comportement : elle change qui se fait dire qu'il s'est trompé. Le prix reste annoncé — le doctor dit combien de caractères voyagent sur chaque invite — parce qu'une déclaration ne le rend pas gratuit.
 
 Un fichier sans en-tête est lu entièrement comme corps, et prend le nom de son dossier. Une note écrite à la main reste donc utilisable avant que son auteur ait lu quoi que ce soit de cette page.

@@ -156,3 +156,95 @@ def test_a_fresh_company_is_never_stood_down(store, monkeypatch):
     assert tools._stop_useless_work(_Ctx(store)) == (
         "Every role still has somewhere for its work to go"
     )
+
+
+# --- and it is written down where the next turn reads it -----------------------
+
+
+def test_a_wall_is_recorded_once_with_its_remedy(tmp_path, monkeypatch):
+    """Every NanoCorp worker opens with "I read DOCS.md" and closes with "I wrote
+    down what I found so the next turn does not re-explore". Corparius had the
+    mechanism and not the discipline: agents used documents for *deliverables* and
+    never for *findings*, so `find_targets: No lead found` was logged more than forty
+    times in one session with nothing anywhere saying it had been established."""
+    from corparius import documents
+
+    monkeypatch.setattr(documents.paths, "companies_dir", lambda: tmp_path)
+    (tmp_path / "c").mkdir()
+    said = documents.record_wall("c", "no lead source", "Nothing configured.", "Set the CSV.")
+    assert "walls.md" in said
+    path = documents.folder("c") / documents.WRITTEN / "walls.md"
+    text = path.read_text(encoding="utf-8")
+    assert "no lead source" in text and "What would remove it: Set the CSV." in text
+    assert "paid for once" in text, "the file has to say what it is for"
+
+
+def test_the_same_wall_met_again_writes_nothing(tmp_path, monkeypatch):
+    """Keyed and idempotent, so the document stays a list of distinct facts rather
+    than a log — which is the thing it exists to replace."""
+    from corparius import documents
+
+    monkeypatch.setattr(documents.paths, "companies_dir", lambda: tmp_path)
+    (tmp_path / "c").mkdir()
+    documents.record_wall("c", "no lead source", "a", "b")
+    assert documents.record_wall("c", "no lead source", "different words", "and remedy") == ""
+    text = (documents.folder("c") / documents.WRITTEN / "walls.md").read_text(encoding="utf-8")
+    assert text.count("no lead source") == 1
+
+
+def test_distinct_walls_both_land(tmp_path, monkeypatch):
+    from corparius import documents
+
+    monkeypatch.setattr(documents.paths, "companies_dir", lambda: tmp_path)
+    (tmp_path / "c").mkdir()
+    documents.record_wall("c", "no lead source", "a", "b")
+    documents.record_wall("c", "no mailbox", "c", "d")
+    text = (documents.folder("c") / documents.WRITTEN / "walls.md").read_text(encoding="utf-8")
+    assert "no lead source" in text and "no mailbox" in text
+
+
+def test_find_targets_records_it_when_no_source_is_configured(tmp_path, monkeypatch):
+    from corparius import documents, enrich, leadsource
+
+    monkeypatch.setattr(documents.paths, "companies_dir", lambda: tmp_path)
+    (tmp_path / "c").mkdir()
+    monkeypatch.setattr(leadsource, "configured_sources", lambda: [])
+    monkeypatch.setattr(leadsource, "find_leads", lambda *a, **k: [])
+    monkeypatch.setattr(enrich, "enrich_all", lambda leads: leads)
+
+    class Ctx:
+        company = {"slug": "c", "name": "C", "icp": {"segment": "s"}}
+        leads: list = []
+
+    tools._find_targets(Ctx())
+    text = (documents.folder("c") / documents.WRITTEN / "walls.md").read_text(encoding="utf-8")
+    assert "no lead source" in text and "Settings, Leads" in text
+
+
+def test_a_configured_source_records_nothing(tmp_path, monkeypatch):
+    """A wall that is not there must not be written down: a walls.md full of things
+    that are fine is the wall of warnings again."""
+    from corparius import documents, enrich, leadsource
+
+    monkeypatch.setattr(documents.paths, "companies_dir", lambda: tmp_path)
+    (tmp_path / "c").mkdir()
+    monkeypatch.setattr(leadsource, "configured_sources", lambda: ["local"])
+    monkeypatch.setattr(leadsource, "find_leads", lambda *a, **k: [])
+    monkeypatch.setattr(enrich, "enrich_all", lambda leads: leads)
+
+    class Ctx:
+        company = {"slug": "c", "name": "C", "icp": {"segment": "s"}}
+        leads: list = []
+
+    tools._find_targets(Ctx())
+    assert not (documents.folder("c") / documents.WRITTEN / "walls.md").is_file()
+
+
+def test_it_lands_where_every_prompt_reads_it_back(tmp_path, monkeypatch):
+    """The whole point: the next turn reads it instead of paying to learn it again."""
+    from corparius import documents
+
+    monkeypatch.setattr(documents.paths, "companies_dir", lambda: tmp_path)
+    (tmp_path / "c").mkdir()
+    documents.record_wall("c", "no lead source", "Nothing configured.", "Set the CSV.")
+    assert "no lead source" in documents.context("c")

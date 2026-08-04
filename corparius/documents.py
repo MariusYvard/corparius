@@ -337,6 +337,47 @@ def images(slug: str) -> list[Path]:
 WRITTEN = "written"
 
 
+WALLS = "walls"
+
+
+def record_wall(slug: str, key: str, found: str, remedy: str) -> str:
+    """Write down a wall only a human can remove, once. Returns "" if already known.
+
+    The counterpart to `write`, which keeps what an agent *produced*. This keeps what
+    an agent *found* — and finding costs a turn too. Measured: one session logged
+    `find_targets: No lead found. Sources configured: none.` more than forty times,
+    every line true and every one rediscovered, with no trace anywhere saying it had
+    been established.
+
+    Keyed, and idempotent on the key: the same wall met again writes nothing, so the
+    document stays a list of distinct facts rather than a log. The whole point is that
+    the next turn reads it instead of paying to learn it again — and it will, because
+    this lands in the folder every prompt reads back.
+    """
+    base = folder(slug) / WRITTEN
+    base.mkdir(parents=True, exist_ok=True)
+    path = base / "walls.md"
+    stamp = f"- **{key}** — {' '.join(str(found).split())} What would remove it: {' '.join(str(remedy).split())}"
+    try:
+        current = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except OSError:
+        return ""
+    if f"**{key}**" in current:
+        return ""
+    header = (
+        "# Walls\n\nWhat this company has established that it cannot get past on its own.\n"
+        "Each line was paid for once. Read it before spending a turn rediscovering it.\n\n"
+        if not current
+        else ""
+    )
+    try:
+        path.write_text((current or header) + stamp + "\n", encoding="utf-8")
+    except OSError as exc:
+        log.warning("could not record the %s wall for %s: %s", key, slug, exc)
+        return ""
+    return f"Written down once, in walls.md: {key}"
+
+
 def write(slug: str, name: str, text: str, kind: str = WRITTEN) -> Path:
     """Persist something an agent produced, and return where it went.
 

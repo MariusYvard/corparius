@@ -227,6 +227,11 @@ class Runtime:
             budget = TokenBudget(
                 budgets.get("session_tokens", self.settings.session_token_budget),
                 budgets.get("cost_budget", self.settings.session_cost_budget),
+                # A ceiling for a named role, which is also a floor nobody else can
+                # spend. Design runs once every 24 ticks with the most expensive turn
+                # in the company; support runs every 3. One shared pool means support
+                # spends it first and design arrives at a closed till.
+                budgets.get("role_tokens") or {},
             )
             breaker = CircuitBreaker(
                 budgets.get("tokens_per_minute", self.settings.tokens_per_minute_limit)

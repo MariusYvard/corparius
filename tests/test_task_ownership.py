@@ -313,3 +313,65 @@ def test_the_column_has_a_label_for_both_cases_in_both_languages():
     assert html.count('"col.proposedCeo"') == 3, "en, fr, and the one place that reads it"
     assert '"col.proposedCeo":"Proposed, for the CEO"' in html
     assert '"col.proposedCeo":"Proposées, pour le CEO"' in html
+
+
+# --- and the operator can correct it on the board ------------------------------
+
+
+def test_the_task_editor_offers_the_agent_and_the_tool():
+    """`/api/tasks` has accepted `target` and `tool` all along and the editor never
+    offered them, so a task on the wrong role — or with no tool at all — could not
+    be corrected from the board where it is shown. The operator said it plainly:
+    even in the backlog, I cannot change the agent or the tool."""
+    from pathlib import Path
+
+    html = Path("corparius/webui.html").read_text(encoding="utf-8")
+    editor = html[html.index("function openTaskEditor(") : html.index("const reducedMotion")]
+    assert 'data-f="target"' in editor and 'data-f="tool"' in editor
+    assert "agent_tools" in editor, "the lists must be the real roles and playbooks"
+    assert 'value=""' in editor, "a task may legitimately have no tool"
+
+
+def test_the_editor_sends_them_only_when_it_rendered_them():
+    """A console with no enabled agents must not blank a task's target by saving a
+    field that was never on screen."""
+    from pathlib import Path
+
+    html = Path("corparius/webui.html").read_text(encoding="utf-8")
+    handler = html[html.index("if (b.dataset.taskSave)") : html.index("if (b.dataset.taskCancel)")]
+    assert 'if (pick("target")) body.target' in handler
+    assert 'if (pick("tool")) body.tool' in handler
+
+
+def test_changing_the_agent_in_the_editor_re_offers_its_tools():
+    from pathlib import Path
+
+    html = Path("corparius/webui.html").read_text(encoding="utf-8")
+    assert 'ev.target.closest("[data-task-owner]")' in html
+    block = html[html.index('ev.target.closest("[data-task-owner]")') :][:800]
+    assert "agent_tools" in block and "box.innerHTML" in block
+
+
+def test_the_api_accepts_what_the_editor_now_sends(store):
+    """The other end of the wire, exercised rather than read."""
+    from corparius.webui import _edit_task
+
+    task_id = store.add_task("c", "Remove the badge", "support", status="approved")
+    code, body = _edit_task(
+        store, {"id": task_id, "target": "design", "tool": "write_site_content"}
+    )
+    assert code == 200, body
+    row = store.get_task(task_id)
+    assert (row["target"], row["tool"]) == ("design", "write_site_content")
+
+
+def test_an_unknown_tool_is_refused_rather_than_stored(store):
+    """A task scoped to a tool nobody has never applies, silently — worse than the
+    untooled task it was meant to fix."""
+    from corparius.webui import _edit_task
+
+    task_id = store.add_task("c", "x", "support", status="approved")
+    code, body = _edit_task(store, {"id": task_id, "tool": "no_such_tool"})
+    assert code == 400 and "unknown tool" in body["error"]
+    code, body = _edit_task(store, {"id": task_id, "target": "webmaster"})
+    assert code == 400 and "unknown agent" in body["error"]

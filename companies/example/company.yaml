@@ -52,6 +52,13 @@ budgets:
   session_tokens: 80000
   tokens_per_minute: 60000
   daily_ad_spend_eur: 0
+  # A purse for one role, on top of the shared session budget above — not a slice
+  # taken out of it. Use it when a role runs rarely and spends a lot per turn: the
+  # design agent runs once a day and reads the whole site, while support runs every
+  # three hours and would otherwise spend the shared pool first. Uncomment to give
+  # design 400000 tokens of its own, taking the total ceiling to 480000.
+  # role_tokens:
+  #   design: 400000
 
 # Tools that always require human approval before executing.
 hitl_tools:

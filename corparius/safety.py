@@ -39,18 +39,25 @@ class TokenBudget:
 
     def __init__(self, max_tokens: int, max_cost: float = 0.0, reserves: dict | None = None):
         self.reserves = {str(k): max(0, int(v)) for k, v in (reserves or {}).items() if int(v) > 0}
-        reserved = sum(self.reserves.values())
-        self.max_tokens = max(max_tokens, reserved)
-        # What everybody without a reserve shares. Never negative: a company that
-        # reserved more than its session budget has had the session raised above.
-        self.shared_max = max(0, self.max_tokens - reserved)
+        # A reserve is a purse **in addition to** the shared budget, not a slice
+        # taken out of it. The first version subtracted, and a 400 000 reserve
+        # against a 120 000 session left the shared pool at zero — every other role
+        # starved instantly, which is the opposite of what asking for one role to
+        # have more can possibly mean. Measured the moment it ran.
+        self.shared_max = max(0, max_tokens)
+        self.max_tokens = self.shared_max + sum(self.reserves.values())
         self.max_cost = max(0.0, max_cost)
         self.used = 0
         self.spent = 0.0
         self.by_role: dict[str, int] = {}
 
     def _ledger(self, role: str) -> tuple[int, int, str]:
-        """(used, ceiling, label) for whichever ledger this role spends from."""
+        """(used, ceiling, label) for whichever ledger this role spends from.
+
+        A reserved role spends from its own purse; everybody else shares the session
+        budget, which is why the shared figure subtracts what the reserved roles
+        have spent — otherwise their spending would count twice.
+        """
         if role in self.reserves:
             return self.by_role.get(role, 0), self.reserves[role], f"{role} budget"
         shared = self.used - sum(self.by_role.get(r, 0) for r in self.reserves)

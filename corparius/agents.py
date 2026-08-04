@@ -54,6 +54,10 @@ ROSTER: dict[AgentRole, AgentSpec] = {
             # there is, and left on no playbook — so no CEO could ever take it.
             "set_roster",
             "set_daily_plan",
+            # Before reviewing new proposals: a task already approved and then held
+            # is work the CEO has already said yes to, and leaving it for the
+            # operator while arbitrating fresh ideas is the wrong order.
+            "assign_held_tasks",
             "review_proposals",
             "create_tasks",
             "decide",

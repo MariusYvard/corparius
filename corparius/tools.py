@@ -1183,6 +1183,137 @@ def _create_tasks(ctx) -> str:
     return f"CEO queued {len(created)} data-driven task(s): {', '.join(created)}"
 
 
+def _held_tasks(store, slug: str) -> list[dict]:
+    """Tasks nothing can run: held because no tool on their role could carry them.
+
+    `park_task` writes `approval:` or `question:` into the note; `_hold_untooled`
+    writes a sentence starting "no tool". That prefix is the discriminator, so a
+    task waiting on the operator's approval is never re-owned behind their back.
+    """
+    return [
+        t
+        for t in store.list_tasks(slug, "waiting")
+        if str(t.get("note") or "").startswith("no tool")
+    ]
+
+
+def _roster_menu(ctx) -> str:
+    """Every enabled role and what it can actually do, for a prompt.
+
+    The playbook, not the whole tool catalogue: a tool that is not on a role's
+    playbook is one that role never runs, so offering it would produce an assignment
+    that looks valid and does nothing — the untooled task again.
+    """
+    from .agents import ROSTER
+
+    enabled = ctx.company.get("agents", {}) or {}
+    lines = []
+    for role, spec in ROSTER.items():
+        if not enabled.get(role.value):
+            continue
+        lines.append(f"- {role.value}: {', '.join(spec.playbook)}")
+    return "\n".join(lines)
+
+
+def _assign_held_prompt(ctx) -> str:
+    store = getattr(ctx, "store", None)
+    slug = ctx.company.get("slug", "company")
+    held = _held_tasks(store, slug) if store is not None else []
+    if not held:
+        return (
+            "No task is held for want of an owner. Return an empty `assignments` "
+            "list and say so in `note`."
+        )
+    rows = "\n".join(
+        f"#{t['id']} (currently {t['target']}): {t['title']}"
+        + (f" — why: {t['why']}" if t.get("why") else "")
+        for t in held[:8]
+    )
+    return (
+        "These tasks were approved and then held, because no tool on the role they "
+        "were given can carry them out. You own the backlog: give each one the role "
+        "whose job it really is, and one tool from that role's own list.\n\n"
+        f"Roles and what each can do:\n{_roster_menu(ctx)}\n\n"
+        f"Held tasks:\n{rows}\n\n"
+        "`assignments`: one entry per task you can place, as `id|role|tool` — use "
+        "exactly those three fields separated by a vertical bar. Leave out any task "
+        "that no role on this list can genuinely do; it stays held for the operator, "
+        "which is better than a tool that would run and change nothing. "
+        "`note`: one sentence on what you did."
+    )
+
+
+def _assign_held(ctx) -> str:
+    """Apply what the CEO decided, and refuse anything the roster cannot honour."""
+    from . import inbox
+    from .agents import ROSTER
+
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "Backlog unavailable"
+    slug = ctx.company.get("slug", "company")
+    held = {t["id"]: t for t in _held_tasks(store, slug)}
+    if not held:
+        return "No task is held for want of an owner"
+    result = getattr(ctx, "structured", None)
+    data = result.data if result else {}
+    enabled = ctx.company.get("agents", {}) or {}
+    playbooks = {r.value: set(s.playbook) for r, s in ROSTER.items()}
+    placed, refused = [], []
+    for entry in data.get("assignments") or []:
+        parts = [p.strip() for p in str(entry).split("|")]
+        if len(parts) != 3:
+            refused.append(f"{str(entry)[:40]} (not id|role|tool)")
+            continue
+        raw_id, role, tool = parts
+        try:
+            task_id = int(raw_id.lstrip("#"))
+        except ValueError:
+            refused.append(f"{raw_id} (not a task id)")
+            continue
+        if task_id not in held:
+            refused.append(f"#{task_id} (not held)")
+            continue
+        if not enabled.get(role) or tool not in playbooks.get(role, set()):
+            # Named rather than silently dropped: an assignment the roster cannot
+            # honour is exactly the mistake that produced the held task.
+            refused.append(f"#{task_id} -> {role}/{tool} (not on that role's playbook)")
+            continue
+        store.update_task(task_id, target=role, tool=tool)
+        store.set_task_status(task_id, "approved", f"re-owned by the CEO: {role}/{tool}")
+        # The notice existed to ask the operator. It has its answer.
+        store.resolve_inbox(
+            inbox.item_id(
+                slug,
+                inbox.NOTIFICATION,
+                held[task_id]["target"],
+                f"Task #{task_id} is waiting for an owner",
+            ),
+            f"{role}/{tool}",
+        )
+        placed.append(f"#{task_id} -> {role}/{tool}")
+    # Any `backlog` notice still pending while nothing is held any more has had its
+    # answer. This also sweeps notices filed before they carried a task id at all —
+    # the operator was looking at two of those, pointing at tasks already re-owned.
+    if len(placed) == len(held):
+        for item in store.list_inbox(slug, "pending"):
+            if item.get("fix") == "backlog":
+                store.resolve_inbox(item["id"], "re-owned by the CEO")
+    left = len(held) - len(placed)
+    if not placed:
+        return (
+            f"{len(held)} task(s) held and none placed"
+            + (f". Refused: {', '.join(refused[:3])}" if refused else "")
+            + ". They stay with the operator."
+        )
+    line = f"Re-owned {len(placed)}: {', '.join(placed)}"
+    if refused:
+        line += f". Refused: {', '.join(refused[:3])}"
+    if left:
+        line += f". {left} still held for the operator."
+    return line
+
+
 def _review_proposals(ctx) -> str:
     store = getattr(ctx, "store", None)
     if store is None:
@@ -1372,6 +1503,29 @@ _ALL = [
     ),
     Tool(
         "create_tasks", "CEO adds tasks to the backlog", effect=lambda c, d: _ok(_create_tasks(c))
+    ),
+    Tool(
+        "assign_held_tasks",
+        "Give a held task the role and tool that can actually do it",
+        needs_draft=True,
+        risk=permissions.WRITE_LOCAL,
+        # Checked before the call: with nothing held there is nothing to decide, and
+        # paying a model call to discover that is the waste `skip_when` exists for.
+        skip_when=lambda c: (
+            (
+                ""
+                if _held_tasks(getattr(c, "store", None), c.company.get("slug", "company"))
+                else "no task is held for want of an owner"
+            )
+            if getattr(c, "store", None) is not None
+            else "backlog unavailable"
+        ),
+        prompt=lambda c: _assign_held_prompt(c),
+        schema={
+            "assignments": {"type": "list", "default": []},
+            "note": {"type": "str", "default": "", "max_len": 200},
+        },
+        effect=lambda c, d: _ok(_assign_held(c)),
     ),
     Tool(
         "review_proposals",

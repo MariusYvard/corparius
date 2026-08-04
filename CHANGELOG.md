@@ -8,6 +8,32 @@ was released.
 
 ## Non publié
 
+- **Added : le CEO réattribue lui-même une tâche que rien ne peut exécuter.**
+  C'est le sixième mécanisme des journaux NanoCorp, celui que
+  `docs/reverse-engineering/nanocorp.md` désignait comme « le prochain candidat
+  sérieux » : leur CEO crée et attribue le travail à partir de ce qu'un autre agent
+  a produit. Corparius retenait la tâche et mettait un avis avec deux listes devant
+  l'exploitant, qui l'a dit tel quel : **« je ne le vois pas proposer de lui-même
+  l'agent et l'outil, c'est trop compliqué »**. Il a raison sur les deux points —
+  offrir des choix n'est pas proposer, et ce n'était de toute façon pas sa décision.
+  Une tâche retenue est une tâche que le CEO a mal attribuée, et le CEO est le rôle
+  qui possède le backlog. Il lit donc les tâches retenues contre le vrai roster —
+  chaque rôle activé et les outils de **son** playbook — et les réattribue.
+  L'exploitant n'est sollicité que si le CEO n'arrive pas à en placer une, ce qui
+  est mieux qu'un outil qui tournerait sans rien changer.
+  Une attribution que le roster ne peut pas honorer est **refusée et nommée**, pas
+  ignorée : c'est exactement l'erreur qui a produit la tâche retenue. Une tâche
+  parquée sur une approbation de l'exploitant n'est jamais touchée — le préfixe de
+  la note les distingue. **Prouvé sur les deux vraies tâches retenues de Vigil** :
+  `Re-owned 2: #80 -> design/write_site_content, #70 -> design/write_site_content`.
+- **Fixed : l'éditeur proposait « aucun outil » alors que le rôle en avait un.**
+  Un seul helper décide maintenant du défaut, partagé par l'éditeur et l'avis :
+  le registre `ROLE_TOOL` d'abord, puis la première étape du playbook du rôle. Sur
+  le cas réel de l'exploitant, `strategy` propose `kaizen` au lieu de rien.
+  « Aucun outil » reste offert mais n'est jamais présélectionné quand le rôle en a
+  un : on ouvre l'éditeur parce qu'une tâche n'avait pas d'outil, et y répondre
+  « aucun » est un haussement d'épaules.
+
 - **Added : un plafond de jetons par rôle, demandé pour l'agent qui fait le site.**
   `budgets.role_tokens` donne à un rôle sa propre bourse — **en plus** du budget
   de session partagé, pas prélevée dessus. La raison est arithmétique : design

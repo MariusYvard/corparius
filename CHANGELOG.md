@@ -8,6 +8,28 @@ was released.
 
 ## Non publié
 
+- **Added : le CEO transforme en travail ce que ses agents ont écrit.** C'est le
+  mécanisme NanoCorp que le document de rétro-ingénierie signalait et que je n'avais
+  que constaté : leur synthèse paralinguistique de 15:45 engendre six tâches
+  techniques précises à 16:02. `_create_tasks` met en file des triplets écrits en
+  dur lus dans le journal d'actions, et un document qu'un agent a écrit n'en fait
+  pas partie. Le cas concret était posé dans l'installation du propriétaire :
+  `review_site` avait écrit **16 changements nommés** dans
+  `documents/written/site-review.md`, en citant le texte à corriger, et rien ne le
+  lisait — encore la donnée qui arrive et qu'on jette, cette fois une page entière.
+  `plan_from_documents` la lit et propose au plus quatre tâches, chacune validée
+  contre le vrai roster (rôle activé, outil de **son** playbook), dédupliquée contre
+  le tableau, refusée et nommée quand le roster ne peut pas l'honorer, et soumise à
+  la limite de travail en cours comme n'importe quelle autre.
+  **Prouvé sur les vrais documents de Vigil** via l'Opus pin : quatre tâches
+  spécifiques sorties, deux mises en file, deux refusées parce que design était à sa
+  limite — dit, pas silencieux.
+  Un défaut de ma part attrapé en le mesurant : `end-of-day.md` est réécrit à chaque
+  tour du CEO, donc par date il est **toujours** le document le plus récent. Ma
+  première version planifiait depuis le résumé du CEO lui-même — un miroir — pendant
+  qu'une revue de site nommant seize changements restait quatrième et n'entrait
+  jamais dans la fenêtre.
+
 - **Fixed : le doctor réclamait des modèles locaux à des installations qui n'en
   utilisent aucun.** `needs_local` valait `... or True` — la condition était morte,
   donc chaque installation se faisait dire de télécharger les modèles locaux.

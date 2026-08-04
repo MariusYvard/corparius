@@ -1411,6 +1411,131 @@ def _assign_held(ctx) -> str:
     return line
 
 
+# How much of a document to put in front of the CEO, and how many. A document is
+# unbounded and a prompt is not; the newest ones are the ones worth acting on.
+PLAN_FROM_DOCS_BUDGET = 4000
+PLAN_FROM_DOCS_COUNT = 2
+
+
+# What the CEO wrote itself. Planning from your own end-of-day summary is a mirror,
+# and it is rewritten on every CEO turn — so by mtime it is *always* the newest
+# document, and it would crowd out every finding another agent made. Measured: the
+# first version of this read the summary and a scoping note while a design review
+# naming sixteen changes sat fourth in the list and never entered the window.
+CEO_OWN_DOCUMENTS = ("end-of-day",)
+
+
+def _agent_documents(slug: str) -> list:
+    """What this company's *other* agents wrote, newest first.
+
+    Only `written/`: a file the operator dropped in is theirs, and turning their
+    price list into a backlog of tasks nobody asked for would be the product
+    deciding what their documents mean.
+    """
+    docs = [
+        d
+        for d in documents.load(slug)
+        if documents.WRITTEN in d.label.split("/") and d.path.stem not in CEO_OWN_DOCUMENTS
+    ]
+    return sorted(docs, key=lambda d: d.path.stat().st_mtime, reverse=True)
+
+
+def _plan_from_docs_prompt(ctx) -> str:
+    slug = ctx.company.get("slug", "company")
+    docs = _agent_documents(slug)[:PLAN_FROM_DOCS_COUNT]
+    if not docs:
+        return (
+            f"{_name(ctx)}'s agents have written no documents yet. Return an empty "
+            "`tasks` list and say so in `note`."
+        )
+    store = getattr(ctx, "store", None)
+    open_titles = (
+        [
+            t["title"]
+            for t in store.list_tasks(slug)
+            if t["status"] in ("proposed", "approved", "in_progress", "waiting")
+        ]
+        if store is not None
+        else []
+    )
+    spent = 0
+    chunks: list[str] = []
+    for doc in docs:
+        room = (PLAN_FROM_DOCS_BUDGET - spent) // max(1, len(docs) - len(chunks))
+        if room <= 200:
+            break
+        text = " ".join((doc.text or "").split())[:room]
+        spent += len(text)
+        chunks.append(f"--- {doc.label} ---\n{text}")
+    already = (
+        "\n\nAlready on the backlog, so do not repeat them:\n"
+        + "\n".join(f"- {t}" for t in open_titles[:12])
+        if open_titles
+        else ""
+    )
+    return (
+        "Your own agents wrote these. Turn what they found into work, or return an "
+        "empty list if there is nothing worth queueing — a task nobody needed costs "
+        "a real turn.\n\n"
+        f"Roles and what each can do:\n{_roster_menu(ctx)}\n\n"
+        + "\n\n".join(chunks)
+        + already
+        + "\n\n`tasks`: at most four, each as `role|tool|title` with a vertical bar "
+        "between them. The title must name the change, not the category — quote the "
+        "words to fix when the document quotes them. Use only a role from the list "
+        "and one of that role's own tools. `note`: one sentence on what you queued."
+    )
+
+
+def _plan_from_docs(ctx) -> str:
+    """Queue what the CEO drew out of its own agents' documents."""
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return "Backlog unavailable"
+    slug = ctx.company.get("slug", "company")
+    result = getattr(ctx, "structured", None)
+    data = result.data if result else {}
+    from .agents import ROSTER
+
+    enabled = ctx.company.get("agents", {}) or {}
+    playbooks = {r.value: set(s.playbook) for r, s in ROSTER.items()}
+    existing = {t["title"].strip().lower() for t in store.list_tasks(slug)}
+    paused = {d["target"] for d in store.directives(slug, "pause") if d.get("target")}
+    wip_limit = cfg.get_int("CORP_WIP_LIMIT", 4)
+    queued, refused = [], []
+    for entry in (data.get("tasks") or [])[:4]:
+        parts = [p.strip() for p in str(entry).split("|")]
+        if len(parts) != 3:
+            refused.append(f"{str(entry)[:40]} (not role|tool|title)")
+            continue
+        role, tool, title = parts
+        if not title:
+            continue
+        if not enabled.get(role) or tool not in playbooks.get(role, set()):
+            refused.append(f"{role}/{tool} (not on that role's playbook)")
+            continue
+        if role in paused:
+            refused.append(f"{role} (stood down)")
+            continue
+        if title.strip().lower() in existing:
+            refused.append(f"{title[:40]} (already on the board)")
+            continue
+        if store.wip_count(slug, role) >= wip_limit:
+            refused.append(f"{role} (at its work-in-progress limit)")
+            continue
+        store.add_task(slug, title[:90], role, 2, "approved", "ceo", tool=tool)
+        existing.add(title.strip().lower())
+        queued.append(f"{role}/{tool}: {title[:50]}")
+    if not queued:
+        return "Nothing queued from the documents" + (
+            f". Refused: {', '.join(refused[:3])}" if refused else ""
+        )
+    line = f"Queued {len(queued)} from the documents: " + "; ".join(queued)
+    if refused:
+        line += f". Refused: {', '.join(refused[:3])}"
+    return line
+
+
 def _review_proposals(ctx) -> str:
     store = getattr(ctx, "store", None)
     if store is None:
@@ -1616,6 +1741,25 @@ _ALL = [
             "why": {"type": "str", "default": "", "max_len": 300},
         },
         effect=lambda c, d: _ask_operator(c),
+    ),
+    Tool(
+        "plan_from_documents",
+        "Turn what the agents wrote into work",
+        needs_draft=True,
+        risk=permissions.WRITE_LOCAL,
+        # Nothing written, nothing to read: paying a model call to discover that is
+        # the waste `skip_when` exists for.
+        skip_when=lambda c: (
+            ""
+            if _agent_documents(c.company.get("slug", "company"))
+            else "the agents have written no documents yet"
+        ),
+        prompt=lambda c: _plan_from_docs_prompt(c),
+        schema={
+            "tasks": {"type": "list", "default": []},
+            "note": {"type": "str", "default": "", "max_len": 200},
+        },
+        effect=lambda c, d: _ok(_plan_from_docs(c)),
     ),
     Tool(
         "create_tasks", "CEO adds tasks to the backlog", effect=lambda c, d: _ok(_create_tasks(c))

@@ -60,6 +60,11 @@ ROSTER: dict[AgentRole, AgentSpec] = {
             "assign_held_tasks",
             "review_proposals",
             "create_tasks",
+            # After the baseline, because this reads what the agents actually found
+            # and the baseline is what fills a quiet day. A design review naming
+            # sixteen changes is worth more than "Publish a post today", and it
+            # should not be competing with it for the work-in-progress limit.
+            "plan_from_documents",
             "decide",
             "remember",
             "write_eod_summary",

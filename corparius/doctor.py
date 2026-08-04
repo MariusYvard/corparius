@@ -447,14 +447,32 @@ def _check_skills(s: Settings) -> tuple:
         )
     # A declared always-on skill is not a mistake, and its price is not zero
     # either. Said plainly rather than warned about: the operator chose this.
-    declared = [f"{s_.name} ({len(s_.instructions)} chars)" for s_ in found.values() if s_.always]
+    # Two costs, said apart, because they are different facts. A skill declared
+    # `always: true` puts its whole body on every prompt. One that wrote an
+    # `always: <text>` puts only that text everywhere and its body in scope — which
+    # is the difference between 3 815 characters a turn and 450.
+    whole = [
+        f"{s_.name} ({len(s_.instructions)})"
+        for s_ in found.values()
+        if s_.always and not s_.always_text
+    ]
+    split = [
+        f"{s_.name} ({len(s_.always_text)} of {len(s_.instructions)})"
+        for s_ in found.values()
+        if s_.always_text
+    ]
     note = f"{len(found)} loaded across {len(slugs) or 1} company(ies)"
-    if declared:
-        total = sum(len(s_.instructions) for s_ in found.values() if s_.always)
-        note += (
-            f"; always-on by declaration: {', '.join(declared)} — {total} characters on "
-            "every prompt of every agent, which is what `always: true` asks for"
-        )
+    riding = sum(
+        len(s_.always_text) if s_.always_text else len(s_.instructions)
+        for s_ in found.values()
+        if s_.always
+    )
+    if whole:
+        note += f"; whole body on every prompt: {', '.join(whole)}"
+    if split:
+        note += f"; rule on every prompt, body in scope: {', '.join(split)}"
+    if whole or split:
+        note += f" — {riding} characters ride on every prompt of every agent"
     return ("ok", "skills", note)
 
 

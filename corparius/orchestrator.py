@@ -428,4 +428,20 @@ class Runtime:
             res = companyrepo.sync(slug, f"{slug}: automatic commit after {ran} tick(s)")
         except Exception as exc:  # defensive: sync already swallows its own
             return {"enabled": True, "ok": False, "error": str(exc)}
+        # Said, not returned into a dict nobody reads. Measured: eight runs in a row
+        # failed to push and every one of them reported it only in a value the caller
+        # discarded, so a company's repository quietly stopped being a backup.
+        if res.get("committed") and not res.get("pushed"):
+            log.warning("%s: committed but not pushed — %s", slug, res.get("error"))
+            inbox.notify(
+                self.store,
+                slug,
+                "system",
+                "The company repository is behind",
+                "Its work is committed locally and the push was refused: "
+                f"{res.get('error') or 'no reason given'}. Until it goes through, this "
+                "company only exists on this machine.",
+            )
+        elif res.get("recovered"):
+            log.info("%s: the remote had moved; rebased onto it and pushed", slug)
         return {"enabled": True, **res}

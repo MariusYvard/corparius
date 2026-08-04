@@ -383,15 +383,63 @@ def sync(slug: str, message: str) -> dict:
         return {"ok": False, "committed": False, "pushed": False, "error": str(exc)}
     if not remote_url(slug):
         return {"ok": True, "committed": True, "pushed": False, "error": "no remote"}
-    out = _git(["push", "origin", "main"], repo_dir(slug), check=False)
-    if out.returncode != 0:
-        return {
-            "ok": True,
-            "committed": True,
-            "pushed": False,
-            "error": (out.stderr or out.stdout).strip()[:200],
-        }
-    return {"ok": True, "committed": True, "pushed": True, "error": ""}
+    path = repo_dir(slug)
+    out = _git(["push", "origin", "main"], path, check=False)
+    if out.returncode == 0:
+        return {"ok": True, "committed": True, "pushed": True, "error": "", "recovered": False}
+    reason = (out.stderr or out.stdout).strip()
+    # A diverged remote is the one failure worth recovering from without asking: the
+    # remote moved, the local moved, and both sides are wanted. Measured on a real
+    # install: one commit pushed from elsewhere rejected every automatic push for
+    # eight runs, and the repository quietly stopped being a backup.
+    if _diverged(reason):
+        fixed = _rebase_onto_remote(path)
+        if fixed:
+            again = _git(["push", "origin", "main"], path, check=False)
+            if again.returncode == 0:
+                return {
+                    "ok": True,
+                    "committed": True,
+                    "pushed": True,
+                    "error": "",
+                    "recovered": True,
+                }
+            reason = (again.stderr or again.stdout).strip()
+        else:
+            reason = (
+                "the remote has commits this copy does not, and rebasing onto them "
+                "conflicts. Resolve it by hand: git pull --rebase in " + str(path)
+            )
+    return {
+        "ok": True,
+        "committed": True,
+        "pushed": False,
+        "error": reason[:300],
+        "recovered": False,
+    }
+
+
+def _diverged(reason: str) -> bool:
+    """Whether a rejected push is the recoverable kind: the remote simply moved."""
+    text = (reason or "").lower()
+    return "non-fast-forward" in text or "fetch first" in text or "rejected" in text
+
+
+def _rebase_onto_remote(path) -> bool:
+    """Put the local commits on top of the remote's. True when the tree is clean after.
+
+    `--autostash` so a run that left the folder dirty does not block its own backup,
+    and an abort on any failure: leaving a repository mid-rebase would be worse than
+    the unpushed commits it was trying to fix, because the next run would find a
+    detached head and fail in a way nobody could read.
+    """
+    if _git(["fetch", "origin", "main"], path, check=False).returncode != 0:
+        return False
+    out = _git(["rebase", "--autostash", "origin/main"], path, check=False)
+    if out.returncode == 0:
+        return True
+    _git(["rebase", "--abort"], path, check=False)
+    return False
 
 
 def autocommit_enabled() -> bool:

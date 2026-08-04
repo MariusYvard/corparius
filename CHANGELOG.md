@@ -8,6 +8,26 @@ was released.
 
 ## Non publié
 
+- **Fixed : le dépôt d'une entreprise a cessé d'être une sauvegarde, en silence.**
+  **Mesuré sur l'installation du propriétaire : neuf commits locaux, aucun sur le
+  distant.** Un commit poussé depuis ailleurs avait fait diverger les historiques, et
+  **chaque push automatique depuis était refusé en non-fast-forward — huit tours de
+  suite, sans un mot**. `sync` renvoyait `pushed: False` avec la raison dans un
+  dictionnaire, l'orchestrateur remontait le dictionnaire, et personne ne le lisait.
+  Deux moitiés, et il fallait les deux. Un distant qui a bougé est récupérable sans
+  demander à qui que ce soit : `fetch`, rebase des commits locaux par-dessus, push —
+  avec `--autostash`, pour qu'un tour ayant laissé le dossier sale ne bloque pas sa
+  propre sauvegarde, et un `--abort` sur tout échec, parce que laisser un dépôt en
+  plein rebase serait pire que les commits non poussés qu'on essayait de sauver. Et
+  quand ce n'est **pas** récupérable — un vrai conflit — ça arrive dans l'inbox et
+  dans le journal, parce que le mode de défaillance est une entreprise qui n'existe
+  plus que sur une machine.
+  Un échec d'authentification n'est pas confondu avec une divergence : rebaser n'y
+  changerait rien et cacherait la vraie raison derrière une seconde, plus confuse.
+  Les tests utilisent de **vrais dépôts git** avec un dépôt nu comme distant — un git
+  bouchonné n'aurait pas attrapé ce qui a cassé, puisque ce qui a cassé était la
+  réponse de git à une vraie divergence.
+
 - **Added : les fichiers pour crawlers d'un site possédé suivent l'adresse réelle.**
   `sitegen` traçait cette ligne depuis toujours pour une page générée — une balise
   absolue est **omise plutôt que pointée vers une supposition**, parce qu'un lien

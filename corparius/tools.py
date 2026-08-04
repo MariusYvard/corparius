@@ -405,7 +405,19 @@ def _find_targets(ctx) -> str:
     # `triage_inbox` was already caught doing, and the repo's own rule is that
     # every number is Measured, Given or Estimated. That one was none.
     ctx.leads = []
-    configured = ", ".join(leadsource.configured_sources()) or "none"
+    sources = leadsource.configured_sources()
+    configured = ", ".join(sources) or "none"
+    if not sources:
+        # Established once, in a document every prompt reads back, instead of
+        # rediscovered every three hours for the rest of the company's life.
+        documents.record_wall(
+            ctx.company.get("slug", "company"),
+            "no lead source",
+            "Every source of prospects is unconfigured, so find_targets can only ever "
+            "return nothing and send_outreach has nobody to write to.",
+            "Set CORP_LEADS_CSV to a list you own, or CORP_LEAD_SEARCH_URL to let "
+            "corparius search — both in Settings, Leads.",
+        )
     return (
         "No lead found. Sources configured: "
         f"{configured}. Set CORP_LEADS_CSV for a list you own, or CORP_LEAD_SEARCH_URL "
@@ -546,6 +558,16 @@ def _send_outreach(ctx, draft: str) -> str:
     )
 
 
+def _record_no_mailbox(ctx) -> None:
+    documents.record_wall(
+        ctx.company.get("slug", "company"),
+        "no mailbox",
+        "No mailbox is connected, so nothing can read what customers sent or answer "
+        "them. Support can draft into the void and no further.",
+        "Connect an account in Settings, Mail — the console tests it for real before saving it.",
+    )
+
+
 def _no_mailbox(ctx, consequence: str) -> str:
     """Say it once, where it can be acted on, instead of every tick forever.
 
@@ -567,6 +589,9 @@ def _no_mailbox(ctx, consequence: str) -> str:
             "Settings, then Mail: pick your provider and follow the steps.",
             fix="mail",
         )
+    # And written down where the next turn reads it, so this is established rather
+    # than rediscovered. The notice asks the operator; the document tells the agents.
+    _record_no_mailbox(ctx)
     return f"No mailbox connected, so {consequence} (filed in the inbox)"
 
 

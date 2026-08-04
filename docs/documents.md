@@ -104,6 +104,20 @@ C'est la moitié facile à manquer. Quatre outils produisaient une vraie prose e
 | `write_eod_summary` | `written/end-of-day.md` |
 | `review_site` | `written/site-review.md` |
 | `write_note` | `written/<sujet>.md` — le nom vient de la tâche |
+| un mur rencontré | `written/walls.md` — une ligne par mur distinct |
+
+`walls.md` est l'autre moitié de ce dossier. Les six premières lignes gardent ce qu'un
+agent a **produit** ; celle-là garde ce qu'un agent a **constaté** — et constater coûte
+un tour aussi. Mesuré : une session a journalisé `find_targets: No lead found. Sources
+configured: none.` **plus de quarante fois**, chaque ligne vraie et chaque ligne
+redécouverte, sans que rien ne dise que c'était établi. C'est la discipline des workers
+NanoCorp, qui ouvrent tous par « je lis DOCS.md » et ferment par « j'écris mes constats
+pour que le prochain tour ne réexplore pas ».
+
+L'écriture est **clé par clé et idempotente** : le même mur rencontré à nouveau n'écrit
+rien, donc le fichier reste une liste de faits distincts et non un journal — ce qu'il
+existe précisément pour remplacer. Et comme il atterrit dans le dossier que chaque
+invite relit, le tour suivant le lit au lieu de payer pour l'apprendre.
 
 Les cinq premiers écrivent chacun **un** document, sous un nom fixe. `write_note` est
 l'autre cas: il écrit *le* document qu'une tâche demande, et son nom vient du sujet.

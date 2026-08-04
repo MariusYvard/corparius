@@ -617,6 +617,49 @@ def _keep(ctx, name: str, text: str, line: str) -> str:
     return line
 
 
+def _task_subject(ctx) -> str:
+    """What the running task asked for, or "" on a playbook turn."""
+    task = getattr(ctx, "task", None) or {}
+    title = " ".join(str(task.get("title") or "").split())
+    why = " ".join(str(task.get("why") or "").split())
+    if not title:
+        return ""
+    return title + (f" — why it was asked for: {why}" if why else "")
+
+
+def _write_note_prompt(ctx) -> str:
+    subject = _task_subject(ctx)
+    if not subject:
+        return (
+            f"Write a short internal note for {_name(ctx)}. `title`: what it is "
+            "about, in a few words. `body`: the note itself."
+        )
+    return (
+        f"A task on {_name(ctx)}'s backlog asks for a written document:\n\n{subject}\n\n"
+        "Write it. `title`: a few words naming the document, so it can be found "
+        "again. `body`: the document — what it decides or records, with the reasons. "
+        "Label every figure Measured, Given or Estimated, and leave out any you do "
+        "not have rather than inventing one."
+    )
+
+
+def _write_note(ctx) -> str:
+    """Write the document the task asked for, and keep it.
+
+    Deliberately general, and deliberately reachable only from a task. On a playbook
+    it would produce a note about nothing every turn, which is the queue of drafts
+    nobody reads in yet another costume.
+    """
+    result = getattr(ctx, "structured", None)
+    data = result.data if result else {}
+    title = " ".join(str(data.get("title", "")).split())[:80]
+    body = str(data.get("body", "")).strip()
+    if not body:
+        return _empty_draft(ctx, "no note was written")
+    name = title or (getattr(ctx, "task", None) or {}).get("title") or "note"
+    return _keep(ctx, name, body, f"Note written: {name} ({len(body)} chars) — kept in documents")
+
+
 def _empty_draft(ctx, consequence: str) -> str:
     """Why a schema tool got nothing: the model said nothing, or none answered.
 
@@ -1093,6 +1136,10 @@ ROLE_TOOL = {
     "outreach": "send_outreach",
     "social": "draft_social_post",
     "support": "draft_support_reply",
+    # Strategy's work product is a written document. Without this, a strategy task
+    # reached an agent with no tool that could carry it and was held for the
+    # operator — measured, twice, on one real company.
+    "strategy": "write_note",
     # The tool that can change what the site says, not the one that renders it.
     # `build_sales_site` reads the copy out of company.yaml and writes HTML, so a
     # task like "remove the unverified badge from the landing page" completed
@@ -1487,6 +1534,24 @@ _ALL = [
         effect=lambda c, d: _ok(_remember(c)),
     ),
     Tool(
+        "write_note",
+        "Write the internal document a task asks for",
+        needs_draft=True,
+        risk=permissions.WRITE_LOCAL,
+        # A task, never a playbook: on a playbook this writes a note about nothing,
+        # every turn. Five tools already write documents under fixed names; this is
+        # the one that writes the document a *task* asked for, which is what
+        # "rédiger une note de cadrage pour le contrat de licence" needed and had
+        # nowhere to go.
+        by_task_only=True,
+        prompt=lambda c: _write_note_prompt(c),
+        schema={
+            "title": {"type": "str", "default": "", "max_len": 80},
+            "body": {"type": "str", "default": "", "max_len": 4000},
+        },
+        effect=lambda c, d: _ok(_write_note(c)),
+    ),
+    Tool(
         "ask_operator",
         "Ask the operator for something only they can supply",
         needs_draft=True,
@@ -1494,6 +1559,7 @@ _ALL = [
         prompt=lambda c: (
             f"In one sentence, ask the operator of {_name(c)} for the one piece of "
             "information or access this task cannot proceed without."
+            + (f" The task: {_task_subject(c)}" if _task_subject(c) else "")
         ),
         schema={
             "question": {"type": "str", "required": True, "max_len": 160},

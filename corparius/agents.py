@@ -294,7 +294,27 @@ class Executor:
         return True
 
     def _work_task(self, company, spec, ctx, task, loop, done) -> bool:
-        """Run a backlog task's tool for real. Returns True if a guard tripped."""
+        """Run a backlog task's tool for real. Returns True if a guard tripped.
+
+        `ctx.task` is set for the whole of this method and cleared on the way out.
+        `by_task_only` tools exist to serve a task, and `ask_operator`'s prompt has
+        always said "this task" while nothing put the task anywhere a prompt could
+        read it. Clearing it matters as much as setting it: the context is shared
+        across the whole turn, so a task left behind would be read by every playbook
+        tool that ran afterwards.
+
+        Set around everything rather than around the call, so the invariant — no task
+        on the context after this returns — holds on every path out, including the
+        early one where nothing can run the task at all. A test asserted the
+        invariant and found that path.
+        """
+        ctx.task = task
+        try:
+            return self._work_task_inner(company, spec, ctx, task, loop, done)
+        finally:
+            ctx.task = None
+
+    def _work_task_inner(self, company, spec, ctx, task, loop, done) -> bool:
         tool_name = (task.get("tool") or "").strip()
         if tool_name not in TOOLS:
             self._hold_untooled(company, task, done)

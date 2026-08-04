@@ -102,6 +102,22 @@ C'est la moitié facile à manquer. Quatre outils produisaient une vraie prose e
 | `scan_competitors` | `written/competitor-scan.md` |
 | `update_pricing` | `written/pricing-note.md` |
 | `write_eod_summary` | `written/end-of-day.md` |
+| `review_site` | `written/site-review.md` |
+| `write_note` | `written/<sujet>.md` — le nom vient de la tâche |
+
+Les cinq premiers écrivent chacun **un** document, sous un nom fixe. `write_note` est
+l'autre cas: il écrit *le* document qu'une tâche demande, et son nom vient du sujet.
+Sans lui, « rédiger une note de cadrage pour le contrat de licence » n'avait nulle
+part où aller — le rôle strategy n'avait aucun outil capable de produire un document,
+la tâche restait retenue, et quand le CEO l'a placée quand même elle est tombée sur
+`write_site_content`, qui aurait écrit du texte de site pour un contrat de licence.
+
+Il est `by_task_only`: sur un playbook il écrirait une note sur rien, à chaque tour.
+La tâche arrive jusqu'à lui par `ctx.task`, posé pour la durée de l'appel et effacé
+en sortant — le contexte est partagé sur tout le tour, donc une tâche oubliée là
+serait lue par chaque outil suivant. C'est aussi ce qui a réparé `ask_operator`, dont
+l'invite disait « ce que **cette tâche** ne peut pas faire sans » alors que rien ne
+lui transmettait la tâche.
 
 Le reste était jeté au moment de l'écriture — y compris pour l'agent qui en aurait eu besoin au tour suivant. Le brief de design mesuré passe de 120 à 512 caractères et revient dans l'invite du tour d'après.
 

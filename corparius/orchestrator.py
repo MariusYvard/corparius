@@ -51,6 +51,12 @@ class RunContext:
     # What could not be sent, and why. Carried rather than dropped, because "no
     # silent truncation" covers a picture left behind as much as a cut document.
     images_skipped: list = field(default_factory=list)
+    # The backlog task this turn is running, when there is one. `by_task_only` tools
+    # exist to serve a task and `ask_operator`'s prompt already said "this task" —
+    # while nothing put the task anywhere the prompt could read it. Set for the
+    # duration of one tool call and cleared after, so a playbook turn can never read
+    # a task left behind by the turn before it.
+    task: dict | None = None
 
 
 def _load_skills(settings, slug: str):

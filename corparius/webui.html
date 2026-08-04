@@ -1135,7 +1135,7 @@ en: {
   "docs.no.too-large":"{name} was not stored: it is larger than the {mb} MB limit.",
   "docs.no.write-failed":"{name} was not stored: it could not be written. {detail}",
   "bk.run":"Back up now","bk.running":"Zipping…","bk.done":"Backup written",
-  "task.edit":"Edit","task.save":"Save","task.cancel":"Cancel","task.saved":"Task updated",
+  "task.edit":"Edit","task.noTool":"no tool","task.save":"Save","task.cancel":"Cancel","task.saved":"Task updated",
   "token.needed":"This console requires an access token.","token.placeholder":"CORP_UI_TOKEN",
   "token.save":"Use token","token.ok":"Token accepted",
   "conn.error":"Cannot reach the corparius server:",
@@ -1347,7 +1347,7 @@ fr: {
   "docs.no.too-large":"{name} n’a pas été enregistré : il dépasse la limite de {mb} Mo.",
   "docs.no.write-failed":"{name} n’a pas été enregistré : l’écriture a échoué. {detail}",
   "bk.run":"Sauvegarder maintenant","bk.running":"Compression…","bk.done":"Sauvegarde écrite",
-  "task.edit":"Modifier","task.save":"Enregistrer","task.cancel":"Annuler","task.saved":"Tâche modifiée",
+  "task.edit":"Modifier","task.noTool":"aucun outil","task.save":"Enregistrer","task.cancel":"Annuler","task.saved":"Tâche modifiée",
   "token.needed":"Cette console exige un token d'accès.","token.placeholder":"CORP_UI_TOKEN",
   "token.save":"Utiliser ce token","token.ok":"Token accepté",
   "toast.approved":"Approuvé","toast.rejected":"Rejeté","toast.remembered":"Approuvé, et ne sera plus demandé","toast.revoked":"Règle révoquée","toast.memory":"Mémoire mise à jour","toast.answered":"Répondu","toast.taskApproved":"Tâche approuvée","toast.taskAssigned":"Assignée et approuvée","toast.taskRejected":"Tâche rejetée",
@@ -2536,11 +2536,29 @@ function openTaskEditor(btn, id) {
   const card = btn.closest(".kcard");
   const task = Object.values(state.overview.tasks).flat().find(x => x.id === id);
   if (!task || card.querySelector("[data-f=title]")) return;
+  /* The agent and the tool, editable here. `/api/tasks` has accepted both all
+     along and the editor never offered them, so a task on the wrong role — or with
+     no tool at all — could not be corrected from the board where it is shown. The
+     operator said it plainly: even in the backlog, I cannot change the agent or the
+     tool. The lists are the same ones the inbox notice offers: the company's
+     enabled agents, and the chosen agent's playbook. */
+  const d = state.overview || {};
+  const roles = Object.keys(d.agent_tools || {});
+  const opts = (list, sel) => list.map(v =>
+    `<option value="${esc(v)}"${v === sel ? " selected" : ""}>${esc(v)}</option>`).join("");
+  const owner = roles.includes(task.target) ? task.target : (roles[0] || "");
+  const tools = (d.agent_tools || {})[owner] || [];
   card.innerHTML = `
     <input data-f="title" value="${esc(task.title)}" style="width:100%">
     <span style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
       <label class="note" style="font-size:12px">p<input data-f="priority" type="number" min="0" max="5"
         value="${esc(task.priority)}" style="width:52px; margin-left:4px"></label>
+      ${roles.length ? `<label class="note" style="font-size:12px">${t("ib.owner")}
+        <select data-f="target" data-task-owner="${id}">${opts(roles, owner)}</select></label>
+      <label class="note" style="font-size:12px">${t("ib.tool")}
+        <select data-f="tool" data-task-tool="${id}">
+          <option value=""${task.tool ? "" : " selected"}>${t("task.noTool")}</option>
+          ${opts(tools, task.tool || "")}</select></label>` : ""}
       <button data-task-save="${id}">${t("task.save")}</button>
       <button data-task-cancel="1">${t("task.cancel")}</button>
     </span>`;
@@ -2660,9 +2678,14 @@ document.addEventListener("click", async e => {
   if (b.dataset.taskEdit) return openTaskEditor(b, +b.dataset.taskEdit);
   if (b.dataset.taskSave) {
     const card = b.closest(".kcard");
+    const pick = f => card.querySelector(`[data-f=${f}]`);
     const body = {id: +b.dataset.taskSave,
-                  title: card.querySelector("[data-f=title]").value,
-                  priority: card.querySelector("[data-f=priority]").value};
+                  title: pick("title").value,
+                  priority: pick("priority").value};
+    // Sent only when the editor offered them, so a console with no enabled agents
+    // cannot blank a task's target by saving a field that was never rendered.
+    if (pick("target")) body.target = pick("target").value;
+    if (pick("tool")) body.tool = pick("tool").value;
     b.disabled = true;
     try { await api("/api/tasks", body); toast(t("task.saved")); await refresh(); }
     catch (err) { toast(err.message, true); b.disabled = false; }
@@ -3364,6 +3387,17 @@ function restoreMailPreset(d) {
 /* Change the agent, get that agent's tools. Without this the tool list keeps
    showing the previous role's playbook, and "Assign" would hand a task a tool the
    chosen agent never runs — the untooled task again, wearing a different hat. */
+document.addEventListener("change", ev => {
+  const sel = ev.target.closest("[data-task-owner]");
+  if (!sel) return;
+  const box = ev.target.closest(".kcard")?.querySelector("[data-task-tool]");
+  if (!box) return;
+  const d = state.overview || {};
+  const list = (d.agent_tools || {})[sel.value] || [];
+  const preferred = (d.role_tool || {})[sel.value] || "";
+  box.innerHTML = `<option value="">${t("task.noTool")}</option>` + list.map(v =>
+    `<option value="${esc(v)}"${v === preferred ? " selected" : ""}>${esc(v)}</option>`).join("");
+});
 document.addEventListener("change", ev => {
   const owner = ev.target.closest("[data-ib-owner]");
   if (!owner) return;

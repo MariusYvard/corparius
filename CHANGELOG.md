@@ -8,6 +8,32 @@ was released.
 
 ## Non publié
 
+- **Added : un plafond de jetons par rôle, demandé pour l'agent qui fait le site.**
+  `budgets.role_tokens` donne à un rôle sa propre bourse — **en plus** du budget
+  de session partagé, pas prélevée dessus. La raison est arithmétique : design
+  tourne une fois par 24 ticks et son tour est le plus cher de l'entreprise (il lit
+  et relit quatre vraies pages), support tourne toutes les 3 ticks. Mesuré sur une
+  vraie semaine : 830 069 jetons dépensés contre un `session_tokens` de 120 000, et
+  les tours de support arrivent d'abord — un seul pot commun veut dire que le rôle
+  fréquent le dépense et que le rôle rare trouve la caisse fermée. Un rôle réservé
+  est arrêté par **son** plafond, avec son nom dans le message ; les autres gardent
+  exactement ce qu'ils avaient ; et le total reste ce qui arrête un emballement.
+  Une entreprise qui ne demande rien ne change pas d'un iota.
+  **Ma première version soustrayait**, et une réserve de 400 000 contre une session
+  de 120 000 laissait la part commune à zéro — tous les autres rôles affamés d'un
+  coup, l'inverse exact de ce que « donner plus à un rôle » peut vouloir dire.
+  Trouvé en l'exécutant, pas en le relisant.
+- **Fixed : dans le backlog, on ne pouvait changer ni l'agent ni l'outil d'une
+  tâche.** `/api/tasks` accepte `target` et `tool` depuis toujours, et l'éditeur ne
+  les a jamais offerts — donc une tâche sur le mauvais rôle, ou sans outil, ne
+  pouvait pas être corrigée depuis le tableau où elle s'affiche. L'exploitant l'a
+  dit tel quel. Les listes sont les mêmes que celles de l'avis : les agents
+  réellement activés, et le playbook de l'agent choisi ; changer d'agent recharge
+  ses outils. Les champs ne sont envoyés que s'ils ont été affichés, pour qu'une
+  console sans agent activé ne puisse pas vider la cible en enregistrant. Vérifié
+  en exécutant l'éditeur livré sur les deux cas réels : une tâche sans outil et une
+  tâche outillée.
+
 - **Fixed : l'aperçu du site servait `index.html` et rien d'autre.** Ce qui allait
   très bien tant que le site *était* une page générée. Pour une entreprise qui
   livre le sien — les quatre pages de Vigil, une feuille de style, un script, un

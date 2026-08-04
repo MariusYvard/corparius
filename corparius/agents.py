@@ -418,7 +418,7 @@ class Executor:
         Returns (result, stop); stop=True means a guard tripped, halt the turn."""
         tool = TOOLS[tool_name]
         try:
-            ctx.budget.check_before()
+            ctx.budget.check_before(role=spec.role.value)
         except BudgetExceeded as exc:
             log.warning("[%s] budget stop: %s", spec.role.value, exc)
             self.store.record_action(company, spec.role.value, tool_name, {}, str(exc), False)
@@ -482,7 +482,9 @@ class Executor:
                 **carry,
             )
             for used in result.usages:  # a repair round is a real call; bill it
-                ctx.budget.record_usage(used.input_tokens, used.output_tokens, used.cost)
+                ctx.budget.record_usage(
+                    used.input_tokens, used.output_tokens, used.cost, spec.role.value
+                )
                 ctx.breaker.record(used.total)
                 self.store.record_usage(
                     company, spec.role.value, used.input_tokens, used.output_tokens, used.cost
@@ -499,7 +501,9 @@ class Executor:
                 model=spec.model,
                 **carry,
             )
-            ctx.budget.record_usage(res.usage.input_tokens, res.usage.output_tokens, res.usage.cost)
+            ctx.budget.record_usage(
+                res.usage.input_tokens, res.usage.output_tokens, res.usage.cost, spec.role.value
+            )
             ctx.breaker.record(res.usage.total)
             self.store.record_usage(
                 company,

@@ -380,13 +380,14 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
         if not agents.get(name):
             warnings.append(f"budgets.role_tokens.{name} is set but that agent is off")
         role_tokens[name] = capped
-    if role_tokens and sum(role_tokens.values()) >= session:
-        # Said, not silently resolved: the session ceiling will be raised to cover
-        # the reserves, which means the operator's own session number is no longer
-        # the number that stops the run.
+    if role_tokens:
+        # Said, not left to be discovered: a reserve is a purse in addition to the
+        # shared budget, so the number that stops a runaway is the sum, not the
+        # session figure the operator wrote.
         warnings.append(
-            f"budgets.role_tokens reserve {sum(role_tokens.values())} of a "
-            f"{session} session, so the session ceiling rises to cover them"
+            f"budgets.role_tokens adds {sum(role_tokens.values())} to the {session} "
+            f"session budget: {session + sum(role_tokens.values())} tokens in total, "
+            f"{session} of them shared by every role without a reserve"
         )
     ads_eur = _int(budgets_in.get("daily_ad_spend_eur", 0), 0)
     if ads_eur < 0:
@@ -601,6 +602,9 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             "session_tokens": session,
             "tokens_per_minute": tpm,
             "daily_ad_spend_eur": ads_eur,
+            # Emitted only when set, like cost_budget: writing an empty mapping into
+            # every company would pin them all to whatever this file meant today.
+            **({"role_tokens": role_tokens} if role_tokens else {}),
             **({"cost_budget": cost_budget} if cost_budget is not None else {}),
         },
         "hitl_tools": hitl,

@@ -18,7 +18,7 @@ import pytest
 
 from corparius import appexport, apps
 from corparius.config import Settings
-from corparius.models import Difficulty
+from corparius.kernel.records import Difficulty
 
 APP = apps.App(
     name="faq",

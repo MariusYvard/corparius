@@ -2,7 +2,7 @@
 money-moving tool at the human gate until it is approved."""
 
 from corparius.config import Settings
-from corparius.models import AgentRole
+from corparius.kernel.records import AgentRole
 from corparius.orchestrator import Runtime, due_roles
 from corparius.store import Store
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import time
 
-from .models import ApprovalRequest, ToolResult
+from .kernel.records import ApprovalRequest, ToolResult
 from .permissions import PermissionEngine
 
 REJECTION_MESSAGE = "Tool execution denied: Approval rejected by administrator."

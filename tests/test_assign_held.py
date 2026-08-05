@@ -91,7 +91,7 @@ def test_the_prompt_offers_only_playbook_tools(store):
     assert "design: " in prompt and "write_site_content" in prompt
     assert "send_outreach" not in prompt, "outreach is off in this company"
     for name in ROSTER[
-        __import__("corparius.models", fromlist=["AgentRole"]).AgentRole.CEO
+        __import__("corparius.kernel.records", fromlist=["AgentRole"]).AgentRole.CEO
     ].playbook:
         if name not in ("review_kpis",):
             continue
@@ -218,7 +218,7 @@ def test_a_notice_is_kept_while_a_task_is_still_held(store):
 def test_it_is_on_the_ceos_playbook_before_reviewing_new_proposals():
     """A task already approved and then held is work the CEO has said yes to.
     Arbitrating fresh ideas while leaving it for the operator is the wrong order."""
-    from corparius.models import AgentRole
+    from corparius.kernel.records import AgentRole
 
     book = ROSTER[AgentRole.CEO].playbook
     assert "assign_held_tasks" in book
@@ -354,7 +354,7 @@ def test_at_most_four_tasks_come_out_of_one_document(store, tmp_path, monkeypatc
 def test_it_is_on_the_ceos_playbook_after_the_baseline():
     """A design review naming sixteen changes is worth more than "Publish a post
     today", and should not compete with it for the work-in-progress limit."""
-    from corparius.models import AgentRole
+    from corparius.kernel.records import AgentRole
 
     book = ROSTER[AgentRole.CEO].playbook
     assert book.index("plan_from_documents") > book.index("create_tasks")

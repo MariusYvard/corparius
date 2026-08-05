@@ -27,7 +27,7 @@ from pathlib import Path
 
 import yaml
 
-from .models import Difficulty
+from .kernel.records import Difficulty
 
 log = logging.getLogger("corparius.apps")
 

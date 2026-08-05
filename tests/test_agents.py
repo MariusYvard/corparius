@@ -5,7 +5,7 @@ that company's day, on the tick the role happens to be due.
 """
 
 from corparius.agents import ROSTER
-from corparius.models import AgentRole, Difficulty
+from corparius.kernel.records import AgentRole, Difficulty
 from corparius.tools import TOOLS
 
 

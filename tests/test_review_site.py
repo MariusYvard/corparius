@@ -204,6 +204,6 @@ def test_the_tool_is_on_the_design_playbook():
     """A tool no playbook names is a tool that never runs — the defect
     tests/test_tool_reach.py exists for."""
     from corparius.agents import ROSTER
-    from corparius.models import AgentRole
+    from corparius.kernel.records import AgentRole
 
     assert "review_site" in ROSTER[AgentRole.DESIGN].playbook

@@ -9,7 +9,7 @@ import pytest
 
 from corparius import cfg, ollama_setup, provider_check, webui
 from corparius.config import Settings
-from corparius.models import LLMResult, Usage
+from corparius.kernel.records import LLMResult, Usage
 
 from .test_webui import _call
 

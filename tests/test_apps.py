@@ -13,7 +13,7 @@ import pytest
 import yaml
 
 from corparius import apps
-from corparius.models import Difficulty, LLMResult, Usage
+from corparius.kernel.records import Difficulty, LLMResult, Usage
 from corparius.store import Store
 
 FAQ = {

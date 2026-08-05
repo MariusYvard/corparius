@@ -46,7 +46,6 @@ ROOT = Path("corparius")
 # 6 interfaces transport: HTTP, CLI, MCP. Nothing imports these.
 RANKS: dict[str, int] = {
     # 0 — kernel
-    "models": 0,
     "kernel/__init__": 0,
     "kernel/i18n": 0,
     "kernel/crypto": 0,
@@ -55,6 +54,7 @@ RANKS: dict[str, int] = {
     "kernel/text": 0,
     "kernel/proc": 0,
     "kernel/paths": 0,
+    "kernel/records": 0,
     "inbox": 0,
     # Rank 1, not 0, and deliberately: `secretbox` kept the policy — where the passphrase
     # comes from, whether the feature is on — which is knowledge of configuration. Only the

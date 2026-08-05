@@ -22,7 +22,7 @@ did exactly what the attacker asked.
 import pytest
 
 from corparius import agents, apps, permissions
-from corparius.models import LLMResult, Usage
+from corparius.kernel.records import LLMResult, Usage
 from corparius.store import Store
 from corparius.structured import Result
 from corparius.tools import TOOLS

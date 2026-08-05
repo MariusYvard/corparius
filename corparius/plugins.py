@@ -103,7 +103,7 @@ class PluginAPI:
         cadence_hours, difficulty, model). Adding a brand-new role is not
         supported in this API version (AgentRole is a fixed enum)."""
         from . import agents
-        from .models import AgentRole
+        from .kernel.records import AgentRole
 
         key = role if isinstance(role, AgentRole) else AgentRole(str(role))
         spec = agents.ROSTER.get(key)

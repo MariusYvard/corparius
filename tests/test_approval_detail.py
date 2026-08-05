@@ -111,7 +111,7 @@ def test_an_approval_written_before_this_column_existed_still_renders(tmp_path, 
         "slug: t\nname: T\n", encoding="utf-8"
     )
     from corparius import webui
-    from corparius.models import ApprovalRequest
+    from corparius.kernel.records import ApprovalRequest
 
     store = Store(str(tmp_path))
     store.add_approval(

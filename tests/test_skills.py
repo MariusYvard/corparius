@@ -11,7 +11,7 @@ import types
 import pytest
 
 from corparius.agents import ROSTER, _messages, language_line
-from corparius.models import AgentRole
+from corparius.kernel.records import AgentRole
 from corparius.skills import Skill, SkillLoader, parse
 from corparius.tools import TOOLS
 

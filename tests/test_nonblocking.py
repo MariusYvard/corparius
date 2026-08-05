@@ -13,7 +13,7 @@ import types
 
 from corparius.agents import ROSTER, Executor
 from corparius.hitl import ApprovalGate
-from corparius.models import AgentRole, ToolResult
+from corparius.kernel.records import AgentRole, ToolResult
 from corparius.permissions import MONEY, PermissionEngine
 from corparius.safety import CircuitBreaker, TokenBudget
 from corparius.store import Store

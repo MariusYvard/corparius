@@ -10,7 +10,7 @@ import pytest
 
 from corparius import permissions as perm
 from corparius.hitl import BLOCKED_MESSAGE, ApprovalGate
-from corparius.models import ToolResult
+from corparius.kernel.records import ToolResult
 from corparius.permissions import Decision, PermissionEngine
 from corparius.store import Store
 from corparius.tools import TOOLS

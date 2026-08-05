@@ -26,8 +26,8 @@ import requests
 
 from . import cfg
 from .kernel import proc
+from .kernel.records import Difficulty, LLMResult, Usage
 from .kernel.vectors import hash_embed
-from .models import Difficulty, LLMResult, Usage
 
 log = logging.getLogger("corparius.llm")
 

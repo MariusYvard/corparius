@@ -180,7 +180,7 @@ def test_approvals_reports_nothing_pending(cfg_path, capsys):
 
 
 def test_approve_and_reject_by_id(cfg_path, capsys):
-    from corparius.models import ApprovalRequest
+    from corparius.kernel.records import ApprovalRequest
 
     store = _store(cfg_path)
     store.add_approval(

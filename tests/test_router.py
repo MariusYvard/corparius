@@ -3,8 +3,8 @@
 import requests
 
 from corparius.config import Settings
+from corparius.kernel.records import Difficulty, LLMResult, Usage
 from corparius.llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, LLMProvider, _split
-from corparius.models import Difficulty, LLMResult, Usage
 
 
 def _mock_settings() -> Settings:

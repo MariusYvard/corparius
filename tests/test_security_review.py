@@ -5,6 +5,7 @@ is what made them worth reporting and worth pinning. Neither was theoretical:
 each was reproduced against the real code before it was fixed.
 """
 
+import ast
 import pathlib
 
 import pytest
@@ -149,12 +150,47 @@ def test_the_host_allow_list_is_still_not_settable_by_name():
     assert "CORP_UI_ALLOWED_HOSTS" not in webui.ALLOWED_VARS
 
 
+# Every module allowed to write a .env, and what for. A new name here is a new way into the
+# file that holds CORP_UI_ALLOWED_HOSTS, so adding one should cost a line in this list.
+DOTENV_CALLERS = {
+    "corparius/webui.py",  # the settings page and the providers panel
+    "corparius/backup.py",  # a restore, from an archive someone else may have built
+    "corparius/secretscli.py",  # `corparius secrets on`
+}
+
+
 def test_the_writer_is_the_choke_point_every_caller_goes_through():
-    """Three callers, one guard: the settings page, the providers panel, and a
-    restore. Putting the check in any one of them would have left the others."""
-    source = pathlib.Path("corparius/webui.py").read_text(encoding="utf-8")
-    assert source.count("_merge_env_file(") >= 3
-    assert (
-        pathlib.Path("corparius/backup.py").read_text(encoding="utf-8").count("_merge_env_file(")
-        >= 1
+    """Four callers, one guard: the settings page, the providers panel, a restore, and the
+    secrets CLI. Putting the check in any one of them would have left the others.
+
+    This counted occurrences of `_merge_env_file(` in two files, which stopped meaning
+    anything once the writer moved to `kernel/dotenv.py`. It now asks the question the old
+    version was a proxy for: **is there exactly one function in the package that writes a
+    .env, and does it refuse a line break?** Anything else appending to a dotenv path —
+    including a well-meaning helper that skips the check — fails here.
+    """
+    callers, direct = set(), set()
+    for path in sorted(pathlib.Path("corparius").rglob("*.py")):
+        name = path.as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if name != "corparius/kernel/dotenv.py" and node.func.attr in (
+                "merge",
+                "merge_into",
+                "_merge_env_file",
+            ):
+                callers.add(name)
+            # Anyone reaching a dotenv path with a raw write is going round the guard.
+            if node.func.attr in ("write_text", "writelines", "open"):
+                receiver = ast.unparse(node.func.value)
+                if "env_file" in receiver or "dotenv" in receiver:
+                    direct.add(f"{name}: {receiver}.{node.func.attr}()")
+    assert callers == DOTENV_CALLERS, (
+        f"the set of modules writing .env changed: {sorted(callers)}. Every one of them "
+        "must go through kernel.dotenv, which is where the line-break refusal lives."
     )
+    assert not direct, f"a .env is written without passing the guard: {sorted(direct)}"
+    source = pathlib.Path("corparius/kernel/dotenv.py").read_text(encoding="utf-8")
+    assert 'if "\\n" in str(v) or "\\r" in str(v)' in source, "the guard left the only writer"

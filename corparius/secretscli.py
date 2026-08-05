@@ -17,6 +17,7 @@ import sys
 from typing import NoReturn
 
 from . import cfg, paths
+from .kernel import dotenv
 
 
 def _fail(msg: str) -> NoReturn:
@@ -35,13 +36,7 @@ def _write_env(value: str) -> None:
     It cannot live in the store: the store is what it decrypts, and a key
     inside the box it opens is not a key.
     """
-    from .webui import _merge_env_file
-
-    path = paths.dotenv_file()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.is_file():
-        path.write_text("", encoding="utf-8")
-    _merge_env_file(path, {"CORP_SECRET_KEY": value})
+    dotenv.merge_into(paths.dotenv_file(), {"CORP_SECRET_KEY": value})
 
 
 def cmd_status(args) -> None:

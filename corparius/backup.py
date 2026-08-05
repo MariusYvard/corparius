@@ -36,6 +36,7 @@ import zipfile
 from pathlib import Path
 
 from . import paths
+from .kernel import dotenv
 
 
 # The writable home: backups land under it and it anchors the archive paths. In
@@ -400,8 +401,6 @@ def _merge_restored_env(text: str) -> None:
     behind, and copying them over would erase the very keys the operator still
     has on this machine.
     """
-    from .webui import _merge_env_file
-
     values = {}
     for line in text.splitlines():
         if "=" not in line or line.lstrip().startswith("#"):
@@ -418,11 +417,7 @@ def _merge_restored_env(text: str) -> None:
         if value.strip():
             values[name] = value.strip()
     if values:
-        path = paths.dotenv_file()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if not path.is_file():
-            path.write_text("", encoding="utf-8")
-        _merge_env_file(path, values)
+        dotenv.merge_into(paths.dotenv_file(), values)
 
 
 def describe(path: Path, lang: str = "en", with_secrets: bool = False) -> str:

@@ -5,8 +5,8 @@
   "corparius/appexport.py": 95.5,
   "corparius/apps.py": 97.2,
   "corparius/appserver.py": 84.3,
-  "corparius/backup.py": 89.4,
-  "corparius/cfg.py": 91.1,
+  "corparius/backup.py": 89.9,
+  "corparius/cfg.py": 90.1,
   "corparius/claudecli.py": 82.4,
   "corparius/cli.py": 51.7,
   "corparius/company.py": 73.2,
@@ -23,6 +23,7 @@
   "corparius/integrations.py": 16.4,
   "corparius/kernel/__init__.py": 100.0,
   "corparius/kernel/crypto.py": 82.5,
+  "corparius/kernel/dotenv.py": 94.7,
   "corparius/kernel/i18n.py": 100.0,
   "corparius/leadsource.py": 43.4,
   "corparius/llm.py": 91.1,
@@ -39,7 +40,7 @@
   "corparius/provider_check.py": 61.5,
   "corparius/safety.py": 97.6,
   "corparius/secretbox.py": 100.0,
-  "corparius/secretscli.py": 23.8,
+  "corparius/secretscli.py": 27.0,
   "corparius/selfupdate.py": 82.5,
   "corparius/settings_spec.py": 86.5,
   "corparius/signals.py": 65.2,
@@ -52,5 +53,5 @@
   "corparius/structured.py": 90.7,
   "corparius/tools.py": 90.5,
   "corparius/update_check.py": 79.6,
-  "corparius/webui.py": 75.6
+  "corparius/webui.py": 75.4
 }

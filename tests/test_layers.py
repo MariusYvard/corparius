@@ -51,6 +51,7 @@ RANKS: dict[str, int] = {
     "kernel/__init__": 0,
     "kernel/i18n": 0,
     "kernel/crypto": 0,
+    "kernel/dotenv": 0,
     "inbox": 0,
     # Rank 1, not 0, and deliberately: `secretbox` kept the policy — where the passphrase
     # comes from, whether the feature is on — which is knowledge of configuration. Only the
@@ -128,9 +129,6 @@ KNOWN_RANK_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
         # on line 19 and nowhere else in 1 380 lines, to read OPENAI_COMPAT_PROVIDERS. That
         # one import drags `requests` and `subprocess` into the path of reading a setting.
         ("settings_spec", "llm"),
-        # Stage 1. `_merge_env_file` is a 30-line dotenv *writer* living in a 2 468-line
-        # HTTP server, which is why an archive utility imports the console.
-        ("backup", "webui"),
         # Stage 3. `doctor` wants one constant, `appserver.key_env`.
         ("doctor", "appserver"),
     }
@@ -148,8 +146,10 @@ KNOWN_CYCLES: frozenset[tuple[str, ...]] = frozenset(
         # Stage 3. The domain knot: `agents` needs the tools, `tools` needs the company,
         # `company` needs the tool names, `documents` needs all three.
         ("agents", "company", "documents", "tools"),
-        # Stage 6. The console is imported by the things it launches.
-        ("appserver", "backup", "doctor", "selfupdate", "webui"),
+        # Stage 6. The console is imported by the things it launches. Was five modules;
+        # moving the dotenv writer to `kernel/dotenv.py` took `backup` out — and
+        # `selfupdate` with it, which reached the console only through `backup`.
+        ("appserver", "doctor", "webui"),
         # Stage 7. All of it is `cli._store`, which two sub-CLIs import.
         ("appcli", "cli", "secretscli"),
     }
@@ -414,7 +414,7 @@ def test_the_ratchet_only_ever_tightens():
     """The lists are the progress counter of the restructuring. This records where it
     stands so a reader can see it move, and fails if someone pads a list instead of
     fixing a module."""
-    assert len(KNOWN_RANK_VIOLATIONS) <= 3, "upward imports should only ever decrease"
+    assert len(KNOWN_RANK_VIOLATIONS) <= 2, "upward imports should only ever decrease"
     assert len(KNOWN_IMPURE) <= 3, "domain impurities should only ever decrease"
     assert len(KNOWN_CYCLES) <= 4, "cycles should only ever decrease"
 

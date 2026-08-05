@@ -50,7 +50,7 @@ from .agents import ROSTER
 from .config import Settings
 from .doctor import run_checks
 from .integrations import smtp_check, stripe_check, stripe_payments
-from .kernel import i18n
+from .kernel import dotenv, i18n
 from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, _split, connected_providers
 from .models import AgentRole
 from .orchestrator import Runtime, _known_target
@@ -130,32 +130,18 @@ def _load_company(slug: str) -> dict | None:
 
 
 def _merge_env_file(path: Path, values: dict[str, str]) -> None:
-    """Persist KEY=value pairs, replacing existing lines and appending new
-    ones. Comments and unrelated lines are left untouched.
+    """`kernel.dotenv.merge`, with its refusal turned into a status code.
 
-    A newline inside a value is refused here rather than upstream, because
-    upstream is three different places: the settings page, the providers panel,
-    and the .env a restore reads out of an archive someone else may have built.
-
-    It mattered. Values were written verbatim and joined with "\\n", so one
-    accepted write could append lines of its own — and the line worth appending
-    was `CORP_UI_ALLOWED_HOSTS`, which SECURITY.md promises cannot be set
-    through the API and which a test asserts is not in ALLOWED_VARS. The name
-    was not; the value was. Planting a host there turns off the DNS-rebinding
-    defence, and the console stops being localhost-only.
+    The writer itself — and the reason a newline in a value is refused there rather than in
+    each of its callers — is documented in `kernel/dotenv.py`. What is left here is the only
+    part that is genuinely about HTTP: a caller that sent a bad value gets a 400 instead of
+    a traceback. The CLI callers deliberately do not go through this; a `LineBreakRefused`
+    reaching a terminal is more honest than a fabricated HTTP status.
     """
-    bad = sorted(k for k, v in values.items() if "\n" in str(v) or "\r" in str(v))
-    if bad:
-        raise _RequestRefused(400, f"a line break is not allowed in: {', '.join(bad)}")
-    lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
-    seen = set()
-    for i, line in enumerate(lines):
-        key = line.split("=", 1)[0].strip()
-        if "=" in line and not line.lstrip().startswith("#") and key in values:
-            lines[i] = f"{key}={values[key]}"
-            seen.add(key)
-    lines.extend(f"{k}={v}" for k, v in values.items() if k not in seen)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    try:
+        dotenv.merge(path, values)
+    except dotenv.LineBreakRefused as exc:
+        raise _RequestRefused(400, str(exc)) from exc
 
 
 class UiState:

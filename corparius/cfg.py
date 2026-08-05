@@ -30,7 +30,7 @@ import threading
 from pathlib import Path
 
 from . import paths
-from .kernel import crypto
+from .kernel import crypto, dotenv
 
 # The writable home. In a source checkout this is the repository root, so the
 # default .env location below is unchanged; frozen, it is a per-OS directory.
@@ -67,28 +67,10 @@ _db_cache: dict[str, str] = {}
 _db_version: int | None = None
 
 
-def _unquote(value: str) -> str:
-    value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
-        return value[1:-1]
-    return value
-
-
-def parse_dotenv(text: str) -> dict[str, str]:
-    """KEY=value lines. Comments, blanks and malformed lines are skipped;
-    `export KEY=value` and quoted values are accepted."""
-    out: dict[str, str] = {}
-    for line in text.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        if key.startswith("export "):
-            key = key[len("export ") :].strip()
-        if key:
-            out[key] = _unquote(value)
-    return out
+# The parser moved to `kernel/dotenv.py`, next to the writer whose refusals it mirrors.
+# The name stays here because this is where callers look for it — a settings module is a
+# reasonable place to ask "what does a .env say", and `doctor` does exactly that.
+parse_dotenv = dotenv.parse
 
 
 def _dotenv_layer() -> dict[str, str]:

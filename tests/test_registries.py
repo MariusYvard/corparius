@@ -53,7 +53,9 @@ from corparius.tools import ROLE_TOOL, TOOLS
 SOURCES = sorted(Path("corparius").rglob("*.py"))
 SRC = {p.relative_to("corparius").as_posix(): p.read_text(encoding="utf-8") for p in SOURCES}
 ALL_SRC = "\n".join(SRC.values())
-MODULE_COUNT = 59  # kernel/: __init__, crypto, dotenv, vectors, text, proc, paths, records
+MODULE_COUNT = (
+    60  # kernel/: __init__, crypto, dotenv, httpkit, i18n, paths, proc, records, text, vectors
+)
 
 
 def test_every_source_file_is_scanned():

@@ -37,6 +37,7 @@ COST: dict[str, frozenset[str]] = {
     "kernel.paths": frozenset(),
     "kernel.records": frozenset(),
     "kernel.i18n": frozenset(),
+    "kernel.httpkit": frozenset(),
     # Free even though it is the encryption module: `cryptography` is optional and is
     # imported inside the three functions that need it, so its absence is *reported* rather
     # than assumed. That is also why it does not appear in WATCHED.

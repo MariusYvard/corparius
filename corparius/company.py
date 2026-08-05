@@ -242,7 +242,14 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     name = str(raw.get("name", "")).strip()
     if not name:
         errors.append("name is required")
-    slug = text.slugify_loose(str(raw.get("slug", "")) or name)
+    # Deriving and preserving are two different jobs, and conflating them is what put a
+    # broken slug on disk. `load` sets raw["slug"] from the directory name before this runs,
+    # so an existing slug **is** a folder that exists: it gets normalised and nothing more —
+    # folding it would be a no-op anyway, and the 48-character cap would point the config at
+    # a directory that is not there. A slug derived from a name is a folder about to be
+    # created, so it gets the correct treatment: accents folded, length capped.
+    given = str(raw.get("slug", "")).strip()
+    slug = text.slugify_loose(given) if given else text.slugify(name)
     if not slug:
         errors.append("slug is empty; give the company a name with letters or digits")
 

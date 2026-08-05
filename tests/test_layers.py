@@ -55,6 +55,7 @@ RANKS: dict[str, int] = {
     "kernel/proc": 0,
     "kernel/paths": 0,
     "kernel/records": 0,
+    "kernel/httpkit": 0,
     "inbox": 0,
     # Rank 1, not 0, and deliberately: `secretbox` kept the policy — where the passphrase
     # comes from, whether the feature is on — which is knowledge of configuration. Only the
@@ -150,10 +151,6 @@ KNOWN_CYCLES: frozenset[tuple[str, ...]] = frozenset(
         # a *private* name reached across a module boundary. Moving the slug functions to
         # `kernel/text.py` dissolved that edge as a side effect.
         ("agents", "company", "tools"),
-        # Stage 6. The console is imported by the things it launches. Was five modules;
-        # moving the dotenv writer to `kernel/dotenv.py` took `backup` out — and
-        # `selfupdate` with it, which reached the console only through `backup`.
-        ("appserver", "doctor", "webui"),
         # Stage 7. All of it is `cli._store`, which two sub-CLIs import.
         ("appcli", "cli", "secretscli"),
     }
@@ -418,7 +415,7 @@ def test_the_ratchet_only_ever_tightens():
     fixing a module."""
     assert len(KNOWN_RANK_VIOLATIONS) <= 2, "upward imports should only ever decrease"
     assert len(KNOWN_IMPURE) <= 3, "domain impurities should only ever decrease"
-    assert len(KNOWN_CYCLES) <= 4, "cycles should only ever decrease"
+    assert len(KNOWN_CYCLES) <= 3, "cycles should only ever decrease"
 
 
 def _ratchet(observed: set, known: frozenset, what: str) -> None:

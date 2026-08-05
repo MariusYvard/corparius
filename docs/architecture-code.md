@@ -27,7 +27,7 @@ Un module de rang *n* n'importe que des rangs **≤ n**. Jamais au-dessus.
 
 | Rang | Dossier | Ce qui y vit | Ce qui n'y a pas le droit |
 | --- | --- | --- | --- |
-| 0 | `kernel/` | chemins, types, i18n ✅, texte, dotenv, crypto ✅, vecteurs, processus, HTTP brut | **tout import corparius**, même d'un rang inférieur — il n'y en a pas |
+| 0 | `kernel/` | **fait** — `paths`, `records`, `i18n`, `text`, `dotenv`, `crypto`, `vectors`, `proc`, `httpkit` | **tout import corparius**, même d'un rang inférieur — il n'y en a pas |
 | 1 | `config/` | résolution des réglages, registre de champs, permissions | le store, les fournisseurs, le domaine |
 | 2 | `store/` | schéma, migrations, un dépôt par table | tout ce qui est au-dessus |
 | 3 | `providers/` | modèles, courrier, déploiements, dépôts, prospects, matériel | le domaine, l'app, le transport |
@@ -60,7 +60,30 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 5. **Les cycles se comptent à part.** Les rangs n'interdisent pas un cycle *à l'intérieur*
    d'un rang, et ce trou était réel : dès que `secretbox` est passé au rang 1, une arête vers
    `cfg` redevenait légale. Les composantes fortement connexes ont donc leur propre liste,
-   `KNOWN_CYCLES`, avec l'étape qui dissout chacune. **Cinq au départ, quatre aujourd'hui.**
+   `KNOWN_CYCLES`, avec l'étape qui dissout chacune. **Cinq au départ, trois aujourd'hui.**
+
+## Où en est le chantier
+
+L'étape 1 est faite. Ce que le rang 0 a coûté et rapporté, mesuré :
+
+| Compteur | Au plan | Aujourd'hui |
+| --- | --- | --- |
+| Arêtes montantes | 4 | **2** (`settings_spec→llm`, `doctor→appserver`) |
+| Cycles d'imports | 5 | **3** |
+| Modules important `subprocess` | 4 | **1** (`kernel/proc.py`) |
+
+Les deux cycles morts ne l'ont pas été par le déplacement lui-même mais par ce que le
+déplacement a rendu visible : `{cfg, secretbox}` en séparant la cryptographie de la
+politique, et `{appserver, backup, doctor, selfupdate, webui}` parce qu'un serveur HTTP en
+importait un autre pour trois constantes. Les deux autres ont rétréci en chemin —
+`selfupdate` et `documents` sont sortis de nœuds auxquels ils n'appartenaient pas.
+
+Deux modules du plan ne sont **pas** dans le kernel, et pas par oubli. `modeltarget`
+(`llm._split`) a besoin de `OPENAI_COMPAT_PROVIDERS`, qui ne quitte `llm` qu'à l'étape 2 :
+le déplacer plus tôt demanderait de faire passer un jeu de préfixes à dix appelants. Et
+`models` est devenu `kernel/records`, pas `kernel/types` — `types` masque un module de la
+bibliothèque standard que cinq fichiers de tests utilisent, et `models` veut déjà dire
+« catalogue de modèles LLM » ici.
 
 ## Le cliquet
 

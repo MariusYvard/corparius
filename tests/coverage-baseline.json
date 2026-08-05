@@ -24,6 +24,7 @@
   "corparius/kernel/__init__.py": 100.0,
   "corparius/kernel/crypto.py": 82.5,
   "corparius/kernel/dotenv.py": 94.7,
+  "corparius/kernel/httpkit.py": 100.0,
   "corparius/kernel/i18n.py": 100.0,
   "corparius/kernel/paths.py": 90.1,
   "corparius/kernel/proc.py": 100.0,
@@ -56,5 +57,5 @@
   "corparius/structured.py": 90.7,
   "corparius/tools.py": 90.5,
   "corparius/update_check.py": 79.6,
-  "corparius/webui.py": 75.4
+  "corparius/webui.py": 75.3
 }

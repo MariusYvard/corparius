@@ -49,7 +49,7 @@ from .agents import ROSTER
 from .config import Settings
 from .doctor import run_checks
 from .integrations import smtp_check, stripe_check, stripe_payments
-from .kernel import dotenv, i18n, paths
+from .kernel import dotenv, httpkit, i18n, paths
 from .kernel.records import AgentRole
 from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, _split, connected_providers
 from .orchestrator import Runtime, _known_target
@@ -76,24 +76,13 @@ _CHAT_LIMIT = 30  # turns kept per company, in-process only
 # and this payload is polled every few seconds; the store keeps all of them.
 DONE_KEPT = 60
 
-# The largest body the console accepts. The biggest legitimate one is a company
-# YAML or a settings batch, orders of magnitude under this.
-MAX_BODY = 1 << 20
-
-_LOOPBACK = {"127.0.0.1", "localhost", "::1", "0.0.0.0", ""}
-
-
-def _host_only(header: str) -> str:
-    """The host from a Host header, without the port, bracket-aware for IPv6.
-
-    A bare rsplit(":", 1) mangles a bracketed literal: "[::1]" splits on the
-    inner colon. Peel the brackets first so "[::1]" and "[::1]:8600" both yield
-    "::1", while "127.0.0.1:8600" and "localhost" are unchanged.
-    """
-    raw = header.strip()
-    if raw.startswith("[") and "]" in raw:
-        return raw[1 : raw.index("]")].lower()
-    return raw.rsplit(":", 1)[0].lower()
+# Re-exported under their old names because the route table, the handlers and eight tests
+# spell them this way. The definitions are in `kernel/httpkit.py`: `appserver` is a second
+# HTTP server that needs the same three things, and importing them *from here* was the whole
+# of the console import cycle.
+MAX_BODY = httpkit.MAX_BODY
+_LOOPBACK = httpkit.LOOPBACK
+_host_only = httpkit.host_only
 
 
 class _RequestRefused(Exception):

@@ -6,8 +6,10 @@ control plane — settings, keys, approvals, the whole company — and it binds 
 putting the two in one process would mean one slipped check exposing both.
 
 What is reused rather than re-derived is the part that was hard to get right:
-`_host_only` (bracket-aware IPv6 parsing, from a real bug), `_LOOPBACK` and
-`MAX_BODY`, imported from webui.
+`host_only` (bracket-aware IPv6 parsing, from a real bug), `LOOPBACK` and
+`MAX_BODY` — now from `kernel/httpkit`, not from webui. Reusing them was always
+correct; reaching into the *console* to get them was what made this module and
+that one a cycle.
 
 Four guards, cheapest first, before any model is called:
 
@@ -40,7 +42,7 @@ from . import apps as apps_mod
 from . import cfg
 from .config import Settings
 from .kernel import paths
-from .webui import MAX_BODY, _host_only
+from .kernel.httpkit import MAX_BODY, host_only
 
 log = logging.getLogger("corparius.appserver")
 
@@ -149,7 +151,7 @@ class Handler(BaseHTTPRequestHandler):
         bind = cfg.get("CORP_APPS_HOST", settings.ui_host or "127.0.0.1")
         if bind not in ("127.0.0.1", "localhost", "::1"):
             return True  # published on purpose; the proxy owns the Host header
-        return _host_only(self.headers.get("Host") or "") in ("127.0.0.1", "localhost", "::1", "")
+        return host_only(self.headers.get("Host") or "") in ("127.0.0.1", "localhost", "::1", "")
 
     def _route(self) -> tuple[str, str] | None:
         parts = urlparse(self.path).path.strip("/").split("/")

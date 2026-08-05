@@ -10,7 +10,7 @@ import sqlite3
 import threading
 import time
 
-from .safety import cosine, hash_embed
+from .kernel.vectors import cosine, hash_embed
 
 log = logging.getLogger("corparius.store")
 
@@ -660,7 +660,7 @@ class Store:
         restated with different word order, casing or punctuation is recognised
         and dropped, which is what an agent asked the same question every day
         actually produces. It is *not* paraphrase detection — the comparison is
-        cosine over safety.hash_embed, a bag-of-tokens embedding, so "coaches
+        cosine over kernel.vectors.hash_embed, a bag-of-tokens embedding, so "coaches
         renew" and "our coaching customers stay" are two facts as far as this is
         concerned. Catching those would need a real embedding model, and would
         risk merging two facts that only sound alike, which is worse than

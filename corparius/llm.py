@@ -26,8 +26,8 @@ from dataclasses import dataclass
 import requests
 
 from . import cfg
+from .kernel.vectors import hash_embed
 from .models import Difficulty, LLMResult, Usage
-from .safety import hash_embed
 
 log = logging.getLogger("corparius.llm")
 

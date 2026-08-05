@@ -52,6 +52,7 @@ RANKS: dict[str, int] = {
     "kernel/i18n": 0,
     "kernel/crypto": 0,
     "kernel/dotenv": 0,
+    "kernel/vectors": 0,
     "inbox": 0,
     # Rank 1, not 0, and deliberately: `secretbox` kept the policy — where the passphrase
     # comes from, whether the feature is on — which is knowledge of configuration. Only the
@@ -59,12 +60,6 @@ RANKS: dict[str, int] = {
     # Splitting it this way left the seven callers untouched; merely *moving* the file would
     # have made all seven pass a passphrase they had no reason to hold.
     "secretbox": 1,
-    # `safety` holds two unrelated things and that is why a rank-2 module imports it:
-    # `store` takes only `cosine` and `hash_embed`, which are vector utilities, while
-    # `TokenBudget`/`LoopGuard`/`CircuitBreaker` are domain policy. It splits into
-    # `kernel/vectors.py` + `domain/safety.py`; until then rank 0 is the honest rank,
-    # because that is the only one consistent with who imports it.
-    "safety": 0,
     # 1 — config
     "cfg": 1,
     "config": 1,
@@ -99,6 +94,10 @@ RANKS: dict[str, int] = {
     "structured": 4,
     "hitl": 4,
     "orchestrator": 4,
+    # Rank 4 since the split: what is left is policy — a token ceiling, a loop guard, a
+    # spend-velocity breaker. It sat at rank 0 only because `cosine` and `hash_embed` were
+    # in the same file, which is what made `store` (rank 2) import it.
+    "safety": 4,
     "sitegen": 4,
     "apps": 4,
     # 5 — app

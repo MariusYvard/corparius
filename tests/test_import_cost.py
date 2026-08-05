@@ -42,6 +42,7 @@ COST: dict[str, frozenset[str]] = {
     # than assumed. That is also why it does not appear in WATCHED.
     "kernel.crypto": frozenset(),
     "permissions": frozenset(),
+    "kernel.vectors": frozenset(),
     "safety": frozenset(),
     # Config: sqlite3 only, because cfg reads a settings table. Stage 2 moves that
     # connection into `config/store_layer.py`; it does not remove it, and it should not —
@@ -106,6 +107,10 @@ def test_a_module_pulls_in_exactly_what_it_declares(module):
 
 def test_the_kernel_costs_nothing():
     """Stated separately because it is the property that makes rank 0 safe to import from
-    anywhere, and it should never need an exception."""
-    for module in ("paths", "models", "kernel.i18n", "kernel.crypto", "permissions", "safety"):
+    anywhere, and it should never need an exception.
+
+    Rank 0 only. `permissions` and `safety` are free too and COST says so, but they are
+    rank 1 and rank 4 — including them here would blur what this test is claiming.
+    """
+    for module in ("paths", "models", "kernel.i18n", "kernel.crypto", "kernel.vectors"):
         assert _pulled(module) == frozenset(), f"corparius.{module} stopped being free"

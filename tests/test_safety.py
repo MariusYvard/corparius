@@ -2,14 +2,8 @@
 
 import pytest
 
-from corparius.safety import (
-    BudgetExceeded,
-    CircuitBreaker,
-    LoopGuard,
-    TokenBudget,
-    cosine,
-    hash_embed,
-)
+from corparius.kernel.vectors import hash_embed
+from corparius.safety import BudgetExceeded, CircuitBreaker, LoopGuard, TokenBudget
 
 
 def test_budget_raises_once_ceiling_is_reached():
@@ -25,11 +19,6 @@ def test_budget_reports_remaining():
     b = TokenBudget(100)
     b.record_usage(40, 10)
     assert b.remaining == 50
-
-
-def test_cosine_of_identical_vectors_is_one():
-    v = hash_embed("hello world")
-    assert cosine(v, v) == pytest.approx(1.0)
 
 
 def test_loop_guard_flags_semantic_stutter():

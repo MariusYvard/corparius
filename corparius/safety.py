@@ -1,14 +1,19 @@
 """The safety firewall: a hard token ceiling, semantic loop detection, and a
 spend-velocity circuit breaker. These run in front of every agent turn so a
 divergent agent cannot burn the budget or stutter forever.
+
+All three are policy, and that is the whole content of this module now: `cosine` and
+`hash_embed` moved to `kernel/vectors.py`, because they are arithmetic with no opinion in
+them — and because keeping them here forced `store` to import a domain module for a
+bag-of-tokens vector.
 """
 
 from __future__ import annotations
 
-import hashlib
-import math
 import time
 from collections import deque
+
+from .kernel.vectors import cosine
 
 
 class BudgetExceeded(Exception):
@@ -89,36 +94,6 @@ class TokenBudget:
     def remaining_for(self, role: str) -> int:
         used, ceiling, _ = self._ledger(role)
         return max(0, min(ceiling - used, self.remaining))
-
-
-def cosine(a: list[float], b: list[float]) -> float:
-    """Cosine similarity between two equal-length vectors.
-
-    Mismatched lengths return 0.0 rather than raising or silently comparing the
-    shorter prefix. This feeds LoopGuard, where 0.0 reads as "not a stutter", so
-    a swapped-in embedding model that changes dimension mid-run lets the agent
-    carry on instead of halting its day on an arithmetic detail. Truncating
-    instead would produce a real-looking number from two unrelated vectors.
-    """
-    if len(a) != len(b):
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b, strict=True))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(y * y for y in b))
-    if na == 0.0 or nb == 0.0:
-        return 0.0
-    return dot / (na * nb)
-
-
-def hash_embed(text: str, dim: int = 64) -> list[float]:
-    """A cheap, dependency-free, deterministic bag-of-tokens embedding. Good
-    enough to catch near-duplicate outputs offline; real similarity comes from
-    the embedding model when the router is live."""
-    vec = [0.0] * dim
-    for tok in text.lower().split():
-        h = int(hashlib.md5(tok.encode("utf-8")).hexdigest(), 16)
-        vec[h % dim] += 1.0
-    return vec
 
 
 class LoopGuard:

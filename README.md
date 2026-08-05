@@ -471,6 +471,8 @@ time, or on request through `corparius apps serve` (off by default, bound to
 | Doc | Covers |
 | --- | --- |
 | `docs/architecture.md` | orchestration topology, tiered router, durable execution |
+| `docs/architecture-code.md` | the code's own structure: seven directories, five ranks, and the test that enforces the rule |
+| `docs/adr/` | architecture decisions, one per file, each carrying the measurement behind it |
 | `docs/console.md` | the operator console (API, security model) |
 | `docs/llm-providers.md` | every free LLM provider: limits, keys, privacy notes |
 | `docs/securite.md` | the safety firewall and the Agent SRE mapping |

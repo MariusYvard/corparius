@@ -25,6 +25,7 @@ backups/
 /build/
 /dist/
 .coverage
+coverage.json
 htmlcov/
 .ruff_cache/
 .mypy_cache/

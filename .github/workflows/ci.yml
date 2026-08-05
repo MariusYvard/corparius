@@ -70,6 +70,12 @@ jobs:
         run: |
           coverage run -m pytest -q
           coverage report --fail-under=72
+          # The total is necessary and not sufficient: one number cannot see a module
+          # going from 88% to 30% while the average holds, which is exactly what a
+          # restructuring does when a large file splits and only some of its tests
+          # follow. Each file carries its own floor in tests/coverage-baseline.json.
+          coverage json
+          python packaging/coverage_ratchet.py
 
   # Catch a broken PyInstaller spec / frozen-path regression on every PR, before
   # a release tag depends on it. One cheap Linux build + offline smoke; the full

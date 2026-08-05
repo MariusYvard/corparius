@@ -135,6 +135,10 @@ def test_every_setting_the_code_reads_can_be_set_somewhere():
     docs never mention is a setting only its author knows about."""
     env_example = Path(".env.example")
     documented = env_example.read_text(encoding="utf-8") if env_example.is_file() else ""
+    # Flat `glob` here on purpose, unlike the source scan above. This asks whether a
+    # setting is documented *for an operator*, and an architecture decision record under
+    # docs/adr/ is not that. Widening to `rglob` would make the test more permissive — more
+    # places count as documentation, so fewer settings fail — which is the wrong direction.
     docs = "\n".join(p.read_text(encoding="utf-8") for p in Path("docs").glob("*.md"))
     readme = Path("README.md").read_text(encoding="utf-8")
     hidden = sorted(

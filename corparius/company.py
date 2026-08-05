@@ -22,6 +22,7 @@ from pathlib import Path
 import yaml
 
 from . import paths, permissions
+from .kernel import text
 
 # `companies/` used to be resolved from a module attribute set at import time,
 # next to `paths.companies_dir()` which resolves on every call. Two sources for
@@ -31,7 +32,6 @@ from . import paths, permissions
 # source, so they cannot disagree; tests move the folder by setting CORP_HOME,
 # which is what an operator does too.
 
-SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 ROLES = (
     "ceo",
@@ -196,25 +196,6 @@ def template(tid: str) -> dict | None:
     return next((dict(t) for t in TEMPLATES if t["id"] == tid), None)
 
 
-def _slugify(text: str) -> str:
-    """A URL-safe slug that survives accents.
-
-    `[^a-z0-9-]+` turned "Méthode et architecture" into
-    `m-thode-et-architecture` — the accent became a hyphen and the word lost a
-    letter. A French company got a broken URL for every page it wrote, which is
-    the kind of thing nobody notices until it is in a sitemap.
-    """
-    import unicodedata
-
-    folded = unicodedata.normalize("NFKD", str(text or ""))
-    folded = "".join(c for c in folded if not unicodedata.combining(c))
-    return re.sub(r"[^a-z0-9]+", "-", folded.lower()).strip("-")[:48]
-
-
-def slugify(name: str) -> str:
-    return SLUG_RE.sub("-", name.strip().lower()).strip("-")
-
-
 def path_for(slug: str) -> Path:
     return paths.companies_dir() / slug / "company.yaml"
 
@@ -261,7 +242,7 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     name = str(raw.get("name", "")).strip()
     if not name:
         errors.append("name is required")
-    slug = slugify(str(raw.get("slug", "")) or name)
+    slug = text.slugify_loose(str(raw.get("slug", "")) or name)
     if not slug:
         errors.append("slug is empty; give the company a name with letters or digits")
 
@@ -539,7 +520,7 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
         for entry in site_in.get("pages") or []:
             if not isinstance(entry, dict):
                 continue
-            slug = _slugify(entry.get("slug", "") or entry.get("title", ""))
+            slug = text.slugify(entry.get("slug", "") or entry.get("title", ""))
             title = str(entry.get("title", "")).strip()
             body = str(entry.get("body", "")).strip()
             if slug and title and body:

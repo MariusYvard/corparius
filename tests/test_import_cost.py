@@ -43,6 +43,7 @@ COST: dict[str, frozenset[str]] = {
     "kernel.crypto": frozenset(),
     "permissions": frozenset(),
     "kernel.vectors": frozenset(),
+    "kernel.text": frozenset(),
     "safety": frozenset(),
     # Config: sqlite3 only, because cfg reads a settings table. Stage 2 moves that
     # connection into `config/store_layer.py`; it does not remove it, and it should not —
@@ -112,5 +113,12 @@ def test_the_kernel_costs_nothing():
     Rank 0 only. `permissions` and `safety` are free too and COST says so, but they are
     rank 1 and rank 4 — including them here would blur what this test is claiming.
     """
-    for module in ("paths", "models", "kernel.i18n", "kernel.crypto", "kernel.vectors"):
+    for module in (
+        "paths",
+        "models",
+        "kernel.i18n",
+        "kernel.crypto",
+        "kernel.vectors",
+        "kernel.text",
+    ):
         assert _pulled(module) == frozenset(), f"corparius.{module} stopped being free"

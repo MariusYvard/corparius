@@ -53,6 +53,7 @@ RANKS: dict[str, int] = {
     "kernel/crypto": 0,
     "kernel/dotenv": 0,
     "kernel/vectors": 0,
+    "kernel/text": 0,
     "inbox": 0,
     # Rank 1, not 0, and deliberately: `secretbox` kept the policy — where the passphrase
     # comes from, whether the feature is on — which is knowledge of configuration. Only the
@@ -143,8 +144,11 @@ KNOWN_CYCLES: frozenset[tuple[str, ...]] = frozenset(
         # `hardware`, and both ask `llm` back for the provider table.
         ("claudecli", "hardware", "llm", "preflight"),
         # Stage 3. The domain knot: `agents` needs the tools, `tools` needs the company,
-        # `company` needs the tool names, `documents` needs all three.
-        ("agents", "company", "documents", "tools"),
+        # `company` needs the tool names. `documents` was in here too, and left for a
+        # reason worth recording: its only edge into `company` was `company_mod._slugify`,
+        # a *private* name reached across a module boundary. Moving the slug functions to
+        # `kernel/text.py` dissolved that edge as a side effect.
+        ("agents", "company", "tools"),
         # Stage 6. The console is imported by the things it launches. Was five modules;
         # moving the dotenv writer to `kernel/dotenv.py` took `backup` out — and
         # `selfupdate` with it, which reached the console only through `backup`.

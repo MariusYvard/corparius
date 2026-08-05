@@ -21,7 +21,7 @@ sous-paquet. Rien ne surveillait rien : pas de règle qu'un relecteur puisse cit
 Chaque module porte le **rang** de sa couche — kernel 0, config 1, store 2, providers 3,
 domain 4, app 5, interfaces 6 — et n'importe que son rang ou moins.
 
-Quatre clauses rendent la règle réelle, et la première est celle qui compte :
+Cinq clauses rendent la règle réelle, et la première est celle qui compte :
 
 1. **Les imports différés sont vérifiés à l'identique.** Une règle qui les ignorerait
    manquerait chacun des cinq cycles qu'elle existe pour empêcher.
@@ -30,6 +30,12 @@ Quatre clauses rendent la règle réelle, et la première est celle qui compte :
    `smtplib`, ni `imaplib`, ni `socket`, ni `time.sleep`.
 4. Une capacité hôte a **un propriétaire déclaré** : `sqlite3` dans `store/**`, `subprocess`
    dans `kernel/proc.py`, `http.server` dans `api/**`.
+5. **Les composantes fortement connexes sont leur propre cliquet.** Ajoutée à l'étape 1,
+   après avoir constaté que les quatre premières ne suffisaient pas : les rangs
+   n'interdisent pas un cycle **à l'intérieur** d'un rang. `secretbox` étant devenu rang 1,
+   une arête vers `cfg` — rang 1 — redevenait légale, et le cycle que l'étape 1 venait de
+   tuer pouvait rentrer par la règle censée l'en empêcher. Non-vacuité prouvée : cycle
+   réintroduit, `new import cycles: [('cfg', 'secretbox')]`, cycle retiré.
 
 ## Le cliquet
 

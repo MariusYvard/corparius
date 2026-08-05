@@ -9,9 +9,11 @@ drift apart. The CLI passes no lang and gets English.
 from __future__ import annotations
 
 
-def normalize(lang) -> str:
+def normalize(lang: object) -> str:
+    """`object`, not `str | None`: callers hand this an Accept-Language header, a query
+    parameter, a stored preference or nothing at all, and it stringifies whatever it gets."""
     return "fr" if str(lang or "").lower().startswith("fr") else "en"
 
 
-def pick(lang, en: str, fr: str) -> str:
+def pick(lang: object, en: str, fr: str) -> str:
     return fr if normalize(lang) == "fr" else en

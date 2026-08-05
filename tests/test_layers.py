@@ -48,9 +48,16 @@ RANKS: dict[str, int] = {
     # 0 — kernel
     "paths": 0,
     "models": 0,
-    "i18n": 0,
+    "kernel/__init__": 0,
+    "kernel/i18n": 0,
+    "kernel/crypto": 0,
     "inbox": 0,
-    "secretbox": 0,
+    # Rank 1, not 0, and deliberately: `secretbox` kept the policy — where the passphrase
+    # comes from, whether the feature is on — which is knowledge of configuration. Only the
+    # cryptography went down to `kernel/crypto`, which takes the passphrase as an argument.
+    # Splitting it this way left the seven callers untouched; merely *moving* the file would
+    # have made all seven pass a passphrase they had no reason to hold.
+    "secretbox": 1,
     # `safety` holds two unrelated things and that is why a rank-2 module imports it:
     # `store` takes only `cosine` and `hash_embed`, which are vector utilities, while
     # `TokenBudget`/`LoopGuard`/`CircuitBreaker` are domain policy. It splits into
@@ -113,14 +120,10 @@ RANKS: dict[str, int] = {
     "__init__": 6,
 }
 
-# Every edge that points upward today. Four, and each one is a named step of the plan.
+# Every edge that points upward today. Each one is a named step of the plan. Started at
+# four; `("secretbox", "cfg")` was struck out when stage 1 split the module in two.
 KNOWN_RANK_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
     {
-        # Stage 1. `CORP_SECRET_KEY` is in `cfg.BOOTSTRAP`, so it resolves from the
-        # environment and .env without the store layer — which means `cfg` can compute the
-        # passphrase itself and call `decrypt(value, passphrase)`. Two lines, and the
-        # {cfg, secretbox} cycle is gone.
-        ("secretbox", "cfg"),
         # Stage 2. The single cheapest fix in the restructuring: `settings_spec` uses `llm`
         # on line 19 and nowhere else in 1 380 lines, to read OPENAI_COMPAT_PROVIDERS. That
         # one import drags `requests` and `subprocess` into the path of reading a setting.
@@ -130,6 +133,25 @@ KNOWN_RANK_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
         ("backup", "webui"),
         # Stage 3. `doctor` wants one constant, `appserver.key_env`.
         ("doctor", "appserver"),
+    }
+)
+
+# The strongly connected components that still exist, each with the stage that ends it.
+# Five when the plan was written; `{cfg, secretbox}` went first, by splitting the module
+# rather than moving it. Every one of these lives on a *deferred* import — which is why the
+# rules above read function bodies, and why this list is possible to write at all.
+KNOWN_CYCLES: frozenset[tuple[str, ...]] = frozenset(
+    {
+        # Stage 5. `llm` asks `preflight` what works, `preflight` asks `claudecli` and
+        # `hardware`, and both ask `llm` back for the provider table.
+        ("claudecli", "hardware", "llm", "preflight"),
+        # Stage 3. The domain knot: `agents` needs the tools, `tools` needs the company,
+        # `company` needs the tool names, `documents` needs all three.
+        ("agents", "company", "documents", "tools"),
+        # Stage 6. The console is imported by the things it launches.
+        ("appserver", "backup", "doctor", "selfupdate", "webui"),
+        # Stage 7. All of it is `cli._store`, which two sub-CLIs import.
+        ("appcli", "cli", "secretscli"),
     }
 )
 
@@ -178,6 +200,30 @@ def _key(path: Path) -> str:
     return rel
 
 
+_KEYS = frozenset(_key(p) for p in _modules())
+
+
+def _resolve(base: str, dotted: str) -> str:
+    """A dotted relative target to a rank-table key, or "" when it names no module of ours.
+
+    The first version of this took `dotted.split(".")[0]`, which was right while the package
+    was flat and wrong the moment it was not: `from .kernel import crypto` resolved to
+    `kernel`, which is in no table, so `if target in RANKS` dropped the edge without a word.
+    A layer test that silently stops seeing edges is worse than no layer test, because it
+    reports success. Resolution now ends at a file that exists, or at the package
+    `__init__` that a subpackage import really does execute.
+    """
+    parts = [p for p in (base.split("/") if base else []) + dotted.split(".") if p]
+    while parts:
+        candidate = "/".join(parts)
+        if candidate in _KEYS:
+            return candidate
+        if f"{candidate}/__init__" in _KEYS:
+            return f"{candidate}/__init__"
+        parts.pop()  # `from .llm import ProviderError` — the tail is a symbol, not a module
+    return ""
+
+
 def _edges(path: Path) -> set[tuple[str, bool]]:
     """Every corparius import in a module, as (target, deferred).
 
@@ -185,6 +231,8 @@ def _edges(path: Path) -> set[tuple[str, bool]]:
     module docstring — every cycle in this package hides behind a deferred import.
     """
     tree = ast.parse(path.read_text(encoding="utf-8"))
+    base = path.parent.relative_to(ROOT).as_posix()
+    base = "" if base == "." else base
     inside_function: set[int] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -192,14 +240,22 @@ def _edges(path: Path) -> set[tuple[str, bool]]:
                 inside_function.add(id(inner))
     found: set[tuple[str, bool]] = set()
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ImportFrom) or node.level != 1:
+        if not isinstance(node, ast.ImportFrom) or not node.level:
             continue
         deferred = id(node) in inside_function
-        if node.module:  # from .llm import x
-            found.add((node.module.split(".")[0], deferred))
-        else:  # from . import llm
+        # `from ..x import y` climbs out of the containing package first.
+        start = base
+        for _ in range(node.level - 1):
+            start = start.rpartition("/")[0]
+        if node.module:  # from .kernel.crypto import PREFIX
+            target = _resolve(start, node.module)
+            if target and target != _key(path):
+                found.add((target, deferred))
+        else:  # from . import cfg, paths
             for alias in node.names:
-                found.add((alias.name.split(".")[0], deferred))
+                target = _resolve(start, alias.name)
+                if target and target != _key(path):
+                    found.add((target, deferred))
     return found
 
 
@@ -296,12 +352,71 @@ def test_each_host_capability_has_one_owner(capability):
     )
 
 
+def _cycles() -> set[frozenset[str]]:
+    """The strongly connected components of the import graph, larger than one module."""
+    graph = {_key(p): {t for t, _ in _edges(p)} for p in _modules()}
+    # Tarjan, iterative: the recursive form overflows on a graph this dense.
+    index: dict[str, int] = {}
+    low: dict[str, int] = {}
+    on_stack: set[str] = set()
+    stack: list[str] = []
+    found: set[frozenset[str]] = set()
+    counter = 0
+    for root in graph:
+        if root in index:
+            continue
+        work = [(root, iter(sorted(graph[root])))]
+        index[root] = low[root] = counter
+        counter += 1
+        stack.append(root)
+        on_stack.add(root)
+        while work:
+            node, children = work[-1]
+            for child in children:
+                if child not in index:
+                    index[child] = low[child] = counter
+                    counter += 1
+                    stack.append(child)
+                    on_stack.add(child)
+                    work.append((child, iter(sorted(graph.get(child, ())))))
+                    break
+                if child in on_stack:
+                    low[node] = min(low[node], index[child])
+            else:
+                work.pop()
+                if work:
+                    low[work[-1][0]] = min(low[work[-1][0]], low[node])
+                if low[node] == index[node]:
+                    component = set()
+                    while True:
+                        member = stack.pop()
+                        on_stack.discard(member)
+                        component.add(member)
+                        if member == node:
+                            break
+                    if len(component) > 1:
+                        found.add(frozenset(component))
+    return found
+
+
+def test_the_import_graph_has_exactly_the_cycles_we_declare():
+    """Ranks alone do not forbid a cycle, and that gap was real: once `secretbox` became
+    rank 1, an edge back to `cfg` — rank 1 — was legal again, and the cycle stage 1 exists
+    to kill could have walked straight back in through the rule meant to keep it out.
+
+    So the components are their own ratchet. Four left of the five measured when the plan
+    was written; each remaining one names the stage that dissolves it.
+    """
+    _ratchet({tuple(sorted(c)) for c in _cycles()}, KNOWN_CYCLES, "import cycles")
+
+
 def test_the_ratchet_only_ever_tightens():
     """The lists are the progress counter of the restructuring. This records where it
     stands so a reader can see it move, and fails if someone pads a list instead of
     fixing a module."""
-    assert len(KNOWN_RANK_VIOLATIONS) <= 4, "upward imports should only ever decrease"
+    assert len(KNOWN_RANK_VIOLATIONS) <= 3, "upward imports should only ever decrease"
     assert len(KNOWN_IMPURE) <= 3, "domain impurities should only ever decrease"
+    assert len(KNOWN_CYCLES) <= 4, "cycles should only ever decrease"
 
 
 def _ratchet(observed: set, known: frozenset, what: str) -> None:

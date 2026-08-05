@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import requests
 
-from . import cfg, i18n
+from . import cfg
 from .config import Settings
+from .kernel import i18n
 from .llm import _split
 
 

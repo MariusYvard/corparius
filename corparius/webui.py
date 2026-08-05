@@ -34,7 +34,6 @@ from . import (
     deploy,
     documents,
     hardware,
-    i18n,
     mailbox,
     ollama_setup,
     paths,
@@ -51,6 +50,7 @@ from .agents import ROSTER
 from .config import Settings
 from .doctor import run_checks
 from .integrations import smtp_check, stripe_check, stripe_payments
+from .kernel import i18n
 from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, _split, connected_providers
 from .models import AgentRole
 from .orchestrator import Runtime, _known_target

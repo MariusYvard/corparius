@@ -16,7 +16,8 @@ import json
 import shutil
 import subprocess
 
-from . import cfg, i18n
+from . import cfg
+from .kernel import i18n
 
 # CLI model aliases, not dated ids: the CLI resolves `haiku`, `sonnet` and
 # `opus` to whatever the current release is, so the tiers track it without

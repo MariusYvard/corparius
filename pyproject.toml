@@ -129,8 +129,12 @@ no_implicit_optional = true
 # All of corparius/ passes mypy at the default level (CI runs `mypy corparius/`).
 # The next ratchet is strictness: these leaf modules also require every def to be
 # annotated. Add a module here once it is fully typed.
+#
+# `corparius.kernel.*` is a wildcard, not a list, and deliberately: rank 0 is where
+# strictness costs the least — pure functions, stdlib only — and a new kernel module
+# should be born annotated rather than added here later. See docs/architecture-code.md.
 [[tool.mypy.overrides]]
-module = ["corparius.models", "corparius.paths", "corparius.settings_spec"]
+module = ["corparius.kernel.*", "corparius.models", "corparius.paths", "corparius.settings_spec"]
 disallow_untyped_defs = true
 
 [tool.coverage.run]

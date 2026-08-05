@@ -12,15 +12,21 @@ Measured on the string that made the difference visible:
       sitegen._slugify  -> methode-et-architecture
       company.slugify   -> m-thode-et-architecture   <- the company's own folder
 
-They are **not** merged here, and that is deliberate. Merging would either silently rename
-the directories of companies already installed on operators' machines, or reintroduce the
-accent bug in the two places that fixed it. So the identical pair became `slugify`, the odd
-one became `slugify_loose` under its own name and with the gap written down, and the fix is
-a separate job with a directory migration attached. A wrong thing that is labelled is
-findable; a wrong thing folded into a right one is not.
+They are **not** merged here, and that is deliberate — but not for the reason it first
+looked like. The plan assumed the fix needed a rename migration. Measured, it does not:
+`company.load` sets the slug from the *directory name* before validation runs, so for a
+company already on disk both spellings are idempotent. The broken one only ever produced a
+directory in one place, the creation wizard, where no slug is given and it is derived from
+the name.
+
+So the two names are two jobs, and that is the fix: **derive with `slugify`, preserve with
+`slugify_loose`**. A company created from now on gets a slug that survives its own name;
+nothing already installed is renamed. Merging them would truncate an existing folder name
+longer than 48 characters and point its config at a directory that is not there.
 
 Two modules also reached across a package boundary for `company._slugify` — a private name,
 imported by `documents` and `tools`. That stops here too.
+
 """
 
 from __future__ import annotations
@@ -45,13 +51,16 @@ def slugify(text: str) -> str:
     return _NOT_SLUG.sub("-", folded.lower()).strip("-")[:48]
 
 
-def slugify_loose(name: str) -> str:
-    """`slugify` without the accent folding or the length cap. **Known wrong**, and kept
-    only because it named directories that exist on disk.
+def slugify_loose(slug: str) -> str:
+    """Normalise a slug that **already exists**, without folding or truncating it.
 
-    Its single caller derives a company's folder from its name. Switching it to `slugify`
-    is a one-word change and a rename migration for every installed company whose name
-    carries an accent — a product decision, not a refactor. Until that is taken, the two
-    behaviours have two names, so nobody picks the broken one by accident.
+    This is the preserving half, and the distinction is the fix for the bug above. A slug
+    that arrives from `company.load` is the name of a directory on disk: folding it would
+    be a no-op (it has no accents left to fold), but the 48-character cap would not — a
+    company whose folder is longer than that would have its config point at a directory
+    that is not there.
+
+    So: derive with `slugify`, preserve with this. Nothing on disk is renamed, and a
+    company created from now on gets a slug that survives its own name.
     """
-    return _NOT_SLUG.sub("-", name.strip().lower()).strip("-")
+    return _NOT_SLUG.sub("-", slug.strip().lower()).strip("-")

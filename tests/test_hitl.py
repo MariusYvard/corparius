@@ -8,7 +8,7 @@ silent success or a crash.
 """
 
 from corparius.hitl import REJECTION_MESSAGE, ApprovalGate, _approval_id
-from corparius.models import ToolResult
+from corparius.kernel.records import ToolResult
 from corparius.store import Store
 from corparius.tools import TOOLS
 

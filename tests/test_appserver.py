@@ -18,7 +18,7 @@ import pytest
 import yaml
 
 from corparius import appserver
-from corparius.models import LLMResult, Usage
+from corparius.kernel.records import LLMResult, Usage
 
 KEY = "test-key-not-a-secret"
 

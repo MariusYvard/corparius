@@ -9,7 +9,7 @@ every time.
 import types
 
 from corparius import structured
-from corparius.models import Difficulty, LLMResult, Usage
+from corparius.kernel.records import Difficulty, LLMResult, Usage
 
 SCHEMA = {
     "headline": {"type": "str", "required": True, "max_len": 20},
@@ -111,7 +111,7 @@ def test_an_empty_reply_never_becomes_the_field_name():
 
     class _Silent:
         def generate(self, messages, difficulty=None, model=None, max_tokens=512):
-            from corparius.models import LLMResult, Usage
+            from corparius.kernel.records import LLMResult, Usage
 
             return LLMResult(text="", usage=Usage(1, 1), model="m", provider="p")
 
@@ -129,7 +129,7 @@ def test_prose_is_still_salvaged_rather_than_thrown_away():
 
     class _Prose:
         def generate(self, messages, difficulty=None, model=None, max_tokens=512):
-            from corparius.models import LLMResult, Usage
+            from corparius.kernel.records import LLMResult, Usage
 
             return LLMResult(text="Oui, presque prêt.", usage=Usage(1, 1), model="m", provider="p")
 
@@ -143,7 +143,7 @@ def test_no_schema_can_produce_its_own_key_as_a_value():
 
     class _Silent:
         def generate(self, messages, difficulty=None, model=None, max_tokens=512):
-            from corparius.models import LLMResult, Usage
+            from corparius.kernel.records import LLMResult, Usage
 
             return LLMResult(text="   ", usage=Usage(1, 1), model="m", provider="p")
 

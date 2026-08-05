@@ -64,7 +64,7 @@ def faq_app(tmp_path, monkeypatch):
 
 
 def _model(monkeypatch, text="an answer"):
-    from corparius.models import LLMResult, Usage
+    from corparius.kernel.records import LLMResult, Usage
 
     class _R:
         def __init__(self, settings):

@@ -86,7 +86,7 @@ def test_the_task_only_tools_are_the_ones_whose_prompt_is_task_shaped():
 def test_set_roster_belongs_to_the_ceo_and_to_nobody_else():
     """ "Hire and fire. The most CEO decision there is" — its own docstring. It has
     to be on the CEO's playbook specifically, not merely somewhere."""
-    from corparius.models import AgentRole
+    from corparius.kernel.records import AgentRole
 
     holders = [role for role, spec in ROSTER.items() if "set_roster" in spec.playbook]
     assert holders == [AgentRole.CEO]

@@ -13,8 +13,8 @@ import logging
 from dataclasses import dataclass
 
 from . import cfg, structured
+from .kernel.records import AgentRole, Difficulty, ToolResult
 from .llm import _split
-from .models import AgentRole, Difficulty, ToolResult
 from .permissions import risk_of
 from .safety import BudgetExceeded, LoopGuard
 from .tools import TOOLS

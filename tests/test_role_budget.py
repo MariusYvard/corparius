@@ -199,7 +199,7 @@ def test_the_agent_checks_and_records_against_its_own_ledger():
     """Both ends. Checking the reserve while charging the shared pool would let a
     role spend its purse twice over."""
     from corparius.agents import ROSTER, Executor
-    from corparius.models import AgentRole
+    from corparius.kernel.records import AgentRole
 
     calls: list = []
 
@@ -229,7 +229,7 @@ def test_the_agent_checks_and_records_against_its_own_ledger():
 
     class Router:
         def generate(self, messages, difficulty=None, model=None, max_tokens=512, images=None):
-            from corparius.models import LLMResult, Usage
+            from corparius.kernel.records import LLMResult, Usage
 
             return LLMResult("a headline", Usage(3, 4), "m", "mock")
 

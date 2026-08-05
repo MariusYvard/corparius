@@ -50,8 +50,8 @@ from .config import Settings
 from .doctor import run_checks
 from .integrations import smtp_check, stripe_check, stripe_payments
 from .kernel import dotenv, i18n, paths
+from .kernel.records import AgentRole
 from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, _split, connected_providers
-from .models import AgentRole
 from .orchestrator import Runtime, _known_target
 from .store import Store
 from .tools import TOOLS, executable_fields

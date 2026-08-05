@@ -11,8 +11,8 @@ provider that reports nothing must read as "not reported", never as "free".
 
 import types
 
+from corparius.kernel.records import Usage
 from corparius.llm import OpenAICompatProvider
-from corparius.models import Usage
 from corparius.safety import BudgetExceeded, TokenBudget
 from corparius.store import Store
 
@@ -146,13 +146,13 @@ def test_a_repair_round_is_billed_in_money_too(tmp_path, monkeypatch):
     report exactly when it costs most."""
     from corparius.agents import ROSTER, Executor
     from corparius.hitl import ApprovalGate
-    from corparius.models import AgentRole
+    from corparius.kernel.records import AgentRole
     from corparius.permissions import PermissionEngine
     from corparius.safety import CircuitBreaker
 
     store = Store(str(tmp_path))
 
-    from corparius.models import LLMResult
+    from corparius.kernel.records import LLMResult
 
     class _Router:
         def generate(self, messages, *a, **kw):

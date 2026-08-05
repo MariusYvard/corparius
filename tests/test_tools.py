@@ -8,7 +8,7 @@ the "return None when unconfigured" contract in corparius/integrations.py are wh
 make that possible without a network or a key.
 """
 
-from corparius.models import ToolResult
+from corparius.kernel.records import ToolResult
 from corparius.orchestrator import RunContext
 from corparius.safety import CircuitBreaker, TokenBudget
 from corparius.store import Store

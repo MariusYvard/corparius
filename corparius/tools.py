@@ -27,7 +27,7 @@ from . import (
     company as company_mod,
 )
 from .kernel import paths, text
-from .models import ToolResult
+from .kernel.records import ToolResult
 
 log = logging.getLogger("corparius.tools")
 

@@ -13,7 +13,7 @@ import pytest
 
 from corparius import cfg, webui
 from corparius.config import Settings
-from corparius.models import ApprovalRequest
+from corparius.kernel.records import ApprovalRequest
 
 from .conftest import EXAMPLE_COMPANY
 

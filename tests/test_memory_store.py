@@ -10,7 +10,7 @@ read positionally by set_daily_plan.
 import types
 
 from corparius.agents import ROSTER, _messages, language_line
-from corparius.models import AgentRole
+from corparius.kernel.records import AgentRole
 from corparius.store import Store
 from corparius.tools import TOOLS
 

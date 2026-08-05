@@ -18,7 +18,7 @@ import pytest
 
 from corparius import documents, llm, preflight
 from corparius.agents import ROSTER, Executor
-from corparius.models import AgentRole, Difficulty, LLMResult, Usage
+from corparius.kernel.records import AgentRole, Difficulty, LLMResult, Usage
 from corparius.tools import TOOLS
 
 # --- the guard that was missing ----------------------------------------------

@@ -16,8 +16,8 @@ from . import documents, inbox, llm
 from .agents import ROSTER, AgentSpec, Executor
 from .config import Settings
 from .hitl import ApprovalGate
+from .kernel.records import AgentRole
 from .llm import HybridRouter
-from .models import AgentRole
 from .permissions import PermissionEngine
 from .safety import CircuitBreaker, TokenBudget
 from .skills import SkillLoader

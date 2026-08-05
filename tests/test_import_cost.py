@@ -35,7 +35,7 @@ WATCHED = ("requests", "subprocess", "sqlite3", "smtplib", "imaplib", "ssl")
 COST: dict[str, frozenset[str]] = {
     # Kernel: clean, and the rules in test_layers.py keep it that way.
     "kernel.paths": frozenset(),
-    "models": frozenset(),
+    "kernel.records": frozenset(),
     "kernel.i18n": frozenset(),
     # Free even though it is the encryption module: `cryptography` is optional and is
     # imported inside the three functions that need it, so its absence is *reported* rather
@@ -44,7 +44,7 @@ COST: dict[str, frozenset[str]] = {
     "permissions": frozenset(),
     "kernel.vectors": frozenset(),
     "kernel.text": frozenset(),
-    # The one module that owns , so of course it loads it. This line is the
+    # The one module that owns `subprocess`, so of course it loads it. This line is the
     # counterpart of the OWNERS rule in test_layers.py: it should never be joined by another.
     "kernel.proc": frozenset({"subprocess"}),
     "safety": frozenset(),
@@ -123,5 +123,5 @@ def test_the_kernel_costs_nothing():
     """
     free = [m for m in sorted(COST) if m.startswith("kernel.") and m != "kernel.proc"]
     assert len(free) >= 5, "the derivation stopped finding kernel modules"
-    for module in [*free, "models"]:
+    for module in free:
         assert _pulled(module) == frozenset(), f"corparius.{module} stopped being free"

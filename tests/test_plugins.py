@@ -29,7 +29,7 @@ def clean_registries():
 
 _REGISTER = """
 from corparius.tools import Tool
-from corparius.models import ToolResult
+from corparius.kernel.records import ToolResult
 
 def register(api):
     api.register_llm_provider("dummyprov", base="http://x/v1", key_env="DUMMY_KEY")

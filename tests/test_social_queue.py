@@ -13,7 +13,7 @@ stands down once they pile up.
 import pytest
 
 from corparius import agents, cfg
-from corparius.models import AgentRole
+from corparius.kernel.records import AgentRole
 from corparius.store import Store
 from corparius.tools import TOOLS
 

@@ -7,7 +7,7 @@ import pytest
 
 from corparius import cfg, webui
 from corparius.config import Settings
-from corparius.models import LLMResult, Usage
+from corparius.kernel.records import LLMResult, Usage
 
 from .test_webui import _call
 

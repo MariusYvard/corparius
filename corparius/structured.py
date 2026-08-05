@@ -202,7 +202,7 @@ def ask(
     model's own JSON, and re-uploading the picture with it would pay for the image
     twice to fix a bracket.
     """
-    from .models import Difficulty
+    from .kernel.records import Difficulty
 
     difficulty = difficulty or Difficulty.EASY
     convo = list(messages)

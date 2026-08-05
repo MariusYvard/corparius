@@ -12,7 +12,7 @@ import types
 import pytest
 
 from corparius import webui
-from corparius.models import AgentRole
+from corparius.kernel.records import AgentRole
 from corparius.orchestrator import cadence_overrides, due_roles, paused_roles
 from corparius.store import Store
 from corparius.tools import TOOLS
@@ -221,7 +221,7 @@ def test_the_pin_reaches_a_tool_with_a_schema(monkeypatch, tmp_path):
     import json as _json
 
     from corparius import structured
-    from corparius.models import LLMResult, Usage
+    from corparius.kernel.records import LLMResult, Usage
 
     seen: list = []
 

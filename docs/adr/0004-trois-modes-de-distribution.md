@@ -8,7 +8,7 @@ différents, et confondre les deux est une erreur qui ne se voit qu'à l'install
 
 ## Décision
 
-Un module, `corparius/paths.py`, et **tout passe par lui**. Il distingue :
+Un module, `corparius/kernel/paths.py`, et **tout passe par lui**. Il distingue :
 
 - les **ressources livrées**, en lecture seule — racine du dépôt, `sys._MEIPASS` gelé, ou
   `corparius/_data/` dans un wheel ;
@@ -33,5 +33,5 @@ une plateforme est **une branche dans `_platform_home()`**, pas une chasse dans 
 
 ## Où c'est appliqué
 
-`corparius/paths.py:1-36` porte le raisonnement ; le job `wheel-smoke` de la CI le vérifie
+`corparius/kernel/paths.py:1-36` porte le raisonnement ; le job `wheel-smoke` de la CI le vérifie
 dans un venv neuf, depuis un répertoire courant neutre.

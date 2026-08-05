@@ -114,7 +114,7 @@ def parse(path: Path) -> App | None:
 def load(slug: str) -> list[App]:
     """Every app of a company, by name. Missing directory means no apps, which
     is the default and must cost nothing."""
-    from . import paths
+    from .kernel import paths
 
     directory = paths.company_apps_dir(slug)
     if not directory.is_dir():

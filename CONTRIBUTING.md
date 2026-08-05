@@ -31,7 +31,7 @@ python start.py                                    # run the console locally
 - **Settings** are one row in `corparius/settings_spec.py`, not an HTML change; they
   resolve through the four layers in `corparius/cfg.py` (env > console/SQLite > `.env` >
   default).
-- **Paths** go through `corparius/paths.py` so the source, Docker and frozen-binary
+- **Paths** go through `corparius/kernel/paths.py` so the source, Docker and frozen-binary
   builds agree on where things live.
 
 - **New console endpoints go in the `ROUTES` table** in `corparius/webui.py`, not in a

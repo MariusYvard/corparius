@@ -43,7 +43,7 @@ from pathlib import Path
 
 import requests
 
-from . import paths
+from .kernel import paths
 from .update_check import RELEASES_URL
 
 DOWNLOAD_BASE = "https://github.com/MariusYvard/corparius/releases/download"

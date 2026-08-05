@@ -16,8 +16,8 @@ import secrets as _secrets
 import sys
 from typing import NoReturn
 
-from . import cfg, paths
-from .kernel import dotenv
+from . import cfg
+from .kernel import dotenv, paths
 
 
 def _fail(msg: str) -> NoReturn:

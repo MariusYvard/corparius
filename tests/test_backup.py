@@ -190,7 +190,7 @@ def test_an_encrypted_secret_rides_along_because_it_is_not_readable(tmp_path, mo
 def test_the_settings_file_is_archived_with_its_secrets_blanked(tmp_path, monkeypatch):
     """.env was never in a backup, so a restore lost every bootstrap toggle.
     It is in now — with the shape kept and the values gone."""
-    from corparius import paths
+    from corparius.kernel import paths
 
     env = tmp_path / ".env"
     env.write_text(
@@ -210,7 +210,7 @@ def test_the_settings_file_is_archived_with_its_secrets_blanked(tmp_path, monkey
 def test_asking_for_the_secrets_in_so_many_words_keeps_them(tmp_path, monkeypatch):
     """A disaster-recovery copy on an encrypted disk is a legitimate thing to
     want. It has to be asked for, and it says what it is."""
-    from corparius import paths
+    from corparius.kernel import paths
 
     env = tmp_path / ".env"
     env.write_text("OPENROUTER_API_KEY=" + SECRET + "\n", encoding="utf-8")
@@ -261,7 +261,7 @@ def test_the_passphrase_never_travels_with_the_ciphertext_it_opens(tmp_path, mon
     .env, and .env is now inside the archive — so if it were not redacted, a
     stolen backup would carry both the locked box and its key. It is the first
     thing to check after putting .env in there, not the last."""
-    from corparius import paths
+    from corparius.kernel import paths
 
     env = tmp_path / ".env"
     env.write_text("CORP_SECRET_KEY=the passphrase\nCORP_LLM_MOCK=false\n", encoding="utf-8")

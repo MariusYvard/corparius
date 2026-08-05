@@ -43,8 +43,21 @@ from pathlib import Path
 
 # The package directory (corparius/) and its parent. In a source checkout the
 # parent is the repository root; in a wheel it is site-packages.
-_PACKAGE_DIR = Path(__file__).resolve().parent
+#
+# Two `.parent` calls, not one, and the count is load-bearing: this file lives in
+# `corparius/kernel/`, so the package directory is its grandparent. When it moved down one
+# level every shipped resource — the example skills, webui.html, the seeded companies —
+# resolved one directory too deep, and twelve tests said so at once. Anchoring on the
+# *package* rather than on this file is what keeps that from depending on where the
+# resolver happens to sit; see `_PACKAGE_DIR.name` below, which asserts it.
+_PACKAGE_DIR = Path(__file__).resolve().parent.parent
 _REPO_ROOT = _PACKAGE_DIR.parent
+
+assert _PACKAGE_DIR.name == "corparius", (
+    f"paths.py resolved the package directory to {_PACKAGE_DIR}, which is not the package. "
+    "Every shipped resource is found relative to it, and a wrong answer here is silent: "
+    "files simply are not there."
+)
 
 
 def is_frozen() -> bool:

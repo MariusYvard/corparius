@@ -128,7 +128,7 @@ def test_a_crafted_archive_cannot_write_a_setting_through_a_restore(tmp_path, mo
     """The third way into the same writer: .env comes out of a zip someone else
     may have built, and a restore merges it. The boundary drops anything that
     is not a plain KEY, and the writer refuses line breaks regardless."""
-    from corparius import paths
+    from corparius.kernel import paths
 
     env = tmp_path / ".env"
     env.write_text("CORP_LLM_MOCK=true\n", encoding="utf-8")

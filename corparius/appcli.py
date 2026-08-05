@@ -34,7 +34,7 @@ def _store():
 
 def _company(slug: str) -> dict | None:
     from . import company as company_mod
-    from . import paths
+    from .kernel import paths
 
     path = paths.companies_dir() / slug / "company.yaml"
     try:
@@ -133,8 +133,9 @@ def cmd_serve(args) -> None:
 
 
 def cmd_export(args) -> None:
-    from . import appexport, paths
+    from . import appexport
     from .config import Settings
+    from .kernel import paths
 
     if args.target != "netlify":
         _fail(f"unknown export target '{args.target}'; only 'netlify' is supported")

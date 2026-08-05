@@ -8,8 +8,9 @@ import os
 import sys
 from pathlib import Path
 
-from . import company, paths
+from . import company
 from .config import Settings, settings, setup_logging
+from .kernel import paths
 from .store import Store
 from .tools import TOOLS
 

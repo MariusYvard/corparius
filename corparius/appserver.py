@@ -37,8 +37,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 from . import apps as apps_mod
-from . import cfg, paths
+from . import cfg
 from .config import Settings
+from .kernel import paths
 from .webui import MAX_BODY, _host_only
 
 log = logging.getLogger("corparius.appserver")

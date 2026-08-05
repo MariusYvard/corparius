@@ -35,8 +35,7 @@ import time
 import zipfile
 from pathlib import Path
 
-from . import paths
-from .kernel import dotenv
+from .kernel import dotenv, paths
 
 
 # The writable home: backups land under it and it anchors the archive paths. In

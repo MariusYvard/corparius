@@ -13,8 +13,9 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
-from . import paths, skillimport, skills
+from . import skillimport, skills
 from .config import Settings
+from .kernel import paths
 
 
 def _fail(msg: str) -> NoReturn:

@@ -34,7 +34,7 @@ WATCHED = ("requests", "subprocess", "sqlite3", "smtplib", "imaplib", "ssl")
 # Measured on this package. The comment on each line says what should change it.
 COST: dict[str, frozenset[str]] = {
     # Kernel: clean, and the rules in test_layers.py keep it that way.
-    "paths": frozenset(),
+    "kernel.paths": frozenset(),
     "models": frozenset(),
     "kernel.i18n": frozenset(),
     # Free even though it is the encryption module: `cryptography` is optional and is
@@ -115,13 +115,13 @@ def test_the_kernel_costs_nothing():
 
     Rank 0 only. `permissions` and `safety` are free too and COST says so, but they are
     rank 1 and rank 4 — including them here would blur what this test is claiming.
+
+    Derived from COST rather than listed, so a new kernel module is covered the day it
+    exists instead of the day somebody remembers this line. `kernel.proc` is the single
+    exception, and a declared one: it is the module that *owns* `subprocess`, which is the
+    whole reason nothing else may import it.
     """
-    for module in (
-        "paths",
-        "models",
-        "kernel.i18n",
-        "kernel.crypto",
-        "kernel.vectors",
-        "kernel.text",
-    ):
+    free = [m for m in sorted(COST) if m.startswith("kernel.") and m != "kernel.proc"]
+    assert len(free) >= 5, "the derivation stopped finding kernel modules"
+    for module in [*free, "models"]:
         assert _pulled(module) == frozenset(), f"corparius.{module} stopped being free"

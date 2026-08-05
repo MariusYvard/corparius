@@ -20,7 +20,8 @@ did not have the API key. One bounded wait, one check, report either way.
 
 import requests
 
-from corparius import paths, sitecheck
+from corparius import sitecheck
+from corparius.kernel import paths
 
 
 def _site(base, name="public", pages=("index.html",), toml=None):

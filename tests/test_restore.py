@@ -144,7 +144,7 @@ def test_the_passphrase_is_its_own_paragraph_not_a_line_to_re_enter(home, monkey
     """Every other blanked name means "type it back in". This one must not: it
     has to come from where the operator saved it, and a backup carrying it
     would be a locked box shipped with its key."""
-    from corparius import paths
+    from corparius.kernel import paths
 
     env = home / ".env"
     env.write_text("CORP_SECRET_KEY=phrase\n", encoding="utf-8")
@@ -248,7 +248,7 @@ def test_a_crafted_archive_cannot_write_outside_the_staging_area(home):
 def test_a_restore_never_overwrites_the_passphrase_with_a_blank(home, monkeypatch):
     """The archive's CORP_SECRET_KEY line is deliberately empty. Copying it
     over would erase the one thing that opens the ciphertext being restored."""
-    from corparius import paths
+    from corparius.kernel import paths
 
     env = home / ".env"
     env.write_text("CORP_SECRET_KEY=the phrase\nCORP_LLM_MOCK=false\n", encoding="utf-8")

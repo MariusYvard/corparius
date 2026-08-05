@@ -17,7 +17,8 @@ does when it cannot act.
 
 import pytest
 
-from corparius import paths, tools
+from corparius import tools
+from corparius.kernel import paths
 from corparius.tools import TOOLS
 
 

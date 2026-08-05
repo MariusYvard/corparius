@@ -150,7 +150,7 @@ def test_an_agent_with_no_loader_is_unaffected():
 def test_the_shipped_example_skill_names_real_tools():
     """A skill naming a tool nobody has is read, parsed, and then never applies.
     Shipping one like that would teach the wrong thing by example."""
-    from corparius import paths
+    from corparius.kernel import paths
 
     # The shipped source, not whatever an operator's home happens to hold. This
     # asked companies_dir() and skipped when it came up empty, so the moment the
@@ -209,7 +209,7 @@ def test_every_shipped_example_skill_is_well_formed():
     """The example company is what an operator copies. A skill that shipped
     unscoped, oversized, or naming a tool nobody has would teach exactly the
     mistakes the doctor now warns about."""
-    from corparius import paths
+    from corparius.kernel import paths
     from corparius.skills import DEFAULT_MAX_CHARS, SkillLoader
 
     # The shipped source, for the same reason as above.
@@ -314,7 +314,8 @@ def test_the_starter_pack_is_found_through_the_one_resource_resolver():
     """
     from pathlib import Path
 
-    from corparius import paths, skillcli
+    from corparius import skillcli
+    from corparius.kernel import paths
 
     found = skillcli._starter_dir()
     assert found is not None, "the pack must be found from a source checkout"
@@ -375,8 +376,9 @@ def test_declaring_it_does_not_change_which_tools_it_applies_to(tmp_path):
 
 
 def test_the_doctor_stops_calling_it_an_omission_but_still_prices_it(tmp_path, monkeypatch):
-    from corparius import doctor, paths
+    from corparius import doctor
     from corparius.config import Settings
+    from corparius.kernel import paths
 
     base = tmp_path / "companies"
     (base / "c").mkdir(parents=True)
@@ -391,8 +393,9 @@ def test_the_doctor_stops_calling_it_an_omission_but_still_prices_it(tmp_path, m
 
 
 def test_an_undeclared_one_still_warns(tmp_path, monkeypatch):
-    from corparius import doctor, paths
+    from corparius import doctor
     from corparius.config import Settings
+    from corparius.kernel import paths
 
     base = tmp_path / "companies"
     (base / "c").mkdir(parents=True)
@@ -480,8 +483,9 @@ def test_the_rule_survives_a_budget_the_material_does_not(tmp_path):
 
 
 def test_the_doctor_prices_the_two_kinds_apart(tmp_path, monkeypatch):
-    from corparius import doctor, paths
+    from corparius import doctor
     from corparius.config import Settings
+    from corparius.kernel import paths
 
     base = tmp_path / "companies"
     (base / "c").mkdir(parents=True)

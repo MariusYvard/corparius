@@ -13,8 +13,9 @@ from pathlib import Path
 
 import requests
 
-from . import cfg, paths, permissions
+from . import cfg, permissions
 from .config import Settings
+from .kernel import paths
 from .llm import OPENAI_COMPAT_PROVIDERS, _split, list_models
 from .store import SCHEMA_VERSION, Store
 

@@ -63,7 +63,7 @@ def _log(msg: str) -> None:
 
 def _prepare_home() -> None:
     from corparius import company as company_mod
-    from corparius import paths
+    from corparius.kernel import paths
 
     home = paths.user_home()
     home.mkdir(parents=True, exist_ok=True)

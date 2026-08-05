@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import requests
 
-from . import cfg, i18n
+from . import cfg
+from .kernel import i18n
 from .llm import OPENAI_COMPAT_PROVIDERS, OpenAICompatProvider
 
 # A cheap, widely-available model per provider for the probe, so the test does

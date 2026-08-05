@@ -36,7 +36,11 @@ COST: dict[str, frozenset[str]] = {
     # Kernel: clean, and the rules in test_layers.py keep it that way.
     "paths": frozenset(),
     "models": frozenset(),
-    "i18n": frozenset(),
+    "kernel.i18n": frozenset(),
+    # Free even though it is the encryption module: `cryptography` is optional and is
+    # imported inside the three functions that need it, so its absence is *reported* rather
+    # than assumed. That is also why it does not appear in WATCHED.
+    "kernel.crypto": frozenset(),
     "permissions": frozenset(),
     "safety": frozenset(),
     # Config: sqlite3 only, because cfg reads a settings table. Stage 2 moves that
@@ -103,5 +107,5 @@ def test_a_module_pulls_in_exactly_what_it_declares(module):
 def test_the_kernel_costs_nothing():
     """Stated separately because it is the property that makes rank 0 safe to import from
     anywhere, and it should never need an exception."""
-    for module in ("paths", "models", "i18n", "permissions", "safety"):
+    for module in ("paths", "models", "kernel.i18n", "kernel.crypto", "permissions", "safety"):
         assert _pulled(module) == frozenset(), f"corparius.{module} stopped being free"

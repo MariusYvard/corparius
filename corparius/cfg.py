@@ -30,6 +30,7 @@ import threading
 from pathlib import Path
 
 from . import paths
+from .kernel import crypto
 
 # The writable home. In a source checkout this is the repository root, so the
 # default .env location below is unchanged; frozen, it is a per-OS directory.
@@ -147,9 +148,14 @@ def _db_layer() -> dict[str, str]:
                 rows = _db_conn.execute("SELECT key, value FROM settings").fetchall()
                 # Values may be encrypted at rest (opt-in, CORP_SECRET_KEY);
                 # decrypt_safe leaves plaintext untouched and never raises.
-                from . import secretbox
-
-                _db_cache = {k: secretbox.decrypt_safe(v) for k, v in rows}
+                #
+                # `_bootstrap`, not `get`: CORP_SECRET_KEY is a bootstrap key, so the
+                # passphrase resolves from the environment or .env and never from the
+                # table being decrypted here. That is what lets this call reach a pure
+                # kernel leaf instead of the old `secretbox`, which had to import `cfg`
+                # back to find the same passphrase — the cycle these two lines removed.
+                passphrase = _bootstrap("CORP_SECRET_KEY").strip()
+                _db_cache = {k: crypto.decrypt_safe(v, passphrase) for k, v in rows}
                 _db_version = version
         except sqlite3.Error:
             # No settings table yet (older database), or the file went away.

@@ -27,7 +27,7 @@ Un module de rang *n* n'importe que des rangs **≤ n**. Jamais au-dessus.
 
 | Rang | Dossier | Ce qui y vit | Ce qui n'y a pas le droit |
 | --- | --- | --- | --- |
-| 0 | `kernel/` | chemins, types, i18n, texte, dotenv, crypto, vecteurs, processus, HTTP brut | **tout import corparius**, même d'un rang inférieur — il n'y en a pas |
+| 0 | `kernel/` | chemins, types, i18n ✅, texte, dotenv, crypto ✅, vecteurs, processus, HTTP brut | **tout import corparius**, même d'un rang inférieur — il n'y en a pas |
 | 1 | `config/` | résolution des réglages, registre de champs, permissions | le store, les fournisseurs, le domaine |
 | 2 | `store/` | schéma, migrations, un dépôt par table | tout ce qui est au-dessus |
 | 3 | `providers/` | modèles, courrier, déploiements, dépôts, prospects, matériel | le domaine, l'app, le transport |
@@ -35,12 +35,16 @@ Un module de rang *n* n'importe que des rangs **≤ n**. Jamais au-dessus.
 | 5 | `app/` | les cas d'usage que l'API **et** la CLI appellent | le transport |
 | 6 | `api/`, `cli/` | HTTP, CLI, MCP | — rien n'importe ces dossiers |
 
+Le rang 0 porte aussi la seule strictesse mypy du paquet : `disallow_untyped_defs` s'applique
+à `corparius.kernel.*` en joker, pas en liste, pour qu'un nouveau module du kernel naisse
+annoté au lieu d'être ajouté après coup.
+
 Trois exceptions, chacune avec sa raison écrite dans le test : `corparius/__init__.py` (c'est
 la racine de composition), `config/store_layer.py` (la couche de réglages en lecture seule —
 on ne peut pas demander à la base où est la base), et `plugins/` (dont le métier est de
 composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 
-## Les quatre clauses qui rendent la règle réelle
+## Les cinq clauses qui rendent la règle réelle
 
 1. **Les imports différés comptent.** C'est la clause porteuse. Un `from . import x` dans un
    corps de fonction est vérifié exactement comme un import en tête de fichier — sinon la
@@ -53,6 +57,10 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 4. **Une capacité, un propriétaire.** `sqlite3` dans trois modules, c'est trois endroits qui
    peuvent verrouiller la base ; `subprocess` dans quatre, c'est quatre façons différentes de
    se tromper sur le quoting Windows.
+5. **Les cycles se comptent à part.** Les rangs n'interdisent pas un cycle *à l'intérieur*
+   d'un rang, et ce trou était réel : dès que `secretbox` est passé au rang 1, une arête vers
+   `cfg` redevenait légale. Les composantes fortement connexes ont donc leur propre liste,
+   `KNOWN_CYCLES`, avec l'étape qui dissout chacune. **Cinq au départ, quatre aujourd'hui.**
 
 ## Le cliquet
 

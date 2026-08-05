@@ -21,8 +21,8 @@ from pathlib import Path
 
 import yaml
 
-from . import paths, permissions
-from .kernel import text
+from . import permissions
+from .kernel import paths, text
 
 # `companies/` used to be resolved from a module attribute set at import time,
 # next to `paths.companies_dir()` which resolves on every call. Two sources for

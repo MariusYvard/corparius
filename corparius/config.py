@@ -18,7 +18,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from . import cfg, paths, permissions
+from . import cfg, permissions
+from .kernel import paths
 
 
 @dataclass

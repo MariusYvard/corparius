@@ -276,7 +276,7 @@ class SkillLoader:
 
     @classmethod
     def for_company(cls, slug: str, max_chars: int | None = None) -> SkillLoader:
-        from . import paths
+        from .kernel import paths
 
         dirs: list[tuple[Path, str]] = [(Path(d), "plugin") for d in EXTRA_DIRS]
         dirs.append((paths.skills_dir(), "global"))

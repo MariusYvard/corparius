@@ -9,9 +9,14 @@ import sys
 from pathlib import Path
 
 from corparius import company as company_mod
-from corparius import documents, paths
+from corparius import documents
+from corparius.kernel import paths
 
-REPO_ROOT = Path(paths.__file__).resolve().parent.parent
+# From this file, not from `paths.__file__`. Deriving it from the module under test meant
+# the test moved whenever the module did — when `paths` went down into `kernel/`, both the
+# module and its test were wrong by the same one directory, and two of the assertions below
+# passed for that reason alone. `tests/` sits at the repo root and does not move.
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 # --- source checkout: everything resolves to the repo layout, unchanged --------

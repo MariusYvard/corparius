@@ -18,7 +18,6 @@ from . import (
     integrations,
     leadsource,
     mailbox,
-    paths,
     permissions,
     signals,
     sitecheck,
@@ -27,7 +26,7 @@ from . import (
 from . import (
     company as company_mod,
 )
-from .kernel import text
+from .kernel import paths, text
 from .models import ToolResult
 
 log = logging.getLogger("corparius.tools")

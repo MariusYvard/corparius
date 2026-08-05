@@ -8,9 +8,10 @@ import threading
 import pytest
 import yaml
 
-from corparius import cfg, paths, webui
+from corparius import cfg, webui
 from corparius import company as company_mod
 from corparius.config import Settings
+from corparius.kernel import paths
 from corparius.store import Store
 
 from .test_webui import _call
@@ -219,7 +220,7 @@ def test_site_takes_a_headline_and_deploy_says_what_happened(server, monkeypatch
         server, "POST", "/api/site", {"company": "acme", "headline": "Widgets that survive Monday"}
     )
     assert status == 200 and d["ok"]
-    from corparius import paths
+    from corparius.kernel import paths
 
     html = paths.site_index(server.RequestHandlerClass.state.settings.data_path, "acme").read_text(
         encoding="utf-8"

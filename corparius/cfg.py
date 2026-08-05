@@ -29,8 +29,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from . import paths
-from .kernel import crypto, dotenv
+from .kernel import crypto, dotenv, paths
 
 # The writable home. In a source checkout this is the repository root, so the
 # default .env location below is unchanged; frozen, it is a per-OS directory.

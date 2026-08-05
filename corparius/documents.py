@@ -37,7 +37,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import paths
+from .kernel import paths
 
 # Aliased: `text` is a parameter name in this module, so a plain `from .kernel import text`
 # is shadowed inside the function that needs it. mypy caught it as `"str" has no attribute

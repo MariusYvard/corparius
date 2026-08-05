@@ -9,7 +9,8 @@ import json
 import os
 import time
 
-from . import cfg, paths
+from . import cfg
+from .kernel import paths
 
 
 def _suppressed(email: str) -> bool:

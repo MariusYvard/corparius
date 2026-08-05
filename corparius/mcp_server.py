@@ -13,9 +13,10 @@ import os
 import threading
 
 from . import deploy as deploy_mod
-from . import paths, sitegen
+from . import sitegen
 from .cli import _load_company
 from .config import settings
+from .kernel import paths
 from .store import Store
 
 # One connection for the whole server, not one per tool call. FastMCP.run() is a

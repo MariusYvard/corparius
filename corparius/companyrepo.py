@@ -24,8 +24,8 @@ from abc import ABC, abstractmethod
 
 import requests
 
-from . import cfg, paths
-from .kernel import proc
+from . import cfg
+from .kernel import paths, proc
 
 GIT_TIMEOUT = 180
 

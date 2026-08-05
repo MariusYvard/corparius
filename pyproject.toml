@@ -134,7 +134,7 @@ no_implicit_optional = true
 # strictness costs the least — pure functions, stdlib only — and a new kernel module
 # should be born annotated rather than added here later. See docs/architecture-code.md.
 [[tool.mypy.overrides]]
-module = ["corparius.kernel.*", "corparius.models", "corparius.paths", "corparius.settings_spec"]
+module = ["corparius.kernel.*", "corparius.models", "corparius.settings_spec"]
 disallow_untyped_defs = true
 
 [tool.coverage.run]

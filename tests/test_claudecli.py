@@ -3,12 +3,12 @@ settings and point the tiers at it. The scattered toggles and hand-edited tier
 strings were most of why nobody found this path."""
 
 import threading
-import types
 
 import pytest
 
 from corparius import cfg, claudecli, webui
 from corparius.config import Settings
+from corparius.kernel import proc
 
 from .test_webui import _call
 
@@ -47,14 +47,21 @@ def server(tmp_path, monkeypatch):
 
 
 def _fake_run(returncode=0, stdout='{"result": "ready", "model": "claude-sonnet"}', stderr=""):
-    return lambda *a, **k: types.SimpleNamespace(
-        returncode=returncode, stdout=stdout, stderr=stderr
+    """Stands in for `kernel.proc.run`, returning the type it returns.
+
+    This used to fake `subprocess.run` with a `SimpleNamespace` carrying three attributes,
+    which passed for as long as the caller only read those three. `proc.Completed` is a real
+    frozen dataclass, so a fake that drifts from the thing it fakes now fails here instead
+    of passing a test the shipped code would not have survived.
+    """
+    return lambda cmd, **k: proc.Completed(
+        args=list(cmd), returncode=returncode, stdout=stdout, stderr=stderr
     )
 
 
 def test_check_reports_installed_logged_in(monkeypatch):
     monkeypatch.setattr(claudecli.shutil, "which", lambda _: "/usr/bin/claude")
-    monkeypatch.setattr(claudecli.subprocess, "run", _fake_run())
+    monkeypatch.setattr(claudecli.proc, "run", _fake_run())
     r = claudecli.check()
     assert r["ok"] and r["installed"] and "no api key" in r["detail"].lower()
 
@@ -68,7 +75,7 @@ def test_check_says_install_when_missing(monkeypatch):
 def test_check_distinguishes_not_logged_in(monkeypatch):
     monkeypatch.setattr(claudecli.shutil, "which", lambda _: "/usr/bin/claude")
     monkeypatch.setattr(
-        claudecli.subprocess,
+        claudecli.proc,
         "run",
         _fake_run(returncode=1, stderr="Error: not logged in. Run claude login."),
     )
@@ -79,7 +86,7 @@ def test_check_distinguishes_not_logged_in(monkeypatch):
 
 def test_one_press_setup_flips_everything_and_survives_restart(server, monkeypatch):
     monkeypatch.setattr(claudecli.shutil, "which", lambda _: "/usr/bin/claude")
-    monkeypatch.setattr(claudecli.subprocess, "run", _fake_run())
+    monkeypatch.setattr(claudecli.proc, "run", _fake_run())
     # The hermetic fixture pins these toggles in the environment (layer 1), which
     # correctly shadows the console (layer 2). Clear them so the store's writes
     # are what answers; leaving them set would be testing the honesty contract,
@@ -107,7 +114,7 @@ def test_setup_leaves_the_simple_work_on_a_free_provider(server, monkeypatch):
     on draft_social_post — TRIVIAL, every two hours — is the expensive mistake.
     OVH answers without a key, so there is always something free to prefer."""
     monkeypatch.setattr(claudecli.shutil, "which", lambda _: "/usr/bin/claude")
-    monkeypatch.setattr(claudecli.subprocess, "run", _fake_run())
+    monkeypatch.setattr(claudecli.proc, "run", _fake_run())
     for k in ("CORP_LLM_MOCK", "CORP_CLOUD_ENABLED", "CORP_CLAUDE_CODE"):
         monkeypatch.delenv(k, raising=False)
     cfg.invalidate()
@@ -126,7 +133,7 @@ def test_setup_leaves_the_simple_work_on_a_free_provider(server, monkeypatch):
 
 def test_all_tiers_is_available_when_asked_for(server, monkeypatch):
     monkeypatch.setattr(claudecli.shutil, "which", lambda _: "/usr/bin/claude")
-    monkeypatch.setattr(claudecli.subprocess, "run", _fake_run())
+    monkeypatch.setattr(claudecli.proc, "run", _fake_run())
     for k in ("CORP_LLM_MOCK", "CORP_CLOUD_ENABLED", "CORP_CLAUDE_CODE"):
         monkeypatch.delenv(k, raising=False)
     cfg.invalidate()
@@ -218,13 +225,11 @@ def test_install_says_what_to_do_when_npm_is_absent(monkeypatch):
 
 
 def test_install_reports_the_npm_failure_rather_than_a_stack_trace(monkeypatch):
-    import subprocess
-
     monkeypatch.setattr(claudecli.shutil, "which", lambda name: "/usr/bin/npm")
     monkeypatch.setattr(
-        claudecli.subprocess,
+        claudecli.proc,
         "run",
-        lambda *a, **k: subprocess.CompletedProcess(a[0], 1, "", "EACCES: permission denied"),
+        _fake_run(returncode=1, stdout="", stderr="EACCES: permission denied"),
     )
     out = claudecli.install()
     assert out["ok"] is False and "EACCES" in out["detail"]
@@ -232,12 +237,8 @@ def test_install_reports_the_npm_failure_rather_than_a_stack_trace(monkeypatch):
 
 def test_install_says_to_open_a_new_terminal_when_the_path_has_not_caught_up(monkeypatch):
     """npm can succeed while `claude` is still not resolvable in this process."""
-    import subprocess
-
     monkeypatch.setattr(claudecli.shutil, "which", lambda name: "/usr/bin/npm" if name else None)
-    monkeypatch.setattr(
-        claudecli.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a[0], 0, "", "")
-    )
+    monkeypatch.setattr(claudecli.proc, "run", _fake_run(stdout="", stderr=""))
     monkeypatch.setattr(claudecli, "resolve", lambda: None)
     out = claudecli.install()
     assert out["ok"] is False and "new terminal" in out["detail"]

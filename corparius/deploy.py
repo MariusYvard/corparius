@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 from abc import ABC, abstractmethod
 
 import requests
 
 from . import cfg, paths
+from .kernel import proc
 
 
 class DeployProvider(ABC):
@@ -175,16 +175,9 @@ class SSHProvider(DeployProvider):
         target = cfg.get("CORP_DEPLOY_SSH_TARGET")
         if not target:
             raise RuntimeError("CORP_DEPLOY_SSH_TARGET is not set")
-        out = subprocess.run(
-            ["rsync", "-az", site_dir.rstrip("/\\") + "/", target],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=180,
-        )
-        if out.returncode != 0:
-            raise RuntimeError(out.stderr.strip() or "rsync failed")
+        out = proc.run(["rsync", "-az", site_dir.rstrip("/\\") + "/", target], timeout=180)
+        if not out.ok:
+            raise RuntimeError(out.tail() or "rsync failed")
         return f"ssh:{target}"
 
 

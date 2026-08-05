@@ -20,12 +20,12 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 from abc import ABC, abstractmethod
 
 import requests
 
 from . import cfg, paths
+from .kernel import proc
 
 GIT_TIMEOUT = 180
 
@@ -35,7 +35,7 @@ state.json
 """
 
 
-def _git(args: list[str], cwd: str, check: bool = True) -> subprocess.CompletedProcess:
+def _git(args: list[str], cwd: str, check: bool = True) -> proc.Completed:
     """Run git in `cwd`. Identity is passed per-invocation rather than written
     into the repo config, so a company repo never disagrees with the operator's
     global git identity."""
@@ -45,17 +45,9 @@ def _git(args: list[str], cwd: str, check: bool = True) -> subprocess.CompletedP
         "-c",
         f"user.email={cfg.get('CORP_GIT_AUTHOR_EMAIL', 'corparius@localhost')}",
     ]
-    out = subprocess.run(
-        ["git", *ident, *args],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=GIT_TIMEOUT,
-    )
-    if check and out.returncode != 0:
-        raise RuntimeError((out.stderr or out.stdout).strip() or f"git {' '.join(args)} failed")
+    out = proc.run(["git", *ident, *args], cwd=cwd, timeout=GIT_TIMEOUT)
+    if check and not out.ok:
+        raise RuntimeError(out.tail() or f"git {' '.join(args)} failed")
     return out
 
 
@@ -148,24 +140,13 @@ class GitHubProvider(RepoProvider):
         name = self._repo_name(slug)
         token = self._token()
         if not token:
-            out = subprocess.run(
+            out = proc.run(
                 ["gh", "repo", "create", name, "--private", "--description", description],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
                 timeout=GIT_TIMEOUT,
             )
-            if out.returncode != 0 and "already exists" not in (out.stderr or "").lower():
-                raise RuntimeError((out.stderr or out.stdout).strip() or "gh repo create failed")
-            who = subprocess.run(
-                ["gh", "api", "user", "--jq", ".login"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=GIT_TIMEOUT,
-            )
+            if not out.ok and "already exists" not in out.stderr.lower():
+                raise RuntimeError(out.tail() or "gh repo create failed")
+            who = proc.run(["gh", "api", "user", "--jq", ".login"], timeout=GIT_TIMEOUT)
             login = who.stdout.strip()
             if not login:
                 raise RuntimeError("gh is installed but not signed in")
@@ -249,16 +230,9 @@ class SSHRemoteProvider(RepoProvider):
         if not host or not base:
             raise RuntimeError("CORP_REPO_SSH_TARGET must look like user@host:/srv/git")
         path = f"{base.rstrip('/')}/{slug}.git"
-        out = subprocess.run(
-            ["ssh", host, f"git init --bare -q {path} && echo ok"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=GIT_TIMEOUT,
-        )
-        if out.returncode != 0:
-            raise RuntimeError(out.stderr.strip() or "ssh git init --bare failed")
+        out = proc.run(["ssh", host, f"git init --bare -q {path} && echo ok"], timeout=GIT_TIMEOUT)
+        if not out.ok:
+            raise RuntimeError(out.tail() or "ssh git init --bare failed")
         return f"{host}:{path}"
 
 
@@ -277,16 +251,9 @@ class LocalBareProvider(RepoProvider):
         os.makedirs(base, exist_ok=True)
         path = os.path.join(base, f"{slug}.git")
         if not os.path.isdir(path):
-            out = subprocess.run(
-                ["git", "init", "--bare", "-q", path],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=GIT_TIMEOUT,
-            )
-            if out.returncode != 0:
-                raise RuntimeError(out.stderr.strip() or "git init --bare failed")
+            out = proc.run(["git", "init", "--bare", "-q", path], timeout=GIT_TIMEOUT)
+            if not out.ok:
+                raise RuntimeError(out.tail() or "git init --bare failed")
         return path
 
 

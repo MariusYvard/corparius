@@ -54,6 +54,7 @@ RANKS: dict[str, int] = {
     "kernel/dotenv": 0,
     "kernel/vectors": 0,
     "kernel/text": 0,
+    "kernel/proc": 0,
     "inbox": 0,
     # Rank 1, not 0, and deliberately: `secretbox` kept the policy — where the passphrase
     # comes from, whether the feature is on — which is knowledge of configuration. Only the
@@ -179,12 +180,10 @@ KNOWN_IMPURE: frozenset[tuple[str, str]] = frozenset(
 OWNERS: dict[str, tuple[frozenset[str], str]] = {
     # → store/** and config/store_layer.py only.
     "sqlite3": (frozenset({"store", "cfg", "backup"}), "store/** and config/store_layer"),
-    # → kernel/proc.py only. Four call sites become one wrapper that owns Windows quoting,
-    # timeouts and capture — and lets this rule forbid subprocess everywhere else.
-    "subprocess": (
-        frozenset({"claudecli", "companyrepo", "deploy", "llm"}),
-        "kernel/proc.py",
-    ),
+    # Done, stage 1. Seven call sites across four modules became one wrapper that owns
+    # Windows quoting, timeouts, capture and — the part that mattered — the utf-8 decoding
+    # that only one of the seven had written down why it needed.
+    "subprocess": (frozenset({"kernel/proc"}), "kernel/proc.py"),
     # → api/** only.
     "http.server": (frozenset({"webui", "appserver"}), "api/**"),
 }

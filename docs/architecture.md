@@ -1,5 +1,10 @@
 # Architecture
 
+> Ce document décrit la topologie **d'exécution**. Pour la structure **du code** — qui a le
+> droit d'importer qui, et le test qui le tient — voir
+> [`architecture-code.md`](architecture-code.md) et les
+> [décisions d'architecture](adr/).
+
 corparius exécute une entreprise autonome comme une boucle d'agents planifiés. Un tick représente une heure simulée. À chaque tick, l'ordonnanceur sélectionne les agents dus, chacun déroule une courte séquence d'outils, et le pare-feu de sécurité plus la validation humaine encadrent chaque étape. L'état (actions, jetons, approbations, horloge) est persisté dans SQLite.
 
 ## Topologie d'orchestration

@@ -39,6 +39,11 @@ from pathlib import Path
 
 from . import paths
 
+# Aliased: `text` is a parameter name in this module, so a plain `from .kernel import text`
+# is shadowed inside the function that needs it. mypy caught it as `"str" has no attribute
+# "slugify"`; without the annotation it would have been an AttributeError at write time.
+from .kernel import text as textkit
+
 log = logging.getLogger("corparius.documents")
 
 # Extensions with a real extractor behind them. Anything else is listed but not
@@ -391,11 +396,10 @@ def write(slug: str, name: str, text: str, kind: str = WRITTEN) -> Path:
     Same folder the operator drops files into, so a brief written on Monday is
     context on Tuesday without anybody moving it.
     """
-    from . import company as company_mod
 
     base = folder(slug) / kind
     base.mkdir(parents=True, exist_ok=True)
-    stem = company_mod._slugify(name) or "note"
+    stem = textkit.slugify(name) or "note"
     path = base / f"{stem}.md"
     body = " ".join(str(text or "").split())
     if not body:

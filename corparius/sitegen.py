@@ -31,6 +31,7 @@ import re
 from pathlib import Path
 
 from . import cfg
+from .kernel import text
 
 log = logging.getLogger("corparius.sitegen")
 
@@ -619,21 +620,6 @@ footer .wrap::before{{content:"";width:22px;height:2px;background:var(--accent);
 """
 
 
-def _slugify(text: str) -> str:
-    """A URL-safe slug that survives accents.
-
-    `[^a-z0-9-]+` turned "Méthode et architecture" into
-    `m-thode-et-architecture` — the accent became a hyphen and the word lost a
-    letter. A French company got a broken URL for every page it wrote, which is
-    the kind of thing nobody notices until it is in a sitemap.
-    """
-    import unicodedata
-
-    folded = unicodedata.normalize("NFKD", str(text or ""))
-    folded = "".join(c for c in folded if not unicodedata.combining(c))
-    return re.sub(r"[^a-z0-9]+", "-", folded.lower()).strip("-")[:48]
-
-
 def _esc(value) -> str:
     return _html.escape(str(value))
 
@@ -1100,7 +1086,7 @@ def extra_pages(company: dict) -> list[dict]:
     for page in (company.get("site") or {}).get("pages") or []:
         if not isinstance(page, dict):
             continue
-        slug = _slugify(page.get("slug", ""))
+        slug = text.slugify(page.get("slug", ""))
         title = str(page.get("title", "")).strip()
         body = str(page.get("body", "")).strip()
         if slug and title and body:

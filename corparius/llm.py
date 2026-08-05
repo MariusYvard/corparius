@@ -18,7 +18,6 @@ import json
 import logging
 import os
 import re
-import subprocess
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -26,6 +25,7 @@ from dataclasses import dataclass
 import requests
 
 from . import cfg
+from .kernel import proc
 from .kernel.vectors import hash_embed
 from .models import Difficulty, LLMResult, Usage
 
@@ -778,28 +778,17 @@ class ClaudeCodeProvider(LLMProvider):
                 )
                 prompt = f"{system}\n\n---\n\n{prompt}"
         try:
-            proc = subprocess.run(
-                cmd,
-                # The prompt on stdin, not on argv: see ARGV_BUDGET. There is no
-                # length limit worth naming here — 25k characters is measured.
-                input=prompt,
-                capture_output=True,
-                text=True,
-                # utf-8 explicitly: `text=True` alone decodes with the locale
-                # encoding — cp1252 on Windows — and the CLI emits utf-8 JSON.
-                # Measured on a real run: every accent in a hard-tier reply came
-                # back mangled and stored that way, and the malformed bytes also
-                # produced intermittent "claude CLI returned non-JSON output".
-                encoding="utf-8",
-                errors="replace",
-                timeout=self.timeout,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+            # The prompt on stdin, not on argv: see ARGV_BUDGET. There is no length limit
+            # worth naming here — 25k characters is measured. The utf-8 decoding that made
+            # this call correct on Windows now lives in `kernel/proc.py`, with the
+            # measurement that found it.
+            out = proc.run(cmd, stdin=prompt, timeout=self.timeout)
+        except proc.ProcError as exc:
             raise ProviderError(f"claude CLI unavailable: {exc}") from exc
-        if proc.returncode != 0:
-            raise ProviderError(f"claude CLI exited {proc.returncode}: {proc.stderr.strip()[:300]}")
+        if not out.ok:
+            raise ProviderError(f"claude CLI exited {out.returncode}: {out.stderr.strip()[:300]}")
         try:
-            data = json.loads(proc.stdout)
+            data = json.loads(out.stdout)
         except json.JSONDecodeError as exc:
             raise ProviderError("claude CLI returned non-JSON output") from exc
         u = data.get("usage") or {}

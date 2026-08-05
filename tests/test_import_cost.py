@@ -44,6 +44,9 @@ COST: dict[str, frozenset[str]] = {
     "permissions": frozenset(),
     "kernel.vectors": frozenset(),
     "kernel.text": frozenset(),
+    # The one module that owns , so of course it loads it. This line is the
+    # counterpart of the OWNERS rule in test_layers.py: it should never be joined by another.
+    "kernel.proc": frozenset({"subprocess"}),
     "safety": frozenset(),
     # Config: sqlite3 only, because cfg reads a settings table. Stage 2 moves that
     # connection into `config/store_layer.py`; it does not remove it, and it should not —

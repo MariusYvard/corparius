@@ -14,10 +14,9 @@ from __future__ import annotations
 
 import json
 import shutil
-import subprocess
 
 from . import cfg
-from .kernel import i18n
+from .kernel import i18n, proc
 
 # CLI model aliases, not dated ids: the CLI resolves `haiku`, `sonnet` and
 # `opus` to whatever the current release is, so the tiers track it without
@@ -134,19 +133,11 @@ def install(timeout: int = 600) -> dict:
             ),
         }
     try:
-        proc = subprocess.run(
-            [npm, "install", "-g", "@anthropic-ai/claude-code"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-        )
-    except (subprocess.TimeoutExpired, OSError) as exc:
+        out = proc.run([npm, "install", "-g", "@anthropic-ai/claude-code"], timeout=timeout)
+    except proc.ProcError as exc:
         return {"ok": False, "detail": f"The install did not finish: {exc}"}
-    if proc.returncode != 0:
-        tail = (proc.stderr or proc.stdout or "").strip()[-400:]
-        return {"ok": False, "detail": f"npm exited {proc.returncode}:\n{tail}"}
+    if not out.ok:
+        return {"ok": False, "detail": f"npm exited {out.returncode}:\n{out.tail()}"}
     if not resolve():
         return {
             "ok": False,
@@ -190,15 +181,11 @@ def check(timeout: int = 60, lang="en") -> dict:
             "detail": prefix + p(INSTALL_EN, INSTALL_FR),
         }
     try:
-        proc = subprocess.run(
+        out = proc.run(
             [exe, "-p", "Reply with the single word: ready", "--output-format", "json"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except proc.ProcTimeout:
         return {
             "ok": False,
             "installed": True,
@@ -209,14 +196,14 @@ def check(timeout: int = 60, lang="en") -> dict:
                 "connexion ; lancez `claude login` une fois dans un terminal.",
             ),
         }
-    except OSError as exc:
+    except proc.ProcError as exc:
         return {
             "ok": False,
             "installed": True,
             "detail": p(f"Could not run the CLI: {exc}", f"Impossible de lancer le CLI : {exc}"),
         }
-    if proc.returncode != 0:
-        err = (proc.stderr or "").strip()
+    if not out.ok:
+        err = out.stderr.strip()
         low = err.lower()
         if any(w in low for w in ("login", "auth", "unauthor", "not logged", "credential")):
             return {
@@ -233,12 +220,12 @@ def check(timeout: int = 60, lang="en") -> dict:
             "ok": False,
             "installed": True,
             "detail": p(
-                f"The CLI exited {proc.returncode}: {err[:200] or 'no output'}",
-                f"Le CLI s'est arrêté ({proc.returncode}) : {err[:200] or 'aucune sortie'}",
+                f"The CLI exited {out.returncode}: {err[:200] or 'no output'}",
+                f"Le CLI s'est arrêté ({out.returncode}) : {err[:200] or 'aucune sortie'}",
             ),
         }
     try:
-        data = json.loads(proc.stdout)
+        data = json.loads(out.stdout)
         model = data.get("model") or ""
     except (json.JSONDecodeError, AttributeError):
         model = ""

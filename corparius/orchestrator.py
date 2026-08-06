@@ -60,12 +60,20 @@ class RunContext:
     task: dict | None = None
 
 
-def _load_skills(settings, slug: str):
+def _load_skills(settings, slug: str, store=None):
     """None rather than an empty loader when skills are off, so _messages has a
-    single condition to check and a company with no skills pays nothing."""
+    single condition to check and a company with no skills pays nothing.
+
+    `store` is passed here and only here: this is the loader that feeds real prompts, so it is
+    the one that can honestly say a skill was used. The console builds loaders too — to render
+    a catalogue and to warn about unscoped ones — and showing a skill on a page is not using
+    it. Counting those would tell the curator that everything is in service.
+    """
     if not getattr(settings, "skills_enabled", True):
         return None
-    loader = SkillLoader.for_company(slug, max_chars=getattr(settings, "skill_max_chars", None))
+    loader = SkillLoader.for_company(
+        slug, max_chars=getattr(settings, "skill_max_chars", None), store=store
+    )
     if loader.skills:
         log.info("%d skill(s) loaded for %s", len(loader.skills), slug)
     return loader if loader.skills else None
@@ -218,7 +226,7 @@ class Runtime:
         executor = Executor(self.router, gate, self.store, self.settings)
         enabled = company.get("agents", {})
 
-        skills = _load_skills(self.settings, slug)
+        skills = _load_skills(self.settings, slug, self.store)
         memory_top_k = _memory_top_k(self.settings)
         start = int(self.store.load_state(slug).get("tick", 0))
         # Yesterday's summaries. Re-read at every day boundary below: read once
@@ -393,7 +401,7 @@ class Runtime:
             gate = ApprovalGate(
                 self.store, PermissionEngine.from_settings(self.settings, company, self.store)
             )
-            skills = _load_skills(self.settings, slug)
+            skills = _load_skills(self.settings, slug, self.store)
             memory_top_k = _memory_top_k(self.settings)
             executor = Executor(self.router, gate, self.store, self.settings)
             time.sleep(1)

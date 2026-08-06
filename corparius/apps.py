@@ -65,6 +65,19 @@ class App:
         return f"{AGENT_PREFIX}{self.name}"
 
 
+def key_env(slug: str, app_name: str) -> str:
+    """The environment variable holding an app's key. One per app, so a leaked or abused key
+    is revoked without touching the others.
+
+    Here rather than in `appserver`, where it was: it names a *key for an app*, and the app is
+    what this module is about. Two things need it — the server that checks a caller's key, and
+    the doctor that reports an app defined with none — and the doctor reaching into an HTTP
+    server for one string was the last upward import in the package.
+    """
+    clean = lambda s: s.upper().replace("-", "_").replace(".", "_")
+    return f"CORP_APP_KEY_{clean(slug)}_{clean(app_name)}"
+
+
 def _int(value, fallback: int) -> int:
     try:
         out = int(value)

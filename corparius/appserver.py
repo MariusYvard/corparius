@@ -39,6 +39,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 from . import apps as apps_mod
+from .apps import key_env
 from .config import cfg
 from .config.settings import Settings
 from .kernel import paths
@@ -47,13 +48,6 @@ from .kernel.httpkit import MAX_BODY, host_only
 log = logging.getLogger("corparius.appserver")
 
 DEFAULT_PORT = 8610
-
-
-def key_env(slug: str, app_name: str) -> str:
-    """The environment variable holding an app's key. One per app, so a leaked
-    or abused key is revoked without touching the others."""
-    clean = lambda s: s.upper().replace("-", "_").replace(".", "_")
-    return f"CORP_APP_KEY_{clean(slug)}_{clean(app_name)}"
 
 
 class RateLimiter:

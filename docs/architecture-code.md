@@ -28,10 +28,10 @@ Un module de rang *n* n'importe que des rangs **≤ n**. Jamais au-dessus.
 | Rang | Dossier | Ce qui y vit | Ce qui n'y a pas le droit |
 | --- | --- | --- | --- |
 | 0 | `kernel/` | **fait** — `paths`, `records`, `i18n`, `text`, `dotenv`, `crypto`, `vectors`, `proc`, `httpkit` | **tout import corparius**, même d'un rang inférieur — il n'y en a pas |
-| 1 | `config/` | résolution des réglages, registre de champs, permissions | le store, les fournisseurs, le domaine |
+| 1 | `config/` | **fait** — `cfg`, `store_layer`, `settings`, `settings_spec`, `provider_table`, `permissions`, `secretbox` | le store, les fournisseurs, le domaine |
 | 2 | `store/` | schéma, migrations, un dépôt par table | tout ce qui est au-dessus |
 | 3 | `providers/` | modèles, courrier, déploiements, dépôts, prospects, matériel | le domaine, l'app, le transport |
-| 4 | `domain/` | roster, exécuteur, outils, entreprise, documents, orchestrateur, site | **toute dépendance hôte** : `requests`, `subprocess`, `sqlite3`, `smtplib`, `imaplib`, `socket`, `time.sleep` |
+| 4 | `domain/` | `roster` ✅, exécuteur, `tools/{spec,effects,registry}` ✅, entreprise, documents, orchestrateur, site | **toute dépendance hôte** : `requests`, `subprocess`, `sqlite3`, `smtplib`, `imaplib`, `socket`, `time.sleep` |
 | 5 | `app/` | les cas d'usage que l'API **et** la CLI appellent | le transport |
 | 6 | `api/`, `cli/` | HTTP, CLI, MCP | — rien n'importe ces dossiers |
 
@@ -60,30 +60,33 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 5. **Les cycles se comptent à part.** Les rangs n'interdisent pas un cycle *à l'intérieur*
    d'un rang, et ce trou était réel : dès que `secretbox` est passé au rang 1, une arête vers
    `cfg` redevenait légale. Les composantes fortement connexes ont donc leur propre liste,
-   `KNOWN_CYCLES`, avec l'étape qui dissout chacune. **Cinq au départ, trois aujourd'hui.**
+   `KNOWN_CYCLES`, avec l'étape qui dissout chacune. **Cinq au départ, deux aujourd'hui.**
 
 ## Où en est le chantier
 
-L'étape 1 est faite, l'étape 2 commencée. Mesuré :
+Étapes 1, 2 et le cœur de la 3 faites. Mesuré :
 
 | Compteur | Au plan | Aujourd'hui |
 | --- | --- | --- |
-| Arêtes montantes | 4 | **1** (`doctor→appserver`) |
+| **Arêtes montantes** | 4 | **0** |
 | Cycles d'imports | 5 | **2** |
 | Modules important `subprocess` | 4 | **1** (`kernel/proc.py`) |
 | Ce que charge la lecture d'un réglage | `requests`, `subprocess`, `ssl`, `sqlite3` | **`sqlite3`** |
-| Ce que charge la lecture de la liste des outils | `requests`, `subprocess`, `ssl`, `sqlite3`, `smtplib`, `imaplib` | **rien** |
+| Ce que charge la lecture de la liste des outils | + `smtplib`, `imaplib` | **rien** |
 
-La dernière ligne est le gain que le plan annonçait comme le moins cher du chantier, et il
-l'était : `settings_spec` importait `llm` **à une ligne sur 1 380**, pour lire
-`OPENAI_COMPAT_PROVIDERS`. Le registre est maintenant `config/provider_table.py` au rang 1,
-avec `split_target` (l'ancien `llm._split`, privé et atteint depuis onze modules) — parce que
-décider si `groq:` est un préfixe de fournisseur demande de savoir lesquels sont enregistrés.
+**Zéro arête montante**, et c'est pour ça que la liste est écrite en cliquet plutôt qu'en
+commentaire : chacune des quatre a été rayée par l'étape qui la nommait, et l'ensemble vide
+n'est pas un permis — `constaté == déclaré` tient toujours, donc le prochain import vers le
+haut échoue sans rien derrière quoi se cacher.
 
-Effet de bord non prévu par le plan : `hardware` et `agents` n'importaient `llm` que pour
-`_split`, et `agents` est le module dont chaque tour d'agent payait cet import.
+**Le gain le moins cher, étape 2.** `settings_spec` importait `llm` à **une ligne sur 1 380**,
+pour lire `OPENAI_COMPAT_PROVIDERS`. Le registre est maintenant `config/provider_table.py` au
+rang 1, avec `split_target` (l'ancien `llm._split`, privé et atteint depuis onze modules) —
+parce que décider si `groq:` est un préfixe de fournisseur demande de savoir lesquels sont
+enregistrés. Effet de bord non prévu : `hardware` et `agents` n'importaient `llm` que pour
+cette fonction.
 
-La dernière ligne est l'étape 3. Le registre plat portait quarante déclarations et quarante
+**Le gain le plus gros, étape 3.** Le registre plat portait quarante déclarations et quarante
 effets dans un même littéral, donc **six de ses huit consommateurs chargeaient un client SMTP
 pour lire une liste de chaînes** : `company` validant les `hitl_tools` de l'opérateur, `doctor`
 et `skills` vérifiant les `allowed-tools` d'une compétence, `skillcli`, le catalogue de la
@@ -94,21 +97,22 @@ exactement comme un `Tool`.
 Une correction au plan, inscrite dans `COST` : l'étape 3 devait alléger `agents`. Elle ne le
 fait pas et ne doit pas — `agents` **est** l'exécuteur, et dérouler un playbook suppose
 d'avoir les effets. Ce qui est devenu libre, c'est `roster` (les 150 premières lignes
-d'`agents.py`, sorties parce que les effets lisent le roster et importaient donc l'exécuteur)
-et `tools/spec`.
+d'`agents.py`) et `tools/spec`.
 
-Les deux cycles morts ne l'ont pas été par le déplacement lui-même mais par ce que le
-déplacement a rendu visible : `{cfg, secretbox}` en séparant la cryptographie de la
-politique, et `{appserver, backup, doctor, selfupdate, webui}` parce qu'un serveur HTTP en
-importait un autre pour trois constantes. Les deux autres ont rétréci en chemin —
-`selfupdate` et `documents` sont sortis de nœuds auxquels ils n'appartenaient pas.
+**Aucun cycle n'est mort par son déplacement**, mais par ce que le déplacement a rendu
+visible : `{cfg, secretbox}` en séparant la cryptographie de la politique ;
+`{appserver, backup, doctor, selfupdate, webui}` parce qu'un serveur HTTP en importait un
+autre pour trois constantes ; `{agents, company, tools}` parce qu'une table de données et la
+machine qui la consomme vivaient dans un fichier. Chaque fois, le cycle était le symptôme
+d'un module qui portait deux choses.
 
-Deux modules du plan ne sont **pas** dans le kernel, et pas par oubli. `modeltarget`
-(`llm._split`) a besoin de `OPENAI_COMPAT_PROVIDERS`, qui ne quitte `llm` qu'à l'étape 2 :
-le déplacer plus tôt demanderait de faire passer un jeu de préfixes à dix appelants. Et
-`models` est devenu `kernel/records`, pas `kernel/types` — `types` masque un module de la
-bibliothèque standard que cinq fichiers de tests utilisent, et `models` veut déjà dire
-« catalogue de modèles LLM » ici.
+Trois écarts au plan, tous pour la même raison — ses noms propres entrent en collision avec
+la bibliothèque standard ou avec le vocabulaire de ce codebase. `models` est devenu
+`kernel/records` et non `kernel/types` (`types` est un module stdlib que cinq fichiers de
+tests utilisent) ; `settings_spec` et `secretbox` gardent leur nom dans `config/` (`spec` est
+une variable locale 77 fois ici, `secrets` est stdlib et `secretscli` avait déjà un
+`import secrets as _secrets`). Et `modeltarget` n'est pas dans le kernel : il a besoin du
+registre de fournisseurs, donc il vit avec lui au rang 1.
 
 ## Le cliquet
 

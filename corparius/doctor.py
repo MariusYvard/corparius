@@ -294,7 +294,7 @@ def _check_apps(s: Settings) -> tuple:
     likeliest thing to be mistaken for a bug.
     """
     from . import apps as apps_mod
-    from .appserver import key_env
+    from .apps import key_env
     from .config import cfg
 
     base = paths.companies_dir()

@@ -17,7 +17,7 @@ from http.client import HTTPConnection
 import pytest
 import yaml
 
-from corparius import appserver
+from corparius import apps, appserver
 from corparius.kernel.records import LLMResult, Usage
 
 KEY = "test-key-not-a-secret"
@@ -279,8 +279,8 @@ def test_an_app_with_no_key_configured_cannot_be_called(server, home, monkeypatc
 
 def test_the_key_variable_is_per_app():
     """One leaked key is revoked without touching the others."""
-    assert appserver.key_env("t", "faq") == "CORP_APP_KEY_T_FAQ"
-    assert appserver.key_env("my-co", "lead-form") == "CORP_APP_KEY_MY_CO_LEAD_FORM"
+    assert apps.key_env("t", "faq") == "CORP_APP_KEY_T_FAQ"
+    assert apps.key_env("my-co", "lead-form") == "CORP_APP_KEY_MY_CO_LEAD_FORM"
 
 
 # --- guard 4: the day's ceiling -------------------------------------------

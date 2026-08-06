@@ -23,6 +23,7 @@ import yaml
 
 from .config import permissions
 from .kernel import paths, text
+from .tools.spec import SPEC
 
 # `companies/` used to be resolved from a module attribute set at import time,
 # next to `paths.companies_dir()` which resolves on every call. Two sources for
@@ -383,8 +384,6 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
         ads_eur = 0
     if ads_eur and not agents["ads"]:
         warnings.append("budgets.daily_ad_spend_eur is set but the ads agent is off")
-
-    from .tools.spec import SPEC
 
     hitl_in = raw.get("hitl_tools")
     hitl = [

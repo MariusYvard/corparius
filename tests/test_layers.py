@@ -143,14 +143,17 @@ RANKS: dict[str, int] = {
     "__init__": 6,
 }
 
-# Every edge that points upward today. Each one is a named step of the plan. Started at
-# four; `("secretbox", "cfg")` was struck out when stage 1 split the module in two.
-KNOWN_RANK_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
-    {
-        # Stage 3. `doctor` wants one constant, `appserver.key_env`.
-        ("doctor", "appserver"),
-    }
-)
+# Every edge that points upward. **Empty**, and that is the point of writing it as a ratchet:
+# it started at four and each one was struck out by the step of the plan that named it.
+#
+#   ("secretbox", "cfg")       stage 1, by splitting crypto from policy
+#   ("backup", "webui")        stage 1, by moving the dotenv writer to kernel/dotenv.py
+#   ("settings_spec", "llm")   stage 2, by moving the provider table to config/
+#   ("doctor", "appserver")    stage 3, by moving `key_env` to `apps`, where the app is
+#
+# An empty set is not a licence: `_ratchet` still asserts `observed == known`, so the next
+# upward import fails here with nothing to hide behind.
+KNOWN_RANK_VIOLATIONS: frozenset[tuple[str, str]] = frozenset()
 
 # The strongly connected components that still exist, each with the stage that ends it.
 # Five when the plan was written; `{cfg, secretbox}` went first, by splitting the module

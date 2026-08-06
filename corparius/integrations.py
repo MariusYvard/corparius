@@ -14,7 +14,8 @@ from email.utils import make_msgid
 
 import requests
 
-from . import cfg, deliverability
+from . import deliverability
+from .config import cfg
 from .kernel import i18n
 
 

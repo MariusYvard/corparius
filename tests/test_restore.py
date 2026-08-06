@@ -53,7 +53,7 @@ def _company(home, slug="acme", body="slug: acme"):
 def test_turning_encryption_on_rewrites_what_is_already_stored(home, monkeypatch):
     """The gap that made the setting mean less than it said."""
     pytest.importorskip("cryptography")
-    from corparius import cfg
+    from corparius.config import cfg
 
     store = Store(str(home / "data"))
     store.set_setting("GROQ_API_KEY", SECRET, secret=True)
@@ -70,7 +70,7 @@ def test_turning_encryption_on_rewrites_what_is_already_stored(home, monkeypatch
 def test_encryption_is_reversible_so_turning_it_on_is_not_a_trap(home, monkeypatch):
     """A one-way door is a door nobody opens."""
     pytest.importorskip("cryptography")
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.setenv("CORP_SECRET_KEY", "a phrase")
     cfg.invalidate()
@@ -87,7 +87,7 @@ def test_an_empty_secret_is_left_alone(home, monkeypatch):
     """There is nothing to protect, and encrypting an empty string would only
     make a blank field unreadable."""
     pytest.importorskip("cryptography")
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.setenv("CORP_SECRET_KEY", "a phrase")
     cfg.invalidate()
@@ -101,7 +101,7 @@ def test_with_encryption_on_a_backup_needs_nothing_typed_back_in(home, monkeypat
     """The whole argument for the setting: the backup restores in full, and is
     still useless to anyone without the passphrase."""
     pytest.importorskip("cryptography")
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.setenv("CORP_SECRET_KEY", "a phrase kept in a password manager")
     cfg.invalidate()
@@ -120,7 +120,7 @@ def test_with_encryption_on_a_backup_needs_nothing_typed_back_in(home, monkeypat
 def test_the_key_survives_a_backup_and_a_restore(home, monkeypatch):
     """End to end, which is the only way this claim means anything."""
     pytest.importorskip("cryptography")
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.setenv("CORP_SECRET_KEY", "a phrase")
     cfg.invalidate()

@@ -117,7 +117,7 @@ def test_routing_check_flags_an_incoherent_tier_with_a_fix(tmp_path, monkeypatch
     check must warn and carry the one-click fix hint the console renders."""
     for env in ("GROQ_API_KEY", "ANTHROPIC_API_KEY", "CEREBRAS_API_KEY"):
         monkeypatch.delenv(env, raising=False)
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
     s = _s(
@@ -137,7 +137,8 @@ def test_routing_check_flags_an_incoherent_tier_with_a_fix(tmp_path, monkeypatch
 
 def test_routing_check_is_green_when_every_tier_resolves(tmp_path, monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "gsk_x")
-    from corparius import cfg, doctor
+    from corparius import doctor
+    from corparius.config import cfg
 
     # Setting a key makes `_check_model_catalog` proceed, and it asks the
     # provider for real. This test is about the *routing* check, and a suite
@@ -257,7 +258,8 @@ def test_the_doctor_is_quiet_when_no_app_is_defined(tmp_path, monkeypatch):
 
 
 def test_the_doctor_says_the_endpoint_is_off(tmp_path, monkeypatch):
-    from corparius import cfg, doctor
+    from corparius import doctor
+    from corparius.config import cfg
 
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_APPS_ENABLED", "false")
@@ -270,7 +272,8 @@ def test_the_doctor_says_the_endpoint_is_off(tmp_path, monkeypatch):
 def test_the_doctor_names_an_app_that_can_never_answer(tmp_path, monkeypatch):
     """Defined, looks ready, and every call to it is refused for want of a key.
     Nothing else would say so."""
-    from corparius import cfg, doctor
+    from corparius import doctor
+    from corparius.config import cfg
 
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_APPS_ENABLED", "true")
@@ -283,7 +286,8 @@ def test_the_doctor_names_an_app_that_can_never_answer(tmp_path, monkeypatch):
 
 def test_the_doctor_flags_an_app_no_browser_can_call(tmp_path, monkeypatch):
     """The right default, and the likeliest thing to be mistaken for a bug."""
-    from corparius import cfg, doctor
+    from corparius import doctor
+    from corparius.config import cfg
 
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_APPS_ENABLED", "true")
@@ -295,7 +299,8 @@ def test_the_doctor_flags_an_app_no_browser_can_call(tmp_path, monkeypatch):
 
 
 def test_the_doctor_is_content_with_a_fully_wired_app(tmp_path, monkeypatch):
-    from corparius import cfg, doctor
+    from corparius import doctor
+    from corparius.config import cfg
 
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_APPS_ENABLED", "true")

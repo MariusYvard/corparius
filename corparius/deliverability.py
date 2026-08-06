@@ -9,7 +9,7 @@ import json
 import os
 import time
 
-from . import cfg
+from .config import cfg
 from .kernel import paths
 
 

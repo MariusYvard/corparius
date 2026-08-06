@@ -144,7 +144,7 @@ def test_a_failed_fetch_keeps_what_was_already_known(tmp_path, monkeypatch):
 def test_an_operator_score_table_is_read_when_pointed_at(tmp_path, monkeypatch):
     """How somebody who trusts a particular leaderboard uses it, without this
     repo shipping a frozen copy of one."""
-    from corparius import cfg
+    from corparius.config import cfg
 
     path = tmp_path / "scores.json"
     path.write_text(
@@ -157,7 +157,7 @@ def test_an_operator_score_table_is_read_when_pointed_at(tmp_path, monkeypatch):
 
 
 def test_a_missing_or_broken_score_file_is_not_an_error(tmp_path, monkeypatch):
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.setattr(cfg, "get", lambda k, d="": "/nowhere/at/all.json")
     assert modelinfo.operator_scores() == {}

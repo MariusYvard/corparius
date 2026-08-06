@@ -17,7 +17,8 @@ from http.client import HTTPConnection
 
 import pytest
 
-from corparius import cfg, webui
+from corparius import webui
+from corparius.config import cfg
 from corparius.config.settings import Settings
 
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import requests
 
-from . import cfg
+from .config import cfg
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS
 from .kernel import i18n
 from .llm import OpenAICompatProvider

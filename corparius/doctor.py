@@ -13,7 +13,7 @@ from pathlib import Path
 
 import requests
 
-from . import cfg, permissions
+from .config import cfg, permissions
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .config.settings import Settings
 from .kernel import paths
@@ -81,7 +81,7 @@ def _check_settings_source(s: Settings, store: Store | None) -> tuple:
 def _check_exposure(s: Settings) -> tuple:
     """A console bound off-localhost with no token is an open remote control:
     it can spend money, publish a site and read every key's status."""
-    from . import cfg
+    from .config import cfg
 
     local = {"127.0.0.1", "localhost", "::1"}
     allowed = [h.strip() for h in cfg.get("CORP_UI_ALLOWED_HOSTS", "").split(",") if h.strip()]
@@ -110,7 +110,7 @@ def _check_exposure(s: Settings) -> tuple:
 
 
 def _check_secrets_at_rest(s: Settings) -> tuple:
-    from . import secretbox
+    from .config import secretbox
 
     db = Path(s.data_path) / "corparius.sqlite"
     if not db.is_file():
@@ -294,8 +294,8 @@ def _check_apps(s: Settings) -> tuple:
     likeliest thing to be mistaken for a bug.
     """
     from . import apps as apps_mod
-    from . import cfg
     from .appserver import key_env
+    from .config import cfg
 
     base = paths.companies_dir()
     slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []

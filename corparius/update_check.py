@@ -14,7 +14,7 @@ import json
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from . import cfg
+from .config import cfg
 
 RELEASES_API = "https://api.github.com/repos/MariusYvard/corparius/releases/latest"
 RELEASES_URL = "https://github.com/MariusYvard/corparius/releases/latest"

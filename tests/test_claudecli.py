@@ -6,7 +6,8 @@ import threading
 
 import pytest
 
-from corparius import cfg, claudecli, webui
+from corparius import claudecli, webui
+from corparius.config import cfg
 from corparius.config.settings import Settings
 from corparius.kernel import proc
 

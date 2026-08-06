@@ -116,7 +116,7 @@ def _reply(text: str):
 )
 def test_the_verdict_needs_both_colours_the_right_way_round(monkeypatch, answer, verdict):
     monkeypatch.setenv("GROQ_API_KEY", "k")
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
     monkeypatch.setattr(preflight.requests, "post", lambda *a, **k: _reply(answer))
@@ -127,7 +127,7 @@ def test_a_transport_failure_is_not_a_verdict(monkeypatch):
     """None, not False. Marking a model blind because a laptop was on a train is
     a measurement of the network."""
     monkeypatch.setenv("GROQ_API_KEY", "k")
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
 
@@ -383,7 +383,7 @@ def test_zero_means_never_and_is_the_reason_this_is_a_setting(tmp_path, monkeypa
     from corparius.config.settings import Settings
 
     monkeypatch.setenv("CORP_IMAGE_MAX_PER_CALL", "0")
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
     assert Settings().image_max_per_call == 0
@@ -403,7 +403,7 @@ def test_zero_means_never_and_is_the_reason_this_is_a_setting(tmp_path, monkeypa
 
 def test_the_refusal_is_in_the_registry_so_the_console_shows_it():
     """A privacy control an operator cannot find is a control they do not have."""
-    from corparius.settings_spec import BY_KEY, WRITABLE
+    from corparius.config.settings_spec import BY_KEY, WRITABLE
 
     row = BY_KEY.get("CORP_IMAGE_MAX_PER_CALL")
     assert row is not None, "the setting is not in the registry, so the console cannot write it"
@@ -495,7 +495,7 @@ def test_a_dropped_picture_reaches_a_real_model_call(tmp_path, monkeypatch):
     """The whole point, asked of the wiring rather than of the documentation."""
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_LLM_MOCK", "true")
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
     folder = tmp_path / "companies" / "acme" / "documents"

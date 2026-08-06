@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from email.header import decode_header, make_header
 from email.utils import parseaddr
 
-from . import cfg
+from .config import cfg
 from .kernel import i18n
 
 ADDR_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")

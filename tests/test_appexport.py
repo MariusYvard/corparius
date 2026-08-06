@@ -30,7 +30,7 @@ APP = apps.App(
 
 
 def _settings(monkeypatch, trivial="groq:llama-3.3-70b-versatile"):
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.setenv("CORP_TRIVIAL_MODEL", trivial)
     cfg.invalidate()

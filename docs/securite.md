@@ -32,7 +32,7 @@ Certaines actions ne s'exécutent jamais sans accord. Tout outil listé dans COR
 
 ### Ce qui décide de demander
 
-Une liste de noms ne répond qu'à « est-ce que ça s'arrête », jamais à « pourquoi celui-là est passé ». Depuis les classes de risque, la décision se compose de trois éléments, résolus par `corparius/permissions.py`.
+Une liste de noms ne répond qu'à « est-ce que ça s'arrête », jamais à « pourquoi celui-là est passé ». Depuis les classes de risque, la décision se compose de trois éléments, résolus par `corparius/config/permissions.py`.
 
 Chaque outil déclare une classe de risque décrivant son effet sur le monde extérieur, pas son sujet: `read` (lit, rédige, calcule, rien ne sort du processus), `write_local` (écrit sous le répertoire de données), `external` (appelle un tiers, ou quelqu'un reçoit quelque chose), `code` (livre du code à un endroit qui l'exécute), `money` (déplace l'argent de l'exploitant). Rédiger une note de prix est `read`; envoyer un seul courriel froid est `external`.
 

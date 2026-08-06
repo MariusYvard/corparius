@@ -42,7 +42,7 @@ import time
 
 import requests
 
-from . import cfg
+from .config import cfg
 
 log = logging.getLogger("corparius.modelinfo")
 

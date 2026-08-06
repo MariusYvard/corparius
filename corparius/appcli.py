@@ -122,7 +122,8 @@ def cmd_key(args) -> None:
 
 
 def cmd_serve(args) -> None:
-    from . import appserver, cfg
+    from . import appserver
+    from .config import cfg
 
     if not cfg.get_bool("CORP_APPS_ENABLED"):
         _fail(

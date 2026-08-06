@@ -44,7 +44,7 @@ _BROKEN = object()
 @pytest.fixture
 def keyed(monkeypatch):
     """A provider with a key set, so probing gets as far as the network."""
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.setattr(cfg, "get", lambda key, default="": "k" if key.endswith("_KEY") else "")
     return "groq"
@@ -148,7 +148,7 @@ def test_a_null_content_does_not_become_the_word_none(monkeypatch, keyed):
 
 
 def test_no_key_proves_nothing_and_says_so(monkeypatch):
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.setattr(cfg, "get", lambda key, default="": "")
     result = preflight.probe("groq", "m")
@@ -444,7 +444,8 @@ def test_the_model_picker_hides_what_is_proved_uncallable(tmp_path, monkeypatch)
 
 def _sweepable(monkeypatch, catalogues, answers=None):
     """A machine with keys for the named providers and these catalogues."""
-    from corparius import cfg, llm
+    from corparius import llm
+    from corparius.config import cfg
 
     monkeypatch.setattr(
         cfg, "get", lambda key, default="": "k" if key.endswith(("_KEY", "_TOKEN")) else ""
@@ -536,7 +537,7 @@ def test_a_provider_with_no_catalogue_does_not_stop_the_sweep(tmp_path, monkeypa
 def test_only_providers_with_a_key_are_swept(monkeypatch):
     """Otherwise a sweep spends a minute proving that unconfigured endpoints are
     unconfigured."""
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.setattr(cfg, "get", lambda key, default="": "k" if key == "GROQ_API_KEY" else "")
     names = preflight.configured_providers()

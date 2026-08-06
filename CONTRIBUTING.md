@@ -28,8 +28,8 @@ python start.py                                    # run the console locally
   FR/EN through `corparius/i18n.py` and the `data-i18n` attributes in `corparius/webui.html`.
 - **`ruff format` decides layout; comments explain *why*, not *what*.** Run it
   before committing (`ruff format .`) — CI checks it.
-- **Settings** are one row in `corparius/settings_spec.py`, not an HTML change; they
-  resolve through the four layers in `corparius/cfg.py` (env > console/SQLite > `.env` >
+- **Settings** are one row in `corparius/config/settings_spec.py`, not an HTML change; they
+  resolve through the four layers in `corparius/config/cfg.py` (env > console/SQLite > `.env` >
   default).
 - **Paths** go through `corparius/kernel/paths.py` so the source, Docker and frozen-binary
   builds agree on where things live.

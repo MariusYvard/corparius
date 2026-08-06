@@ -22,9 +22,9 @@ store, webui — passes secrets through exactly as before.
 
 from __future__ import annotations
 
+from ..kernel import crypto
+from ..kernel.crypto import PREFIX, available, is_encrypted
 from . import cfg
-from .kernel import crypto
-from .kernel.crypto import PREFIX, available, is_encrypted
 
 _INSTALL_HINT = crypto.INSTALL_HINT
 

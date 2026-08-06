@@ -15,7 +15,7 @@ def test_the_local_source_is_available_only_when_a_list_exists(tmp_path, monkeyp
     path = tmp_path / "leads.csv"
     path.write_text("name,company,title,email\n", encoding="utf-8")
     monkeypatch.setenv("CORP_LEADS_CSV", str(path))
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
     assert LocalDatasetSource().available() is True

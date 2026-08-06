@@ -285,7 +285,7 @@ def test_the_providers_stay_connected_across_an_update(frozen, monkeypatch):
     table in the store — and both are in the data folder, not beside the binary.
     An operator who has connected providers should not have to reconnect them,
     and should certainly not discover that at the next tick."""
-    from corparius import cfg
+    from corparius.config import cfg
     from corparius.store import Store
 
     home = frozen["home"]

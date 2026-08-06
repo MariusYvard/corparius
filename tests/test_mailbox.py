@@ -6,7 +6,8 @@ answered, which is the one signal it exists to chase.
 
 import types
 
-from corparius import cfg, mailbox, tools
+from corparius import mailbox, tools
+from corparius.config import cfg
 from corparius.store import Store
 
 

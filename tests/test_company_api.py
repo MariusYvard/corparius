@@ -8,8 +8,9 @@ import threading
 import pytest
 import yaml
 
-from corparius import cfg, webui
 from corparius import company as company_mod
+from corparius import webui
+from corparius.config import cfg
 from corparius.config.settings import Settings
 from corparius.kernel import paths
 from corparius.store import Store

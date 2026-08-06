@@ -7,8 +7,8 @@ that turn a connected key into a working full configuration are covered too.
 
 import types
 
+from corparius.config.settings_spec import LLM_SERVER_PRESETS
 from corparius.llm import OPENAI_COMPAT_PROVIDERS, list_models, recommended_routing
-from corparius.settings_spec import LLM_SERVER_PRESETS
 from corparius.webui import _providers_payload
 
 
@@ -50,7 +50,7 @@ def test_default_models_belong_to_providers_that_can_be_activated():
 
 def test_payload_surfaces_the_onboarding_metadata(monkeypatch, tmp_path):
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
     payload = _providers_payload()

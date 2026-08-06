@@ -1,7 +1,8 @@
 """Deployment must never depend on one host: the chain falls back to a local,
 self-hosted target that is always available."""
 
-from corparius import cfg, deploy
+from corparius import deploy
+from corparius.config import cfg
 from corparius.deploy import LocalDirProvider, NetlifyProvider
 
 

@@ -80,7 +80,7 @@ WARNING_SECRETS_FR = (
 
 
 def _secret_names() -> set[str]:
-    from .settings_spec import SECRETS
+    from .config.settings_spec import SECRETS
 
     return set(SECRETS)
 
@@ -114,7 +114,7 @@ def _snapshot_store(source: Path, destination: Path, keep_secrets: bool, redacte
     """
     import shutil
 
-    from . import secretbox
+    from .config import secretbox
 
     try:
         src = sqlite3.connect(f"file:{source}?mode=ro", uri=True)

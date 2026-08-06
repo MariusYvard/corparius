@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 
 import requests
 
-from . import cfg
+from .config import cfg
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .llm import list_models
 

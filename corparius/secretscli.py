@@ -16,7 +16,7 @@ import secrets as _secrets
 import sys
 from typing import NoReturn
 
-from . import cfg
+from .config import cfg
 from .kernel import dotenv, paths
 
 
@@ -40,7 +40,7 @@ def _write_env(value: str) -> None:
 
 
 def cmd_status(args) -> None:
-    from . import secretbox
+    from .config import secretbox
 
     store = _store()
     rows = store.secret_rows()
@@ -57,7 +57,7 @@ def cmd_status(args) -> None:
 
 
 def cmd_on(args) -> None:
-    from . import secretbox
+    from .config import secretbox
 
     if not secretbox.available():
         _fail(
@@ -86,7 +86,7 @@ def cmd_on(args) -> None:
 
 def cmd_off(args) -> None:
     """Decrypt back to plaintext, so turning it on was never a trap."""
-    from . import secretbox
+    from .config import secretbox
 
     if not secretbox.enabled():
         print("encryption is already off")

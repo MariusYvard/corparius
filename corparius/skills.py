@@ -268,20 +268,31 @@ class SkillLoader:
     would buy a few kilobytes at the cost of a file that can change out from
     under a run halfway through."""
 
-    def __init__(self, dirs: list[tuple[Path, str]] | None = None, max_chars: int | None = None):
+    def __init__(
+        self,
+        dirs: list[tuple[Path, str]] | None = None,
+        max_chars: int | None = None,
+        store=None,
+        slug: str = "",
+    ):
         self.max_chars = DEFAULT_MAX_CHARS if max_chars is None else max_chars
+        # Optional, and every caller that only reads skills leaves it out: nothing here needs
+        # a database to load a folder of prose. It is passed when the loader is about to feed
+        # a real prompt, because that is the only moment "this skill was used" becomes true.
+        self.store = store
+        self.slug = slug
         self.skills: list[Skill] = []
         for directory, scope in dirs or []:
             self._discover(Path(directory), scope)
 
     @classmethod
-    def for_company(cls, slug: str, max_chars: int | None = None) -> SkillLoader:
+    def for_company(cls, slug: str, max_chars: int | None = None, store=None) -> SkillLoader:
         from .kernel import paths
 
         dirs: list[tuple[Path, str]] = [(Path(d), "plugin") for d in EXTRA_DIRS]
         dirs.append((paths.skills_dir(), "global"))
         dirs.append((paths.company_skills_dir(slug), slug or "company"))
-        return cls(dirs, max_chars=max_chars)
+        return cls(dirs, max_chars=max_chars, store=store, slug=slug)
 
     def _discover(self, directory: Path, scope: str) -> None:
         if not directory.is_dir():
@@ -352,6 +363,7 @@ class SkillLoader:
         # than a rule. A claims guardrail truncated to make room for "what is true
         # and sufficient to sell" would be exactly the wrong way round.
         applicable = sorted(applicable, key=lambda s: not s.always_text)
+        used: list[str] = []
         for skill in applicable:
             body = skill.core_for(tool_name)
             if not body:
@@ -363,6 +375,25 @@ class SkillLoader:
                 body = body[: max(0, budget)].rstrip() + "\n[truncated]"
             budget -= len(body)
             parts.append(f"## {skill.name}\n{body}")
+            used.append(skill.name)
             if budget <= 0:
                 break
+        if used:
+            self._record_use(used)
         return "\n\n".join(parts)
+
+    def _record_use(self, names: list[str]) -> None:
+        """Count that these skills reached a prompt. Here, because this is the only place
+        that is true — `for_tool` answers "would it apply", which is not the same question.
+
+        Best-effort on purpose: a counter failing must not cost the company its turn. What
+        depends on it is the curator's judgement of what to archive, and a curator that
+        archives nothing is a folder that grows, which is recoverable. A turn that dies
+        because a bookkeeping write failed is not.
+        """
+        if self.store is None:
+            return
+        try:
+            self.store.record_skill_use(self.slug, names)
+        except Exception:  # noqa: BLE001 - see the docstring
+            log.debug("could not record skill use for %s", names)

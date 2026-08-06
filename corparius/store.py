@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS memory (
     company TEXT, agent TEXT, fact TEXT, why TEXT, pinned INTEGER DEFAULT 0, ts REAL
 );
 CREATE INDEX IF NOT EXISTS memory_by_company ON memory (company, pinned, ts);
+CREATE TABLE IF NOT EXISTS skill_usage (
+    company TEXT, skill TEXT, uses INTEGER DEFAULT 0, last_used REAL,
+    PRIMARY KEY (company, skill)
+);
 CREATE TABLE IF NOT EXISTS inbox (
     id TEXT PRIMARY KEY,
     company TEXT, agent TEXT, kind TEXT, title TEXT, body TEXT, options TEXT,
@@ -98,7 +102,7 @@ CREATE TABLE IF NOT EXISTS model_probes (
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -316,6 +320,31 @@ def _migration_15(db: sqlite3.Connection) -> None:
         pass  # already there: fresh stores get it from SCHEMA
 
 
+def _migration_17(db: sqlite3.Connection) -> None:
+    """When each skill was last actually used, and how often.
+
+    A skill reaches a prompt when the tool about to run is named in its `allowed-tools`, and
+    until now that left no trace. Which is fine while an operator writes every skill by hand
+    and can see the folder — and not fine at all once an *agent* can write one. Hermes Agent
+    names the failure mode in its curator's own docstring: without maintenance you get
+    "hundreds of narrow skills where each one captures one session's specific bug"
+    (docs/reverse-engineering/hermes-agent.md).
+
+    Here it would be worse than a cluttered folder. An unscoped skill rides on **every prompt
+    of every turn**, and `SkillLoader.always_on_chars()` already exists to measure that tax.
+    Shipping a writer without the counter that lets a curator archive what nobody reads would
+    be building a leak next to its own gauge.
+
+    Keyed by (company, skill) rather than by path: a company skill of the same name replaces a
+    global one on purpose, and the count should follow the name the loader resolved.
+    """
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS skill_usage ("
+        " company TEXT, skill TEXT, uses INTEGER DEFAULT 0, last_used REAL,"
+        " PRIMARY KEY (company, skill))"
+    )
+
+
 # version -> callable(db). Applied in order for any version above the DB's own.
 def _migration_16(db: sqlite3.Connection) -> None:
     """Whether a model can actually read an image, as opposed to claiming it can.
@@ -352,6 +381,7 @@ MIGRATIONS = {
     14: _migration_14,
     15: _migration_15,
     16: _migration_16,
+    17: _migration_17,
 }
 
 
@@ -695,6 +725,32 @@ class Store:
         self.db.commit()
         assert cur.lastrowid is not None
         return cur.lastrowid
+
+    @_locked
+    def record_skill_use(self, company, names: list[str], now: float | None = None) -> None:
+        """These skills reached a prompt. One statement per skill, upserted.
+
+        `now` is a parameter because the only thing that reads this is a decision about age —
+        "nothing has used it in thirty days" — and a test of that decision must be able to say
+        when, without waiting a month.
+        """
+        stamp = time.time() if now is None else now
+        for name in names:
+            self.db.execute(
+                "INSERT INTO skill_usage (company, skill, uses, last_used) VALUES (?,?,1,?)"
+                " ON CONFLICT(company, skill) DO UPDATE SET"
+                " uses = uses + 1, last_used = excluded.last_used",
+                (company, name, stamp),
+            )
+        self.db.commit()
+
+    @_locked
+    def skill_usage(self, company) -> dict[str, dict]:
+        """{skill name: {uses, last_used}} for one company. What the curator reads."""
+        rows = self.db.execute(
+            "SELECT skill, uses, last_used FROM skill_usage WHERE company=?", (company,)
+        ).fetchall()
+        return {r["skill"]: {"uses": r["uses"], "last_used": r["last_used"]} for r in rows}
 
     @_locked
     def recall(self, company, query="", limit=5) -> list[dict]:

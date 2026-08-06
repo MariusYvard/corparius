@@ -155,7 +155,7 @@ def test_a_failed_push_reaches_the_operator(tmp_path, monkeypatch):
     caller discarded."""
     from corparius import companyrepo as repo_mod
     from corparius import orchestrator
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.store import Store
 
     monkeypatch.setattr(repo_mod, "autocommit_enabled", lambda: True)

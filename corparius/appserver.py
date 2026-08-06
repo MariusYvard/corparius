@@ -40,7 +40,7 @@ from urllib.parse import urlparse
 
 from . import apps as apps_mod
 from . import cfg
-from .config import Settings
+from .config.settings import Settings
 from .kernel import paths
 from .kernel.httpkit import MAX_BODY, host_only
 

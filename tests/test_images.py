@@ -279,7 +279,7 @@ def test_claude_code_declares_that_it_carries_none():
 
 
 def _executor(monkeypatch, mock=True):
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     settings = Settings()
     monkeypatch.setattr(settings, "llm_mock", mock, raising=False)
@@ -339,7 +339,7 @@ def test_the_measured_verdict_outranks_the_catalogue(monkeypatch, tmp_path):
     store = Store(str(tmp_path))
     ex = _executor(monkeypatch, mock=False)
     model = ex.router.resolve_model(Difficulty.EASY, None)
-    _, name = llm._split(model)
+    _, name = llm.split_target(model)
 
     # The catalogue says yes...
     monkeypatch.setattr(
@@ -380,7 +380,7 @@ def test_zero_means_never_and_is_the_reason_this_is_a_setting(tmp_path, monkeypa
     provider off, which also gives up the text — so there was no way to keep cloud
     text and decline cloud pictures, the more sensitive of the two.
     """
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     monkeypatch.setenv("CORP_IMAGE_MAX_PER_CALL", "0")
     from corparius import cfg
@@ -450,10 +450,10 @@ def test_a_role_can_be_pinned_to_its_own_model(tmp_path):
     ],
 )
 def test_a_pin_must_name_a_target_this_build_routes_to(pinned, accepted):
-    """`llm._split` defaults an unknown prefix to local, on purpose, so that a bare
+    """`split_target` defaults an unknown prefix to local, on purpose, so that a bare
     Ollama tag works in the tier settings. That makes `opnerouter:typo` and
     `gemma4:e4b` the same shape to it — both come back local — so validating a pin
-    through `_split` would accept the typo and send every turn of that role to
+    through `split_target` would accept the typo and send every turn of that role to
     Ollama, which reads as a slow day rather than as a mistake.
 
     A pin therefore spells its target out, and the refusal is reported.

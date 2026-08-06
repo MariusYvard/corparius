@@ -151,7 +151,7 @@ def test_a_mapping_is_required():
 def test_the_orchestrator_hands_the_reserves_to_the_ledger(tmp_path, monkeypatch):
     """A reserve nothing reads is a reserve that does nothing."""
     from corparius import orchestrator
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.store import Store
 
     seen: list = []

@@ -115,7 +115,7 @@ def test_the_doctor_fails_on_a_store_from_the_future(tmp_path, monkeypatch):
     import sqlite3
 
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     Store(str(tmp_path)).close()
@@ -134,7 +134,7 @@ def test_the_doctor_fails_on_a_store_from_the_future(tmp_path, monkeypatch):
 
 def test_the_doctor_is_quiet_about_a_store_at_the_right_version(tmp_path, monkeypatch):
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     store = Store(str(tmp_path))

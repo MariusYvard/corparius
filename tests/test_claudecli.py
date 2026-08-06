@@ -7,7 +7,7 @@ import threading
 import pytest
 
 from corparius import cfg, claudecli, webui
-from corparius.config import Settings
+from corparius.config.settings import Settings
 from corparius.kernel import proc
 
 from .test_webui import _call

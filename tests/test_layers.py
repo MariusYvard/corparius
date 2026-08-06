@@ -65,7 +65,12 @@ RANKS: dict[str, int] = {
     "secretbox": 1,
     # 1 — config
     "cfg": 1,
-    "config": 1,
+    "config/__init__": 1,
+    "config/settings": 1,
+    # Pure data — which providers exist, what variable holds each key — plus the one function
+    # that needs to know that list to read a tier string. It was in `llm.py` at rank 3, and
+    # that is why reading a setting loaded an HTTP client.
+    "config/provider_table": 1,
     "settings_spec": 1,
     "permissions": 1,
     # 2 — store
@@ -127,10 +132,6 @@ RANKS: dict[str, int] = {
 # four; `("secretbox", "cfg")` was struck out when stage 1 split the module in two.
 KNOWN_RANK_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
     {
-        # Stage 2. The single cheapest fix in the restructuring: `settings_spec` uses `llm`
-        # on line 19 and nowhere else in 1 380 lines, to read OPENAI_COMPAT_PROVIDERS. That
-        # one import drags `requests` and `subprocess` into the path of reading a setting.
-        ("settings_spec", "llm"),
         # Stage 3. `doctor` wants one constant, `appserver.key_env`.
         ("doctor", "appserver"),
     }
@@ -142,9 +143,11 @@ KNOWN_RANK_VIOLATIONS: frozenset[tuple[str, str]] = frozenset(
 # rules above read function bodies, and why this list is possible to write at all.
 KNOWN_CYCLES: frozenset[tuple[str, ...]] = frozenset(
     {
-        # Stage 5. `llm` asks `preflight` what works, `preflight` asks `claudecli` and
-        # `hardware`, and both ask `llm` back for the provider table.
-        ("claudecli", "hardware", "llm", "preflight"),
+        # Stage 5. `llm` asks `preflight` what works and `preflight` asks `claudecli`, and
+        # both ask `llm` back. `hardware` was in here too and left in stage 2: its only edge
+        # into `llm` was `_split`, so moving the provider table — and the splitter that needs
+        # to know what is in it — to `config/provider_table.py` dissolved that edge as well.
+        ("claudecli", "llm", "preflight"),
         # Stage 3. The domain knot: `agents` needs the tools, `tools` needs the company,
         # `company` needs the tool names. `documents` was in here too, and left for a
         # reason worth recording: its only edge into `company` was `company_mod._slugify`,

@@ -5,7 +5,7 @@ must be visible as such, never silently ignored."""
 import pytest
 
 from corparius import cfg
-from corparius.config import Settings
+from corparius.config.settings import Settings
 from corparius.store import Store
 
 

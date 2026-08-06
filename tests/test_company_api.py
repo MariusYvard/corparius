@@ -10,7 +10,7 @@ import yaml
 
 from corparius import cfg, webui
 from corparius import company as company_mod
-from corparius.config import Settings
+from corparius.config.settings import Settings
 from corparius.kernel import paths
 from corparius.store import Store
 

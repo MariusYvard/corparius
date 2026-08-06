@@ -7,9 +7,10 @@ for three of its stages.
 The baseline below is measured, not assumed. Two lines of it are the argument for the
 whole exercise:
 
-- **`settings_spec` pulls `requests`, `subprocess` and `ssl`.** Reading a settings registry
-  loads the HTTP stack and the process spawner, because of one import on line 19 that
-  exists to read `OPENAI_COMPAT_PROVIDERS` and is used nowhere else in 1 380 lines.
+- **`settings_spec` pulled `requests`, `subprocess` and `ssl`** — fixed in stage 2, and the
+  line below records what it costs now. Reading a settings registry loaded the HTTP stack
+  and the process spawner because of one import on line 19, used nowhere else in 1 380
+  lines. This test is what proved it gone rather than assumed it.
 - **`agents` pulls `smtplib` and `imaplib`.** `agents.py` has no host concern of its own —
   it imports `tools`, and `tools` imports `deploy`, `integrations`, `mailbox` and
   `sitecheck` at module scope. Every agent turn pays for a mail client it will never use.
@@ -53,11 +54,16 @@ COST: dict[str, frozenset[str]] = {
     # connection into `config/store_layer.py`; it does not remove it, and it should not —
     # "you cannot ask the database where the database is" is why it exists.
     "cfg": frozenset({"sqlite3"}),
-    "config": frozenset({"sqlite3"}),
+    "config.settings": frozenset({"sqlite3"}),
+    # The registry that used to live in `llm.py`. Pure data plus one splitter, and free —
+    # which is the whole point of having moved it.
+    "config.provider_table": frozenset(),
     "store": frozenset({"sqlite3"}),
-    # Stage 2 must take `requests`, `subprocess` and `ssl` off this line: reading a
-    # setting has no business loading an HTTP client.
-    "settings_spec": frozenset({"requests", "subprocess", "sqlite3", "ssl"}),
+    # Was `{requests, subprocess, sqlite3, ssl}`. Stage 2 took three of the four off, in
+    # one line: `from .llm import OPENAI_COMPAT_PROVIDERS` — used once in 1 380 lines —
+    # became an import of `config/provider_table.py`. `sqlite3` stays, and should: reading a
+    # setting reads the settings table.
+    "settings_spec": frozenset({"sqlite3"}),
     # Stage 3 must take `smtplib` and `imaplib` off this line. Splitting the tool registry
     # into data (`domain/tools/spec.py`) and wiring (`registry.py`) is what does it: the
     # catalogue stops needing the adapters, and only the executor pays.

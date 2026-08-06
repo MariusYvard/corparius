@@ -11,9 +11,9 @@ from __future__ import annotations
 import requests
 
 from . import cfg
-from .config import Settings
+from .config.provider_table import split_target
+from .config.settings import Settings
 from .kernel import i18n
-from .llm import _split
 
 
 def _base() -> str:
@@ -25,7 +25,7 @@ def wanted_models(s: Settings | None = None) -> list[str]:
     tiers, the local fallback and the embedding model."""
     s = s or Settings()
     tiers = [s.trivial_model, s.normal_model, s.hard_model]
-    names = {_split(m)[1] for m in tiers if _split(m)[0] == "local"}
+    names = {split_target(m)[1] for m in tiers if split_target(m)[0] == "local"}
     names |= {s.local_model, s.embed_model}
     return sorted(n for n in names if n)
 

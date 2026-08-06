@@ -204,7 +204,7 @@ def test_the_doctor_reads_the_cache_and_never_measures(tmp_path, monkeypatch):
     start and is served over HTTP; probing here would be the polled-endpoint
     mistake with a much bigger timer."""
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     def explode(*a, **k):
         raise AssertionError("the doctor measured")
@@ -223,7 +223,7 @@ def test_the_doctor_reads_the_cache_and_never_measures(tmp_path, monkeypatch):
 
 def test_the_doctor_reports_a_measured_machine(tmp_path, monkeypatch):
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     monkeypatch.setattr(hardware, "installed_models", lambda **k: [])
@@ -241,7 +241,7 @@ def test_the_doctor_reports_a_measured_machine(tmp_path, monkeypatch):
 
 def test_the_doctor_flags_a_stale_measurement(tmp_path, monkeypatch):
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     store = Store(str(tmp_path))

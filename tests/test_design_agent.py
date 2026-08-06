@@ -3,7 +3,7 @@ executor (it receives a RunContext, not a raw company dict)."""
 
 import os
 
-from corparius.config import Settings
+from corparius.config.settings import Settings
 from corparius.orchestrator import Runtime
 from corparius.store import Store
 

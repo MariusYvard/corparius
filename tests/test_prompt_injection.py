@@ -139,7 +139,7 @@ def test_a_run_where_every_model_reply_is_an_attack_still_only_runs_playbooks(
     is what the roster said would run, and nothing else — because the roster is
     read by code and the draft is only ever content.
     """
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.orchestrator import Runtime
 
     class _Router:

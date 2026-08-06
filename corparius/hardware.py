@@ -362,9 +362,9 @@ def recommended_local(store, settings, models=None) -> tuple[str, str]:
     polled-endpoint mistake again. `models` lets a caller that has just listed
     them hand the list over rather than pay a second round-trip for it.
     """
-    from .llm import _split
+    from .config.provider_table import split_target
 
-    prefer = _split(getattr(settings, "trivial_model", ""))[1]
+    prefer = split_target(getattr(settings, "trivial_model", ""))[1]
     prof = profile(store, max_age_days=getattr(settings, "bench_max_age_days", 30))
     models = installed_models() if models is None else models
     if not models:

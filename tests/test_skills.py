@@ -377,7 +377,7 @@ def test_declaring_it_does_not_change_which_tools_it_applies_to(tmp_path):
 
 def test_the_doctor_stops_calling_it_an_omission_but_still_prices_it(tmp_path, monkeypatch):
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.kernel import paths
 
     base = tmp_path / "companies"
@@ -394,7 +394,7 @@ def test_the_doctor_stops_calling_it_an_omission_but_still_prices_it(tmp_path, m
 
 def test_an_undeclared_one_still_warns(tmp_path, monkeypatch):
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.kernel import paths
 
     base = tmp_path / "companies"
@@ -484,7 +484,7 @@ def test_the_rule_survives_a_budget_the_material_does_not(tmp_path):
 
 def test_the_doctor_prices_the_two_kinds_apart(tmp_path, monkeypatch):
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.kernel import paths
 
     base = tmp_path / "companies"

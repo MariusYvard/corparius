@@ -154,7 +154,7 @@ def test_the_shipped_defaults_gate_exactly_what_they_used_to(tmp_path):
     """Pinned deliberately. This is the assertion that fails if a later change
     to the default threshold or to a risk class quietly widens or narrows what
     an existing company has to approve."""
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     engine = PermissionEngine.from_settings(Settings(), {}, Store(str(tmp_path)))
     gated = {name for name, tool in TOOLS.items() if engine.evaluate(tool, "t").needs_user}

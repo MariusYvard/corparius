@@ -11,8 +11,9 @@ from __future__ import annotations
 import requests
 
 from . import cfg
+from .config.provider_table import OPENAI_COMPAT_PROVIDERS
 from .kernel import i18n
-from .llm import OPENAI_COMPAT_PROVIDERS, OpenAICompatProvider
+from .llm import OpenAICompatProvider
 
 # A cheap, widely-available model per provider for the probe, so the test does
 # not fail merely because a default model name is wrong. Empty means "let the

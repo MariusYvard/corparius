@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from corparius import cli
-from corparius.config import Settings
+from corparius.config.settings import Settings
 from corparius.store import Store
 
 COMPANY = """

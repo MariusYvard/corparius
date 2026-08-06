@@ -2,9 +2,10 @@
 
 import requests
 
-from corparius.config import Settings
+from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
+from corparius.config.settings import Settings
 from corparius.kernel.records import Difficulty, LLMResult, Usage
-from corparius.llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, LLMProvider, _split
+from corparius.llm import HybridRouter, LLMProvider
 
 
 def _mock_settings() -> Settings:
@@ -14,9 +15,9 @@ def _mock_settings() -> Settings:
 
 
 def test_split_reads_provider_prefix():
-    assert _split("cloud:claude-x") == ("cloud", "claude-x")
-    assert _split("local:gemma4:e4b") == ("local", "gemma4:e4b")
-    assert _split("qwen2.5:7b-instruct") == ("local", "qwen2.5:7b-instruct")
+    assert split_target("cloud:claude-x") == ("cloud", "claude-x")
+    assert split_target("local:gemma4:e4b") == ("local", "gemma4:e4b")
+    assert split_target("qwen2.5:7b-instruct") == ("local", "qwen2.5:7b-instruct")
 
 
 def test_mock_router_runs_offline():
@@ -49,14 +50,14 @@ def test_pinned_model_overrides_tier():
 
 
 def test_split_reads_free_provider_prefix():
-    assert _split("groq:llama-3.3-70b-versatile") == ("groq", "llama-3.3-70b-versatile")
-    assert _split("openrouter:deepseek/deepseek-r1-0528:free") == (
+    assert split_target("groq:llama-3.3-70b-versatile") == ("groq", "llama-3.3-70b-versatile")
+    assert split_target("openrouter:deepseek/deepseek-r1-0528:free") == (
         "openrouter",
         "deepseek/deepseek-r1-0528:free",
     )
-    assert _split("claudecode:sonnet") == ("claudecode", "sonnet")
+    assert split_target("claudecode:sonnet") == ("claudecode", "sonnet")
     # Unknown prefixes are Ollama tags, not providers.
-    assert _split("gemma4:e4b") == ("local", "gemma4:e4b")
+    assert split_target("gemma4:e4b") == ("local", "gemma4:e4b")
 
 
 def test_provider_registry_is_well_formed():

@@ -127,7 +127,7 @@ def test_the_ask_operator_tool_asks_then_reports_the_answer(tmp_path):
 def test_a_frozen_session_leaves_a_notice(tmp_path):
     """Before this, a circuit-breaker freeze was one row in the action log. A
     company could sit dead for a day unless the operator thought to look."""
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.orchestrator import Runtime
 
     s = Settings()

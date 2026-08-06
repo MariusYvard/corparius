@@ -134,7 +134,7 @@ def cmd_serve(args) -> None:
 
 def cmd_export(args) -> None:
     from . import appexport
-    from .config import Settings
+    from .config.settings import Settings
     from .kernel import paths
 
     if args.target != "netlify":

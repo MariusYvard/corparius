@@ -2,7 +2,7 @@
 that runs for days actually reads the summaries it writes."""
 
 from corparius import orchestrator
-from corparius.config import Settings
+from corparius.config.settings import Settings
 from corparius.orchestrator import Runtime
 from corparius.store import Store
 

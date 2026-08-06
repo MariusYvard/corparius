@@ -274,7 +274,7 @@ def test_the_doctor_reads_the_cache_and_never_calls_a_provider(tmp_path, monkeyp
     """A probe costs a real generation, and the doctor runs on every launcher
     start and is served over HTTP. Measuring here would be the polled-endpoint
     mistake with somebody's money attached."""
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.doctor import _check_preflight
     from corparius.store import Store
 
@@ -303,7 +303,7 @@ def test_the_doctor_reads_the_cache_and_never_calls_a_provider(tmp_path, monkeyp
 
 
 def test_a_cold_provider_does_not_make_the_doctor_complain(tmp_path, monkeypatch):
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.doctor import _check_preflight
     from corparius.store import Store
 

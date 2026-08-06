@@ -4,7 +4,7 @@ may only propose."""
 import types
 
 from corparius import tools
-from corparius.config import Settings
+from corparius.config.settings import Settings
 from corparius.orchestrator import Runtime
 from corparius.store import Store
 from corparius.structured import Result

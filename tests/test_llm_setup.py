@@ -7,7 +7,8 @@ import types
 
 import pytest
 
-from corparius import cfg, ollama_setup, provider_check, webui
+from corparius import ollama_setup, provider_check, webui
+from corparius.config import cfg
 from corparius.config.settings import Settings
 from corparius.kernel.records import LLMResult, Usage
 
@@ -142,7 +143,7 @@ def test_server_presets_are_offered(server):
 # --- localized diagnosis ---------------------------------------------------
 def test_diagnosis_answers_in_french(server, monkeypatch):
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
     status, d = _call(server, "POST", "/api/test/provider", {"name": "groq", "lang": "fr"})

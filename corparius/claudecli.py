@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import shutil
 
-from . import cfg
+from .config import cfg
 from .kernel import i18n, proc
 
 # CLI model aliases, not dated ids: the CLI resolves `haiku`, `sonnet` and

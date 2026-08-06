@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from corparius import cfg
+from corparius.config import cfg
 
 # The checkout's own companies/, and the one company inside it that git tracks.
 # The rest of that directory is gitignored, which is exactly why nobody noticed

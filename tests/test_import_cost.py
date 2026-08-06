@@ -43,7 +43,7 @@ COST: dict[str, frozenset[str]] = {
     # imported inside the three functions that need it, so its absence is *reported* rather
     # than assumed. That is also why it does not appear in WATCHED.
     "kernel.crypto": frozenset(),
-    "permissions": frozenset(),
+    "config.permissions": frozenset(),
     "kernel.vectors": frozenset(),
     "kernel.text": frozenset(),
     # The one module that owns `subprocess`, so of course it loads it. This line is the
@@ -53,7 +53,10 @@ COST: dict[str, frozenset[str]] = {
     # Config: sqlite3 only, because cfg reads a settings table. Stage 2 moves that
     # connection into `config/store_layer.py`; it does not remove it, and it should not —
     # "you cannot ask the database where the database is" is why it exists.
-    "cfg": frozenset({"sqlite3"}),
+    "config.cfg": frozenset({"sqlite3"}),
+    # The declared sqlite3 owner at rank 1. `cfg` costs sqlite3 *because of* this module, and
+    # separating them did not remove the cost — it made who pays it visible.
+    "config.store_layer": frozenset({"sqlite3"}),
     "config.settings": frozenset({"sqlite3"}),
     # The registry that used to live in `llm.py`. Pure data plus one splitter, and free —
     # which is the whole point of having moved it.
@@ -63,7 +66,7 @@ COST: dict[str, frozenset[str]] = {
     # one line: `from .llm import OPENAI_COMPAT_PROVIDERS` — used once in 1 380 lines —
     # became an import of `config/provider_table.py`. `sqlite3` stays, and should: reading a
     # setting reads the settings table.
-    "settings_spec": frozenset({"sqlite3"}),
+    "config.settings_spec": frozenset({"sqlite3"}),
     # Stage 3 must take `smtplib` and `imaplib` off this line. Splitting the tool registry
     # into data (`domain/tools/spec.py`) and wiring (`registry.py`) is what does it: the
     # catalogue stops needing the adapters, and only the executor pays.
@@ -120,8 +123,8 @@ def test_the_kernel_costs_nothing():
     """Stated separately because it is the property that makes rank 0 safe to import from
     anywhere, and it should never need an exception.
 
-    Rank 0 only. `permissions` and `safety` are free too and COST says so, but they are
-    rank 1 and rank 4 — including them here would blur what this test is claiming.
+    Rank 0 only. `config.permissions` and `safety` are free too and COST says so, but they
+    are rank 1 and rank 4 — including them here would blur what this test is claiming.
 
     Derived from COST rather than listed, so a new kernel module is covered the day it
     exists instead of the day somebody remembers this line. `kernel.proc` is the single

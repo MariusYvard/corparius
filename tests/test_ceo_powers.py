@@ -103,8 +103,8 @@ def test_saying_the_same_thing_twice_leaves_one_directive(store):
 def test_approving_in_words_resolves_the_request_that_exists(store):
     """Bonus, and narrow on purpose: it approves a request already raised and
     already shown. The console button is untouched."""
+    from corparius.config.permissions import PermissionEngine
     from corparius.hitl import ApprovalGate
-    from corparius.permissions import PermissionEngine
 
     gate = ApprovalGate(store, PermissionEngine(["send_outreach"]))
     ctx = types.SimpleNamespace(store=store, company={"slug": SLUG, "name": "V"}, leads=[])

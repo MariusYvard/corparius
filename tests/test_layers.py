@@ -62,17 +62,22 @@ RANKS: dict[str, int] = {
     # cryptography went down to `kernel/crypto`, which takes the passphrase as an argument.
     # Splitting it this way left the seven callers untouched; merely *moving* the file would
     # have made all seven pass a passphrase they had no reason to hold.
-    "secretbox": 1,
+    "config/secretbox": 1,
     # 1 — config
-    "cfg": 1,
+    "config/cfg": 1,
+    # The declared exception: reading the settings table is one of the four layers, and you
+    # cannot ask the database where the database is. `cfg` imports it directly rather than
+    # through a registry — a registry that silently failed to register would make every
+    # console-saved setting stop being read while the application kept working on defaults.
+    "config/store_layer": 1,
     "config/__init__": 1,
     "config/settings": 1,
     # Pure data — which providers exist, what variable holds each key — plus the one function
     # that needs to know that list to read a tier string. It was in `llm.py` at rank 3, and
     # that is why reading a setting loaded an HTTP client.
     "config/provider_table": 1,
-    "settings_spec": 1,
-    "permissions": 1,
+    "config/settings_spec": 1,
+    "config/permissions": 1,
     # 2 — store
     "store": 2,
     # 3 — providers
@@ -178,8 +183,15 @@ KNOWN_IMPURE: frozenset[tuple[str, str]] = frozenset(
 # One owner per host capability. The right-hand side is where each is allowed to appear
 # *today*; the target is in the comment.
 OWNERS: dict[str, tuple[frozenset[str], str]] = {
-    # → store/** and config/store_layer.py only.
-    "sqlite3": (frozenset({"store", "cfg", "backup"}), "store/** and config/store_layer"),
+    # Two of the three, stage 2: `cfg` had a read-only connection, a lock, a cache and a
+    # `PRAGMA data_version` poll inside a 200-line precedence resolver. That is now
+    # `config/store_layer.py`, the declared rank-1 exception. `backup` is next — it snapshots
+    # the store through SQLite's own backup API, which `store/**` should own. → store/** and
+    # config/store_layer.py only.
+    "sqlite3": (
+        frozenset({"store", "config/store_layer", "backup"}),
+        "store/** and config/store_layer",
+    ),
     # Done, stage 1. Seven call sites across four modules became one wrapper that owns
     # Windows quoting, timeouts, capture and — the part that mattered — the utf-8 decoding
     # that only one of the seven had written down why it needed.

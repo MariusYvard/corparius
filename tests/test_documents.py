@@ -17,7 +17,7 @@ from corparius import documents
 @pytest.fixture
 def drop(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
     folder = tmp_path / "companies" / "acme" / "documents"

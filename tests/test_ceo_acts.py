@@ -5,7 +5,8 @@ import threading
 
 import pytest
 
-from corparius import cfg, webui
+from corparius import webui
+from corparius.config import cfg
 from corparius.config.settings import Settings
 from corparius.kernel.records import LLMResult, Usage
 

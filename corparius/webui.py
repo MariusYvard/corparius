@@ -29,16 +29,13 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from . import (
     backup,
-    cfg,
     claudecli,
     deploy,
     documents,
     hardware,
     mailbox,
     ollama_setup,
-    permissions,
     provider_check,
-    settings_spec,
     sitegen,
     structured,
 )
@@ -46,6 +43,7 @@ from . import company as company_mod
 from . import inbox as inbox_mod
 from . import tools as tools_mod
 from .agents import ROSTER
+from .config import cfg, permissions, settings_spec
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .config.settings import Settings
 from .doctor import run_checks
@@ -861,7 +859,7 @@ def _persist(state: UiState, values: dict[str, str], unset: list[str] | None = N
     # field looked like it encrypted the operator's keys and only affected the
     # next write — the trap that made the setting mean less than it said.
     if "CORP_SECRET_KEY" in values or "CORP_SECRET_KEY" in unset:
-        from . import secretbox
+        from .config import secretbox
 
         try:
             changed = state.store().rewrite_secrets(to_encrypted=secretbox.enabled())

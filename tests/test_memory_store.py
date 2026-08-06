@@ -182,7 +182,7 @@ def test_the_remember_tool_says_so_when_it_already_knew(tmp_path):
 
 def test_the_remember_tool_is_harmless_and_ungated(tmp_path):
     """It writes to the operator's own store and nothing leaves the process."""
-    from corparius.permissions import READ, PermissionEngine
+    from corparius.config.permissions import READ, PermissionEngine
 
     assert TOOLS["remember"].risk == READ
     assert not PermissionEngine().evaluate(TOOLS["remember"], "t").needs_user

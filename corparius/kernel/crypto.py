@@ -31,7 +31,7 @@ from typing import Any
 
 PREFIX = "enc:v1:"
 # Fixed application salt; see the module docstring for why this is acceptable.
-_SALT = b"corparius.secretbox.v1"
+_SALT = b"corparius.config.secretbox.v1"
 
 INSTALL_HINT = (
     "CORP_SECRET_KEY is set but the 'cryptography' package is not "

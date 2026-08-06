@@ -6,7 +6,8 @@ import json
 
 import pytest
 
-from corparius import cfg, company, llm, plugins, tools
+from corparius import company, llm, plugins, tools
+from corparius.config import cfg
 
 
 @pytest.fixture

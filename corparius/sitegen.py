@@ -30,7 +30,7 @@ import os
 import re
 from pathlib import Path
 
-from . import cfg
+from .config import cfg
 from .kernel import text
 
 log = logging.getLogger("corparius.sitegen")

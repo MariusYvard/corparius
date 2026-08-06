@@ -39,7 +39,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 from . import apps as apps_mod
-from . import cfg
+from .config import cfg
 from .config.settings import Settings
 from .kernel import paths
 from .kernel.httpkit import MAX_BODY, host_only

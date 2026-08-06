@@ -18,7 +18,7 @@ Overview donne le pouls de la company. « En attente de vous » mène la ligne e
 
 La console écrit tout ce que corparius lit. L'éditeur de société couvre chaque champ de `company.yaml` (offre, prix, lien de paiement, ICP, canaux, agents, budgets, outils sous approbation) ; enregistrer réécrit le fichier depuis ces champs, donc les commentaires ajoutés à la main ne survivent pas. La suppression exige de taper le slug et déplace la config dans `companies/.trash/` : rien n'est détruit. Un fichier cassé s'ouvre quand même, avec ses problèmes nommés, plutôt que de renvoyer une erreur qui laisserait l'opérateur sans moyen de le réparer.
 
-L'onglet Réglages couvre le reste, groupe par groupe, piloté par le registre `corparius/settings_spec.py` : ajouter un réglage est une ligne, pas une modification du HTML. Chaque champ affiche la couche qui lui répond et se met en lecture seule quand l'environnement du processus le fixe (voir la table de précédence du README) — un réglage n'est jamais ignoré en silence.
+L'onglet Réglages couvre le reste, groupe par groupe, piloté par le registre `corparius/config/settings_spec.py` : ajouter un réglage est une ligne, pas une modification du HTML. Chaque champ affiche la couche qui lui répond et se met en lecture seule quand l'environnement du processus le fixe (voir la table de précédence du README) — un réglage n'est jamais ignoré en silence.
 
 ## Compte mail
 

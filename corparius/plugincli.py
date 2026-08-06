@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import sys
 
-from . import cfg, plugins
+from . import plugins
+from .config import cfg
 
 
 def _fail(msg: str) -> None:

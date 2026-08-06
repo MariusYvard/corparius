@@ -18,7 +18,8 @@ import types
 import pytest
 
 from corparius import inbox as inbox_mod
-from corparius import mailbox, settings_spec, webui
+from corparius import mailbox, webui
+from corparius.config import settings_spec
 from corparius.store import Store
 from corparius.tools import TOOLS
 
@@ -70,7 +71,7 @@ def test_the_hard_step_carries_the_link_that_makes_it_doable():
 
 
 def test_a_step_reports_done_from_the_settings_not_from_a_checkbox(monkeypatch):
-    from corparius import cfg
+    from corparius.config import cfg
 
     values = {}
     monkeypatch.setattr(cfg, "get", lambda key, default="": values.get(key, default))
@@ -87,7 +88,7 @@ def test_a_step_reports_done_from_the_settings_not_from_a_checkbox(monkeypatch):
 def test_a_step_nobody_can_verify_says_so_rather_than_staying_unticked(monkeypatch):
     """Installing Proton Bridge is real work corparius cannot observe. A
     checkbox that can never turn green reads as a failure."""
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.setattr(cfg, "get", lambda key, default="": "")
     steps = webui._mail_steps()["proton"]

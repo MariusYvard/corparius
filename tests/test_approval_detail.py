@@ -11,8 +11,8 @@ it, in braces. The full text lives in `detail` now, which nothing hashes.
 
 import json
 
+from corparius.config.permissions import EXTERNAL, MONEY, PermissionEngine, explain
 from corparius.hitl import ApprovalGate
-from corparius.permissions import EXTERNAL, MONEY, PermissionEngine, explain
 from corparius.store import Store
 from corparius.tools import TOOLS
 

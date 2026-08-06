@@ -884,14 +884,14 @@ class Store:
     # second layer of corparius/cfg.py, under the real process environment.
     @_locked
     def all_settings(self) -> dict[str, str]:
-        from . import secretbox
+        from .config import secretbox
 
         rows = self.db.execute("SELECT key, value FROM settings").fetchall()
         return {r["key"]: secretbox.decrypt_safe(r["value"]) for r in rows}
 
     @_locked
     def get_setting(self, key) -> str | None:
-        from . import secretbox
+        from .config import secretbox
 
         row = self.db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
         return secretbox.decrypt_safe(row["value"]) if row else None
@@ -901,7 +901,7 @@ class Store:
         # Secret values are encrypted at rest when CORP_SECRET_KEY is set;
         # encrypt() is a no-op otherwise, so plaintext stays the default.
         if secret:
-            from . import secretbox
+            from .config import secretbox
 
             value = secretbox.encrypt(value)
         self.db.execute(
@@ -1181,10 +1181,10 @@ class Store:
         turning it on only affects the next write, so a store can have the
         passphrase set and still hold plaintext keys.
         """
-        from . import secretbox
+        from .config import secretbox
 
         rows = self.db.execute("SELECT key, value, secret FROM settings").fetchall()
-        from .settings_spec import SECRETS
+        from .config.settings_spec import SECRETS
 
         out = []
         for row in rows:
@@ -1211,7 +1211,7 @@ class Store:
         Returns the names it changed. Empty values are skipped — there is
         nothing to protect, and encrypting "" would only make it unreadable.
         """
-        from . import secretbox
+        from .config import secretbox
 
         changed: list[str] = []
         for row in self.secret_rows.__wrapped__(self):  # already holding the lock

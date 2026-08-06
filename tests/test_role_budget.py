@@ -251,7 +251,7 @@ def test_the_agent_checks_and_records_against_its_own_ledger():
         because what is under test is which ledger the spend lands in."""
 
         def decide(self, tool, company):
-            from corparius.permissions import Decision
+            from corparius.config.permissions import Decision
 
             return Decision(allowed=True, needs_user=False, reason="test", rule="test")
 

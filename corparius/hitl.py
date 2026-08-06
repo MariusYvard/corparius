@@ -12,8 +12,8 @@ from __future__ import annotations
 import hashlib
 import time
 
+from .config.permissions import PermissionEngine
 from .kernel.records import ApprovalRequest, ToolResult
-from .permissions import PermissionEngine
 
 REJECTION_MESSAGE = "Tool execution denied: Approval rejected by administrator."
 BLOCKED_MESSAGE = "Tool execution blocked: {reason}."

@@ -25,11 +25,11 @@ simply an empty layer.
 from __future__ import annotations
 
 import os
-import sqlite3
 import threading
 from pathlib import Path
 
-from .kernel import crypto, dotenv, paths
+from ..kernel import dotenv, paths
+from . import store_layer
 
 # The writable home. In a source checkout this is the repository root, so the
 # default .env location below is unchanged; frozen, it is a per-OS directory.
@@ -59,12 +59,6 @@ _lock = threading.RLock()
 _dotenv_path: Path = ROOT / ".env"
 _dotenv_cache: dict[str, str] | None = None
 _dotenv_stamp: tuple | None = None
-
-_db_conn: sqlite3.Connection | None = None
-_db_conn_path: str | None = None
-_db_cache: dict[str, str] = {}
-_db_version: int | None = None
-
 
 # The parser moved to `kernel/dotenv.py`, next to the writer whose refusals it mirrors.
 # The name stays here because this is where callers look for it — a settings module is a
@@ -99,60 +93,17 @@ def _bootstrap(name: str, default: str = "") -> str:
 
 
 def _db_layer() -> dict[str, str]:
-    """The settings table, or an empty layer when there is no database yet.
-    Opened read-only so that merely reading configuration never creates the
-    data directory (Store() would, at import time)."""
-    global _db_conn, _db_conn_path, _db_cache, _db_version
-    data_path = _bootstrap("CORP_DATA_PATH", paths.default_data_dir())
-    path = os.path.join(data_path, "corparius.sqlite")
-    with _lock:
-        if path != _db_conn_path:
-            _close_db()
-            _db_conn_path = path
-        if _db_conn is None:
-            if not os.path.isfile(path):
-                _db_cache = {}
-                return _db_cache
-            try:
-                _db_conn = sqlite3.connect(
-                    f"file:{path}?mode=ro", uri=True, check_same_thread=False
-                )
-            except sqlite3.Error:
-                _db_cache = {}
-                return _db_cache
-            _db_version = None
-        try:
-            # data_version changes when another connection commits, which is
-            # exactly how the console's writes reach this read-only view.
-            version = _db_conn.execute("PRAGMA data_version").fetchone()[0]
-            if version != _db_version:
-                rows = _db_conn.execute("SELECT key, value FROM settings").fetchall()
-                # Values may be encrypted at rest (opt-in, CORP_SECRET_KEY);
-                # decrypt_safe leaves plaintext untouched and never raises.
-                #
-                # `_bootstrap`, not `get`: CORP_SECRET_KEY is a bootstrap key, so the
-                # passphrase resolves from the environment or .env and never from the
-                # table being decrypted here. That is what lets this call reach a pure
-                # kernel leaf instead of the old `secretbox`, which had to import `cfg`
-                # back to find the same passphrase — the cycle these two lines removed.
-                passphrase = _bootstrap("CORP_SECRET_KEY").strip()
-                _db_cache = {k: crypto.decrypt_safe(v, passphrase) for k, v in rows}
-                _db_version = version
-        except sqlite3.Error:
-            # No settings table yet (older database), or the file went away.
-            _close_db()
-            _db_cache = {}
-        return _db_cache
+    """Layer 2, from `config/store_layer.py`.
 
-
-def _close_db() -> None:
-    global _db_conn, _db_version
-    if _db_conn is not None:
-        try:
-            _db_conn.close()
-        except sqlite3.Error:
-            pass
-    _db_conn, _db_version = None, None
+    Two arguments, both resolved from the layers *below* the store: where the database is,
+    and the passphrase that opens any encrypted value in it. Neither can come from the
+    store — you cannot ask the database where the database is, and a key inside the box it
+    opens is not a key.
+    """
+    return store_layer.read(
+        _bootstrap("CORP_DATA_PATH", paths.default_data_dir()),
+        _bootstrap("CORP_SECRET_KEY").strip(),
+    )
 
 
 def get(name: str, default: str = "") -> str:
@@ -216,8 +167,7 @@ def set_dotenv_path(path: Path) -> None:
 
 def invalidate() -> None:
     """Drop every cached layer. Called after a write and by the test fixture."""
-    global _dotenv_cache, _dotenv_stamp, _db_cache
+    global _dotenv_cache, _dotenv_stamp
     with _lock:
         _dotenv_cache, _dotenv_stamp = None, None
-        _db_cache = {}
-        _close_db()
+    store_layer.forget()

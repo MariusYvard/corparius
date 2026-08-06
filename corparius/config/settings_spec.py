@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import cfg
-from .config.provider_table import OPENAI_COMPAT_PROVIDERS
+from .provider_table import OPENAI_COMPAT_PROVIDERS
 
 # Groups, in the order the page shows them. `warn` marks the ones whose keys
 # authorise real-world side effects, and carries the banner text.

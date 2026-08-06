@@ -82,7 +82,7 @@ def _app(home, **over):
 @pytest.fixture()
 def server(home, monkeypatch):
     monkeypatch.setenv("CORP_APP_KEY_T_FAQ", KEY)
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
     # A fresh limiter per test: it is process-global by design, and one test's
@@ -267,7 +267,7 @@ def test_a_missing_key_is_refused(server, home):
 
 def test_an_app_with_no_key_configured_cannot_be_called(server, home, monkeypatch):
     """Absent must not read as "no key needed"."""
-    from corparius import cfg
+    from corparius.config import cfg
 
     monkeypatch.delenv("CORP_APP_KEY_T_FAQ", raising=False)
     cfg.invalidate()

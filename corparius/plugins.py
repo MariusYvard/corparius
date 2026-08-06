@@ -36,7 +36,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import cfg
+from .config import cfg
 from .kernel import paths
 
 log = logging.getLogger("corparius.plugins")

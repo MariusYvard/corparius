@@ -176,7 +176,7 @@ def test_an_encrypted_secret_rides_along_because_it_is_not_readable(tmp_path, mo
     archive is useless without the passphrase, which is not in it."""
     pytest.importorskip("cryptography")
     monkeypatch.setenv("CORP_SECRET_KEY", "a passphrase kept elsewhere")
-    from corparius import cfg
+    from corparius.config import cfg
 
     cfg.invalidate()
     data = _real_store(tmp_path, monkeypatch, OPENROUTER_API_KEY=SECRET)

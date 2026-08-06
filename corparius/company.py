@@ -21,7 +21,7 @@ from pathlib import Path
 
 import yaml
 
-from . import permissions
+from .config import permissions
 from .kernel import paths, text
 
 # `companies/` used to be resolved from a module attribute set at import time,

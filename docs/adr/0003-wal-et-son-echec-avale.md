@@ -2,7 +2,7 @@
 
 ## Contexte
 
-`corparius/cfg.py` ouvre le store **en lecture seule** comme couche de réglages, et la CLI
+`corparius/config/cfg.py` ouvre le store **en lecture seule** comme couche de réglages, et la CLI
 doit pouvoir tourner pendant que la console est ouverte. Sous le journal de rollback par
 défaut, un écrivain exclut les lecteurs, et SQLite renvoie `BUSY` immédiatement plutôt que
 d'invoquer le gestionnaire d'attente quand deux connexions tentent d'élever un verrou en même

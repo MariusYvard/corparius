@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 
 import requests
 
-from . import cfg
+from .config import cfg
 from .kernel import paths, proc
 
 

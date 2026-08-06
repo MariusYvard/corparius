@@ -11,7 +11,8 @@ import json
 
 import pytest
 
-from corparius import cfg, cli, plugins
+from corparius import cli, plugins
+from corparius.config import cfg
 
 
 @pytest.fixture()

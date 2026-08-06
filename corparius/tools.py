@@ -10,7 +10,9 @@ import re
 from collections.abc import Callable
 
 from . import (
-    cfg,
+    company as company_mod,
+)
+from . import (
     deploy,
     documents,
     enrich,
@@ -18,14 +20,11 @@ from . import (
     integrations,
     leadsource,
     mailbox,
-    permissions,
     signals,
     sitecheck,
     sitegen,
 )
-from . import (
-    company as company_mod,
-)
+from .config import cfg, permissions
 from .kernel import paths, text
 from .kernel.records import ToolResult
 

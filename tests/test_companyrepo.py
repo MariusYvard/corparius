@@ -6,8 +6,9 @@ run that already happened.
 
 import pytest
 
-from corparius import cfg, companyrepo
+from corparius import companyrepo
 from corparius.companyrepo import GitHubProvider, LocalBareProvider
+from corparius.config import cfg
 
 needs_git = pytest.mark.skipif(not companyrepo.git_available(), reason="git is not on PATH")
 

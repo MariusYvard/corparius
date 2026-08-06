@@ -574,7 +574,7 @@ def cmd_decide(args, status: str) -> None:
     # Granted here rather than by a separate command: "yes, and stop asking" is
     # one decision, and splitting it in two invites the half that never runs.
     if getattr(args, "always", False) and status == "approved" and approval:
-        from .permissions import PermissionEngine
+        from .config.permissions import PermissionEngine
 
         slug = approval["company"]
         tool = TOOLS.get(approval["tool"])

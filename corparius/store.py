@@ -753,6 +753,17 @@ class Store:
         return {r["skill"]: {"uses": r["uses"], "last_used": r["last_used"]} for r in rows}
 
     @_locked
+    def forget_skill_use(self, company, name: str) -> None:
+        """Drop the usage row when the skill leaves the live folder.
+
+        Without it, a skill written again under the same name inherits a `last_used` from
+        before it was archived and the next sweep archives it immediately — a loop where the
+        company keeps answering a question and keeps having the answer taken away.
+        """
+        self.db.execute("DELETE FROM skill_usage WHERE company=? AND skill=?", (company, name))
+        self.db.commit()
+
+    @_locked
     def recall(self, company, query="", limit=5) -> list[dict]:
         """The facts most worth putting in front of this particular prompt.
 

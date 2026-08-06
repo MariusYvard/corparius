@@ -123,9 +123,9 @@ def _starter_dir() -> Path | None:
 
 
 def _tool_names() -> set[str]:
-    from .tools import TOOLS
+    from .tools.spec import SPEC
 
-    return set(TOOLS)
+    return set(SPEC)
 
 
 def add_parser(sub) -> None:

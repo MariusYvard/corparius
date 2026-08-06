@@ -24,9 +24,10 @@ from pathlib import Path
 
 import pytest
 
-from corparius import leadsource, mailbox, tools
+from corparius import leadsource, mailbox
 from corparius.store import Store
-from corparius.tools import NO_LEAD_SOURCE, TRIES_BEFORE_STAND_DOWN
+from corparius.tools import effects as tools
+from corparius.tools.effects import NO_LEAD_SOURCE, TRIES_BEFORE_STAND_DOWN
 
 
 class _Ctx:

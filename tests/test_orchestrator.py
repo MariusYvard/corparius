@@ -82,7 +82,7 @@ def test_circuit_breaker_freezes_the_session(tmp_path):
     # which quietly encoded how many tools the CEO happened to have. Its
     # playbook went from five to eleven and the test failed for a reason that
     # had nothing to do with the circuit breaker.
-    from corparius.agents import ROSTER
+    from corparius.roster import ROSTER
 
     ceiling = sum(len(spec.playbook) for spec in ROSTER.values())
     assert store.status("t")["actions"] < ceiling, "the whole roster ran despite the freeze"

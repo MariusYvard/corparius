@@ -13,7 +13,7 @@ from corparius.orchestrator import RunContext
 from corparius.safety import CircuitBreaker, TokenBudget
 from corparius.store import Store
 from corparius.structured import Result
-from corparius.tools import TOOLS
+from corparius.tools.registry import TOOLS
 
 
 def _drafted(idea, why=""):
@@ -60,9 +60,9 @@ def test_registry_is_keyed_by_its_own_names():
 def test_every_tool_is_described_and_runnable():
     for name, tool in TOOLS.items():
         assert tool.description.strip(), f"{name} has no description"
-        assert callable(tool._effect), f"{name} has no effect"
+        assert callable(tool.behaviour.effect), f"{name} has no effect"
         if tool.needs_draft:
-            assert tool._prompt is not None, f"{name} needs a draft but has no prompt"
+            assert tool.behaviour.prompt is not None, f"{name} needs a draft but has no prompt"
 
 
 def test_money_and_production_tools_are_gated():

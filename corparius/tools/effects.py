@@ -8,11 +8,12 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 
-from . import (
+from .. import (
     company as company_mod,
 )
-from . import (
+from .. import (
     deploy,
     documents,
     enrich,
@@ -24,76 +25,12 @@ from . import (
     sitecheck,
     sitegen,
 )
-from .config import cfg, permissions
-from .kernel import paths, text
-from .kernel.records import ToolResult
+from ..config import cfg
+from ..kernel import paths, text
+from ..kernel.records import ToolResult
+from .spec import ROLE_TOOL, executable_fields
 
 log = logging.getLogger("corparius.tools")
-
-
-class Tool:
-    def __init__(
-        self,
-        name: str,
-        description: str,
-        effect: Callable,
-        *,
-        hitl: bool = False,
-        risk: str = permissions.READ,
-        needs_draft: bool = False,
-        prompt: Callable | None = None,
-        schema: dict | None = None,
-        skip_when: Callable | None = None,
-        sees_images: bool = False,
-        by_task_only: bool = False,
-    ):
-        self.name = name
-        self.description = description
-        self.hitl = hitl
-        # Whether the company's own pictures are worth sending to this tool. Opt
-        # in, per tool, for the same reason `skip_when` exists: an image is the
-        # most expensive thing a turn can carry, and a screenshot of a competitor's
-        # page helps a design brief and does nothing at all for reconciling Stripe.
-        # Declared here so it is greppable, rather than inferred from the role.
-        self.sees_images = sees_images
-        # This tool runs only when a task names it, never from a playbook. Its
-        # prompt is written for a task ("what *this task* cannot proceed without"),
-        # so a playbook turn would ask it with no task to be about.
-        #
-        # Declared rather than deduced, because "on no playbook" is exactly what a
-        # forgotten tool looks like too: `ask_operator` and `set_roster` sat there
-        # for months, one by design and one by omission, and nothing could tell
-        # them apart. `tests/test_tool_reach.py` now demands that every tool have a
-        # path, and this flag is how a tool says its path is a task.
-        self.by_task_only = by_task_only
-        # What this tool does to the world outside the process, which is what
-        # corparius/permissions.py weighs against the operator's threshold.
-        # `hitl` stays separate and stronger: it is a gate declared by name,
-        # not a class, and no threshold or standing rule can lower it.
-        self.risk = risk
-        self.needs_draft = needs_draft
-        # Opt-in structured output: when a tool declares a schema, the executor
-        # drives the router through corparius/structured so the effect receives a
-        # validated dict (ctx.structured.data) that is the same shape whatever
-        # model, tier or provider answered. Tools without a schema are unchanged.
-        self.schema = schema
-        self._prompt = prompt
-        self._effect = effect
-        # Checked before the model is called, and it returns the reason rather
-        # than a boolean so the log says why nothing happened. Without it, a
-        # needs_draft tool spends a real call before its effect can discover
-        # there was nothing to do: `draft_support_reply` wrote a reply to
-        # nobody every three hours on a company with no mailbox connected.
-        self._skip_when = skip_when
-
-    def skip_reason(self, ctx) -> str:
-        return self._skip_when(ctx) if self._skip_when else ""
-
-    def draft_prompt(self, ctx) -> str:
-        return self._prompt(ctx) if self._prompt else ""
-
-    def run(self, ctx, draft: str = "") -> ToolResult:
-        return self._effect(ctx, draft)
 
 
 def _name(ctx) -> str:
@@ -1220,43 +1157,6 @@ def _weekly_review(ctx) -> str:
     return line + f" {week['tokens'] // max(1, week['done'])} tokens per finished task."
 
 
-ROLE_TOOL = {
-    "outreach": "send_outreach",
-    "social": "draft_social_post",
-    "support": "draft_support_reply",
-    # Strategy's work product is a written document. Without this, a strategy task
-    # reached an agent with no tool that could carry it and was held for the
-    # operator — measured, twice, on one real company.
-    "strategy": "write_note",
-    # The tool that can change what the site says, not the one that renders it.
-    # `build_sales_site` reads the copy out of company.yaml and writes HTML, so a
-    # task like "remove the unverified badge from the landing page" completed
-    # through it rebuilds the same page, byte for byte, and reports success.
-    # Rendering happens anyway: it is the last step of the design playbook every
-    # turn. What a backlog task needs is the step that changes something.
-    "design": "write_site_content",
-}
-
-
-def executable_fields(task: dict) -> dict:
-    """What has to be set on an approved task for it to actually run.
-
-    Two paths approve a proposal — the CEO's `review_proposals` and the operator's
-    own button in the console — and only the CEO's reached this registry. Measured
-    in a real store: **24 tasks for one role with no tool, 22 of them closed
-    "done (no tool mapped)"** having done nothing at all. The condition that
-    produced them therefore survived, so the agent proposed it again, and again;
-    six near-identical proposals about one badge on one landing page.
-
-    So it lives in one function that both ends call. `test_registries` asserts the
-    keys and values are real; this is the other half of the same rule.
-    """
-    if task.get("tool"):
-        return {}
-    target = (task.get("target") or "").strip()
-    return {"tool": ROLE_TOOL[target]} if target in ROLE_TOOL else {}
-
-
 def _create_tasks(ctx) -> str:
     """Data-driven: the CEO reads what the company observed (buying signals,
     leads, KPIs) from the action log and queues targeted tasks, deduped against
@@ -1339,7 +1239,7 @@ def _roster_menu(ctx) -> str:
     playbook is one that role never runs, so offering it would produce an assignment
     that looks valid and does nothing — the untooled task again.
     """
-    from .agents import ROSTER
+    from ..roster import ROSTER
 
     enabled = ctx.company.get("agents", {}) or {}
     lines = []
@@ -1380,8 +1280,8 @@ def _assign_held_prompt(ctx) -> str:
 
 def _assign_held(ctx) -> str:
     """Apply what the CEO decided, and refuse anything the roster cannot honour."""
-    from . import inbox
-    from .agents import ROSTER
+    from .. import inbox
+    from ..roster import ROSTER
 
     store = getattr(ctx, "store", None)
     if store is None:
@@ -1533,7 +1433,7 @@ def _plan_from_docs(ctx) -> str:
     slug = ctx.company.get("slug", "company")
     result = getattr(ctx, "structured", None)
     data = result.data if result else {}
-    from .agents import ROSTER
+    from ..roster import ROSTER
 
     enabled = ctx.company.get("agents", {}) or {}
     playbooks = {r.value: set(s.playbook) for r, s in ROSTER.items()}
@@ -1714,77 +1614,59 @@ def _kaizen(ctx) -> str:
 # EXTERNAL because a stranger receives it. Tools whose mock effect will become a
 # real integration are classed for the integration, not for the mock, so
 # swapping the effect does not silently widen what runs unattended.
-_ALL = [
-    Tool(
-        "set_daily_plan",
-        "Set the day's 1-3 priorities",
-        needs_draft=True,
+
+
+@dataclass(frozen=True)
+class Behaviour:
+    """The three callables a tool needs at run time, paired with a `ToolSpec` by name in
+    `tools/registry.py`.
+
+    Split out of `Tool` so that the forty declarations can live in `tools/spec.py` with
+    no import of this module — which is what stops a name lookup from loading an SMTP client.
+    A tool with no `prompt` never drafts; one with no `skip_when` never skips.
+    """
+
+    effect: Callable
+    prompt: Callable | None = None
+    # Checked before the model is called, and it returns the reason rather than a boolean so
+    # the log says why nothing happened. Without it, a needs_draft tool spends a real call
+    # before its effect can discover there was nothing to do: `draft_support_reply` wrote a
+    # reply to nobody every three hours on a company with no mailbox connected.
+    skip_when: Callable | None = None
+
+
+BEHAVIOUR: dict[str, Behaviour] = {
+    "set_daily_plan": Behaviour(
         prompt=lambda c: (
             f"Yesterday: {c.memory[0] if getattr(c, 'memory', None) else 'no prior summary'}. "
             f"In one sentence, set today's top priority for {_name(c)}."
         ),
         effect=lambda c, d: _ok(f"Daily plan set: {d[:140]}"),
     ),
-    Tool(
-        "write_eod_summary",
-        "Summarise the day",
-        needs_draft=True,
+    "write_eod_summary": Behaviour(
         prompt=lambda c: f"In one sentence, summarise the day for {_name(c)}.",
         effect=lambda c, d: _ok(_keep(c, "End of day", d, f"EOD summary: {d[:140]}")),
     ),
-    Tool(
-        "remember",
-        "Write down one thing the company learned",
-        needs_draft=True,
+    "remember": Behaviour(
         prompt=lambda c: (
             f"What did {_name(c)} learn today that is still true next month? "
             "One fact about the market, the offer or the customers — not today's numbers."
         ),
-        schema={
-            "fact": {"type": "str", "required": True, "max_len": 200},
-            "why": {"type": "str", "default": "", "max_len": 200},
-        },
         effect=lambda c, d: _ok(_remember(c)),
     ),
-    Tool(
-        "write_note",
-        "Write the internal document a task asks for",
-        needs_draft=True,
-        risk=permissions.WRITE_LOCAL,
-        # A task, never a playbook: on a playbook this writes a note about nothing,
-        # every turn. Five tools already write documents under fixed names; this is
-        # the one that writes the document a *task* asked for, which is what
-        # "rédiger une note de cadrage pour le contrat de licence" needed and had
-        # nowhere to go.
-        by_task_only=True,
+    "write_note": Behaviour(
         prompt=lambda c: _write_note_prompt(c),
-        schema={
-            "title": {"type": "str", "default": "", "max_len": 80},
-            "body": {"type": "str", "default": "", "max_len": 4000},
-        },
         effect=lambda c, d: _ok(_write_note(c)),
     ),
-    Tool(
-        "ask_operator",
-        "Ask the operator for something only they can supply",
-        needs_draft=True,
-        by_task_only=True,
+    "ask_operator": Behaviour(
         prompt=lambda c: (
             f"In one sentence, ask the operator of {_name(c)} for the one piece of "
             "information or access this task cannot proceed without."
             + (f" The task: {_task_subject(c)}" if _task_subject(c) else "")
         ),
-        schema={
-            "question": {"type": "str", "required": True, "max_len": 160},
-            "why": {"type": "str", "default": "", "max_len": 300},
-        },
         effect=lambda c, d: _ask_operator(c),
     ),
-    Tool(
-        "plan_from_documents",
-        "Turn what the agents wrote into work",
-        needs_draft=True,
-        risk=permissions.WRITE_LOCAL,
+    "plan_from_documents": Behaviour(
         # Nothing written, nothing to read: paying a model call to discover that is
         # the waste `skip_when` exists for.
         skip_when=lambda c: (
@@ -1793,20 +1675,12 @@ _ALL = [
             else "the agents have written no documents yet"
         ),
         prompt=lambda c: _plan_from_docs_prompt(c),
-        schema={
-            "tasks": {"type": "list", "default": []},
-            "note": {"type": "str", "default": "", "max_len": 200},
-        },
         effect=lambda c, d: _ok(_plan_from_docs(c)),
     ),
-    Tool(
-        "create_tasks", "CEO adds tasks to the backlog", effect=lambda c, d: _ok(_create_tasks(c))
+    "create_tasks": Behaviour(
+        effect=lambda c, d: _ok(_create_tasks(c)),
     ),
-    Tool(
-        "assign_held_tasks",
-        "Give a held task the role and tool that can actually do it",
-        needs_draft=True,
-        risk=permissions.WRITE_LOCAL,
+    "assign_held_tasks": Behaviour(
         # Checked before the call: with nothing held there is nothing to decide, and
         # paying a model call to discover that is the waste `skip_when` exists for.
         skip_when=lambda c: (
@@ -1819,21 +1693,12 @@ _ALL = [
             else "backlog unavailable"
         ),
         prompt=lambda c: _assign_held_prompt(c),
-        schema={
-            "assignments": {"type": "list", "default": []},
-            "note": {"type": "str", "default": "", "max_len": 200},
-        },
         effect=lambda c, d: _ok(_assign_held(c)),
     ),
-    Tool(
-        "review_proposals",
-        "CEO validates or refuses proposed tasks",
+    "review_proposals": Behaviour(
         effect=lambda c, d: _ok(_review_proposals(c)),
     ),
-    Tool(
-        "propose_task",
-        "Suggest a task to the CEO for review",
-        needs_draft=True,
+    "propose_task": Behaviour(
         # Checked before the call, not after: the cap is one open idea per role,
         # and support reaches this tool every three hours. Without this the model
         # writes a proposal that the effect then throws away, every time.
@@ -1847,53 +1712,22 @@ _ALL = [
             "If nothing in this turn warrants a task, leave `idea` empty rather than "
             "inventing something to file."
         ),
-        schema={
-            "idea": {"type": "str", "default": "", "max_len": 90},
-            "why": {"type": "str", "default": "", "max_len": 200},
-            # Which role does the work. Measured: support proposed "remove the
-            # unverified badge from the landing page" six times over; every one was
-            # targeted at support, because the target was the proposer, and support's
-            # tool drafts a support reply. So the site kept the badge, a support
-            # reply about something else was written instead, and the task was
-            # marked done. An idea about the site belongs to design.
-            "owner": {"type": "str", "default": "", "max_len": 20},
-        },
         effect=lambda c, d: _ok(_propose_task(c)),
     ),
-    Tool(
-        "kaizen",
-        "Continuous improvement: find the bottleneck, propose a fix",
+    "kaizen": Behaviour(
         effect=lambda c, d: _ok(_kaizen(c)),
     ),
-    Tool(
-        "draft_social_post",
-        "Draft a post for X or LinkedIn",
-        needs_draft=True,
+    "draft_social_post": Behaviour(
         prompt=lambda c: f"Draft one short {_channel(c)} post for {_name(c)}.",
-        schema={
-            "headline": {"type": "str", "required": True, "max_len": 120},
-            "body": {"type": "str", "required": True, "max_len": 500},
-            "hashtags": {"type": "list", "default": []},
-        },
         effect=lambda c, d: _ok(_social_post(c)),
     ),
-    Tool(
-        "schedule_post",
-        "Queue the drafted post so it can be published",
-        risk=permissions.EXTERNAL,
+    "schedule_post": Behaviour(
         effect=lambda c, d: _ok(_schedule_post(c)),
     ),
-    Tool(
-        "find_targets",
-        "Find ICP-matching prospects",
-        risk=permissions.EXTERNAL,
+    "find_targets": Behaviour(
         effect=lambda c, d: _ok(_find_targets(c)),
     ),
-    Tool(
-        "send_outreach",
-        "Send a cold email sequence",
-        risk=permissions.EXTERNAL,
-        needs_draft=True,
+    "send_outreach": Behaviour(
         # Checked before the draft, like draft_support_reply with no mailbox. With
         # nobody to write to there is nothing to write, and paying a model call to
         # find that out is the exact waste that check was added for — on the tool
@@ -1907,75 +1741,44 @@ _ALL = [
         prompt=lambda c: _outreach_prompt(c),
         effect=lambda c, d: _ok(_send_outreach(c, d)),
     ),
-    Tool(
-        "triage_inbox",
-        "Triage the support inbox",
-        risk=permissions.EXTERNAL,
+    "triage_inbox": Behaviour(
         effect=lambda c, d: _ok(_triage_inbox(c)),
     ),
-    Tool(
-        "scan_replies",
-        "Check the inbox for prospect replies",
-        risk=permissions.EXTERNAL,
+    "scan_replies": Behaviour(
         effect=lambda c, d: _ok(_scan_replies(c)),
     ),
-    Tool(
-        "draft_support_reply",
-        "Draft a reply to the top ticket",
-        needs_draft=True,
+    "draft_support_reply": Behaviour(
         prompt=lambda c: f"Draft a one-line support reply for a {_name(c)} user.",
         skip_when=lambda c: (
             "" if mailbox.configured() else _no_mailbox(c, "there is no ticket to reply to")
         ),
         effect=lambda c, d: _ok(f"Reply drafted: {d[:110]}"),
     ),
-    Tool(
-        "review_ad_budget",
-        "Review ad spend and pacing",
+    "review_ad_budget": Behaviour(
         effect=lambda c, d: _ok(_review_ad_budget(c)),
     ),
-    Tool(
-        "adjust_bids",
-        "Write ad variants and adjust bids",
-        risk=permissions.EXTERNAL,
-        needs_draft=True,
+    "adjust_bids": Behaviour(
         prompt=lambda c: f"Write one ad headline for {_name(c)}.",
         effect=lambda c, d: _ok(f"Bid variant written: {d[:90]}"),
     ),
-    Tool(
-        "reconcile_stripe",
-        "Reconcile Stripe cashflow",
-        risk=permissions.EXTERNAL,
+    "reconcile_stripe": Behaviour(
         effect=lambda c, d: _ok(
             integrations.stripe_reconcile() or "Stripe reconciled: MRR 27 EUR, 3 active subs (mock)"
         ),
     ),
-    Tool(
-        "send_financial_transaction",
-        "Pay an invoice / move money",
-        risk=permissions.MONEY,
-        hitl=True,
+    "send_financial_transaction": Behaviour(
         effect=lambda c, d: _ok("Paid infrastructure invoice 12 EUR (mock)"),
     ),
-    Tool(
-        "review_commitments",
-        "Check the last plan against what actually happened",
+    "review_commitments": Behaviour(
         effect=lambda c, d: _ok(_review_commitments(c)),
     ),
-    Tool(
-        "stop_useless_work",
-        "Stand down any role producing into a void",
+    "stop_useless_work": Behaviour(
         effect=lambda c, d: _ok(_stop_useless_work(c)),
     ),
-    Tool(
-        "check_providers",
-        "Notice a failing model tier and say what to do",
+    "check_providers": Behaviour(
         effect=lambda c, d: _ok(_check_providers(c)),
     ),
-    Tool(
-        "set_roster",
-        "Turn a role on or off",
-        needs_draft=True,
+    "set_roster": Behaviour(
         prompt=lambda c: (
             "Name only the roles that should change, prefixing with - the ones to "
             "stand down, e.g. `coder -social`. Answer with role names only, and "
@@ -1984,15 +1787,10 @@ _ALL = [
         ),
         effect=lambda c, d: _ok(_set_roster(c, d)),
     ),
-    Tool(
-        "weekly_review",
-        "Seven days: spent against produced",
+    "weekly_review": Behaviour(
         effect=lambda c, d: _ok(_weekly_review(c)),
     ),
-    Tool(
-        "decide",
-        "Record a decision that binds what comes next",
-        needs_draft=True,
+    "decide": Behaviour(
         prompt=lambda c: (
             "State one decision the company is taking now, in a sentence, and why. "
             "A decision binds the future; an observation does not. If nothing has "
@@ -2000,11 +1798,7 @@ _ALL = [
         ),
         effect=lambda c, d: _ok(_record_decision(c, d)),
     ),
-    Tool(
-        "review_site",
-        "Read the company's own site and write down what to change",
-        needs_draft=True,
-        risk=permissions.WRITE_LOCAL,
+    "review_site": Behaviour(
         # Nothing to review when the page is generated from company.yaml — that is
         # what write_site_content is for, and the two are exclusive by design.
         skip_when=lambda c: (
@@ -2013,28 +1807,14 @@ _ALL = [
             else "this company has no site of its own; its page is generated from company.yaml"
         ),
         prompt=lambda c: _review_site_prompt(c),
-        schema={
-            "findings": {"type": "list", "default": []},
-            "worst": {"type": "str", "default": "", "max_len": 200},
-        },
         effect=lambda c, d: _ok(_review_site(c)),
     ),
-    Tool(
-        "write_site_content",
-        "Draft the site sections and write them into company.yaml",
-        needs_draft=True,
-        risk=permissions.WRITE_LOCAL,
+    "write_site_content": Behaviour(
         # A company that publishes hand-written HTML gets nothing from copy written
         # into company.yaml, and once deploy_site started publishing the real folder
         # this tool became a turn spent on a file nothing renders. Skipped with the
         # reason, and review_site is the one that has something to say.
         skip_when=lambda c: _site_is_not_generated(c),
-        schema={
-            "steps": {"type": "list", "default": []},
-            "privacy": {"type": "list", "default": []},
-            "page_title": {"type": "str", "default": "", "max_len": 60},
-            "page_body": {"type": "str", "default": "", "max_len": 1200},
-        },
         prompt=lambda c: (
             f"Write the sales-site content for {_name(c)}, which sells: "
             f"{(c.company.get('offer') or {}).get('product', '')[:200]}. "
@@ -2049,83 +1829,39 @@ _ALL = [
         ),
         effect=lambda c, d: _ok(_write_site_content(c, d)),
     ),
-    Tool(
-        "review_kpis",
-        "Review KPIs against targets",
+    "review_kpis": Behaviour(
         effect=lambda c, d: _ok(_review_kpis(c)),
     ),
-    Tool(
-        "update_pricing",
-        "Draft a pricing adjustment",
-        needs_draft=True,
+    "update_pricing": Behaviour(
         prompt=lambda c: f"Suggest one pricing tweak for {_name(c)} in a sentence.",
         effect=lambda c, d: _ok(_keep(c, "Pricing note", d, f"Pricing note: {d[:120]}")),
     ),
-    Tool(
-        "scan_competitors",
-        "Scan and summarise competitors",
-        risk=permissions.EXTERNAL,
-        needs_draft=True,
-        # The operator drops a capture of a rival's page precisely so this job can
-        # read it.
-        sees_images=True,
+    "scan_competitors": Behaviour(
         prompt=lambda c: f"Name one competitor risk for {_name(c)} in a sentence.",
         effect=lambda c, d: _ok(_keep(c, "Competitor scan", d, f"Competitor scan: {d[:120]}")),
     ),
-    Tool(
-        "scan_signals",
-        "Watch configured sources for buying signals",
-        risk=permissions.EXTERNAL,
+    "scan_signals": Behaviour(
         effect=lambda c, d: _ok(_scan_signals(c)),
     ),
-    Tool(
-        "generate_code",
-        "Draft a feature or fix",
-        needs_draft=True,
+    "generate_code": Behaviour(
         prompt=lambda c: f"Describe a small feature for {_name(c)} in one sentence.",
         effect=lambda c, d: _ok(f"Feature branch drafted: {d[:110]}"),
     ),
-    Tool(
-        "publish_production_code",
-        "Merge a PR to production",
-        risk=permissions.CODE,
-        hitl=True,
+    "publish_production_code": Behaviour(
         effect=lambda c, d: _ok("Merged PR #42 to production (mock)"),
     ),
-    Tool(
-        "draft_design_brief",
-        "Draft a visual direction or brief",
-        needs_draft=True,
-        # A screenshot in the company's folder is the whole input to this job: a
-        # visual direction argued from a description of a picture is worth less
-        # than one argued from the picture.
-        sees_images=True,
+    "draft_design_brief": Behaviour(
         prompt=lambda c: f"Describe a visual direction for {_name(c)} in one sentence.",
         effect=lambda c, d: _ok(_keep(c, "Design brief", d, f"Design brief drafted: {d[:120]}")),
     ),
-    Tool(
-        "produce_mockup",
-        "Produce a landing or ad mockup",
+    "produce_mockup": Behaviour(
         effect=lambda c, d: _ok("Mockup produced: landing hero and one ad variant (mock)"),
     ),
-    Tool(
-        "build_sales_site",
-        "Generate the sales landing page",
-        risk=permissions.WRITE_LOCAL,
-        needs_draft=True,
+    "build_sales_site": Behaviour(
         prompt=lambda c: f"Write one punchy sales headline, under 10 words, for {_name(c)}.",
         effect=lambda c, d: _ok(_build_site(c, d)),
     ),
-    Tool(
-        "deploy_site",
-        "Publish the sales site to the configured hosts",
-        risk=permissions.EXTERNAL,
-        hitl=True,
-        # Publishing is a decision, not a cadence. It waits for a task that says
-        # to publish, so no daily design turn ever pushes a site on its own.
-        by_task_only=True,
+    "deploy_site": Behaviour(
         effect=lambda c, d: _deploy_site(c),
     ),
-]
-
-TOOLS: dict[str, Tool] = {t.name: t for t in _ALL}
+}

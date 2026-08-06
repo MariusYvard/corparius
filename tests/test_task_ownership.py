@@ -22,9 +22,10 @@ Three separate defects met there, and each has its own test below.
 
 import pytest
 
-from corparius import tools
 from corparius.store import Store
-from corparius.tools import ROLE_TOOL, TOOLS, executable_fields
+from corparius.tools import effects as tools
+from corparius.tools.registry import TOOLS
+from corparius.tools.spec import ROLE_TOOL, executable_fields
 
 
 class _Ctx:

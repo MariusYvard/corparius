@@ -144,10 +144,11 @@ def test_a_repair_round_is_billed_in_money_too(tmp_path, monkeypatch):
     """structured.ask may spend more than one call. Every one is already billed
     in tokens; the same has to be true of money, or a schema tool would under-
     report exactly when it costs most."""
-    from corparius.agents import ROSTER, Executor
+    from corparius.agents import Executor
     from corparius.config.permissions import PermissionEngine
     from corparius.hitl import ApprovalGate
     from corparius.kernel.records import AgentRole
+    from corparius.roster import ROSTER
     from corparius.safety import CircuitBreaker
 
     store = Store(str(tmp_path))

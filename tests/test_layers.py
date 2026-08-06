@@ -98,8 +98,18 @@ RANKS: dict[str, int] = {
     "deliverability": 3,
     "sitecheck": 3,
     # 4 — domain
+    # The roster is data — roles, cadences, playbooks naming tools as strings — and it is
+    # free to import. It was the first 150 lines of `agents.py`, and that adjacency is what
+    # made {agents, tools/effects, tools/registry} a cycle: the effects read the roster, so
+    # they imported the executor, which imports the registry, which imports the effects.
+    "roster": 4,
     "agents": 4,
-    "tools": 4,
+    "tools/__init__": 4,
+    # Forty declarations, no callable. Six of the eight consumers of the old flat registry
+    # only ever wanted a name, and paid an SMTP client for it.
+    "tools/spec": 4,
+    "tools/effects": 4,
+    "tools/registry": 4,
     "company": 4,
     "documents": 4,
     "skills": 4,
@@ -153,12 +163,6 @@ KNOWN_CYCLES: frozenset[tuple[str, ...]] = frozenset(
         # into `llm` was `_split`, so moving the provider table — and the splitter that needs
         # to know what is in it — to `config/provider_table.py` dissolved that edge as well.
         ("claudecli", "llm", "preflight"),
-        # Stage 3. The domain knot: `agents` needs the tools, `tools` needs the company,
-        # `company` needs the tool names. `documents` was in here too, and left for a
-        # reason worth recording: its only edge into `company` was `company_mod._slugify`,
-        # a *private* name reached across a module boundary. Moving the slug functions to
-        # `kernel/text.py` dissolved that edge as a side effect.
-        ("agents", "company", "tools"),
         # Stage 7. All of it is `cli._store`, which two sub-CLIs import.
         ("appcli", "cli", "secretscli"),
     }
@@ -430,7 +434,7 @@ def test_the_ratchet_only_ever_tightens():
     fixing a module."""
     assert len(KNOWN_RANK_VIOLATIONS) <= 2, "upward imports should only ever decrease"
     assert len(KNOWN_IMPURE) <= 3, "domain impurities should only ever decrease"
-    assert len(KNOWN_CYCLES) <= 3, "cycles should only ever decrease"
+    assert len(KNOWN_CYCLES) <= 2, "cycles should only ever decrease"
 
 
 def _ratchet(observed: set, known: frozenset, what: str) -> None:

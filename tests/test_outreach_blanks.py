@@ -20,7 +20,8 @@ import types
 
 import pytest
 
-from corparius.tools import TOOLS, unfilled_blanks
+from corparius.tools.effects import unfilled_blanks
+from corparius.tools.registry import TOOLS
 
 
 class _Lead:
@@ -93,7 +94,7 @@ def test_blanks_are_found_in_the_text_that_would_actually_go_out(text, found):
 def test_a_draft_with_a_blank_is_refused_and_says_which(monkeypatch):
     """The prompt already forbids placeholders. A prompt is a request, and the
     draft is sent verbatim — so this reads the text that is about to leave."""
-    import corparius.tools as tools_mod
+    from corparius.tools import effects as tools_mod
 
     def explode(*a, **k):
         raise AssertionError("an email with a blank in it was sent")
@@ -110,7 +111,7 @@ def test_a_draft_with_a_blank_is_refused_and_says_which(monkeypatch):
 
 def test_a_clean_draft_still_goes_out(monkeypatch):
     """The guard has to be narrow enough to let a real letter through."""
-    import corparius.tools as tools_mod
+    from corparius.tools import effects as tools_mod
 
     sent = []
     monkeypatch.setattr(

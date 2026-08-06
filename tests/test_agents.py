@@ -4,9 +4,9 @@ TOOLS[tool_name] with no guard, which makes a typo in a playbook a crash for
 that company's day, on the tick the role happens to be due.
 """
 
-from corparius.agents import ROSTER
 from corparius.kernel.records import AgentRole, Difficulty
-from corparius.tools import TOOLS
+from corparius.roster import ROSTER
+from corparius.tools.registry import TOOLS
 
 
 def test_every_role_has_a_spec():

@@ -23,7 +23,13 @@ import pytest
 from corparius.inbox import FIXES
 
 PAGE = Path("corparius/webui.html")
-TOOLS = Path("corparius/tools.py")
+# The whole package, not one file. `tools.py` became `tools/{spec,effects,registry}.py`, and a
+# path to the old file would have made this scan read nothing — or worse, once it was a
+# package, read only the part that happened to still hold what it was looking for. The count
+# is pinned so narrowing cannot happen unnoticed; bump it when a module is genuinely added.
+_TOOLS_FILES = sorted(Path("corparius/tools").glob("*.py"))
+assert len(_TOOLS_FILES) == 4, f"{len(_TOOLS_FILES)} files under corparius/tools/, expected 4"
+_TOOLS_SRC = "\n".join(f.read_text(encoding="utf-8") for f in _TOOLS_FILES)
 
 
 def _i18n_keys(lang: str) -> set[str]:
@@ -42,7 +48,7 @@ def test_no_notice_tells_the_operator_to_open_a_terminal():
     somebody looking at a web page to go and be a developer."""
     offenders = [
         line.strip()
-        for line in TOOLS.read_text(encoding="utf-8").splitlines()
+        for line in _TOOLS_SRC.splitlines()
         if "corparius " in line and "`" in line and "inbox.notify" not in line and "#" not in line
     ]
     # Narrow to the ones that are notice or question text rather than docs.
@@ -76,7 +82,7 @@ def test_every_fix_points_at_a_tab_that_exists():
 def test_the_provider_failure_notice_offers_to_run_the_preflight():
     """Not merely to open the tab. The label of the fix and the label of the
     control it presses are the same words on purpose."""
-    src = TOOLS.read_text(encoding="utf-8")
+    src = _TOOLS_SRC
     assert 'fix="preflight"' in src, "the notice still only opens the providers tab"
     html = PAGE.read_text(encoding="utf-8")
     assert '"ib.fix.preflight":"Prove these models"' in html

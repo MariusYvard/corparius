@@ -15,10 +15,11 @@ only when the CEO cannot place one.
 
 import pytest
 
-from corparius import inbox, tools
-from corparius.agents import ROSTER
+from corparius import inbox
+from corparius.roster import ROSTER
 from corparius.store import Store
-from corparius.tools import TOOLS
+from corparius.tools import effects as tools
+from corparius.tools.registry import TOOLS
 
 
 class _Ctx:
@@ -73,10 +74,10 @@ def test_it_never_touches_a_task_waiting_on_the_operator(store):
 
 
 def test_nothing_held_means_nothing_asked(store):
-    reason = tools.TOOLS["assign_held_tasks"].skip_reason(_Ctx(store))
+    reason = TOOLS["assign_held_tasks"].skip_reason(_Ctx(store))
     assert "no task is held" in reason
     _hold(store)
-    assert tools.TOOLS["assign_held_tasks"].skip_reason(_Ctx(store)) == ""
+    assert TOOLS["assign_held_tasks"].skip_reason(_Ctx(store)) == ""
 
 
 # --- what the CEO is shown -----------------------------------------------------

@@ -6,8 +6,9 @@ import json
 
 import pytest
 
-from corparius import company, llm, plugins, tools
+from corparius import company, llm, plugins
 from corparius.config import cfg
+from corparius.tools.registry import TOOLS
 
 
 @pytest.fixture
@@ -15,22 +16,22 @@ def clean_registries():
     """Snapshot the global registries the loader mutates, and restore them so a
     plugin loaded in one test never leaks into another."""
     prov = dict(llm.OPENAI_COMPAT_PROVIDERS)
-    tls = dict(tools.TOOLS)
+    tls = dict(TOOLS)
     tpls = list(company.TEMPLATES)
     loaded = set(plugins._loaded)
     yield
     llm.OPENAI_COMPAT_PROVIDERS.clear()
     llm.OPENAI_COMPAT_PROVIDERS.update(prov)
-    tools.TOOLS.clear()
-    tools.TOOLS.update(tls)
+    TOOLS.clear()
+    TOOLS.update(tls)
     company.TEMPLATES[:] = tpls
     plugins._loaded.clear()
     plugins._loaded.update(loaded)
 
 
 _REGISTER = """
-from corparius.tools import Tool
 from corparius.kernel.records import ToolResult
+from corparius.tools.registry import Tool
 
 def register(api):
     api.register_llm_provider("dummyprov", base="http://x/v1", key_env="DUMMY_KEY")
@@ -100,7 +101,7 @@ def test_loads_with_optin_and_registers_everything(clean_registries, monkeypatch
     cfg.invalidate()
     assert plugins.load() == ["acme-plugin"]
     assert llm.OPENAI_COMPAT_PROVIDERS["dummyprov"]["key_env"] == "DUMMY_KEY"
-    assert "dummy_tool" in tools.TOOLS
+    assert "dummy_tool" in TOOLS
     assert any(t["id"] == "dummytpl" for t in company.TEMPLATES)
     # Idempotent: a second load does not double-register.
     assert plugins.load() == []

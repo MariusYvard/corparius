@@ -10,10 +10,11 @@ import types
 
 import pytest
 
-from corparius.agents import ROSTER, _messages, language_line
+from corparius.agents import _messages, language_line
 from corparius.kernel.records import AgentRole
+from corparius.roster import ROSTER
 from corparius.skills import Skill, SkillLoader, parse
-from corparius.tools import TOOLS
+from corparius.tools.registry import TOOLS
 
 
 def _write(base, name, body="Say less.", front=None, tools="send_outreach"):

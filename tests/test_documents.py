@@ -142,7 +142,7 @@ def test_a_deliverable_survives_the_turn_that_produced_it(drop):
     would want it next turn."""
     import types
 
-    from corparius.tools import TOOLS
+    from corparius.tools.registry import TOOLS
 
     ctx = types.SimpleNamespace(company={"slug": "acme", "name": "Acme"}, store=None)
     brief = "A severe visual identity, dark tones, deep blue accents. " * 8

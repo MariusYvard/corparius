@@ -32,12 +32,13 @@ from pathlib import Path
 import pytest
 
 from corparius import inbox
-from corparius.agents import ROSTER
 from corparius.company import ROLES
 from corparius.config import cfg, settings_spec
 from corparius.llm import OPENAI_COMPAT_PROVIDERS
+from corparius.roster import ROSTER
 from corparius.store import MIGRATIONS, SCHEMA_VERSION
-from corparius.tools import ROLE_TOOL, TOOLS
+from corparius.tools.registry import TOOLS
+from corparius.tools.spec import ROLE_TOOL
 
 # `rglob`, and keyed by path rather than by filename.
 #
@@ -54,10 +55,11 @@ from corparius.tools import ROLE_TOOL, TOOLS
 SOURCES = sorted(Path("corparius").rglob("*.py"))
 SRC = {p.relative_to("corparius").as_posix(): p.read_text(encoding="utf-8") for p in SOURCES}
 ALL_SRC = "\n".join(SRC.values())
-# 45 flat + kernel/ (10: __init__, crypto, dotenv, httpkit, i18n, paths, proc, records, text,
+# 45 flat, +roster and -tools.py, + tools/ (4: __init__, spec, effects, registry)
+# + kernel/ (10: __init__, crypto, dotenv, httpkit, i18n, paths, proc, records, text,
 # vectors) + config/ (8: __init__, cfg, permissions, provider_table, secretbox, settings,
 # settings_spec, store_layer — all but two moved in from the flat package).
-MODULE_COUNT = 63
+MODULE_COUNT = 67
 
 
 def test_every_source_file_is_scanned():

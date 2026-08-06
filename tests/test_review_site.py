@@ -17,9 +17,9 @@ does when it cannot act.
 
 import pytest
 
-from corparius import tools
 from corparius.kernel import paths
-from corparius.tools import TOOLS
+from corparius.tools import effects as tools
+from corparius.tools.registry import TOOLS
 
 
 class _Ctx:
@@ -203,7 +203,7 @@ def test_with_no_site_it_says_so_rather_than_inventing(tmp_path, monkeypatch):
 def test_the_tool_is_on_the_design_playbook():
     """A tool no playbook names is a tool that never runs — the defect
     tests/test_tool_reach.py exists for."""
-    from corparius.agents import ROSTER
     from corparius.kernel.records import AgentRole
+    from corparius.roster import ROSTER
 
     assert "review_site" in ROSTER[AgentRole.DESIGN].playbook

@@ -11,9 +11,10 @@ whole exercise:
   line below records what it costs now. Reading a settings registry loaded the HTTP stack
   and the process spawner because of one import on line 19, used nowhere else in 1 380
   lines. This test is what proved it gone rather than assumed it.
-- **`agents` pulls `smtplib` and `imaplib`.** `agents.py` has no host concern of its own —
-  it imports `tools`, and `tools` imports `deploy`, `integrations`, `mailbox` and
-  `sitecheck` at module scope. Every agent turn pays for a mail client it will never use.
+- **Reading a list of forty tool names pulled `smtplib` and `imaplib`** — fixed in stage 3.
+  The flat registry held forty declarations and forty effects in one literal, so `company`
+  validating an operator's `hitl_tools` loaded a mail client. `tools.spec` and `roster` are
+  now free, and the two lines that still cost are the two that genuinely execute.
 
 Each check runs in a **fresh interpreter**, because `sys.modules` is global: once anything
 in a test session has imported `requests`, every later check would pass for the wrong
@@ -67,11 +68,21 @@ COST: dict[str, frozenset[str]] = {
     # became an import of `config/provider_table.py`. `sqlite3` stays, and should: reading a
     # setting reads the settings table.
     "config.settings_spec": frozenset({"sqlite3"}),
-    # Stage 3 must take `smtplib` and `imaplib` off this line. Splitting the tool registry
-    # into data (`domain/tools/spec.py`) and wiring (`registry.py`) is what does it: the
-    # catalogue stops needing the adapters, and only the executor pays.
+    # Forty declarations and no callable, so: free. This is the line the tool-registry split
+    # was for. Six consumers — `company` validating an operator's hitl_tools, `doctor` and
+    # `skills` checking a skill's allowed-tools, `skillcli`, the console catalogue, the CLI
+    # weighing an approval — reached the flat registry for a *name* and loaded an SMTP client,
+    # an IMAP client, an HTTP client and a process spawner to get it.
+    "tools.spec": frozenset(),
+    # Data too, and free for the same reason: roles, cadences, and playbooks that name tools
+    # as strings. Split out of `agents.py`, where it was the first 150 lines.
+    "roster": frozenset(),
+    # The executor, and the registry it drives. **These do not get cheaper**, and the plan was
+    # wrong to expect it: running a playbook means having the effects, and the effects are
+    # where `deploy`, `integrations`, `mailbox` and `sitecheck` legitimately live. What the
+    # split changed is who *else* pays — and the two lines above are the answer.
     "agents": frozenset({"requests", "subprocess", "sqlite3", "smtplib", "imaplib", "ssl"}),
-    "tools": frozenset({"requests", "subprocess", "sqlite3", "smtplib", "imaplib", "ssl"}),
+    "tools.registry": frozenset({"requests", "subprocess", "sqlite3", "smtplib", "imaplib", "ssl"}),
     # Stage 5 should take `subprocess` off this line: the Claude CLI becomes one provider
     # among others behind `kernel/proc.py`, and the router stops knowing it exists.
     "llm": frozenset({"requests", "subprocess", "sqlite3", "ssl"}),

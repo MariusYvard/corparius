@@ -21,7 +21,7 @@ from corparius import inbox as inbox_mod
 from corparius import mailbox, webui
 from corparius.config import settings_spec
 from corparius.store import Store
-from corparius.tools import TOOLS
+from corparius.tools.registry import TOOLS
 
 # --------------------------------------------------------------------------
 # Guided mail

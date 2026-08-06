@@ -3,8 +3,9 @@ and fall back cleanly when there are no leads."""
 
 import types
 
-from corparius import integrations, tools
+from corparius import integrations
 from corparius.leadsource import Lead
+from corparius.tools import effects as tools
 
 
 def _fake_send(calls):

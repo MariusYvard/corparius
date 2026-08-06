@@ -86,7 +86,7 @@ def test_a_site_folder_with_nothing_publishable_is_not_a_site(tmp_path, monkeypa
 
 
 def test_the_generator_refuses_to_overwrite_a_real_site(tmp_path, monkeypatch):
-    from corparius import tools
+    from corparius.tools import effects as tools
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
     _site(tmp_path / "c", pages=("index.html", "tech.html", "beta.html"))
@@ -103,7 +103,8 @@ def test_the_generator_refuses_to_overwrite_a_real_site(tmp_path, monkeypatch):
 
 
 def test_the_deploy_tool_publishes_the_companys_own_site(tmp_path, monkeypatch):
-    from corparius import deploy, tools
+    from corparius import deploy
+    from corparius.tools import effects as tools
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
     wanted = _site(tmp_path / "c", pages=("index.html", "tech.html"))
@@ -308,8 +309,9 @@ def test_no_site_url_means_no_host_comparison(tmp_path):
 
 
 def test_the_deploy_refuses_rather_than_publishing_placeholders(tmp_path, monkeypatch):
-    from corparius import deploy, tools
+    from corparius import deploy
     from corparius.store import Store
+    from corparius.tools import effects as tools
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
     folder = _site(tmp_path / "c", pages=("index.html",))
@@ -461,7 +463,7 @@ def test_the_published_address_fills_an_empty_site_url(tmp_path, monkeypatch):
     provider already returned it and nothing read it back: data that arrives and is
     thrown away, one more time."""
     from corparius import company as cm
-    from corparius import tools
+    from corparius.tools import effects as tools
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
     _company(tmp_path)
@@ -474,7 +476,7 @@ def test_a_domain_the_operator_chose_is_never_overwritten(tmp_path, monkeypatch)
     """They decided. Replacing it with whatever the last deploy answered would take
     the last word away from the person running the business."""
     from corparius import company as cm
-    from corparius import tools
+    from corparius.tools import effects as tools
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
     _company(tmp_path, site={"url": "https://vigil.fr"})
@@ -486,7 +488,7 @@ def test_a_result_with_no_address_records_nothing(tmp_path, monkeypatch):
     """The local provider returns a filesystem path. Writing that into site.url
     would put `/data/sites/published` in a canonical link."""
     from corparius import company as cm
-    from corparius import tools
+    from corparius.tools import effects as tools
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
     _company(tmp_path)
@@ -496,7 +498,7 @@ def test_a_result_with_no_address_records_nothing(tmp_path, monkeypatch):
 
 
 def test_a_missing_company_does_not_fail_the_publish(tmp_path, monkeypatch):
-    from corparius import tools
+    from corparius.tools import effects as tools
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
     assert tools._record_site_url("nosuch", "netlify:https://x.netlify.app") == ""
@@ -603,7 +605,8 @@ def test_the_deploy_rebuilds_them_after_recording_the_address(tmp_path, monkeypa
     it, publish again. A sitemap that disagrees with where the site lives tells a
     crawler to index somebody else."""
     from corparius import company as cm
-    from corparius import deploy, tools
+    from corparius import deploy
+    from corparius.tools import effects as tools
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
     _company(tmp_path)

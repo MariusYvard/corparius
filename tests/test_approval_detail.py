@@ -14,7 +14,7 @@ import json
 from corparius.config.permissions import EXTERNAL, MONEY, PermissionEngine, explain
 from corparius.hitl import ApprovalGate
 from corparius.store import Store
-from corparius.tools import TOOLS
+from corparius.tools.registry import TOOLS
 
 EMAIL = "Bonjour,\n\n" + ("Votre équipe passe des heures à lire des CV. " * 8)
 

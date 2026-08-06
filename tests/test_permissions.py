@@ -13,7 +13,7 @@ from corparius.config.permissions import Decision, PermissionEngine
 from corparius.hitl import BLOCKED_MESSAGE, ApprovalGate
 from corparius.kernel.records import ToolResult
 from corparius.store import Store
-from corparius.tools import TOOLS
+from corparius.tools.registry import TOOLS
 
 
 class _Recorder:

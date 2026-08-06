@@ -327,8 +327,8 @@ def test_the_tier_ladder_is_one_model_per_tier():
 def test_opus_sits_on_the_least_frequent_tier():
     """The expensive model belongs where it is called least. HARD serves
     strategy (every 24h) and the coder (on demand) — nothing else."""
-    from corparius.agents import ROSTER
     from corparius.kernel.records import Difficulty
+    from corparius.roster import ROSTER
 
     hard_roles = {r.value for r, spec in ROSTER.items() if spec.difficulty is Difficulty.HARD}
     assert hard_roles == {"strategy", "coder"}

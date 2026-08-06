@@ -198,8 +198,9 @@ def test_the_orchestrator_hands_the_reserves_to_the_ledger(tmp_path, monkeypatch
 def test_the_agent_checks_and_records_against_its_own_ledger():
     """Both ends. Checking the reserve while charging the shared pool would let a
     role spend its purse twice over."""
-    from corparius.agents import ROSTER, Executor
+    from corparius.agents import Executor
     from corparius.kernel.records import AgentRole
+    from corparius.roster import ROSTER
 
     calls: list = []
 

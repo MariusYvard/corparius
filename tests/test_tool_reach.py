@@ -15,10 +15,17 @@ sitting unreachable for months.
 import re
 from pathlib import Path
 
-from corparius.agents import ROSTER
-from corparius.tools import ROLE_TOOL, TOOLS
+from corparius.roster import ROSTER
+from corparius.tools.registry import TOOLS
+from corparius.tools.spec import ROLE_TOOL
 
-TOOLS_SRC = Path("corparius/tools.py").read_text(encoding="utf-8")
+# The whole package, not one file. `tools.py` became `tools/{spec,effects,registry}.py`, and a
+# path to the old file would have made this scan read nothing — or worse, once it was a
+# package, read only the part that happened to still hold what it was looking for. The count
+# is pinned so narrowing cannot happen unnoticed; bump it when a module is genuinely added.
+_TOOLS_FILES = sorted(Path("corparius/tools").glob("*.py"))
+assert len(_TOOLS_FILES) == 4, f"{len(_TOOLS_FILES)} files under corparius/tools/, expected 4"
+TOOLS_SRC = "\n".join(f.read_text(encoding="utf-8") for f in _TOOLS_FILES)
 
 
 def _on_a_playbook() -> set[str]:
@@ -99,7 +106,7 @@ def test_the_ceo_cannot_undo_a_stand_down_the_operator_set(tmp_path):
     import types
 
     from corparius.store import Store
-    from corparius.tools import CEO_STAND_DOWN, _set_roster
+    from corparius.tools.effects import CEO_STAND_DOWN, _set_roster
 
     store = Store(str(tmp_path))
     store.add_directive("acme", "pause", "social", "asked in the CEO chat")

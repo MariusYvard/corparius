@@ -41,8 +41,6 @@ from . import (
 )
 from . import company as company_mod
 from . import inbox as inbox_mod
-from . import tools as tools_mod
-from .agents import ROSTER
 from .config import cfg, permissions, settings_spec
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .config.settings import Settings
@@ -52,8 +50,9 @@ from .kernel import dotenv, httpkit, i18n, paths
 from .kernel.records import AgentRole
 from .llm import HybridRouter, connected_providers
 from .orchestrator import Runtime, _known_target
+from .roster import ROSTER
 from .store import Store
-from .tools import TOOLS, executable_fields
+from .tools.spec import ROLE_TOOL, SPEC, executable_fields
 
 log = logging.getLogger("corparius.webui")
 
@@ -196,7 +195,7 @@ def _overview(state: UiState, slug: str) -> dict:
                 a["parameters"] = json.loads(a["parameters"])
             except json.JSONDecodeError:
                 pass
-        tool = TOOLS.get(a.get("tool", ""))
+        tool = SPEC.get(a.get("tool", ""))
         a["risk"] = permissions.risk_of(tool) if tool else permissions.READ
         # A tool gated by name can never be silenced by a standing rule, so the
         # console must not offer a button that would do nothing.
@@ -278,13 +277,11 @@ def _overview(state: UiState, slug: str) -> dict:
         # role, and the operator picks. Inventing the answer from the task's wording
         # would be a guess dressed as a recommendation.
         "agent_tools": {
-            role.value: sorted(
-                set(spec.playbook) | {tools_mod.ROLE_TOOL.get(role.value, "")} - {""}
-            )
+            role.value: sorted(set(spec.playbook) | {ROLE_TOOL.get(role.value, "")} - {""})
             for role, spec in ROSTER.items()
             if (company_cfg.get("agents", {}) or {}).get(role.value, False)
         },
-        "role_tool": tools_mod.ROLE_TOOL,
+        "role_tool": ROLE_TOOL,
         "memory": store.list_memory(slug) if s.memory_enabled else [],
         "memory_enabled": s.memory_enabled,
         "permission_mode": engine.mode,
@@ -792,7 +789,7 @@ def _company_payload(slug: str) -> dict:
         "roles": list(company_mod.ROLES),
         "channels": list(company_mod.CHANNELS),
         "billing": list(company_mod.BILLING),
-        "tools": sorted(TOOLS),
+        "tools": sorted(SPEC),
     }
 
 
@@ -919,7 +916,7 @@ def _edit_task(store, body: dict) -> tuple[int, dict]:
         fields["target"] = target
     if "tool" in body:
         tool = str(body["tool"]).strip()
-        if tool and tool not in TOOLS:
+        if tool and tool not in SPEC:
             return 400, {"ok": False, "error": f"unknown tool '{tool}'"}
         fields["tool"] = tool
     if not fields and decision is None:
@@ -1623,7 +1620,7 @@ def _route_plugins_get(ctx):
                 "description": sk.description,
                 "scope": sk.scope,
                 "tools": sk.allowed_tools,
-                "unknown_tools": [t for t in sk.allowed_tools if t not in TOOLS],
+                "unknown_tools": [t for t in sk.allowed_tools if t not in SPEC],
                 "chars": len(sk.instructions),
                 "unscoped": sk.unscoped,
                 # Whether the author said so. An always-on guardrail is still
@@ -1643,7 +1640,7 @@ def _route_plugins_get(ctx):
         "skills_always_on_chars": loader.always_on_chars() if s.skills_enabled else 0,
         # So the scoping picker offers real names instead of asking the operator
         # to know them. Sorted, because it is a list a human reads.
-        "tool_names": sorted(TOOLS),
+        "tool_names": sorted(SPEC),
     }
 
 
@@ -1703,7 +1700,7 @@ def _route_approvals_post(ctx):
     scope = str(ctx.body.get("remember", "")).strip()
     if done and decision == "approved" and scope in ("run", "always") and approval:
         slug = approval["company"]
-        tool = TOOLS.get(approval["tool"])
+        tool = SPEC.get(approval["tool"])
         engine = permissions.PermissionEngine.from_settings(
             _fresh_settings(), _load_company(slug) or {}, store
         )

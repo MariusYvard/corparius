@@ -9,6 +9,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from .. import (
     company as company_mod,
@@ -1616,6 +1617,189 @@ def _kaizen(ctx) -> str:
 # swapping the effect does not silently widen what runs unattended.
 
 
+# --- writing a skill from what went wrong ------------------------------------
+#
+# The producing half of the skill system, which did not exist: `write_skill`, `create_skill`
+# and `save_skill` had zero occurrences in the package while all of `skills.py` — parse, tool
+# scoping, per-company loading, code-side selection, a character budget — waited for an author.
+# Only the operator could be one. See docs/reverse-engineering/hermes-agent.md for where the
+# shape comes from, and what was deliberately not taken from it.
+#
+# `remember` does not cover this. A fact is declarative ("the market wants X"); a skill is
+# procedural ("when doing X, do it this way, and here is the trap"). The company had a place
+# for the second and no way to fill it.
+
+# Frontmatter marker: this skill was written by the company, not by the operator. The curator
+# reads it to know what it may archive, and an operator reading the folder can tell at a
+# glance. Nothing in the loader looks at it — `parse` ignores an unknown key.
+AGENT_AUTHOR = "corparius"
+
+# How many skills the company may write for itself before it has to consolidate. A cap rather
+# than a rate: what matters is the size of the library, not how fast it grew, and Hermes'
+# curator exists because a library of narrow one-session skills is the failure mode. Past this,
+# the tool stops and says so instead of adding the next one.
+SKILL_WRITE_MAX = 12
+
+# A failure has to happen twice before it is worth a procedure. Once is noise — a rate limit, a
+# network blip, the kind of thing the guardrail below says never to record. Twice is a pattern,
+# and it is also what makes this tool self-limiting: once the skill works the failure stops
+# recurring, and the tool goes quiet on its own.
+FAILURES_BEFORE_A_SKILL = 2
+
+# What must never be written down, in the words that make the reason clear. Taken from
+# `agent/background_review.py` in hermes-agent, and it is the single most transferable thing in
+# that repository: this project has been bitten by the same shape twice — the
+# `promesse-clinique` constraint riding all 36 tool calls of a playbook pass (66 423
+# characters), and TRIES_BEFORE_STAND_DOWN, which exists because a loop kept retrying something
+# the environment did not allow.
+NEVER_RECORD = (
+    "Do NOT write down anything that depends on this machine or this moment: a server being "
+    "down, a rate limit, a missing key, a network error, a one-off timeout. Those become "
+    "permanent self-imposed constraints that bite later when the environment changes. Write "
+    "only what would still be true and useful next month."
+)
+
+
+def _agent_skills(slug: str) -> list[Path]:
+    """The skill folders this company wrote for itself, newest first.
+
+    Identified by the frontmatter marker rather than by location: an operator may well keep
+    their own skills in the same folder, and those are not the curator's to touch.
+    """
+    folder = paths.company_skills_dir(slug)
+    if not folder.is_dir():
+        return []
+    found = []
+    for path in sorted(folder.glob("*/SKILL.md")):
+        try:
+            head = path.read_text(encoding="utf-8", errors="replace")[:400]
+        except OSError:
+            continue
+        if f"author: {AGENT_AUTHOR}" in head:
+            found.append(path.parent)
+    return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def _repeated_failure(ctx) -> tuple[str, list[str]]:
+    """(tool, its recent failure outputs) for the tool that failed most, or ("", []).
+
+    Reads `recent_actions` rather than `recent_failures` because the *tool* is the load-bearing
+    part: it becomes the skill's `allowed-tools`, which is what makes the skill scoped. The
+    other function returns outputs only.
+    """
+    store = getattr(ctx, "store", None)
+    if store is None or not hasattr(store, "recent_actions"):
+        return "", []
+    failures: dict[str, list[str]] = {}
+    for row in store.recent_actions(ctx.company.get("slug", ""), limit=60):
+        if row.get("ok"):
+            continue
+        tool = str(row.get("tool") or "")
+        # Not itself, and not the tool whose whole job is to report a problem: a skill about
+        # how to fail at writing a skill is a joke the library does not need.
+        if not tool or tool in ("write_skill", "ask_operator"):
+            continue
+        failures.setdefault(tool, []).append(str(row.get("output") or ""))
+    if not failures:
+        return "", []
+    tool = max(sorted(failures), key=lambda t: len(failures[t]))
+    if len(failures[tool]) < FAILURES_BEFORE_A_SKILL:
+        return "", []
+    return tool, failures[tool][:6]
+
+
+def _nothing_to_learn(ctx) -> str:
+    """Why this turn writes no skill. A reason rather than a boolean, so the log says which."""
+    slug = ctx.company.get("slug", "company")
+    if len(_agent_skills(slug)) >= SKILL_WRITE_MAX:
+        return (
+            f"{SKILL_WRITE_MAX} skills already written for this company; archive or "
+            "consolidate some before writing another"
+        )
+    tool, _ = _repeated_failure(ctx)
+    if not tool:
+        return (
+            f"nothing has failed {FAILURES_BEFORE_A_SKILL} times recently, so there is no "
+            "pattern to write down"
+        )
+    return ""
+
+
+def _write_skill_prompt(ctx) -> str:
+    tool, outputs = _repeated_failure(ctx)
+    if not tool:
+        return ""
+    seen = "\n".join(f"- {o[:200]}" for o in outputs)
+    return (
+        f"`{tool}` has failed {len(outputs)} times for {_name(ctx)}. What it said:\n{seen}\n\n"
+        f"Write the procedure that would avoid this next time: what to check before running "
+        f"`{tool}`, what to do instead, and how to tell it worked. Address whoever runs that "
+        "tool next — they will read this and nothing else about it.\n\n"
+        f"{NEVER_RECORD}\n\n"
+        "If the only honest answer is that this failure is not something a procedure can "
+        "prevent, say exactly that in one sentence and write no instructions."
+    )
+
+
+def _write_skill(ctx) -> str:
+    """Write a SKILL.md the company reads back on the next turn of the failing tool.
+
+    Three guards, and only the third is a prompt instruction:
+
+    1. **Scope is set here, not by the model.** `allowed-tools` is the tool that actually
+       failed. An agent-written skill therefore *cannot* be unscoped, so it cannot join the
+       block that rides on every prompt of every turn — the cost
+       `SkillLoader.always_on_chars()` exists to measure, and the one this feature could
+       plausibly have made worse.
+    2. **The name is slugified and has to survive it.** It becomes a directory name, and this
+       project has been here before: `_load_company` guards a slug against the glob that
+       produced it, `kernel/dotenv.merge` refuses a newline in a value. A name that does not
+       round-trip is refused rather than repaired.
+    3. The negative guardrail is in the prompt (NEVER_RECORD), because no code can tell
+       "check the mailbox is connected first" from "the mailbox was down".
+
+    An operator's own skill of the same name is never overwritten: the marker is what
+    distinguishes them, so the person running the business keeps the last word by
+    construction, exactly as `EXTRA_DIRS` already promises for plugin skills.
+    """
+    tool, _ = _repeated_failure(ctx)
+    if not tool:
+        return "Nothing had failed twice, so no skill was written"
+    result = getattr(ctx, "structured", None)
+    data = result.data if result else {}
+    instructions = str(data.get("instructions", "")).strip()
+    if not instructions:
+        return _empty_draft(ctx, "no skill was written")
+    raw_name = str(data.get("name", "")).strip() or f"avoid-{tool}-failure"
+    name = text.slugify(raw_name)
+    if not name:
+        return f"refused to write a skill: {raw_name!r} leaves nothing usable as a folder name"
+    slug = ctx.company.get("slug", "company")
+    folder = paths.company_skills_dir(slug) / name
+    target = folder / "SKILL.md"
+    if target.is_file():
+        head = target.read_text(encoding="utf-8", errors="replace")[:400]
+        if f"author: {AGENT_AUTHOR}" not in head:
+            return f"refused to overwrite {name}/SKILL.md, which the operator wrote"
+    description = " ".join(str(data.get("description", "")).split())[:120] or (
+        f"What to check before running {tool}."
+    )
+    body = (
+        f"---\nname: {name}\ndescription: {description}\n"
+        f"allowed-tools: {tool}\nauthor: {AGENT_AUTHOR}\n---\n{instructions}\n"
+    )
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        target.write_text(body, encoding="utf-8")
+    except OSError as exc:  # a full disk must not fail the turn
+        log.warning("could not write skill %s for %s: %s", name, slug, exc)
+        return f"could not write the skill: {exc}"
+    return (
+        f"Skill written: {name} ({len(instructions)} chars), scoped to {tool}. "
+        f"The next {tool} turn reads it."
+    )
+
+
 @dataclass(frozen=True)
 class Behaviour:
     """The three callables a tool needs at run time, paired with a `ToolSpec` by name in
@@ -1653,6 +1837,11 @@ BEHAVIOUR: dict[str, Behaviour] = {
             "One fact about the market, the offer or the customers — not today's numbers."
         ),
         effect=lambda c, d: _ok(_remember(c)),
+    ),
+    "write_skill": Behaviour(
+        skip_when=lambda c: _nothing_to_learn(c),
+        prompt=lambda c: _write_skill_prompt(c),
+        effect=lambda c, d: _ok(_write_skill(c)),
     ),
     "write_note": Behaviour(
         prompt=lambda c: _write_note_prompt(c),

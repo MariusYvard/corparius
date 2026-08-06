@@ -67,6 +67,11 @@ ROSTER: dict[AgentRole, AgentSpec] = {
             "plan_from_documents",
             "decide",
             "remember",
+            # After `remember`, and for the same reason it is here: this is the day boundary,
+            # the one moment the company looks back. `remember` writes a fact; this writes a
+            # procedure, when something has failed twice and a procedure would have helped.
+            # It skips itself otherwise — see `_nothing_to_learn`.
+            "write_skill",
             "write_eod_summary",
         ],
     ),

@@ -82,6 +82,23 @@ SPEC: dict[str, ToolSpec] = {
             "why": {"type": "str", "default": "", "max_len": 200},
         },
     ),
+    "write_skill": ToolSpec(
+        "write_skill",
+        "Write down the procedure that avoids a repeated failure",
+        needs_draft=True,
+        # WRITE_LOCAL, not READ: this puts a file in the company's folder, and that file goes
+        # into a prompt on the next turn of the tool it names. `remember` writes a row in the
+        # store and is weighed the same way.
+        risk=permissions.WRITE_LOCAL,
+        schema={
+            # No `allowed_tools` field, on purpose. The scope is the tool that actually failed
+            # and the effect sets it — a model choosing its own scope could choose "all", and
+            # an unscoped skill rides on every prompt of every turn.
+            "name": {"type": "str", "default": "", "max_len": 60},
+            "description": {"type": "str", "default": "", "max_len": 120},
+            "instructions": {"type": "str", "required": True, "max_len": 2000},
+        },
+    ),
     "write_note": ToolSpec(
         "write_note",
         "Write the internal document a task asks for",

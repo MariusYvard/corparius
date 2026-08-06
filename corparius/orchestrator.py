@@ -12,7 +12,7 @@ from dataclasses import dataclass, field, replace
 
 import requests
 
-from . import documents, inbox, llm
+from . import curator, documents, inbox, llm
 from .agents import Executor
 from .config.permissions import PermissionEngine
 from .config.settings import Settings
@@ -392,6 +392,10 @@ class Runtime:
             # The day boundary is where a long-lived loop catches up with the
             # world: what the operator changed, and what the company itself
             # learned yesterday.
+            # Before the loader is rebuilt below, so tomorrow reads the swept folder. The
+            # company writes skills for itself (tools.effects.write_skill) and this is the
+            # half that keeps that from turning into spend on prompts nobody reads.
+            curator.sweep(self.store, slug)
             memory = self.store.recent_outputs(slug, "write_eod_summary", 3)
             self.settings = Settings()
             self.router = HybridRouter(self.settings)

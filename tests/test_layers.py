@@ -117,6 +117,10 @@ RANKS: dict[str, int] = {
     "structured": 4,
     "hitl": 4,
     "orchestrator": 4,
+    # The maintenance half of the learning loop. Rank 4 and host-free: it moves a folder and
+    # reads a table through the store it is handed, and calls no model — deliberately, because
+    # merging two skills is the one operation here that can lose meaning.
+    "curator": 4,
     # Rank 4 since the split: what is left is policy — a token ceiling, a loop guard, a
     # spend-velocity breaker. It sat at rank 0 only because `cosine` and `hash_embed` were
     # in the same file, which is what made `store` (rank 2) import it.

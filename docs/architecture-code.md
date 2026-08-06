@@ -69,9 +69,10 @@ L'étape 1 est faite, l'étape 2 commencée. Mesuré :
 | Compteur | Au plan | Aujourd'hui |
 | --- | --- | --- |
 | Arêtes montantes | 4 | **1** (`doctor→appserver`) |
-| Cycles d'imports | 5 | **3**, dont deux ont rétréci |
+| Cycles d'imports | 5 | **2** |
 | Modules important `subprocess` | 4 | **1** (`kernel/proc.py`) |
 | Ce que charge la lecture d'un réglage | `requests`, `subprocess`, `ssl`, `sqlite3` | **`sqlite3`** |
+| Ce que charge la lecture de la liste des outils | `requests`, `subprocess`, `ssl`, `sqlite3`, `smtplib`, `imaplib` | **rien** |
 
 La dernière ligne est le gain que le plan annonçait comme le moins cher du chantier, et il
 l'était : `settings_spec` importait `llm` **à une ligne sur 1 380**, pour lire
@@ -81,6 +82,20 @@ décider si `groq:` est un préfixe de fournisseur demande de savoir lesquels so
 
 Effet de bord non prévu par le plan : `hardware` et `agents` n'importaient `llm` que pour
 `_split`, et `agents` est le module dont chaque tour d'agent payait cet import.
+
+La dernière ligne est l'étape 3. Le registre plat portait quarante déclarations et quarante
+effets dans un même littéral, donc **six de ses huit consommateurs chargeaient un client SMTP
+pour lire une liste de chaînes** : `company` validant les `hitl_tools` de l'opérateur, `doctor`
+et `skills` vérifiant les `allowed-tools` d'une compétence, `skillcli`, le catalogue de la
+console, la CLI pesant une approbation. `tools/spec.py` porte les données, `tools/registry.py`
+lie les effets, et `permissions` lisant un outil par `getattr` fait qu'un `ToolSpec` se pèse
+exactement comme un `Tool`.
+
+Une correction au plan, inscrite dans `COST` : l'étape 3 devait alléger `agents`. Elle ne le
+fait pas et ne doit pas — `agents` **est** l'exécuteur, et dérouler un playbook suppose
+d'avoir les effets. Ce qui est devenu libre, c'est `roster` (les 150 premières lignes
+d'`agents.py`, sorties parce que les effets lisent le roster et importaient donc l'exécuteur)
+et `tools/spec`.
 
 Les deux cycles morts ne l'ont pas été par le déplacement lui-même mais par ce que le
 déplacement a rendu visible : `{cfg, secretbox}` en séparant la cryptographie de la

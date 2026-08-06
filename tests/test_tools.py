@@ -87,11 +87,29 @@ def test_every_tool_runs_offline_and_returns_a_result(tmp_path):
 
 def test_draft_prompts_render_without_a_model(tmp_path):
     """The prompt lambdas read company fields; a missing key would raise at the
-    top of an agent turn, before any LLM call could report the problem."""
+    top of an agent turn, before any LLM call could report the problem.
+
+    Skipped tools are exempt, and that follows the executor rather than relaxing the rule:
+    `Executor._invoke` calls `skip_reason` first and returns before a prompt is ever asked
+    for (agents.py). A tool that says "there is nothing to do" is never asked what to draft,
+    so demanding a prompt from it would be asserting a property the product does not use —
+    and it would push a tool towards rendering a generic prompt for a turn that will not
+    happen, which is how `draft_support_reply` came to write a reply to nobody every three
+    hours.
+
+    The pairing is what makes this safe: every empty prompt below must be explained by a skip
+    reason on the same context, and the assertion says which is missing.
+    """
     ctx = _ctx(tmp_path)
     for name, tool in TOOLS.items():
-        if tool.needs_draft:
-            assert tool.draft_prompt(ctx).strip(), f"{name} rendered an empty prompt"
+        if not tool.needs_draft:
+            continue
+        if tool.draft_prompt(ctx).strip():
+            continue
+        assert tool.skip_reason(ctx).strip(), (
+            f"{name} rendered an empty prompt and gave no skip reason, so the turn would "
+            "send an empty draft request to a real model"
+        )
 
 
 def test_deploy_publishes_locally_with_nothing_configured(tmp_path):

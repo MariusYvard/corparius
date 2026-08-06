@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from corparius.llm import OPENAI_COMPAT_PROVIDERS as PROVIDERS
+from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS as PROVIDERS
 
 DOC = Path("docs/llm-providers.md")
 

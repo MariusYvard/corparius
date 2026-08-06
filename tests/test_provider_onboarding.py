@@ -137,7 +137,7 @@ def test_the_doctor_offers_the_claude_path_when_the_cli_is_there(monkeypatch):
     paying for inference they could get from a login they already have. The old
     message just said "disabled"."""
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     s = Settings()
     s.claude_code_enabled = False
@@ -151,7 +151,7 @@ def test_the_doctor_says_nothing_when_neither_is_installed(monkeypatch):
     """No subscription in evidence, no advice: the doctor lists what is wrong,
     not what could be bought."""
     from corparius import claudecli, doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     s = Settings()
     s.claude_code_enabled = False
@@ -350,7 +350,7 @@ def test_local_still_ends_the_chain_even_when_it_cannot_serve_a_tier():
     """Not serving a tier and not being the last resort are different things.
     The router always falls through to local after the chain — that safety net
     must survive a negative verdict."""
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.llm import HybridRouter
 
     s = Settings()
@@ -372,7 +372,7 @@ def test_recommended_local_is_the_single_decider(tmp_path, monkeypatch):
     """The console button, the CLI and the doctor all ask this one function, so
     they cannot drift into three different answers."""
     from corparius import hardware
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.store import Store
 
     store = Store(str(tmp_path))
@@ -399,7 +399,7 @@ def test_recommended_local_is_the_single_decider(tmp_path, monkeypatch):
 
 def test_no_ollama_at_all_is_reported_as_such(tmp_path, monkeypatch):
     from corparius import hardware
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
     from corparius.store import Store
 
     monkeypatch.setattr(hardware, "installed_models", lambda **k: [])
@@ -411,7 +411,7 @@ def test_the_doctor_names_the_desktop_app_when_the_cli_is_missing(monkeypatch):
     """Same trap as the CLI message: someone holding Claude Desktop reads
     "install Claude Code" as done."""
     from corparius import claudecli, doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     s = Settings()
     s.claude_code_enabled = False
@@ -424,7 +424,7 @@ def test_the_doctor_names_the_desktop_app_when_the_cli_is_missing(monkeypatch):
 
 def test_the_doctor_fails_loudly_when_the_target_is_on_without_the_cli(monkeypatch):
     from corparius import claudecli, doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     s = Settings()
     s.claude_code_enabled = True

@@ -46,12 +46,13 @@ from . import company as company_mod
 from . import inbox as inbox_mod
 from . import tools as tools_mod
 from .agents import ROSTER
-from .config import Settings
+from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
+from .config.settings import Settings
 from .doctor import run_checks
 from .integrations import smtp_check, stripe_check, stripe_payments
 from .kernel import dotenv, httpkit, i18n, paths
 from .kernel.records import AgentRole
-from .llm import OPENAI_COMPAT_PROVIDERS, HybridRouter, _split, connected_providers
+from .llm import HybridRouter, connected_providers
 from .orchestrator import Runtime, _known_target
 from .store import Store
 from .tools import TOOLS, executable_fields
@@ -1308,7 +1309,7 @@ def _route_ollama_bench(ctx):
     models = hardware.installed_models()
     if not models:
         return 200, {"ok": True, "result": {"ok": False, "detail": "no local model to measure"}}
-    want = hardware.best_local_model(models, prefer=_split(settings.trivial_model)[1])
+    want = hardware.best_local_model(models, prefer=split_target(settings.trivial_model)[1])
     spec = hardware.specs()
     measured = hardware.measure(want or models[0]["name"])
     if measured["ok"]:

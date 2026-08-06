@@ -106,7 +106,7 @@ class Skill:
         return self.unscoped and not self.always
 
 
-def _split(text: str) -> tuple[str, str]:
+def split_target(text: str) -> tuple[str, str]:
     """(frontmatter, body). A file with no frontmatter is all body, which keeps
     a hand-written note usable before its author has read any of this."""
     lines = text.splitlines()
@@ -127,7 +127,7 @@ def parse(path: Path, scope: str = "global") -> Skill | None:
     except OSError as exc:
         log.warning("cannot read %s: %s", path, exc)
         return None
-    head, body = _split(raw)
+    head, body = split_target(raw)
     meta: dict = {}
     if head.strip():
         try:
@@ -202,7 +202,7 @@ def scope_to(path: Path, tools: list[str]) -> str:
     except OSError as exc:
         return f"cannot read {path.name}: {exc}"
 
-    head, body = _split(raw)
+    head, body = split_target(raw)
     meta: dict = {}
     if head.strip():
         try:
@@ -250,7 +250,7 @@ def parse_text(raw: str) -> dict | None:
     Used to check a rewrite before it reaches disk. `parse` takes a path, and
     proving a file is still readable *after* writing it is one write too late.
     """
-    head, _ = _split(raw)
+    head, _ = split_target(raw)
     if not head.strip():
         return None
     try:

@@ -17,7 +17,7 @@ import subprocess
 import pytest
 
 from corparius import appexport, apps
-from corparius.config import Settings
+from corparius.config.settings import Settings
 from corparius.kernel.records import Difficulty
 
 APP = apps.App(

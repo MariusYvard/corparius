@@ -14,7 +14,7 @@ import requests
 
 from . import documents, inbox, llm
 from .agents import ROSTER, AgentSpec, Executor
-from .config import Settings
+from .config.settings import Settings
 from .hitl import ApprovalGate
 from .kernel.records import AgentRole
 from .llm import HybridRouter
@@ -169,7 +169,7 @@ def model_overrides(store, slug: str) -> dict[str, str]:
 def _known_target(model: str) -> bool:
     """`target:name` with a target this build routes to, prefix spelled out.
 
-    Deliberately **not** written on top of `llm._split`, which defaults an unknown
+    Deliberately **not** written on top of `split_target`, which defaults an unknown
     prefix to local so that a bare Ollama tag like `gemma4:e4b` works in the tier
     settings. That default makes `opnerouter:typo` indistinguishable from an Ollama
     tag — both come back as local — so a pin validated through it would accept the
@@ -179,7 +179,7 @@ def _known_target(model: str) -> bool:
     The refusal is reported, so the operator learns the prefix rather than
     wondering why one role got slow.
     """
-    from .llm import OPENAI_COMPAT_PROVIDERS
+    from .config.provider_table import OPENAI_COMPAT_PROVIDERS
 
     prefix, sep, rest = str(model or "").partition(":")
     if not sep or not rest.strip():

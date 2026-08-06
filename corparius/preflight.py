@@ -39,7 +39,8 @@ from dataclasses import dataclass, field
 import requests
 
 from . import cfg
-from .llm import OPENAI_COMPAT_PROVIDERS, _split, list_models
+from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
+from .llm import list_models
 
 log = logging.getLogger("corparius.preflight")
 
@@ -446,7 +447,7 @@ def skipped(settings) -> list[tuple[str, str]]:
     steps = fallback if isinstance(fallback, (list, tuple)) else str(fallback).split(",")
     tiers += [("fallback", str(s).strip()) for s in steps if str(s).strip()]
     for tier, model in tiers:
-        provider, name = _split(str(model or ""))
+        provider, name = split_target(str(model or ""))
         if model and (provider not in OPENAI_COMPAT_PROVIDERS or not name):
             out.append((tier, str(model)))
     return out
@@ -465,7 +466,7 @@ def targets(settings) -> list[tuple[str, str, str]]:
         ("normal", settings.normal_model),
         ("hard", settings.hard_model),
     ):
-        provider, name = _split(str(model or ""))
+        provider, name = split_target(str(model or ""))
         if provider in OPENAI_COMPAT_PROVIDERS and name:
             out.append((tier, provider, name))
     # `llm_fallback` is already a list on Settings; it is a comma string only in
@@ -475,7 +476,7 @@ def targets(settings) -> list[tuple[str, str, str]]:
     fallback = getattr(settings, "llm_fallback", "") or []
     steps = fallback if isinstance(fallback, (list, tuple)) else str(fallback).split(",")
     for step in steps:
-        provider, name = _split(str(step).strip())
+        provider, name = split_target(str(step).strip())
         if provider in OPENAI_COMPAT_PROVIDERS and name:
             out.append(("fallback", provider, name))
     # Same model twice is one probe: the answer cannot differ, and each probe is

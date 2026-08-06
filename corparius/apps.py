@@ -206,7 +206,7 @@ def run(app: App, slug: str, store, user_input: str, company: dict | None = None
     """
     import requests
 
-    from .config import Settings
+    from .config.settings import Settings
     from .llm import HybridRouter, ProviderError
 
     settings = Settings()

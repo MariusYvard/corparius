@@ -1,6 +1,6 @@
 """The doctor must diagnose without crashing in every mode and say what to do."""
 
-from corparius.config import Settings
+from corparius.config.settings import Settings
 from corparius.doctor import run_checks
 
 
@@ -158,7 +158,7 @@ def test_routing_check_is_green_when_every_tier_resolves(tmp_path, monkeypatch):
 
 
 def _doctor_settings(**over):
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     s = Settings()
     s.llm_mock = False
@@ -322,7 +322,7 @@ def test_the_doctor_names_a_company_whose_budget_will_freeze_it(tmp_path, monkey
     the log said the breaker tripped without saying which ceiling. Raised to
     60000 the same 24 ticks ran with none."""
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     _company(tmp_path, "vigil", 8000)
@@ -333,7 +333,7 @@ def test_the_doctor_names_a_company_whose_budget_will_freeze_it(tmp_path, monkey
 
 def test_a_workable_ceiling_is_not_flagged(tmp_path, monkeypatch):
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     _company(tmp_path, "acme", 60000)
@@ -347,7 +347,7 @@ def test_the_operators_own_number_is_reported_never_overridden(tmp_path, monkeyp
     the freeze it would prevent."""
     from corparius import company as company_mod
     from corparius import doctor
-    from corparius.config import Settings
+    from corparius.config.settings import Settings
 
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     _company(tmp_path, "vigil", 8000)

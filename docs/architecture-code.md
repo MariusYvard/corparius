@@ -64,13 +64,23 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 
 ## Où en est le chantier
 
-L'étape 1 est faite. Ce que le rang 0 a coûté et rapporté, mesuré :
+L'étape 1 est faite, l'étape 2 commencée. Mesuré :
 
 | Compteur | Au plan | Aujourd'hui |
 | --- | --- | --- |
-| Arêtes montantes | 4 | **2** (`settings_spec→llm`, `doctor→appserver`) |
-| Cycles d'imports | 5 | **3** |
+| Arêtes montantes | 4 | **1** (`doctor→appserver`) |
+| Cycles d'imports | 5 | **3**, dont deux ont rétréci |
 | Modules important `subprocess` | 4 | **1** (`kernel/proc.py`) |
+| Ce que charge la lecture d'un réglage | `requests`, `subprocess`, `ssl`, `sqlite3` | **`sqlite3`** |
+
+La dernière ligne est le gain que le plan annonçait comme le moins cher du chantier, et il
+l'était : `settings_spec` importait `llm` **à une ligne sur 1 380**, pour lire
+`OPENAI_COMPAT_PROVIDERS`. Le registre est maintenant `config/provider_table.py` au rang 1,
+avec `split_target` (l'ancien `llm._split`, privé et atteint depuis onze modules) — parce que
+décider si `groq:` est un préfixe de fournisseur demande de savoir lesquels sont enregistrés.
+
+Effet de bord non prévu par le plan : `hardware` et `agents` n'importaient `llm` que pour
+`_split`, et `agents` est le module dont chaque tour d'agent payait cet import.
 
 Les deux cycles morts ne l'ont pas été par le déplacement lui-même mais par ce que le
 déplacement a rendu visible : `{cfg, secretbox}` en séparant la cryptographie de la

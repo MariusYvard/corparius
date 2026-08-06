@@ -14,9 +14,10 @@ from pathlib import Path
 import requests
 
 from . import cfg, permissions
-from .config import Settings
+from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
+from .config.settings import Settings
 from .kernel import paths
-from .llm import OPENAI_COMPAT_PROVIDERS, _split, list_models
+from .llm import list_models
 from .store import SCHEMA_VERSION, Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -579,19 +580,19 @@ def _check_ollama(s: Settings) -> tuple:
     tier cannot run. Local as the last resort is a fact, said as one.
     """
     tiers = [s.trivial_model, s.normal_model, s.hard_model]
-    serves_a_tier = [m for m in tiers if _split(m)[0] == "local"]
+    serves_a_tier = [m for m in tiers if split_target(m)[0] == "local"]
     try:
         r = requests.get(f"{s.ollama_url.rstrip('/')}/api/tags", timeout=3)
         r.raise_for_status()
         have = {m.get("name", "").split(":latest")[0] for m in r.json().get("models", [])}
-        wanted = {_split(m)[1] for m in tiers if _split(m)[0] == "local"} | {
+        wanted = {split_target(m)[1] for m in tiers if split_target(m)[0] == "local"} | {
             s.local_model,
             s.embed_model,
         }
         missing = {w for w in wanted if w and w not in have and w.split(":")[0] not in have}
         if missing:
             pulls = " && ".join(f"ollama pull {m}" for m in sorted(missing))
-            blocking = {w for w in missing if w in {_split(m)[1] for m in serves_a_tier}}
+            blocking = {w for w in missing if w in {split_target(m)[1] for m in serves_a_tier}}
             if blocking:
                 return (
                     "warn",
@@ -624,7 +625,7 @@ def _check_ollama(s: Settings) -> tuple:
         # A model bigger than the machine will never load, however reachable
         # Ollama is. Answered from specs alone — no measurement needed.
         for tier in tiers:
-            target, name = _split(tier)
+            target, name = split_target(tier)
             if target != "local" or not name:
                 continue
             size = next(
@@ -796,7 +797,7 @@ def _check_tier_coherence(s: Settings) -> tuple:
         ("normal", s.normal_model),
         ("hard", s.hard_model),
     ):
-        target, _ = _split(model)
+        target, _ = split_target(model)
         if target in ("local", "claudecode"):
             continue
         if target == "cloud":
@@ -845,7 +846,7 @@ def _check_pinned_models(s: Settings, store: Store | None) -> tuple:
     for slug in company_mod.list_slugs():
         for role, model in model_overrides(store, slug).items():
             total += 1
-            target, _ = _split(model)
+            target, _ = split_target(model)
             if target in ("local", "claudecode"):
                 continue
             if target == "cloud":
@@ -940,7 +941,7 @@ def _check_model_catalog(s: Settings) -> tuple:
         ("normal", s.normal_model),
         ("hard", s.hard_model),
     ):
-        target, name = _split(model)
+        target, name = split_target(model)
         if target not in OPENAI_COMPAT_PROVIDERS or not name:
             continue
         spec = OPENAI_COMPAT_PROVIDERS[target]

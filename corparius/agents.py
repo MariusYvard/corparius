@@ -13,8 +13,8 @@ import logging
 from dataclasses import dataclass
 
 from . import cfg, structured
+from .config.provider_table import split_target
 from .kernel.records import AgentRole, Difficulty, ToolResult
-from .llm import _split
 from .permissions import risk_of
 from .safety import BudgetExceeded, LoopGuard
 from .tools import TOOLS
@@ -425,7 +425,7 @@ class Executor:
         # exercise this path instead of skipping it.
         if getattr(self.router.settings, "llm_mock", False):
             return True
-        _, name = _split(model)
+        _, name = split_target(model)
         store = getattr(ctx, "store", None)
         if store is None:
             return False

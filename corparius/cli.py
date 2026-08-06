@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from . import company
-from .config import Settings, settings, setup_logging
+from .config.settings import Settings, settings, setup_logging
 from .kernel import paths
 from .store import Store
 from .tools import TOOLS
@@ -359,9 +359,9 @@ def cmd_bench(args) -> None:
         raise SystemExit(1)
     # Measure the model that would actually be used, not the smallest one:
     # a benchmark of something the company will never run answers nothing.
-    from .llm import _split
+    from .config.provider_table import split_target
 
-    want = hardware.best_local_model(models, prefer=_split(settings.trivial_model)[1])
+    want = hardware.best_local_model(models, prefer=split_target(settings.trivial_model)[1])
     spec = hardware.specs()
     result = hardware.measure(want or models[0]["name"])
     if not result["ok"]:

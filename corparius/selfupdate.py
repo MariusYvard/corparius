@@ -126,7 +126,7 @@ def why_not() -> str:
 
 
 def _data_path() -> str:
-    from .config import Settings
+    from .config.settings import Settings
 
     return Settings().data_path
 

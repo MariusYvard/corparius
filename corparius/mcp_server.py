@@ -15,7 +15,7 @@ import threading
 from . import deploy as deploy_mod
 from . import sitegen
 from .cli import _load_company
-from .config import settings
+from .config.settings import settings
 from .kernel import paths
 from .store import Store
 

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import NoReturn
 
 from . import skillimport, skills
-from .config import Settings
+from .config.settings import Settings
 from .kernel import paths
 
 

@@ -1,7 +1,7 @@
 """A simulated day must run every enabled agent, record its work, and hold the
 money-moving tool at the human gate until it is approved."""
 
-from corparius.config import Settings
+from corparius.config.settings import Settings
 from corparius.kernel.records import AgentRole
 from corparius.orchestrator import Runtime, due_roles
 from corparius.store import Store

@@ -139,7 +139,7 @@ def test_every_hinted_tool_exists(tmp_path):
     """A skill naming a tool nobody has is read, parsed and then never applied.
     The doctor catches it for hand-written skills; the mapping must not be able
     to produce one in the first place."""
-    from corparius.tools import TOOLS
+    from corparius.tools.registry import TOOLS
 
     for name, tools in skillimport.TOOL_HINTS.items():
         unknown = [t for t in tools if t not in TOOLS]

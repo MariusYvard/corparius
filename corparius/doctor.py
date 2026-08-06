@@ -393,7 +393,7 @@ def _check_skills(s: Settings) -> tuple:
     if not s.skills_enabled:
         return ("ok", "skills", "off (CORP_SKILLS_ENABLED=false)")
     from . import skills as skills_mod
-    from .tools import TOOLS
+    from .tools.spec import SPEC
 
     base = paths.companies_dir()
     slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
@@ -409,7 +409,7 @@ def _check_skills(s: Settings) -> tuple:
             "companies/<slug>/skills/ to teach a company its own trade.",
         )
     unknown = sorted(
-        f"{s_.name}:{t}" for s_ in found.values() for t in s_.allowed_tools if t not in TOOLS
+        f"{s_.name}:{t}" for s_ in found.values() for t in s_.allowed_tools if t not in SPEC
     )
     if unknown:
         return (

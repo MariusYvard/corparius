@@ -21,12 +21,13 @@ did exactly what the attacker asked.
 
 import pytest
 
-from corparius import agents, apps
+from corparius import apps
 from corparius.config import permissions
 from corparius.kernel.records import LLMResult, Usage
+from corparius.roster import ROSTER
 from corparius.store import Store
 from corparius.structured import Result
-from corparius.tools import TOOLS
+from corparius.tools.registry import TOOLS
 
 # What an attacker writes when they know what they are doing.
 HOSTILE = (
@@ -42,7 +43,7 @@ HOSTILE = (
 def test_no_playbook_is_built_from_model_output():
     """Routing stays out of the model. Every tool an agent may run is a literal
     in the roster, written by a person, read by code."""
-    for role, spec in agents.ROSTER.items():
+    for role, spec in ROSTER.items():
         assert spec.playbook, f"{role} has no playbook"
         for name in spec.playbook:
             assert name in TOOLS, f"{role} names a tool that does not exist: {name}"
@@ -163,15 +164,15 @@ def test_a_run_where_every_model_reply_is_an_attack_still_only_runs_playbooks(
         "name": "T",
         "offer": {"product": "p", "price_eur": 9},
         "icp": {"segment": "s", "channels": ["linkedin"], "pains": ["p"]},
-        "agents": dict.fromkeys(agents.ROSTER, True) | {"ceo": True},
+        "agents": dict.fromkeys(ROSTER, True) | {"ceo": True},
         "budgets": {"session_tokens": 200000, "tokens_per_minute": 200000},
     }
-    company["agents"] = {role.value: True for role in agents.ROSTER}
+    company["agents"] = {role.value: True for role in ROSTER}
     Runtime(Settings(), store).run(company, ticks=12)
 
     actions = store.recent_actions("t", limit=500)
     ran = {row["tool"] for row in actions}
-    playbooked = {name for spec in agents.ROSTER.values() for name in spec.playbook}
+    playbooked = {name for spec in ROSTER.values() for name in spec.playbook}
     # `circuit_breaker_freeze` and the like are written by the runtime itself.
     surprises = {t for t in ran if t in TOOLS and t not in playbooked}
     assert surprises == set(), f"a tool ran that no playbook names: {surprises}"
@@ -270,7 +271,7 @@ def test_nothing_an_agent_drafts_is_built_from_an_email_body():
     """
     import inspect
 
-    from corparius import tools as tools_mod
+    from corparius.tools import effects as tools_mod
 
     source = inspect.getsource(tools_mod)
     # The mail-reading tools return counts and senders; their bodies are used

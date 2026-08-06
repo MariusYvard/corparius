@@ -15,8 +15,9 @@ import pytest
 from corparius import agents
 from corparius.config import cfg
 from corparius.kernel.records import AgentRole
+from corparius.roster import ROSTER
 from corparius.store import Store
-from corparius.tools import TOOLS
+from corparius.tools.registry import TOOLS
 
 
 def _ctx(store, slug="t", channel="linkedin", structured=None):
@@ -111,7 +112,7 @@ def test_the_social_agent_stands_down_once_the_queue_is_full(tmp_path, monkeypat
     for n in range(3):
         store.add_draft("t", "social", "linkedin", f"post {n}", state="queued")
     done: list[str] = []
-    assert _Exec(store)._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], done) is True
+    assert _Exec(store)._stood_down("t", ROSTER[AgentRole.SOCIAL], done) is True
     assert "stood down" in done[0] and "3 post(s)" in done[0]
     store.close()
 
@@ -121,7 +122,7 @@ def test_it_keeps_working_while_the_queue_is_shallow(tmp_path, monkeypatch):
     cfg.invalidate()
     store = Store(str(tmp_path))
     store.add_draft("t", "social", "linkedin", "one", state="queued")
-    assert _Exec(store)._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], []) is False
+    assert _Exec(store)._stood_down("t", ROSTER[AgentRole.SOCIAL], []) is False
     store.close()
 
 
@@ -135,7 +136,7 @@ def test_the_operator_is_told_once_not_once_per_tick(tmp_path, monkeypatch):
         store.add_draft("t", "social", "linkedin", f"p{n}", state="queued")
     ex = _Exec(store)
     for _ in range(5):
-        ex._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], [])
+        ex._stood_down("t", ROSTER[AgentRole.SOCIAL], [])
     notices = [i for i in store.list_inbox("t") if "piling up" in i["title"]]
     assert len(notices) == 1, "one notice, however many turns stood down"
     assert "4 posts are written" in notices[0]["body"]
@@ -150,7 +151,7 @@ def test_no_other_role_stands_down_on_social_drafts(tmp_path, monkeypatch, role)
     cfg.invalidate()
     store = Store(str(tmp_path))
     store.add_draft("t", "social", "linkedin", "p", state="queued")
-    assert _Exec(store)._stood_down("t", agents.ROSTER[role], []) is False
+    assert _Exec(store)._stood_down("t", ROSTER[role], []) is False
     store.close()
 
 
@@ -209,10 +210,10 @@ def test_publishing_one_actually_releases_the_agent(tmp_path, monkeypatch):
     store = Store(str(tmp_path))
     store.add_draft("t", "social", "linkedin", "queued one", state="queued")
     newest = store.add_draft("t", "social", "linkedin", "still a draft", state="draft")
-    assert _Exec(store)._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], []) is True
+    assert _Exec(store)._stood_down("t", ROSTER[AgentRole.SOCIAL], []) is True
 
     store.set_draft_state(newest, "published")
-    assert _Exec(store)._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], []) is False
+    assert _Exec(store)._stood_down("t", ROSTER[AgentRole.SOCIAL], []) is False
     store.close()
 
 
@@ -222,9 +223,9 @@ def test_discarding_releases_it_too(tmp_path, monkeypatch):
     cfg.invalidate()
     store = Store(str(tmp_path))
     draft_id = store.add_draft("t", "social", "linkedin", "not good enough", state="queued")
-    assert _Exec(store)._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], []) is True
+    assert _Exec(store)._stood_down("t", ROSTER[AgentRole.SOCIAL], []) is True
     store.set_draft_state(draft_id, "discarded")
-    assert _Exec(store)._stood_down("t", agents.ROSTER[AgentRole.SOCIAL], []) is False
+    assert _Exec(store)._stood_down("t", ROSTER[AgentRole.SOCIAL], []) is False
     store.close()
 
 

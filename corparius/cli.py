@@ -12,7 +12,7 @@ from . import company
 from .config.settings import Settings, settings, setup_logging
 from .kernel import paths
 from .store import Store
-from .tools import TOOLS
+from .tools.spec import SPEC
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -577,7 +577,7 @@ def cmd_decide(args, status: str) -> None:
         from .config.permissions import PermissionEngine
 
         slug = approval["company"]
-        tool = TOOLS.get(approval["tool"])
+        tool = SPEC.get(approval["tool"])
         engine = PermissionEngine.from_settings(Settings(), cfg, store)
         if tool is None or engine.evaluate(tool, slug).rule == "hitl":
             print(f"{approval['tool']} is gated by name; it keeps asking")

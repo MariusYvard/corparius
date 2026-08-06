@@ -2,8 +2,8 @@
 
 import types
 
-from corparius import tools
 from corparius.store import Store
+from corparius.tools import effects as tools
 
 
 def test_wip_count_and_flow_metrics(tmp_path):

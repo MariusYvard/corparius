@@ -3,11 +3,12 @@ may only propose."""
 
 import types
 
-from corparius import tools
 from corparius.config.settings import Settings
 from corparius.orchestrator import Runtime
 from corparius.store import Store
 from corparius.structured import Result
+from corparius.tools import effects as tools
+from corparius.tools.registry import TOOLS
 
 
 def _settings(tmp) -> Settings:
@@ -223,6 +224,6 @@ def test_a_second_idea_costs_nothing_to_refuse(tmp_path):
     guard it would pay for a proposal the effect then discards."""
     store = Store(str(tmp_path))
     tools._propose_task(_ctx(store, structured=_idea("Answer the refund tickets")))
-    assert "already has an idea" in tools.TOOLS["propose_task"].skip_reason(_ctx(store))
-    assert tools.TOOLS["propose_task"].skip_reason(_ctx(store, role="design")) == ""
+    assert "already has an idea" in TOOLS["propose_task"].skip_reason(_ctx(store))
+    assert TOOLS["propose_task"].skip_reason(_ctx(store, role="design")) == ""
     store.close()

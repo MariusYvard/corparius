@@ -15,7 +15,7 @@ from corparius import webui
 from corparius.kernel.records import AgentRole
 from corparius.orchestrator import cadence_overrides, due_roles, paused_roles
 from corparius.store import Store
-from corparius.tools import TOOLS
+from corparius.tools.registry import TOOLS
 
 SLUG = "vigil"
 ENABLED = {r.value: True for r in AgentRole}

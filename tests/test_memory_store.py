@@ -9,10 +9,11 @@ read positionally by set_daily_plan.
 
 import types
 
-from corparius.agents import ROSTER, _messages, language_line
+from corparius.agents import _messages, language_line
 from corparius.kernel.records import AgentRole
+from corparius.roster import ROSTER
 from corparius.store import Store
-from corparius.tools import TOOLS
+from corparius.tools.registry import TOOLS
 
 
 def test_a_fact_survives_and_comes_back(tmp_path):

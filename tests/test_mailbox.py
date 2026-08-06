@@ -6,9 +6,10 @@ answered, which is the one signal it exists to chase.
 
 import types
 
-from corparius import mailbox, tools
+from corparius import mailbox
 from corparius.config import cfg
 from corparius.store import Store
+from corparius.tools import effects as tools
 
 
 def test_unconfigured_mailbox_is_an_empty_layer_not_a_crash(monkeypatch):

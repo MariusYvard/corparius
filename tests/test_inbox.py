@@ -110,7 +110,7 @@ def test_a_parked_question_is_not_claimed_meanwhile(tmp_path):
 
 
 def test_the_ask_operator_tool_asks_then_reports_the_answer(tmp_path):
-    from corparius.tools import TOOLS
+    from corparius.tools.registry import TOOLS
 
     store = Store(str(tmp_path))
     ctx = _ctx(store, "support")

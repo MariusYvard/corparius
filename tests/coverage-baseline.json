@@ -1,6 +1,6 @@
 {
   "corparius/__init__.py": 100.0,
-  "corparius/agents.py": 92.6,
+  "corparius/agents.py": 92.3,
   "corparius/appcli.py": 67.6,
   "corparius/appexport.py": 95.5,
   "corparius/apps.py": 97.2,
@@ -42,11 +42,12 @@
   "corparius/mailbox.py": 22.8,
   "corparius/modelinfo.py": 91.6,
   "corparius/ollama_setup.py": 40.3,
-  "corparius/orchestrator.py": 84.7,
+  "corparius/orchestrator.py": 84.8,
   "corparius/plugincli.py": 80.0,
   "corparius/plugins.py": 82.8,
   "corparius/preflight.py": 90.1,
   "corparius/provider_check.py": 62.3,
+  "corparius/roster.py": 100.0,
   "corparius/safety.py": 99.0,
   "corparius/secretscli.py": 27.0,
   "corparius/selfupdate.py": 82.5,
@@ -58,7 +59,10 @@
   "corparius/skills.py": 90.8,
   "corparius/store.py": 95.1,
   "corparius/structured.py": 90.7,
-  "corparius/tools.py": 90.5,
+  "corparius/tools/__init__.py": 100.0,
+  "corparius/tools/effects.py": 90.3,
+  "corparius/tools/registry.py": 91.7,
+  "corparius/tools/spec.py": 100.0,
   "corparius/update_check.py": 79.6,
   "corparius/webui.py": 75.3
 }

@@ -13,12 +13,13 @@ from dataclasses import dataclass, field, replace
 import requests
 
 from . import documents, inbox, llm
-from .agents import ROSTER, AgentSpec, Executor
+from .agents import Executor
 from .config.permissions import PermissionEngine
 from .config.settings import Settings
 from .hitl import ApprovalGate
 from .kernel.records import AgentRole
 from .llm import HybridRouter
+from .roster import ROSTER, AgentSpec
 from .safety import CircuitBreaker, TokenBudget
 from .skills import SkillLoader
 

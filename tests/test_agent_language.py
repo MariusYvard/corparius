@@ -11,7 +11,8 @@ and `agents._messages` is the single place every drafting tool passes through.
 
 from corparius import agents
 from corparius.company import LANGUAGES
-from corparius.tools import TOOLS
+from corparius.roster import ROSTER
+from corparius.tools.registry import TOOLS
 
 
 class _Ctx:
@@ -28,9 +29,7 @@ def _system(language):
         "language": language,
         "offer": {"product": "Check-in anonyme"},
     }
-    messages = agents._messages(
-        agents.ROSTER["support"], _Ctx(company), TOOLS["draft_support_reply"]
-    )
+    messages = agents._messages(ROSTER["support"], _Ctx(company), TOOLS["draft_support_reply"])
     assert messages[0]["role"] == "system"
     return messages[0]["content"]
 
@@ -45,7 +44,7 @@ def test_the_language_reaches_every_agent_in_the_roster():
     """One insertion point, so this is really checking that no role bypasses
     `_messages` — which is the property that made the fix one line."""
     company = {"name": "V", "slug": "v", "language": "fr", "offer": {"product": "p"}}
-    for role, spec in agents.ROSTER.items():
+    for role, spec in ROSTER.items():
         assert spec.playbook, f"{role} has an empty playbook"
         for name in spec.playbook:
             system = agents._messages(spec, _Ctx(company), TOOLS[name])[0]["content"]

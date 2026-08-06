@@ -16,9 +16,11 @@ and unreachable, in a prompt rather than in code.
 
 import pytest
 
-from corparius import documents, tools
+from corparius import documents
 from corparius.store import Store
-from corparius.tools import ROLE_TOOL, TOOLS
+from corparius.tools import effects as tools
+from corparius.tools.registry import TOOLS
+from corparius.tools.spec import ROLE_TOOL
 
 
 class _Ctx:
@@ -124,7 +126,7 @@ def test_it_runs_from_a_task_and_never_from_a_cadence():
     """On a playbook it would write a note about nothing every turn, which is the
     queue of drafts nobody reads in another costume."""
     assert TOOLS["write_note"].by_task_only is True
-    from corparius.agents import ROSTER
+    from corparius.roster import ROSTER
 
     on_a_playbook = {n for spec in ROSTER.values() for n in spec.playbook}
     assert "write_note" not in on_a_playbook

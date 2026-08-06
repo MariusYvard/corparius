@@ -80,9 +80,9 @@ class PluginAPI:
     def register_tool(self, tool) -> None:
         # Tools inherit the HITL gate and the safety firewall at dispatch, so a
         # plugin tool marked hitl=True still waits for a human like any other.
-        from . import tools
+        from .tools import registry
 
-        tools.TOOLS[tool.name] = tool
+        registry.TOOLS[tool.name] = tool
 
     def register_skill_dir(self, path) -> None:
         """Add a directory of SKILL.md folders to the search path. A plugin that
@@ -102,11 +102,11 @@ class PluginAPI:
         """Override fields of an existing agent's spec (system_prompt, playbook,
         cadence_hours, difficulty, model). Adding a brand-new role is not
         supported in this API version (AgentRole is a fixed enum)."""
-        from . import agents
+        from . import roster
         from .kernel.records import AgentRole
 
         key = role if isinstance(role, AgentRole) else AgentRole(str(role))
-        spec = agents.ROSTER.get(key)
+        spec = roster.ROSTER.get(key)
         if spec is None:
             raise ValueError(f"unknown agent role: {role}")
         for field_name, value in overrides.items():

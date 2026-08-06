@@ -187,10 +187,10 @@ def scope_to(path: Path, tools: list[str]) -> str:
     written back byte for byte — this rewrites a header, it does not reformat
     somebody's file.
     """
-    from .tools import TOOLS
+    from .tools.spec import SPEC
 
     tools = [t.strip() for t in tools if t.strip()]
-    unknown = [t for t in tools if t not in TOOLS]
+    unknown = [t for t in tools if t not in SPEC]
     if unknown:
         # A skill scoped to a tool nobody has never applies, silently. That is a
         # worse outcome than the tax it was meant to fix.

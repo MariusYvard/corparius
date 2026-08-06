@@ -384,7 +384,7 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     if ads_eur and not agents["ads"]:
         warnings.append("budgets.daily_ad_spend_eur is set but the ads agent is off")
 
-    from .tools import TOOLS  # local import: tools imports config, config imports cfg
+    from .tools.spec import SPEC
 
     hitl_in = raw.get("hitl_tools")
     hitl = [
@@ -392,7 +392,7 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
         for x in (hitl_in if isinstance(hitl_in, list) else DEFAULT_HITL)
         if str(x).strip()
     ]
-    unknown_tools = [x for x in hitl if x not in TOOLS]
+    unknown_tools = [x for x in hitl if x not in SPEC]
     if unknown_tools:
         warnings.append(f"hitl_tools: {', '.join(unknown_tools)} match no tool and gate nothing")
 
@@ -424,7 +424,7 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
         allow = [
             str(x).strip() for x in (raw_allow if isinstance(raw_allow, list) else []) if str(x)
         ]
-        unknown_allow = [x for x in allow if x not in TOOLS]
+        unknown_allow = [x for x in allow if x not in SPEC]
         if unknown_allow:
             warnings.append(
                 f"auto_allow: {', '.join(unknown_allow)} match no tool and allow nothing"

@@ -87,3 +87,48 @@ class ApprovalRequest:
     # 80 characters or the same request would look new on every tick — which
     # meant approving an outreach email nobody could read.
     detail: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Trace:
+    """Where a drafted answer came from, kept next to the action it produced.
+
+    `structured.ask` has always returned `ok`, `fell_back`, `attempts`, `source` and `errors`.
+    Counted across the package: **12 callers read `.data`, 3 read `.ok`, 1 reads `.source`, 1
+    reads `.fell_back`, and none read `.errors` or `.attempts`.** `record_action` took six
+    columns, one of them a boolean, so after the turn ended none of it existed anywhere.
+
+    That is not a new observation — `_empty_draft`'s docstring already carries it, with the
+    bill: an operator read "Nothing usable drafted" as a broken site generator while groq and
+    cerebras were both answering 429, **365 026 tokens in**. `_empty_draft` was written as the
+    fix and it is *optional*, which is how it came to be "the fourth caller to read only one
+    field". NVIDIA's NOOA lists the answer as a property rather than a helper — all model
+    calls traced automatically, meaning not at the caller's discretion
+    (docs/reverse-engineering/nooa.md).
+
+    Rank 0, and the layer rule is why: the executor holds a `structured.Result`, which is rank
+    4, and `store` is rank 2. It cannot be handed the harness's own type, so the fields that
+    are worth keeping get a record of their own — which is a better contract anyway, because
+    it says exactly which five of them matter.
+    """
+
+    source: str = ""  # "provider:model" that answered
+    attempts: int = 0
+    fell_back: bool = False
+    errors: str = ""
+
+    @classmethod
+    def of(cls, result: object) -> Trace:
+        """From whatever the harness returned, or an empty trace from None.
+
+        Duck-typed on purpose: a rank-0 record may not import `structured`, and every test
+        that fakes a harness result fakes a different shape of it.
+        """
+        if result is None:
+            return cls()
+        return cls(
+            source=str(getattr(result, "source", "") or ""),
+            attempts=int(getattr(result, "attempts", 0) or 0),
+            fell_back=bool(getattr(result, "fell_back", False)),
+            errors="; ".join(str(e) for e in (getattr(result, "errors", None) or []))[:400],
+        )

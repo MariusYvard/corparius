@@ -527,6 +527,57 @@ def _check_memory(s: Settings, store: Store | None) -> tuple:
     )
 
 
+def _check_routing_history(s: Settings, store: Store | None) -> tuple:
+    """What actually answered the last drafted turns, from the journal.
+
+    Every other provider check here asks whether a provider *would* answer — a key is set, a
+    catalogue lists a model, a probe once succeeded. This one reads what happened. The
+    difference is the whole reason schema 18 exists: an operator read "Nothing usable drafted"
+    as a broken site generator while groq and cerebras were both returning 429, and there was
+    nowhere to see that the chain had been falling back all day. 365 026 tokens.
+
+    A fall-back is not a failure — the chain exists to be walked, and one step down is the
+    product working. A *majority* of turns walking it means the tier is pointed at something
+    that does not answer, and that is worth a warning rather than a line in a log.
+    """
+    if store is None:
+        return ("ok", "history", "no store yet")
+    base = paths.companies_dir()
+    slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
+    drafted = fell_back = retries = 0
+    answered: dict[str, int] = {}
+    for slug in slugs:
+        health = store.routing_health(slug)
+        drafted += health["drafted"]
+        fell_back += health["fell_back"]
+        retries += health["retries"]
+        for source, n in health["answered_by"].items():
+            answered[source] = answered.get(source, 0) + n
+    if not drafted:
+        # Distinguished from "everything answered": no drafted turn has been journalled with a
+        # source yet, which on a store predating schema 18 is the honest answer and not a
+        # verdict about the providers.
+        return ("ok", "history", "no drafted turn recorded yet")
+    top = ", ".join(
+        f"{name} {n}" for name, n in sorted(answered.items(), key=lambda kv: -kv[1])[:3]
+    )
+    share = fell_back / drafted
+    detail = f"{drafted} drafted turn(s): {top}"
+    if retries:
+        detail += f"; {retries} repair round(s)"
+    if share >= 0.5:
+        return (
+            "warn",
+            "history",
+            f"{detail}. {fell_back} of {drafted} fell back to a later step in the chain, so the "
+            "tier a role asks for is mostly not the one answering. Prove your models in the "
+            "console (Providers) and point the tier at one that does.",
+        )
+    if fell_back:
+        detail += f"; {fell_back} fell back"
+    return ("ok", "history", detail)
+
+
 def _check_machine(s: Settings, store: Store | None) -> tuple:
     """What this machine measured, and what it implies.
 
@@ -1025,6 +1076,7 @@ def _all_checks(s: Settings, store: Store | None) -> list[tuple]:
         _check_tier_coherence(s),
         _check_pinned_models(s, store),
         _check_preflight(s, store),
+        _check_routing_history(s, store),
         _check_model_catalog(s),
         _check_network(s),
         _check_claude_cli(s),

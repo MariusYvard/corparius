@@ -17,7 +17,7 @@ from . import structured
 from .config import cfg
 from .config.permissions import risk_of
 from .config.provider_table import split_target
-from .kernel.records import AgentRole, ToolResult
+from .kernel.records import AgentRole, ToolResult, Trace
 from .roster import AgentSpec
 from .safety import BudgetExceeded, LoopGuard
 from .tools.registry import TOOLS
@@ -436,6 +436,10 @@ class Executor:
             {**params, "risk": risk_of(tool), "why": decision.reason, "rule": decision.rule},
             result.output,
             result.ok,
+            # The routing detail, from the harness result set above. Recorded here because
+            # this is the one caller that has it — twelve tool effects read `.data` off the
+            # same object and eleven of them read nothing else.
+            Trace.of(ctx.structured),
         )
         if result.pending:
             log.info("[%s] paused for human approval on %s", spec.role.value, tool_name)

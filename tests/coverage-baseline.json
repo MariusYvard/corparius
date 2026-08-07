@@ -45,7 +45,7 @@
   "corparius/providers/deliverability.py": 88.5,
   "corparius/providers/deploy.py": 70.5,
   "corparius/providers/enrich.py": 89.1,
-  "corparius/providers/hardware.py": 63.2,
+  "corparius/providers/hardware.py": 64.0,
   "corparius/providers/integrations.py": 16.8,
   "corparius/providers/leadsource.py": 43.4,
   "corparius/providers/llm.py": 90.3,

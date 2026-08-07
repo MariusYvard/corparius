@@ -1814,7 +1814,7 @@ def _route_tiers_recommend(ctx):
     # One click to a coherent routing over the free providers actually connected:
     # flip mock off and cloud on, then fill every tier so none is left pointing at
     # an unconfigured provider (the trap the defaults leave after a single key).
-    from .llm import recommended_routing
+    from .routing import recommended_routing
 
     local_trivial, _why = hardware.recommended_local(ctx.store(), _fresh_settings())
     # What a preflight actually proved, so "recommended" never writes a tier

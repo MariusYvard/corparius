@@ -268,7 +268,7 @@ def plan(
     every tier — the behaviour this had before. `all_tiers` asks for that
     deliberately.
     """
-    from .llm import recommended_routing
+    from .routing import recommended_routing
 
     if all_tiers:
         return {**TOGGLES, **TIERS}

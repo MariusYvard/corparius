@@ -41,6 +41,7 @@ import requests
 from .config import cfg
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .llm import list_models
+from .routing import BLOCKED, CAPACITY, UNKNOWN, USABLE
 
 log = logging.getLogger("corparius.preflight")
 
@@ -50,10 +51,6 @@ MAX_TOKENS = 8
 PROMPT = "Reply with the single word: ok"
 TIMEOUT = 25
 
-USABLE = "usable"
-BLOCKED = "blocked"
-CAPACITY = "capacity"
-UNKNOWN = "unknown"
 
 # Transient by nature. 500 is in here on purpose: several free gateways return a
 # bare 500 while a model cold-starts, and a model that answers a minute later is
@@ -636,116 +633,6 @@ def save_measurement(store, m: Measurement) -> None:
     store.record_measurement(
         m.provider, m.model, m.tok_s, m.json_ok, m.samples, m.failures, m.vision_ok
     )
-
-
-def rank(
-    candidates: dict[str, dict],
-    tier: str = "normal",
-    catalogue: dict[str, dict] | None = None,
-    scores: dict[str, float] | None = None,
-) -> list[str]:
-    """Models best-first for a given tier, on evidence, in order of authority.
-
-    `candidates` is one provider's slice of `proven_map`. `catalogue` is
-    `modelinfo.cached(...)` — what the provider says a model *is*. Without it
-    this ranks on measurement alone, exactly as it did before.
-
-    Two things always come first, whatever the tier, because they are not
-    preferences:
-
-    1. **Blocked is excluded.** It cannot be called at all.
-    2. **JSON capability, where it was measured.** Every tool with a schema goes
-       through `structured.ask`, so a model that cannot return a JSON object
-       breaks most of the roster however capable it is on paper. Measured
-       beats declared here and it is not close: `cerebras:gpt-oss-120b`
-       advertises `structured_outputs` and was measured unable to do it. A
-       model never *measured* is not penalised — absence of evidence is not
-       evidence.
-    3. **Reliability.** Two failures in five samples drops a turn in five.
-
-    After that the tier decides, because the tiers want different things:
-
-    - **hard** — strategy and code. Reasoning support, a large context and a
-      recent generation matter more than speed; a slow model that thinks is the
-      right trade for work that runs a few times a day.
-    - **trivial** — a social post every two hours. Speed and a small model, and
-      capability barely enters into it.
-    - **normal** — capability and speed weighed together.
-
-    An operator score (see `modelinfo.operator_scores`) outranks the derived
-    signals when present, because someone who supplied one knows something this
-    code does not.
-    """
-    catalogue = catalogue or {}
-    tier = tier if tier in ("trivial", "normal", "hard") else "normal"
-    usable = {m: v for m, v in candidates.items() if v.get("state") == USABLE}
-    if not usable:
-        return []
-
-    def head(v):
-        """What no tier trades away: it must follow a schema, and it must not
-        drop turns."""
-        measured = v.get("samples") or 0
-        return (
-            0 if (not measured or v.get("json_ok")) else 1,
-            -round(v.get("reliability", 1.0) if measured else 1.0, 2),
-        )
-
-    def capability(model):
-        info = _describe(model, catalogue, scores)
-        # Recency stands in for generation: a 2026 model is a later generation
-        # than a 2024 one, and the catalogue dates every entry it lists.
-        return (
-            info["score"] if info.get("score") is not None else 0.0,
-            1 if info.get("reasoning") else 0,
-            info.get("context") or 0,
-            info.get("created") or 0.0,
-            info.get("params_b") or 0.0,
-        )
-
-    def speed(v):
-        return (-(v.get("tok_s") or 0.0), v.get("ms") or 10**6)
-
-    if tier == "hard":
-        # Strategy and code, a few times a day. A slow model that reasons is the
-        # right trade; speed is the tiebreak, not the criterion.
-        return sorted(
-            usable,
-            key=lambda m: (head(usable[m]), *[-x for x in capability(m)], *speed(usable[m]), m),
-        )
-    if tier == "trivial":
-        # A social post every two hours. A 120B model here is paying for
-        # capability nobody reads, so smaller wins ties.
-        return sorted(
-            usable,
-            key=lambda m: (
-                head(usable[m]),
-                *speed(usable[m]),
-                _describe(m, catalogue, scores).get("params_b") or 0.0,
-                m,
-            ),
-        )
-
-    # `normal` is the everyday work, and it is the one tier where neither axis
-    # should dominate. A lexicographic key cannot express that — sorting by
-    # speed first made `normal` identical to `trivial`, which is not a balance,
-    # it is speed with extra steps. So: position in the speed ordering weighed
-    # against position in the capability ordering.
-    #
-    # Speed counts double because this tier runs constantly, while capability
-    # still moves a model up. An equal weighting was tried and is degenerate:
-    # when the two orderings are exact opposites every model scores the same and
-    # the result collapses to alphabetical.
-    by_speed = sorted(usable, key=lambda m: (*speed(usable[m]), m))
-    by_capability = sorted(usable, key=lambda m: (*[-x for x in capability(m)], m))
-    place = {m: 2 * by_speed.index(m) + by_capability.index(m) for m in usable}
-    return sorted(usable, key=lambda m: (head(usable[m]), place[m], m))
-
-
-def _describe(model: str, catalogue: dict, scores: dict | None) -> dict:
-    from . import modelinfo
-
-    return modelinfo.describe(model, catalogue, scores)
 
 
 def proven_map(store, provider: str = "") -> dict[str, dict[str, dict]]:

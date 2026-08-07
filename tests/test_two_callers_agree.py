@@ -36,6 +36,7 @@ SHARED = {
     ("_edit_task", "task"): "app_tasks.edit",
     ("_deploy", "deploy"): "app_publish.publish",
     ("_set_settings", "set"): "app_settings.persist",
+    ("_create_company", "new"): "app_companies.create",
 }
 
 # Pairs that look like a pair and are not, with the reason. Audited by reading both sides.
@@ -47,11 +48,10 @@ DIFFERENT_JOBS = {
         "the page applies; on a one-shot CLI process that is the same settings object."
     ),
     ("_create_company", "init"): (
-        "`init` does not create a company, it stamps the state of one that exists. **There is "
-        "no CLI way to create a company at all** — an operator writes companies/<slug>/"
-        "company.yaml by hand, which is a real gap and not a divergence. Closing it means a "
-        "`new` command over `_create_company`'s validator, so a hand-written config and a "
-        "created one cannot disagree about what a company is."
+        "`init` does not create a company, it stamps the state of one that exists — a different "
+        "job, so not a divergence. The gap this row used to name (no CLI way to create a company "
+        "at all) is closed: `corparius new` pairs with `_create_company` through "
+        "`app_companies.create`, and that pair is in SHARED below."
     ),
     ("_ollama_pull", "bench"): (
         "`bench` measures what is installed; the pull downloads. Neighbours in the console's "

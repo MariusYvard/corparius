@@ -20,6 +20,15 @@ La console écrit tout ce que corparius lit. L'éditeur de société couvre chaq
 
 L'onglet Réglages couvre le reste, groupe par groupe, piloté par le registre `corparius/config/settings_spec.py` : ajouter un réglage est une ligne, pas une modification du HTML. Chaque champ affiche la couche qui lui répond et se met en lecture seule quand l'environnement du processus le fixe (voir la table de précédence du README) — un réglage n'est jamais ignoré en silence.
 
+**Sans navigateur, l'assistant aussi : `corparius new --name "Acme" --product "…"`.**
+Il n'y avait aucun moyen de créer une entreprise depuis un terminal — `init` initialise l'état
+d'une entreprise qui existe déjà, donc l'opérateur écrivait `companies/<slug>/company.yaml` à la
+main, en devinant la forme et les champs requis, sans que `company.validate` tourne à la
+création. Or c'est toute la promesse de l'assistant : deux champs suffisent, le reste vient du
+*même* validateur que l'éditeur, « donc une entreprise créée ici et une entreprise modifiée
+ensuite ne peuvent jamais être en désaccord sur ce qu'est une entreprise ». `--list-templates`
+montre les gabarits ; un champ explicite gagne toujours sur l'exemple du gabarit.
+
 **Sans navigateur : `corparius set CLE=valeur`.** La page et la commande passent par le même
 service (`corparius/app/settings.py`), donc elles refusent les mêmes valeurs avec les mêmes
 messages, et chaque clé part dans la couche qui peut la porter — le store pour un réglage

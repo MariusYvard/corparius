@@ -112,23 +112,37 @@ def cmd_tasks(args) -> None:
 
 
 def cmd_task(args) -> None:
+    """Edit a backlog task through the same service the console's backlog uses.
+
+    It used to call `store.update_task(id, **fields)` directly, which meant it had none of the
+    validation the console grew — and, worse, none of the `executable_fields` call on approval.
+    Measured on a real store before this: the command line accepted `--target not-a-real-agent`
+    and `--tool not-a-real-tool` and wrote both. And a task approved from here with no tool
+    closed "done (no tool mapped)" having done nothing, so the condition survived and the agent
+    proposed the same work again — 24 tasks for one role, 22 of them closed that way.
+    """
+    from .app import errors as app_errors
+    from .app import tasks as app_tasks
+
     store = _store()
-    fields = {}
-    if args.title is not None:
-        fields["title"] = args.title
-    if args.priority is not None:
-        fields["priority"] = args.priority
-    if args.target is not None:
-        fields["target"] = args.target
-    if args.tool is not None:
-        fields["tool"] = args.tool
-    if fields:
-        store.update_task(args.id, **fields)
-    if args.approve:
-        store.set_task_status(args.id, "approved", "validated via CLI")
-    elif args.reject:
-        store.set_task_status(args.id, "rejected", "refused via CLI")
-    print(f"task {args.id} updated")
+    decision = "approved" if args.approve else "rejected" if args.reject else None
+    try:
+        changed = app_tasks.edit(
+            store,
+            args.id,
+            title=args.title,
+            priority=args.priority,
+            target=args.target,
+            tool=args.tool,
+            decision=decision,
+            note="via CLI",
+        )
+    except app_errors.Refused as exc:
+        # The service raises the failure; the console turns it into a 400 and a terminal says it.
+        print(exc)
+        return
+    said = ", ".join(changed["changed"]) or "nothing"
+    print(f"task {changed['id']}: {said}" + (f" ({changed['decision']})" if decision else ""))
 
 
 def cmd_deploy(args) -> None:

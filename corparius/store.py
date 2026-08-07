@@ -853,10 +853,37 @@ class Store:
     def recall(self, company, query="", limit=5) -> list[dict]:
         """The facts most worth putting in front of this particular prompt.
 
-        Pinned first, then by similarity to the query, then by recency. Ranking
-        in Python over a few hundred rows rather than in SQL: the ordering is
-        semantic, and pushing it into the query would mean either a vector
-        extension or a LIKE that matches words instead of meaning."""
+        Pinned first, then by similarity to the query, then by recency. Ranked in Python
+        rather than in SQL, and the reason given here used to be wrong: it said the
+        alternative was "either a vector extension or a LIKE that matches words instead of
+        meaning". **FTS5 is compiled into the standard library's sqlite3** — measured, SQLite
+        3.50.4 — and it is neither of those; it is real BM25 ranking with no third dependency.
+        A docstring that rules out the option it is actually choosing against is worse than
+        one that says nothing.
+
+        Measured against the real corpus before deciding (55 facts, 13 933 characters, mean
+        fact 137 chars). FTS5 is not the right answer here, for a reason that has nothing to
+        do with quality:
+
+          * **The query is a whole prompt**, not keywords. `agents._recall` passes
+            `tool.draft_prompt(ctx)` — 40 to 613 characters, mean 258. `MATCH` takes a query
+            expression, so using it means inventing a keyword extractor, and the one written
+            for the measurement needed a hand-kept stop list, half of it stop-words from the
+            language line every prompt carries. That is a new heuristic, not a removed one.
+          * **It under-fills the top k.** On four real prompts FTS5 returned 5, 5, 2 and 1
+            candidates; an OR of a few keywords simply misses. This feature exists to put
+            `limit` facts in front of a prompt.
+          * The two rankings overlap on 0 to 2 of 5, and there is **no labelled data** here to
+            say which is right. Swapping on the strength of that would be replacing one
+            intuition with another.
+
+        What the same measurement did confirm is that this ranking discriminates: over the
+        real corpus the spread between best and worst is 0.32 to 0.41 with the median well
+        below the best, so it is selecting rather than shuffling. `tests/test_memory_store.py`
+        pins that.
+
+        `hash_embed` compares bags of words, and a prompt is a bag of words. FTS5 stays the
+        right tool for a search box, which this is not."""
         rows = [
             dict(r)
             for r in self.db.execute(

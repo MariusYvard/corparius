@@ -132,22 +132,35 @@ l'environnement ne permettait pas.
 Sans cette règle, la première compétence qu'un agent écrira sera « le serveur SMTP ne répond
 pas », et l'entreprise portera cette croyance pour toujours.
 
-### 4. Le rappel n'a pas besoin d'un plongement bricolé
+### 4. Une docstring qui écarte une option qu'elle n'a pas essayée — mesuré, puis abandonné
 
 `store.recall` classe par `cosine(hash_embed(requête), hash_embed(fait + pourquoi))`, et sa
-docstring justifie ce choix ainsi : pousser le tri dans SQL voudrait dire *« soit une
+docstring justifiait ce choix ainsi : pousser le tri dans SQL voudrait dire *« soit une
 extension vectorielle, soit un LIKE qui compare des mots au lieu du sens »*.
 
-C'est un faux dilemme, et il est vérifiable. **FTS5 est compilé dans le `sqlite3` de la
-bibliothèque standard** — mesuré sur cette machine, SQLite 3.50.4, `CREATE VIRTUAL TABLE …
-USING fts5` accepté, `ORDER BY rank` renvoyant un score BM25. Ce n'est ni une extension
-vectorielle ni un `LIKE` : c'est un classement lexical réel, avec radicalisation et
-pondération par rareté, à zéro dépendance. `hash_embed` est un sac de mots hachés écrit pour
-la détection de boucles ; il rend un service correct sur quelques dizaines de lignes et
-personne n'a mesuré ce qu'il vaut sur quelques centaines.
+Ce dilemme est faux, et c'est vérifiable : **FTS5 est compilé dans le `sqlite3` de la
+bibliothèque standard** — SQLite 3.50.4, `CREATE VIRTUAL TABLE … USING fts5` accepté,
+`ORDER BY rank` renvoyant du BM25. Ni extension vectorielle, ni `LIKE`, et zéro dépendance.
 
-Les deux se composent plutôt qu'ils ne s'opposent : FTS5 pour rappeler, le cosinus pour
-dédupliquer à l'écriture (`recall` s'en sert déjà à 0,95 pour refuser un doublon).
+**Ma conclusion l'était aussi.** J'en ai déduit qu'il fallait donc remplacer le cosinus ici.
+Mesuré sur la mémoire réelle de `vigil` — 55 faits, 13 933 caractères, fait moyen 137
+caractères — c'est non, pour une raison qui n'a rien à voir avec la qualité du classement :
+
+- **la requête est un prompt entier**, pas des mots-clés. `agents._recall` passe
+  `tool.draft_prompt(ctx)`, de 40 à 613 caractères. `MATCH` prend une expression, donc
+  l'utiliser demande d'écrire un extracteur de mots-clés — et celui de la mesure a eu besoin
+  d'une liste d'arrêt tenue à la main. Une heuristique de plus, pas une de moins ;
+- **il ne remplit pas le top k** : sur quatre prompts réels, 5, 5, **2 et 1** candidats ;
+- recouvrement de 0 à 2 sur 5, et **aucune donnée étiquetée** pour trancher.
+
+Ce que la mesure a confirmé, en revanche : le classement actuel **discrimine** — écart de 0,32
+à 0,41 entre le meilleur et le pire, médiane nettement sous le meilleur. `hash_embed` compare
+des sacs de mots, et un prompt est un sac de mots. La docstring dit maintenant cela, et FTS5
+reste le bon outil pour une barre de recherche, ce que ceci n'est pas.
+
+C'est la valeur d'une exigence que le plan portait déjà : *la migration doit venir avec sa
+mesure, sinon on remplace une intuition par une autre.* Elle a coûté une heure et évité un
+mauvais échange.
 
 ### Ce qui est refusé
 
@@ -168,20 +181,28 @@ Chez corparius, une compétence non portée coûte des jetons **sur chaque promp
 tour** — `always_on_chars()` est déjà là pour le dire. Livrer la production sans l'entretien
 serait construire une fuite dont le compteur existe déjà.
 
-## Où ça s'inscrit
+## Ce qui a été livré
 
-Rien de ceci n'est une étape nouvelle. Les quatre points tombent dans des étapes que le plan
-de refonte prévoit déjà, et c'est la raison de les inscrire maintenant plutôt que de les
-empiler après :
+Rien de ceci n'a été une étape nouvelle : les quatre points sont tombés dans des étapes que le
+plan prévoyait déjà, ce qui était la raison de les inscrire plutôt que de les empiler après.
 
-- l'outil d'écriture d'une compétence est une entrée du registre que **l'étape 3** coupe en
-  deux (`domain/tools/spec.py` en données, `registry.py` en effets), et il vit dans
-  `domain/skills`, où l'étape 3 envoie déjà `skillimport` ;
-- le compte d'usage et la péremption sont des colonnes, donc un mixin et une migration à
-  **l'étape 4**, avec le reste de `store/` ;
-- le rappel FTS5 est une requête de la table `memory`, donc le même mixin, à la même étape —
-  et c'est là que la docstring qui dit « soit une extension vectorielle, soit un LIKE » se
-  corrige ;
-- le curateur est un travail périodique du domaine, avec les mêmes garde-fous déterministes
-  que Hermes (archiver, jamais effacer ; épinglé intouchable ; passe par modèle **désactivée
-  par défaut**), et il se planifie comme le reste — donc `domain/`, après l'étape 3.
+| Point | État | Où |
+| --- | --- | --- |
+| Le compte d'usage | **fait**, schéma 17 | `store.record_skill_use`, appelé depuis `SkillLoader.context_for` — pas depuis `for_tool`, parce qu'afficher une compétence n'est pas l'utiliser |
+| L'outil d'écriture | **fait** | `tools/effects.write_skill`, sur le playbook du CEO, avec la portée fixée par le code |
+| Le garde-fou négatif | **fait** | `tools/effects.NEVER_RECORD` |
+| Le curateur | **fait** | `corparius/curator.py`, au passage de journée, sans passe par modèle |
+| Le rappel FTS5 | **abandonné, mesuré** | voir le point 4 ci-dessus |
+
+Trois choses ont été décidées à l'exécution et méritent d'être notées, parce qu'aucune n'était
+dans l'étude :
+
+- **la portée d'une compétence écrite par un agent est fixée par le code**, jamais par le
+  modèle : c'est l'outil qui a échoué. Une compétence non portée est donc *impossible* à
+  produire, ce qui retire structurellement le seul risque que cette fonctionnalité posait —
+  l'impôt sur chaque prompt de chaque tour ;
+- **le compteur a été livré avant le producteur**, parce que le curateur ne peut rien décider
+  sans lui. Livrer dans l'autre ordre, c'était construire la fuite à côté de sa jauge ;
+- **`forget_skill_use` est un vrai bug évité** : sans lui, une compétence réécrite sous le même
+  nom héritait d'un `last_used` d'avant l'archivage, donc le balayage suivant l'archivait
+  aussitôt — la compagnie répondant à une question et se faisant retirer la réponse.

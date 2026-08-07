@@ -481,14 +481,14 @@ def test_the_chat_prompt_cannot_be_read_as_translate_this_word():
     answered with the label instead of an answer."""
     import inspect
 
-    from corparius import webui as mod
+    from corparius.app import chat as mod
 
     # Comment lines stripped: the comment there quotes the old wording on
     # purpose, and banning the explanation along with the mistake would be a
     # test that punishes writing down why.
     source = "\n".join(
         line
-        for line in inspect.getsource(mod._chat).splitlines()
+        for line in inspect.getsource(mod.once).splitlines()
         if not line.strip().startswith("#")
     )
     assert "Write 'reply' in" not in source
@@ -499,7 +499,7 @@ def test_a_model_that_says_nothing_is_reported_as_such(server, monkeypatch):
     """`or message` echoed the operator's own question back, which reads like an
     answer and is not one."""
     from corparius import structured
-    from corparius import webui as mod
+    from corparius.app import chat as mod
 
     monkeypatch.setattr(
         structured,
@@ -518,7 +518,7 @@ def test_a_model_that_says_nothing_is_reported_as_such(server, monkeypatch):
 
 def test_a_real_answer_is_not_flagged_as_unanswered(server, monkeypatch):
     from corparius import structured
-    from corparius import webui as mod
+    from corparius.app import chat as mod
 
     monkeypatch.setattr(
         structured,

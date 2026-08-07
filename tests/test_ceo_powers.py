@@ -149,14 +149,21 @@ def test_the_reply_reports_what_happened_not_what_was_intended(store):
 # prose happened to carry an example. These tests hold both ends.
 
 
+# The two halves of the CEO's powers live in `app/`, not in the console: the prompt that
+# *describes* them in `app/chat.py`, the code that *reads* them in `app/directives.py`. They
+# were both in `webui.py` when these tests were written, and a path-shaped read is exactly what
+# a move breaks — the same trap the flat glob in test_registries.py set for the whole
+# restructuring. Read by inspecting the functions rather than by slicing a file at a marker, so
+# the next move does not silently make these assertions read nothing.
 def _chat_prompt() -> str:
-    """The system prompt the chat sends, read out of the source: building it for
-    real needs a store, a company and a live router, and what matters here is
-    whether the field is described at all."""
-    from pathlib import Path
+    """The system prompt the chat sends. Read from the source because building it for real needs
+    a store, a company and a live router, and what matters here is whether the field is
+    described at all."""
+    import inspect
 
-    src = Path("corparius/webui.py").read_text(encoding="utf-8")
-    return src[src.index("    system = (") : src.index("{snapshot}")]
+    from corparius.app import chat as app_chat
+
+    return inspect.getsource(app_chat.once)
 
 
 # `reply` is the answer itself; `intent` and `ticks` drive the console's buttons,
@@ -177,10 +184,11 @@ def test_every_power_is_named_in_the_prompt(field):
 def test_every_power_is_read_when_it_arrives(field):
     """The mirror direction: a field offered to the model and read by nobody is a
     promise the console makes and drops."""
-    from pathlib import Path
+    import inspect
 
-    src = Path("corparius/webui.py").read_text(encoding="utf-8")
-    applied = src[src.index("def _apply_directives") : src.index("def _chat")]
+    from corparius.app import directives
+
+    applied = inspect.getsource(directives.apply)
     assert f'"{field}"' in applied, f"`{field}` is offered to the CEO and never read"
 
 

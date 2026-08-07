@@ -150,7 +150,7 @@ explains each one:
 | | |
 | --- | --- |
 | Run a company | `new` `init` `run` `status` `board` `flow` `tasks` `task` |
-| Decide | `approvals` `approve` `reject` `rules` `inbox` `memory` |
+| Decide | `ceo` `approvals` `approve` `reject` `rules` `inbox` `memory` |
 | Ship | `site` `deploy` `repo` `apps` |
 | Models | `bench` `preflight` `claude` |
 | Extend | `plugin` `skills` |

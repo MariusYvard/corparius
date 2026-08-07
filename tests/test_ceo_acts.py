@@ -6,6 +6,7 @@ import threading
 import pytest
 
 from corparius import webui
+from corparius.app import chat as chat_mod
 from corparius.config import cfg
 from corparius.config.settings import Settings
 from corparius.kernel.records import LLMResult, Usage
@@ -30,7 +31,7 @@ def server(tmp_path, monkeypatch):
 def _model(monkeypatch, reply_json):
     # Force the router to return a scripted JSON so the harness classifies intent.
     monkeypatch.setattr(
-        webui.HybridRouter,
+        chat_mod.HybridRouter,
         "generate",
         lambda self, msgs, difficulty=None, model=None, max_tokens=512: LLMResult(
             text=reply_json, usage=Usage(5, 5), model="m", provider="fake"

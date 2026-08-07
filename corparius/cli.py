@@ -105,6 +105,40 @@ def cmd_new(args) -> int:
     return 0
 
 
+def cmd_ceo(args) -> int:
+    """Ask the CEO something, from a terminal.
+
+    The console had this and a terminal did not, and the barrier was one line — the chat history
+    lived in `UiState.chats`, a dict in the console's process. The service takes the history as a
+    parameter now, so this passes a list and gets a single turn. That limit is stated rather than
+    hidden: conversation that survives a process is a store table, not something a one-shot
+    command can pretend to have.
+
+    The CEO's powers come with it. Asked to pause a role or to focus the company, it acts and
+    then says what it changed — the same `directives.apply` the console calls, so the sentence
+    and the state agree here too.
+    """
+    from .app import chat as app_chat
+
+    cfg = _load_company(args.company)
+    # `Settings()` rather than the module-level snapshot, for the reason `_store()` spells
+    # out: the snapshot is taken at import, so it predates anything saved from the console —
+    # and in a test it predates the fixture, which is how this reached the real network once.
+    out = app_chat.once(_store(), Settings(), cfg["slug"], args.message, lang=args.lang)
+    print(out["reply"])
+    if out["unanswered"]:
+        return 1
+    where = " / ".join(part for part in (out["provider"], out["model"]) if part)
+    if where:
+        print()
+        print(f"-- {where}")
+    if out["proposal"]:
+        # The console renders this as a button. A terminal can only say what it would do, and
+        # saying nothing would hide a decision the CEO is waiting on.
+        print(f"-- it wants to: {out['proposal']['label']}")
+    return 0
+
+
 def cmd_run(args) -> None:
     from .orchestrator import Runtime
 
@@ -918,6 +952,11 @@ def main(argv=None) -> int:
     sp.add_argument("--answer-to", default="", help="inbox item id to answer or dismiss")
     sp.add_argument("--answer", default="", help="the answer text")
     sp.set_defaults(fn=cmd_inbox)
+
+    sp = with_company(sub.add_parser("ceo", help="ask the CEO something (the console chat)"))
+    sp.add_argument("message", help="what to ask")
+    sp.add_argument("--lang", default="en", help="the language the answer is written in")
+    sp.set_defaults(fn=cmd_ceo)
 
     sp = sub.add_parser("new", help="create a company (the console wizard, from a terminal)")
     sp.add_argument("--name", default="", help="the company name; the slug is derived from it")

@@ -3,7 +3,8 @@ store is migrated in place rather than needing a manual backup-and-recreate."""
 
 import sqlite3
 
-from corparius.store import SCHEMA_VERSION, Store
+from corparius.store import Store
+from corparius.store.schema import SCHEMA_VERSION
 
 
 def _columns(db, table):

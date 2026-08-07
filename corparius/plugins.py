@@ -58,22 +58,22 @@ class PluginAPI:
     api_version = API_VERSION
 
     def register_llm_provider(self, name: str, base: str = "", key_env: str = "", **opts) -> None:
-        from . import llm
+        from .providers import llm
 
         llm.OPENAI_COMPAT_PROVIDERS[name] = {"base": base, "key_env": key_env, **opts}
 
     def register_deploy_provider(self, provider) -> None:
-        from . import deploy
+        from .providers import deploy
 
         deploy.REGISTRY[provider.name] = provider
 
     def register_lead_source(self, source) -> None:
-        from . import leadsource
+        from .providers import leadsource
 
         leadsource.REGISTRY[source.name] = source
 
     def register_enricher(self, enricher) -> None:
-        from . import enrich
+        from .providers import enrich
 
         enrich.REGISTRY[enricher.name] = enricher
 

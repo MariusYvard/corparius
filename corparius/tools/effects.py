@@ -15,20 +15,22 @@ from .. import (
     company as company_mod,
 )
 from .. import (
-    deploy,
     documents,
-    enrich,
     inbox,
-    integrations,
-    leadsource,
-    mailbox,
-    signals,
-    sitecheck,
     sitegen,
 )
 from ..config import cfg
 from ..kernel import paths, text
 from ..kernel.records import ToolResult
+from ..providers import (
+    deploy,
+    enrich,
+    integrations,
+    leadsource,
+    mailbox,
+    signals,
+    sitecheck,
+)
 from .spec import ROLE_TOOL, executable_fields
 
 log = logging.getLogger("corparius.tools")

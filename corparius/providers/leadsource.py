@@ -15,7 +15,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from .config import cfg
+from ..config import cfg
 
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 

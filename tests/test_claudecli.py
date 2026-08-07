@@ -6,10 +6,11 @@ import threading
 
 import pytest
 
-from corparius import claudecli, webui
+from corparius import webui
 from corparius.config import cfg
 from corparius.config.settings import Settings
 from corparius.kernel import proc
+from corparius.providers import claudecli
 
 from .test_webui import _call
 
@@ -22,7 +23,7 @@ def no_ollama_probe(monkeypatch):
     filtered rather than refused, the connect timeout outlived the test
     client's own and these tests failed with a socket timeout rather than an
     assertion. Answer "not reachable" without leaving the process."""
-    from corparius import hardware, ollama_setup
+    from corparius.providers import hardware, ollama_setup
 
     monkeypatch.setattr(
         ollama_setup, "status", lambda *a, **k: {"ok": False, "reachable": False, "missing": []}
@@ -166,7 +167,7 @@ def test_the_polled_providers_endpoint_makes_no_network_probe(server, monkeypatc
     machine without Ollama paid a connect timeout, and on a runner where the
     port is filtered rather than refused it blocked past the client's own
     timeout. The payload now carries only what costs nothing to compute."""
-    from corparius import ollama_setup
+    from corparius.providers import ollama_setup
 
     def explode(*a, **k):
         raise AssertionError("/api/providers probed the network")

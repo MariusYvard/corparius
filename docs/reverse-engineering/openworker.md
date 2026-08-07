@@ -54,7 +54,7 @@ La reprise ajoute les genres question et notification à côté de la table d'ap
 
 **Les vingt-cinq connecteurs et leurs poignées de main OAuth.** OpenWorker route ces échanges par une infrastructure hébergée. Corparius s'en tient à des outils remplaçables un par un et à deux dépendances d'exécution.
 
-**Tauri, React et aisuite.** La console corparius est un serveur `http.server` de la bibliothèque standard et une page unique sans étape de construction. aisuite serait une troisième dépendance pour ce que `corparius/llm.py` fait déjà à la main sur quatorze fournisseurs, dont deux qu'aisuite ne couvre pas : l'interface en ligne de commande de Claude Code et Ollama en repli systématique.
+**Tauri, React et aisuite.** La console corparius est un serveur `http.server` de la bibliothèque standard et une page unique sans étape de construction. aisuite serait une troisième dépendance pour ce que `corparius/providers/llm.py` fait déjà à la main sur quatorze fournisseurs, dont deux qu'aisuite ne couvre pas : l'interface en ligne de commande de Claude Code et Ollama en repli systématique.
 
 **Le fichier `config.toml`.** Le résolveur à quatre couches de `corparius/config/cfg.py` et le registre de `corparius/config/settings_spec.py` répondent déjà au besoin, en montrant en plus quelle couche répond pour chaque champ.
 

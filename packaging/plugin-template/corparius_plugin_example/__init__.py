@@ -8,9 +8,9 @@ declares what corparius can use.
 
 The API (corparius/plugins.py PluginAPI):
   api.register_llm_provider(name, base, key_env, **opts)
-  api.register_deploy_provider(provider)     # subclass corparius.deploy.DeployProvider
-  api.register_lead_source(source)           # subclass corparius.leadsource.LeadSource
-  api.register_enricher(enricher)            # subclass corparius.enrich.Enricher
+  api.register_deploy_provider(provider)     # subclass corparius.providers.deploy.DeployProvider
+  api.register_lead_source(source)           # subclass corparius.providers.leadsource.LeadSource
+  api.register_enricher(enricher)            # subclass corparius.providers.enrich.Enricher
   api.register_tool(tool)                    # corparius.tools.Tool (HITL + firewall apply)
   api.register_template(dict)                # a company template (see corparius.company.TEMPLATES)
   api.customize_agent(role, **overrides)     # tweak an existing agent's spec
@@ -18,7 +18,7 @@ The API (corparius/plugins.py PluginAPI):
 
 from __future__ import annotations
 
-from corparius.deploy import DeployProvider
+from corparius.providers.deploy import DeployProvider
 
 
 class ExampleDeployProvider(DeployProvider):

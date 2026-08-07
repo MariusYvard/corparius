@@ -6,7 +6,8 @@ plugin (see .github/workflows/plugins-validate.yml)."""
 
 from corparius_plugin_example import register
 
-from corparius import deploy, llm, plugins
+from corparius import plugins
+from corparius.providers import deploy, llm
 
 
 def test_register_adds_its_extensions():

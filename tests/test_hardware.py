@@ -12,7 +12,7 @@ with the weather, and it never reports a speed it did not measure.
 
 import time
 
-from corparius import hardware
+from corparius.providers import hardware
 from corparius.store import Store
 
 GB = 1_000_000_000

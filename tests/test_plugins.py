@@ -6,8 +6,9 @@ import json
 
 import pytest
 
-from corparius import company, llm, plugins
+from corparius import company, plugins
 from corparius.config import cfg
+from corparius.providers import llm
 from corparius.tools.registry import TOOLS
 
 

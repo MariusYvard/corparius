@@ -12,11 +12,11 @@ from __future__ import annotations
 import os
 import threading
 
-from . import deploy as deploy_mod
 from . import sitegen
 from .cli import _load_company
 from .config.settings import settings
 from .kernel import paths
+from .providers import deploy as deploy_mod
 from .store import Store
 
 # One connection for the whole server, not one per tool call. FastMCP.run() is a

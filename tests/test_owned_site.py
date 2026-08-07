@@ -20,8 +20,8 @@ did not have the API key. One bounded wait, one check, report either way.
 
 import requests
 
-from corparius import sitecheck
 from corparius.kernel import paths
+from corparius.providers import sitecheck
 
 
 def _site(base, name="public", pages=("index.html",), toml=None):
@@ -103,7 +103,7 @@ def test_the_generator_refuses_to_overwrite_a_real_site(tmp_path, monkeypatch):
 
 
 def test_the_deploy_tool_publishes_the_companys_own_site(tmp_path, monkeypatch):
-    from corparius import deploy
+    from corparius.providers import deploy
     from corparius.tools import effects as tools
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
@@ -309,7 +309,7 @@ def test_no_site_url_means_no_host_comparison(tmp_path):
 
 
 def test_the_deploy_refuses_rather_than_publishing_placeholders(tmp_path, monkeypatch):
-    from corparius import deploy
+    from corparius.providers import deploy
     from corparius.store import Store
     from corparius.tools import effects as tools
 
@@ -605,7 +605,7 @@ def test_the_deploy_rebuilds_them_after_recording_the_address(tmp_path, monkeypa
     it, publish again. A sitemap that disagrees with where the site lives tells a
     crawler to index somebody else."""
     from corparius import company as cm
-    from corparius import deploy
+    from corparius.providers import deploy
     from corparius.tools import effects as tools
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)

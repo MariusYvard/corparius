@@ -29,13 +29,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from . import (
     backup,
-    claudecli,
-    deploy,
     documents,
-    hardware,
-    mailbox,
-    ollama_setup,
-    provider_check,
     sitegen,
     structured,
 )
@@ -45,11 +39,19 @@ from .config import cfg, permissions, settings_spec
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .config.settings import Settings
 from .doctor import run_checks
-from .integrations import smtp_check, stripe_check, stripe_payments
 from .kernel import dotenv, httpkit, i18n, paths
 from .kernel.records import AgentRole
-from .llm import HybridRouter, connected_providers
 from .orchestrator import Runtime, _known_target
+from .providers import (
+    claudecli,
+    deploy,
+    hardware,
+    mailbox,
+    ollama_setup,
+    provider_check,
+)
+from .providers.integrations import smtp_check, stripe_check, stripe_payments
+from .providers.llm import HybridRouter, connected_providers
 from .roster import ROSTER
 from .store import Store
 from .tools.spec import ROLE_TOOL, SPEC, executable_fields
@@ -1039,7 +1041,7 @@ def _claude_setup(state: UiState, all_tiers: bool = False) -> dict:
     # and two four-second connect timeouts on a machine with no Ollama exceeded
     # the console client's own timeout.
     local_trivial, _why = hardware.recommended_local(state.store(), _fresh_settings())
-    from . import modelinfo, preflight
+    from .providers import modelinfo, preflight
 
     applied = claudecli.plan(
         connected_providers(),
@@ -1814,13 +1816,13 @@ def _route_tiers_recommend(ctx):
     # One click to a coherent routing over the free providers actually connected:
     # flip mock off and cloud on, then fill every tier so none is left pointing at
     # an unconfigured provider (the trap the defaults leave after a single key).
-    from .routing import recommended_routing
+    from .providers.routing import recommended_routing
 
     local_trivial, _why = hardware.recommended_local(ctx.store(), _fresh_settings())
     # What a preflight actually proved, so "recommended" never writes a tier
     # this key cannot call. Empty until someone runs one, and then this behaves
     # exactly as it did before.
-    from . import modelinfo, preflight
+    from .providers import modelinfo, preflight
 
     routing = recommended_routing(
         connected_providers(),
@@ -1845,8 +1847,8 @@ def _route_tiers_recommend(ctx):
 def _route_provider_models(ctx):
     # The models a provider advertises, so a tier can be filled from a list rather
     # than a remembered string. A network failure is reported, never a 500.
-    from . import preflight
-    from .llm import list_models
+    from .providers import preflight
+    from .providers.llm import list_models
 
     name = str(ctx.body.get("name", ""))
     if name not in OPENAI_COMPAT_PROVIDERS:
@@ -1934,7 +1936,7 @@ def _route_preflight(ctx):
     operator's own account. The doctor reads what this leaves behind and never
     measures — the same split as the hardware bench.
     """
-    from . import preflight
+    from .providers import preflight
 
     s = _fresh_settings()
     if s.llm_mock:
@@ -1957,7 +1959,7 @@ def _route_sweep_get(ctx):
     A GET, polled by the page — so it reads state and calls nobody. The probing
     happens in the worker thread that the POST started.
     """
-    from . import preflight
+    from .providers import preflight
 
     known = ctx.state.store().known_probes()
     tally: dict[str, int] = {}
@@ -1986,7 +1988,7 @@ def _route_sweep_post(ctx):
     operator pressing "check everything" is spending their own money and their
     own rate limits. They get the number first.
     """
-    from . import preflight
+    from .providers import preflight
 
     s = _fresh_settings()
     if ctx.body.get("stop"):

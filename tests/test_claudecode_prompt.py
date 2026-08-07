@@ -21,7 +21,7 @@ import subprocess
 
 import pytest
 
-from corparius import llm
+from corparius.providers import llm
 
 
 class _Run:
@@ -48,7 +48,7 @@ class _Run:
 def run(monkeypatch):
     r = _Run()
     monkeypatch.setattr(subprocess, "run", r)
-    monkeypatch.setattr("corparius.claudecli.resolve", lambda: "claude.CMD")
+    monkeypatch.setattr("corparius.providers.claudecli.resolve", lambda: "claude.CMD")
     return r
 
 

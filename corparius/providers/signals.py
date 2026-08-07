@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import os
 
+from ..config import cfg
 from . import leadsource
-from .config import cfg
 
 
 def _match(text: str, keywords: list[str]) -> bool:

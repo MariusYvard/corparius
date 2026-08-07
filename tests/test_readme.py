@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from corparius.company import DEFAULT_HITL
-from corparius.llm import OPENAI_COMPAT_PROVIDERS
+from corparius.providers.llm import OPENAI_COMPAT_PROVIDERS
 
 README = Path("README.md")
 DOCS = Path("docs")

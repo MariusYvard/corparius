@@ -34,7 +34,7 @@ import pytest
 from corparius import inbox
 from corparius.company import ROLES
 from corparius.config import cfg, settings_spec
-from corparius.llm import OPENAI_COMPAT_PROVIDERS
+from corparius.providers.llm import OPENAI_COMPAT_PROVIDERS
 from corparius.roster import ROSTER
 from corparius.store.schema import MIGRATIONS, SCHEMA_VERSION
 from corparius.tools.registry import TOOLS
@@ -59,7 +59,7 @@ ALL_SRC = "\n".join(SRC.values())
 # + kernel/ (10: __init__, crypto, dotenv, httpkit, i18n, paths, proc, records, text,
 # vectors) + config/ (8: __init__, cfg, permissions, provider_table, secretbox, settings,
 # settings_spec, store_layer — all but two moved in from the flat package).
-MODULE_COUNT = 89
+MODULE_COUNT = 90
 
 
 def test_every_source_file_is_scanned():

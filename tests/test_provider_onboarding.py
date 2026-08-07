@@ -9,8 +9,8 @@ import types
 
 from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
 from corparius.config.settings_spec import LLM_SERVER_PRESETS
-from corparius.llm import list_models
-from corparius.routing import recommended_routing
+from corparius.providers.llm import list_models
+from corparius.providers.routing import recommended_routing
 from corparius.webui import _providers_payload
 
 
@@ -114,7 +114,7 @@ def test_list_models_returns_sorted_ids(monkeypatch):
         def json(self):
             return {"data": [{"id": "b-model"}, {"id": "a-model"}, {"id": ""}]}
 
-    monkeypatch.setattr("corparius.llm.requests.get", lambda *a, **k: _Resp())
+    monkeypatch.setattr("corparius.providers.llm.requests.get", lambda *a, **k: _Resp())
     assert list_models("groq") == ["a-model", "b-model"]
 
 
@@ -152,8 +152,9 @@ def test_the_doctor_offers_the_claude_path_when_the_cli_is_there(monkeypatch):
 def test_the_doctor_says_nothing_when_neither_is_installed(monkeypatch):
     """No subscription in evidence, no advice: the doctor lists what is wrong,
     not what could be bought."""
-    from corparius import claudecli, doctor
+    from corparius import doctor
     from corparius.config.settings import Settings
+    from corparius.providers import claudecli
 
     s = Settings()
     s.claude_code_enabled = False
@@ -172,8 +173,8 @@ def test_the_one_command_writes_exactly_the_console_plan(tmp_path, monkeypatch, 
     machine as having nothing free and puts *every* tier on the subscription.
     The inputs are what has to match, not just the function.
     """
-    from corparius import claudecli, hardware, llm
     from corparius.cli import cmd_claude
+    from corparius.providers import claudecli, hardware, llm
     from corparius.store import Store
 
     monkeypatch.setattr(claudecli, "check", lambda *a, **k: {"ok": True, "detail": "ready"})
@@ -192,8 +193,8 @@ def test_the_one_command_writes_exactly_the_console_plan(tmp_path, monkeypatch, 
 
 def test_the_one_command_honours_all_tiers(tmp_path, monkeypatch, capsys):
     """--all-tiers was parsed and then never read."""
-    from corparius import claudecli, hardware, llm
     from corparius.cli import cmd_claude
+    from corparius.providers import claudecli, hardware, llm
     from corparius.store import Store
 
     monkeypatch.setattr(claudecli, "check", lambda *a, **k: {"ok": True, "detail": "ready"})
@@ -209,8 +210,8 @@ def test_the_one_command_honours_all_tiers(tmp_path, monkeypatch, capsys):
 def test_the_one_command_puts_a_capable_machine_on_local(tmp_path, monkeypatch, capsys):
     """The measured verdict has to reach the CLI too, or `corparius bench` says
     the machine can serve a tier and `corparius claude` ignores it."""
-    from corparius import claudecli, hardware, llm
     from corparius.cli import cmd_claude
+    from corparius.providers import claudecli, hardware, llm
     from corparius.store import Store
 
     monkeypatch.setattr(claudecli, "check", lambda *a, **k: {"ok": True, "detail": "ready"})
@@ -232,8 +233,8 @@ def test_the_cli_store_honours_the_redirected_data_path(tmp_path, monkeypatch):
 
 
 def test_check_only_changes_nothing(tmp_path, monkeypatch, capsys):
-    from corparius import claudecli
     from corparius.cli import cmd_claude
+    from corparius.providers import claudecli
     from corparius.store import Store
 
     monkeypatch.setattr(claudecli, "check", lambda *a, **k: {"ok": True, "detail": "ready"})
@@ -247,8 +248,8 @@ def test_a_failed_check_refuses_to_half_configure(tmp_path, monkeypatch):
     the operator worse off than before they ran anything."""
     import pytest
 
-    from corparius import claudecli
     from corparius.cli import cmd_claude
+    from corparius.providers import claudecli
     from corparius.store import Store
 
     monkeypatch.setattr(
@@ -301,7 +302,7 @@ def test_without_an_override_nothing_changes():
 
 
 def test_the_claude_plan_prefers_free_and_falls_back_to_every_tier():
-    from corparius import claudecli
+    from corparius.providers import claudecli
 
     mixed = claudecli.plan(["groq"], "gemma:2b")
     assert mixed["CORP_HARD_MODEL"] == "claudecode:opus"
@@ -317,7 +318,7 @@ def test_the_claude_plan_prefers_free_and_falls_back_to_every_tier():
 def test_the_tier_ladder_is_one_model_per_tier():
     """haiku / sonnet / opus, cheapest to most capable. A tier that repeats a
     model is a tier that isn't buying anything."""
-    from corparius import claudecli
+    from corparius.providers import claudecli
 
     ladder = [
         claudecli.TIERS[k] for k in ("CORP_TRIVIAL_MODEL", "CORP_NORMAL_MODEL", "CORP_HARD_MODEL")
@@ -353,7 +354,7 @@ def test_local_still_ends_the_chain_even_when_it_cannot_serve_a_tier():
     The router always falls through to local after the chain — that safety net
     must survive a negative verdict."""
     from corparius.config.settings import Settings
-    from corparius.llm import HybridRouter
+    from corparius.providers.llm import HybridRouter
 
     s = Settings()
     s.llm_mock = False
@@ -364,7 +365,7 @@ def test_local_still_ends_the_chain_even_when_it_cannot_serve_a_tier():
 
 
 def test_the_ladder_climbs_cheapest_first():
-    from corparius import claudecli
+    from corparius.providers import claudecli
 
     assert claudecli.FALLBACK_LADDER == ("claudecode:haiku", "claudecode:sonnet")
     assert claudecli.HARD_TIER not in claudecli.FALLBACK_LADDER
@@ -373,8 +374,8 @@ def test_the_ladder_climbs_cheapest_first():
 def test_recommended_local_is_the_single_decider(tmp_path, monkeypatch):
     """The console button, the CLI and the doctor all ask this one function, so
     they cannot drift into three different answers."""
-    from corparius import hardware
     from corparius.config.settings import Settings
+    from corparius.providers import hardware
     from corparius.store import Store
 
     store = Store(str(tmp_path))
@@ -400,8 +401,8 @@ def test_recommended_local_is_the_single_decider(tmp_path, monkeypatch):
 
 
 def test_no_ollama_at_all_is_reported_as_such(tmp_path, monkeypatch):
-    from corparius import hardware
     from corparius.config.settings import Settings
+    from corparius.providers import hardware
     from corparius.store import Store
 
     monkeypatch.setattr(hardware, "installed_models", lambda **k: [])
@@ -412,8 +413,9 @@ def test_no_ollama_at_all_is_reported_as_such(tmp_path, monkeypatch):
 def test_the_doctor_names_the_desktop_app_when_the_cli_is_missing(monkeypatch):
     """Same trap as the CLI message: someone holding Claude Desktop reads
     "install Claude Code" as done."""
-    from corparius import claudecli, doctor
+    from corparius import doctor
     from corparius.config.settings import Settings
+    from corparius.providers import claudecli
 
     s = Settings()
     s.claude_code_enabled = False
@@ -425,8 +427,9 @@ def test_the_doctor_names_the_desktop_app_when_the_cli_is_missing(monkeypatch):
 
 
 def test_the_doctor_fails_loudly_when_the_target_is_on_without_the_cli(monkeypatch):
-    from corparius import claudecli, doctor
+    from corparius import doctor
     from corparius.config.settings import Settings
+    from corparius.providers import claudecli
 
     s = Settings()
     s.claude_code_enabled = True
@@ -442,8 +445,8 @@ def test_the_command_installs_only_when_asked(tmp_path, monkeypatch, capsys):
     something a status check gets to decide."""
     import pytest
 
-    from corparius import claudecli
     from corparius.cli import cmd_claude
+    from corparius.providers import claudecli
 
     monkeypatch.setattr(claudecli, "installed", lambda: False)
     monkeypatch.setattr(
@@ -460,8 +463,8 @@ def test_the_command_installs_only_when_asked(tmp_path, monkeypatch, capsys):
 
 
 def test_the_command_installs_then_configures(tmp_path, monkeypatch, capsys):
-    from corparius import claudecli, hardware, llm
     from corparius.cli import cmd_claude
+    from corparius.providers import claudecli, hardware, llm
     from corparius.store import Store
 
     calls = []

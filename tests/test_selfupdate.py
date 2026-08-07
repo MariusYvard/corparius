@@ -304,7 +304,7 @@ def test_the_providers_stay_connected_across_an_update(frozen, monkeypatch):
     def resolve():
         cfg.set_dotenv_path(home / ".env")
         cfg.invalidate()
-        from corparius.llm import connected_providers
+        from corparius.providers.llm import connected_providers
 
         return {
             "providers": sorted(connected_providers()),

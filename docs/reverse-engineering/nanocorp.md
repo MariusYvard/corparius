@@ -98,7 +98,7 @@ et n'allait jamais chercher l'adresse. Un hôte qui accepte un envoi et sert aut
 chose — cache ancien, 404, page d'erreur de build — était indistinguable d'une
 publication réussie.
 
-**Transféré**, dans `corparius/sitecheck.py` : attente bornée
+**Transféré**, dans `corparius/providers/sitecheck.py` : attente bornée
 (`CORP_DEPLOY_VERIFY_WAIT`, plafonnée à 180 s), une requête, un verdict parmi
 `fresh` / `stale` / `unreachable` / `unverified`, et une phrase qui dit d'où il
 vient. Le marqueur est le `<title>` et non un hachage des octets : une page générée

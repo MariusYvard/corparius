@@ -91,7 +91,7 @@ def test_persistent_garbage_falls_back_but_still_returns_the_shape():
 def test_the_mock_provider_answers_structured_offline():
     # Offline mode must exercise the real structured path, not always fall back:
     # a homelab with no network still gets validated shapes.
-    from corparius.llm import MockProvider
+    from corparius.providers.llm import MockProvider
 
     router = types.SimpleNamespace(
         generate=lambda convo, diff=None, model=None, max_tokens=512: MockProvider().generate(

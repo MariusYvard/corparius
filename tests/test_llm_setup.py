@@ -7,10 +7,11 @@ import types
 
 import pytest
 
-from corparius import ollama_setup, provider_check, webui
+from corparius import webui
 from corparius.config import cfg
 from corparius.config.settings import Settings
 from corparius.kernel.records import LLMResult, Usage
+from corparius.providers import ollama_setup, provider_check
 
 from .test_webui import _call
 
@@ -155,7 +156,7 @@ def test_diagnosis_answers_in_french(server, monkeypatch):
 def test_ollama_status_localized(server, monkeypatch):
     import requests
 
-    from corparius import ollama_setup
+    from corparius.providers import ollama_setup
 
     monkeypatch.setattr(ollama_setup, "wanted_models", lambda s=None: ["gemma"])
     monkeypatch.setattr(
@@ -172,7 +173,7 @@ def test_the_ollama_card_carries_the_cached_profile_and_lists_once(server, monke
     """The card is polled while a pull runs. It already asks /api/tags for the
     installed models; asking again to learn their sizes would double the timeout
     exposure on exactly the endpoint that gets hammered."""
-    from corparius import hardware
+    from corparius.providers import hardware
     from corparius.store import Store
 
     calls = []
@@ -205,7 +206,7 @@ def test_the_ollama_card_never_measures(server, monkeypatch):
     """A measurement is a real generation — 93 seconds to load the configured
     model on the machine this was written for. It happens on a button, never on
     a poll."""
-    from corparius import hardware
+    from corparius.providers import hardware
 
     def explode(*a, **k):
         raise AssertionError("the polled card measured")
@@ -226,7 +227,7 @@ def test_the_ollama_card_never_measures(server, monkeypatch):
 
 
 def test_the_bench_button_measures_and_caches(server, monkeypatch, tmp_path):
-    from corparius import hardware
+    from corparius.providers import hardware
     from corparius.store import Store
 
     monkeypatch.setattr(
@@ -249,7 +250,7 @@ def test_the_bench_button_measures_and_caches(server, monkeypatch, tmp_path):
 
 
 def test_the_bench_button_says_so_when_there_is_nothing_to_measure(server, monkeypatch):
-    from corparius import hardware
+    from corparius.providers import hardware
 
     monkeypatch.setattr(hardware, "installed_models", lambda **k: [])
     status, d = _call(server, "POST", "/api/ollama/bench", {})
@@ -258,7 +259,7 @@ def test_the_bench_button_says_so_when_there_is_nothing_to_measure(server, monke
 
 def test_a_failed_measurement_does_not_overwrite_the_cache(server, monkeypatch, tmp_path):
     """A refused connection is not a machine that got slower."""
-    from corparius import hardware
+    from corparius.providers import hardware
     from corparius.store import Store
 
     Store(str(tmp_path)).save_machine({"tokens_per_second": 8.6, "placement": "cpu", "model": "m"})

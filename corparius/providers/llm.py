@@ -24,11 +24,11 @@ from dataclasses import dataclass
 
 import requests
 
-from .config import cfg
-from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
-from .kernel import proc
-from .kernel.records import Difficulty, LLMResult, Usage
-from .kernel.vectors import hash_embed
+from ..config import cfg
+from ..config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
+from ..kernel import proc
+from ..kernel.records import Difficulty, LLMResult, Usage
+from ..kernel.vectors import hash_embed
 
 log = logging.getLogger("corparius.llm")
 

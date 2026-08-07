@@ -12,13 +12,14 @@ from dataclasses import dataclass, field, replace
 
 import requests
 
-from . import curator, documents, inbox, llm
+from . import curator, documents, inbox
 from .agents import Executor
 from .config.permissions import PermissionEngine
 from .config.settings import Settings
 from .hitl import ApprovalGate
 from .kernel.records import AgentRole
-from .llm import HybridRouter
+from .providers import llm
+from .providers.llm import HybridRouter
 from .roster import ROSTER, AgentSpec
 from .safety import CircuitBreaker, TokenBudget
 from .skills import SkillLoader
@@ -433,7 +434,7 @@ class Runtime:
         Never raises. A repository that cannot be reached is not a reason to
         lose a run that already happened.
         """
-        from . import companyrepo
+        from .providers import companyrepo
 
         if not companyrepo.autocommit_enabled():
             return {"enabled": False}

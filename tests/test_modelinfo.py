@@ -17,7 +17,7 @@ import json
 import pytest
 import requests
 
-from corparius import modelinfo
+from corparius.providers import modelinfo
 
 
 class _Answer:

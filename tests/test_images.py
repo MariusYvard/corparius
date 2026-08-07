@@ -16,9 +16,10 @@ import zlib
 
 import pytest
 
-from corparius import documents, llm, preflight
+from corparius import documents
 from corparius.agents import Executor
 from corparius.kernel.records import AgentRole, Difficulty, LLMResult, Usage
+from corparius.providers import llm, preflight
 from corparius.roster import ROSTER
 from corparius.tools.registry import TOOLS
 
@@ -334,7 +335,7 @@ def test_the_measured_verdict_outranks_the_catalogue(monkeypatch, tmp_path):
     """This project already knows what a capability claim is worth."""
     import types
 
-    from corparius import modelinfo
+    from corparius.providers import modelinfo
     from corparius.store import Store
 
     store = Store(str(tmp_path))

@@ -5,7 +5,7 @@ import requests
 from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from corparius.config.settings import Settings
 from corparius.kernel.records import Difficulty, LLMResult, Usage
-from corparius.llm import HybridRouter, LLMProvider
+from corparius.providers.llm import HybridRouter, LLMProvider
 
 
 def _mock_settings() -> Settings:
@@ -147,7 +147,7 @@ def test_ollama_timeout_is_configurable():
 
 def _asked_provider(monkeypatch, settings, model, resting=()):
     """Which provider actually got the call, given a chain and a set of resting ones."""
-    import corparius.llm as llm_mod
+    import corparius.providers.llm as llm_mod
 
     asked: list[str] = []
 
@@ -192,7 +192,7 @@ def test_fallback_steps_are_still_reordered_by_cooldown(monkeypatch):
     cooldown must not be the reason nothing answers at all."""
     s = _live_settings()
 
-    import corparius.llm as llm_mod
+    import corparius.providers.llm as llm_mod
 
     asked: list[str] = []
 

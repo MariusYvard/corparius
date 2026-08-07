@@ -20,8 +20,8 @@ import types
 import pytest
 import requests
 
-from corparius import preflight, routing
-from corparius.preflight import BLOCKED, CAPACITY, UNKNOWN, USABLE
+from corparius.providers import preflight, routing
+from corparius.providers.preflight import BLOCKED, CAPACITY, UNKNOWN, USABLE
 
 
 class _Response:
@@ -412,7 +412,8 @@ def test_the_model_picker_hides_what_is_proved_uncallable(tmp_path, monkeypatch)
     than offering nothing."""
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
-    from corparius import llm, webui
+    from corparius import webui
+    from corparius.providers import llm
     from corparius.store import Store
 
     store = Store(str(tmp_path))
@@ -444,8 +445,8 @@ def test_the_model_picker_hides_what_is_proved_uncallable(tmp_path, monkeypatch)
 
 def _sweepable(monkeypatch, catalogues, answers=None):
     """A machine with keys for the named providers and these catalogues."""
-    from corparius import llm
     from corparius.config import cfg
+    from corparius.providers import llm
 
     monkeypatch.setattr(
         cfg, "get", lambda key, default="": "k" if key.endswith(("_KEY", "_TOKEN")) else ""
@@ -516,7 +517,7 @@ def test_a_limit_samples_across_the_catalogue_rather_than_its_front(tmp_path, mo
 
 
 def test_a_provider_with_no_catalogue_does_not_stop_the_sweep(tmp_path, monkeypatch):
-    from corparius import llm
+    from corparius.providers import llm
     from corparius.store import Store
 
     _sweepable(monkeypatch, {"groq": ["a"], "nvidia": ["x"]})
@@ -592,7 +593,7 @@ def test_recommended_routing_never_writes_a_tier_proved_uncallable():
     filtered a dropdown, and "recommended routing" kept writing the pinned
     literal — which is exactly how openrouter's rotted default shipped."""
     from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
-    from corparius.routing import recommended_routing
+    from corparius.providers.routing import recommended_routing
 
     default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
     proven = {
@@ -611,7 +612,7 @@ def test_a_working_default_is_never_second_guessed_for_a_faster_one():
     """The defaults are chosen for capability, not latency. Only a *blocked*
     default is replaced."""
     from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
-    from corparius.routing import recommended_routing
+    from corparius.providers.routing import recommended_routing
 
     default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
     proven = {
@@ -626,7 +627,7 @@ def test_a_working_default_is_never_second_guessed_for_a_faster_one():
 def test_with_nothing_measured_routing_is_exactly_what_it_was():
     """No preflight run means no knowledge, and no knowledge must not change
     anybody's configuration."""
-    from corparius.routing import recommended_routing
+    from corparius.providers.routing import recommended_routing
 
     assert recommended_routing(["groq", "cerebras"]) == recommended_routing(
         ["groq", "cerebras"], proven={}
@@ -638,7 +639,7 @@ def test_a_blocked_default_with_no_alternative_is_kept_and_reported(caplog):
     import logging
 
     from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
-    from corparius.routing import recommended_routing
+    from corparius.providers.routing import recommended_routing
 
     default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
     proven = {"groq": {default: {"state": BLOCKED, "ms": 0}}}
@@ -787,7 +788,7 @@ def test_the_order_is_deterministic_when_everything_ties():
 
 def test_routing_takes_the_best_measured_model_not_merely_the_fastest():
     from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
-    from corparius.routing import recommended_routing
+    from corparius.providers.routing import recommended_routing
 
     default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
     proven = {
@@ -1009,7 +1010,7 @@ def test_routing_asks_for_the_right_tier():
     """The trivial tier and the hard tier must not receive the same model just
     because one ranking function serves both."""
     from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
-    from corparius.routing import recommended_routing
+    from corparius.providers.routing import recommended_routing
 
     default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
     # The default is itself one of the models in SLICE, so it has to be marked

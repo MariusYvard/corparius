@@ -1757,6 +1757,16 @@ ROUTES: tuple[Route, ...] = (
 # can never be shadowed by a prefix that happens to start the same way.
 PREFIX_ROUTES: tuple[Route, ...] = (Route("GET", "/site/", _route_site_serve, public=True),)
 
+# Every route there is, in one name. `ROUTES` and `PREFIX_ROUTES` are two tables because they
+# are matched differently — exact first, so `/api/site` can never be shadowed by a prefix that
+# happens to start the same way — but anything *auditing* the surface has to see both.
+#
+# It did not. `tests/test_webui_security.py` asserted that every non-public route demands a
+# token by iterating `ROUTES` alone, so a prefix route added non-public would have been outside
+# a security check that reads as exhaustive. A partial registry is the defect this project keeps
+# finding in other registries; here it was in the one guarding the token.
+ALL_ROUTES: tuple[Route, ...] = ROUTES + PREFIX_ROUTES
+
 _EXACT = {(r.method, r.path): r for r in ROUTES}
 assert len(_EXACT) == len(ROUTES), "duplicate (method, path) in ROUTES"
 

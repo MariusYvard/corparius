@@ -228,7 +228,9 @@ def test_every_non_public_route_requires_the_token(server, monkeypatch):
     route's own flag. It used to live in do_POST alone."""
     monkeypatch.setenv("CORP_UI_TOKEN", "s3cret")
     cfg.invalidate()
-    for route in webui.ROUTES:
+    # `ALL_ROUTES`, not `ROUTES`: the prefix table was outside this check, so a non-public
+    # prefix route would have been outside a guard that reads as exhaustive.
+    for route in webui.ALL_ROUTES:
         if route.public or route.method != "GET":
             continue
         path = route.path + ("?company=example" if route.needs_slug else "")

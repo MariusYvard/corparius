@@ -113,10 +113,18 @@ def test_task_edit_and_approve(cfg_path, capsys):
             "--approve",
         ]
     )
-    assert f"task {task_id} updated" in capsys.readouterr().out
+    said = capsys.readouterr().out
+    assert f"task {task_id}" in said and "approved" in said
+    # It names what changed now, rather than saying "updated" whatever happened.
+    assert "title" in said and "priority" in said
     row = _store(cfg_path).list_tasks("t")[0]
     assert row["title"] == "renamed" and row["priority"] == 3
     assert row["status"] == "approved" and "via CLI" in row["note"]
+    # The assertion this test was missing, and the bug it would have caught: approving from
+    # the command line went straight to `store.update_task`, so it skipped `executable_fields`
+    # and left the task with no tool. It then closed "done (no tool mapped)" having done
+    # nothing, the condition survived, and the agent proposed the same work again.
+    assert row["tool"] == "draft_social_post", "approval must leave the task executable"
 
 
 def test_task_reject(cfg_path, capsys):

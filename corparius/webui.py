@@ -34,7 +34,9 @@ from . import (
 )
 from . import company as company_mod
 from . import inbox as inbox_mod
+from .app import errors as app_errors
 from .app import settings as app_settings
+from .app import tasks as app_tasks
 from .config import cfg, permissions, settings_spec
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .config.settings import Settings
@@ -54,7 +56,7 @@ from .providers.integrations import smtp_check, stripe_check, stripe_payments
 from .providers.llm import HybridRouter, connected_providers
 from .roster import ROSTER
 from .store import Store
-from .tools.spec import ROLE_TOOL, SPEC, executable_fields
+from .tools.spec import ROLE_TOOL, SPEC
 
 log = logging.getLogger("corparius.webui")
 
@@ -849,50 +851,26 @@ def _set_env(state: UiState, values: dict) -> dict:
 
 
 def _edit_task(store, body: dict) -> tuple[int, dict]:
-    """Edit fields, decide, or both. The CLI could already retitle and
-    reprioritise a task; the console could only approve or reject one."""
-    try:
-        task_id = int(body.get("id"))  # type: ignore[arg-type]  # None -> TypeError, caught here
-    except (TypeError, ValueError):
-        return 400, {"ok": False, "error": "a task id is required"}
-    decision = body.get("decision")
-    if decision is not None and decision not in ("approved", "rejected"):
-        return 400, {"ok": False, "error": "decision must be approved or rejected"}
+    """`app.tasks.edit`, with its refusal turned into a status code.
 
-    fields: dict = {}
-    if "title" in body:
-        title = str(body["title"]).strip()
-        if not title:
-            return 400, {"ok": False, "error": "title cannot be empty"}
-        fields["title"] = title
-    if "priority" in body:
-        try:
-            fields["priority"] = max(0, min(int(body["priority"]), 5))
-        except (TypeError, ValueError):
-            return 400, {"ok": False, "error": "priority must be a whole number"}
-    if "target" in body:
-        target = str(body["target"]).strip()
-        if target not in {r.value for r in AgentRole}:
-            return 400, {"ok": False, "error": f"unknown agent '{target}'"}
-        fields["target"] = target
-    if "tool" in body:
-        tool = str(body["tool"]).strip()
-        if tool and tool not in SPEC:
-            return 400, {"ok": False, "error": f"unknown tool '{tool}'"}
-        fields["tool"] = tool
-    if not fields and decision is None:
-        return 400, {"ok": False, "error": "nothing to change"}
-    if decision == "approved":
-        # The same thing the CEO does on approval. This is the end of the wire that
-        # was missing: measured in a real store, 24 tasks for one role carried no
-        # tool and 22 closed "done (no tool mapped)" without doing anything, so the
-        # agent kept re-proposing the same work. See tools.executable_fields.
-        fields = {**executable_fields({**store.get_task(task_id), **fields}), **fields}
-    if fields:
-        store.update_task(task_id, **fields)
-    if decision:
-        store.set_task_status(task_id, decision, str(body.get("note", "via console")))
-    return 200, {"ok": True, "id": task_id, "changed": sorted(fields)}
+    The service takes one keyword per field instead of this body dict, which is what let the
+    command line reach it — a dict shaped like a request body *is* a request. What is left here
+    is unpacking and the status code, which is the only part that is about HTTP.
+    """
+    try:
+        changed = app_tasks.edit(
+            store,
+            body.get("id"),
+            title=body.get("title"),
+            priority=body.get("priority"),
+            target=body.get("target"),
+            tool=body.get("tool"),
+            decision=body.get("decision"),
+            note=str(body.get("note", "via console")),
+        )
+    except app_errors.Refused as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    return 200, {"ok": True, **changed}
 
 
 def _deploy(state: UiState, slug: str) -> tuple[int, dict]:

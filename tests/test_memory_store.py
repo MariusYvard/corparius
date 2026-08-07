@@ -187,3 +187,49 @@ def test_the_remember_tool_is_harmless_and_ungated(tmp_path):
 
     assert TOOLS["remember"].risk == READ
     assert not PermissionEngine().evaluate(TOOLS["remember"], "t").needs_user
+
+
+def test_recall_actually_discriminates(tmp_path):
+    """The property the FTS5 measurement was really testing, pinned.
+
+    `recall` ranks by `cosine(hash_embed(...))`, which is a hashed bag of words — cheap enough
+    that it is fair to ask whether it separates anything at all or just shuffles. Measured on
+    the real corpus (55 facts): the spread between the best and worst score is 0.32 to 0.41,
+    with the median well below the best. It selects.
+
+    Here that is reproduced in miniature, because the alternative — FTS5, which *is* in the
+    standard library and which `recall`'s docstring used to rule out incorrectly — turned out
+    not to fit: the query is a whole draft prompt, so using MATCH means inventing a keyword
+    extractor, and on four real prompts it returned 5, 5, 2 and 1 candidates where this
+    returns `limit` every time.
+    """
+    store = Store(str(tmp_path / "spread"))
+    try:
+        store.remember(
+            "acme", "ceo", "Les militaires exigent la confidentialite des donnees vocales"
+        )
+        store.remember("acme", "ceo", "Le prix est de 9 EUR par mois, pas 29")
+        store.remember("acme", "ceo", "Le formulaire de contact vit dans site/index.html")
+        rows = store.recall("acme", query="quel prix pour l'offre mensuelle", limit=3)
+        assert len(rows) == 3, "it must fill the k it was asked for"
+        scores = [r["score"] for r in rows]
+        assert scores == sorted(scores, reverse=True), "best first"
+        assert scores[0] > scores[-1], "a ranking that does not separate is a shuffle"
+        assert "9 EUR" in rows[0]["fact"], "and the one about price ranks first"
+    finally:
+        store.close()
+
+
+def test_recall_fills_the_limit_even_when_nothing_matches(tmp_path):
+    """The behaviour that decided against FTS5. A prompt sharing no words with any fact still
+    gets `limit` candidates, ordered by recency — because the caller's contract is "put this
+    many facts in front of the prompt", and an empty block is not a better answer than an
+    imperfect one."""
+    store = Store(str(tmp_path / "fill"))
+    try:
+        for i in range(4):
+            store.remember("acme", "ceo", f"un fait numero {i} sur le marche")
+        rows = store.recall("acme", query="zzzz qqqq wwww", limit=3)
+        assert len(rows) == 3
+    finally:
+        store.close()

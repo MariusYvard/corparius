@@ -18,7 +18,8 @@ from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .config.settings import Settings
 from .kernel import paths
 from .llm import list_models
-from .store import SCHEMA_VERSION, Store
+from .store import Store
+from .store.schema import SCHEMA_VERSION
 
 ROOT = Path(__file__).resolve().parent.parent
 

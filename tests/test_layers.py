@@ -78,8 +78,30 @@ RANKS: dict[str, int] = {
     "config/provider_table": 1,
     "config/settings_spec": 1,
     "config/permissions": 1,
-    # 2 — store
-    "store": 2,
+    # 2 — store. One connection and one lock on the facade, a mixin per table beside it, and
+    # the schema on its own. `store/base.py` holds the contract a mixin may assume.
+    "store/__init__": 2,
+    "store/base": 2,
+    "store/schema": 2,
+    "store/actions": 2,
+    "store/approvals": 2,
+    "store/decisions": 2,
+    "store/directives": 2,
+    "store/drafts": 2,
+    "store/inbox": 2,
+    "store/machine": 2,
+    "store/memory": 2,
+    "store/model_catalogue": 2,
+    "store/model_probes": 2,
+    "store/outreach": 2,
+    # The three reads that name more than one table, and therefore belong to none of them.
+    "store/reports": 2,
+    "store/rules": 2,
+    "store/settings": 2,
+    "store/skill_usage": 2,
+    "store/state": 2,
+    "store/tasks": 2,
+    "store/token_usage": 2,
     # 3 — providers
     "llm": 3,
     "claudecli": 3,
@@ -200,7 +222,15 @@ OWNERS: dict[str, tuple[frozenset[str], str]] = {
     # the store through SQLite's own backup API, which `store/**` should own. → store/** and
     # config/store_layer.py only.
     "sqlite3": (
-        frozenset({"store", "config/store_layer", "backup"}),
+        frozenset(
+            {
+                "store/__init__",
+                "store/base",
+                "store/schema",
+                "config/store_layer",
+                "backup",
+            }
+        ),
         "store/** and config/store_layer",
     ),
     # Done, stage 1. Seven call sites across four modules became one wrapper that owns

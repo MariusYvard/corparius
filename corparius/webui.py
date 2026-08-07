@@ -35,6 +35,7 @@ from . import (
 from . import company as company_mod
 from . import inbox as inbox_mod
 from .app import errors as app_errors
+from .app import publish as app_publish
 from .app import settings as app_settings
 from .app import tasks as app_tasks
 from .config import cfg, permissions, settings_spec
@@ -46,7 +47,6 @@ from .kernel.records import AgentRole
 from .orchestrator import Runtime, _known_target
 from .providers import (
     claudecli,
-    deploy,
     hardware,
     mailbox,
     ollama_setup,
@@ -874,37 +874,19 @@ def _edit_task(store, body: dict) -> tuple[int, dict]:
 
 
 def _deploy(state: UiState, slug: str) -> tuple[int, dict]:
-    company = _load_company(slug)
-    if company is None:
-        return 404, {"ok": False, "error": f"unknown company '{slug}'"}
-    data_path = _fresh_settings().data_path
-    # The company's own site wins, exactly as it does for the agent's deploy tool.
-    # The console publishing a different folder than the roster does would be the
-    # worst of both.
-    owned = paths.owned_site(slug)
-    if owned is not None:
-        out_dir = owned
-    else:
-        out_dir = paths.site_dir(data_path, slug)
-        if not paths.site_index(data_path, slug).exists():
-            sitegen.build_site(company, str(out_dir), store=state.store())
-    res = deploy.deploy_result(str(out_dir))
-    if res["ok"]:
-        # Remember where it went, so the "go live" card can show the live URL
-        # again after a reload, not only in this response.
-        try:
-            (out_dir / ".published").write_text(str(res["result"]), encoding="utf-8")
-        except OSError:
-            pass
+    """`app.publish.publish`, with its refusal turned into a status code.
+
+    The service resolves the folder — the company's own site wins over the generated one — and
+    that is the half the command line never had. What is left here is the 404 and the envelope.
+    """
+    try:
+        out = app_publish.publish(
+            slug, _fresh_settings().data_path, _load_company(slug), state.store()
+        )
+    except app_errors.Refused as exc:
+        return 404, {"ok": False, "error": str(exc)}
     # The envelope succeeded; whether anything published is the payload's news.
-    return 200, {
-        "ok": True,
-        "published": res["ok"],
-        "provider": res["provider"],
-        "result": res["result"],
-        "errors": res["errors"],
-        "skipped": res["skipped"],
-    }
+    return 200, {"ok": True, **{k: v for k, v in out.items() if k != "folder"}}
 
 
 def _golive_status(slug: str) -> dict:

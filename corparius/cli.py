@@ -145,15 +145,37 @@ def cmd_task(args) -> None:
     print(f"task {changed['id']}: {said}" + (f" ({changed['decision']})" if decision else ""))
 
 
-def cmd_deploy(args) -> None:
-    from . import sitegen
-    from .providers import deploy
+def cmd_deploy(args) -> int:
+    """Publish through the same service the console uses.
+
+    It used to build `paths.site_dir(data_path, slug)` itself and never consult
+    `paths.owned_site`, so on a company with its own site folder — which is what an operator
+    gets the moment they edit their pages instead of regenerating them — it published the
+    generated site and said it worked. Measured on the owner's own company: the console
+    published `companies/vigil/site/public` and this published `data/sites/vigil`.
+
+    It also returned None either way, so a shell saw success whatever happened. A deploy that
+    published nothing now exits non-zero.
+    """
+    from .app import errors as app_errors
+    from .app import publish as app_publish
 
     cfg = _load_company(args.company)
-    out_dir = str(paths.site_dir(settings.data_path, cfg["slug"]))
-    if not os.path.exists(os.path.join(out_dir, "index.html")):
-        sitegen.build_site(cfg, out_dir, store=_store())
-    print("deployed: " + deploy.deploy_site(out_dir))
+    try:
+        out = app_publish.publish(cfg["slug"], settings.data_path, cfg, _store())
+    except app_errors.Refused as exc:
+        print(exc)
+        return 1
+    print(f"folder: {out['folder']}")
+    if out["published"]:
+        print(f"deployed: {out['provider']} -> {out['result']}")
+        return 0
+    for err in out["errors"]:
+        print(f"  {err}")
+    if out["skipped"]:
+        print(f"  skipped (not configured): {', '.join(out['skipped'])}")
+    print("nothing was published")
+    return 1
 
 
 def cmd_repo(args) -> None:
@@ -715,7 +737,7 @@ def cmd_rules(args) -> None:
         print("none; every gated tool still asks")
 
 
-def main(argv=None) -> None:
+def main(argv=None) -> int:
     setup_logging()
     from . import company, plugins
 
@@ -882,8 +904,12 @@ def main(argv=None) -> None:
     secretscli.add_parser(sub)
 
     args = p.parse_args(argv)
-    args.fn(args)
+    # The return value was discarded, so a command had no way to tell a shell it failed —
+    # `corparius deploy` printed "no provider succeeded" and exited 0, which a script around it
+    # reads as a publish. `None` still means success, so the twenty-odd commands that return
+    # nothing are unaffected.
+    return int(args.fn(args) or 0)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -37,6 +37,7 @@ SHARED = {
     ("_deploy", "deploy"): "app_publish.publish",
     ("_set_settings", "set"): "app_settings.persist",
     ("_create_company", "new"): "app_companies.create",
+    ("_chat", "ceo"): "app_chat.once",
 }
 
 # Pairs that look like a pair and are not, with the reason. Audited by reading both sides.

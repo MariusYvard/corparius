@@ -161,6 +161,8 @@ RANKS: dict[str, int] = {
     "app/tasks": 5,
     "app/publish": 5,
     "app/companies": 5,
+    "app/chat": 5,
+    "app/directives": 5,
     "doctor": 5,
     "backup": 5,
     "selfupdate": 5,

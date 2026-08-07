@@ -30,11 +30,12 @@ from . import (
     backup,
     documents,
     sitegen,
-    structured,
 )
 from . import company as company_mod
 from . import inbox as inbox_mod
+from .app import chat as app_chat
 from .app import companies as app_companies
+from .app import directives as app_directives
 from .app import errors as app_errors
 from .app import publish as app_publish
 from .app import settings as app_settings
@@ -44,8 +45,7 @@ from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .config.settings import Settings
 from .doctor import run_checks
 from .kernel import dotenv, httpkit, i18n, paths
-from .kernel.records import AgentRole
-from .orchestrator import Runtime, _known_target
+from .orchestrator import Runtime
 from .providers import (
     claudecli,
     hardware,
@@ -54,7 +54,7 @@ from .providers import (
     provider_check,
 )
 from .providers.integrations import smtp_check, stripe_check, stripe_payments
-from .providers.llm import HybridRouter, connected_providers
+from .providers.llm import connected_providers
 from .roster import ROSTER
 from .store import Store
 from .tools.spec import ROLE_TOOL, SPEC
@@ -75,6 +75,14 @@ ALLOWED_VARS = settings_spec.WRITABLE
 _SECRET_VARS = settings_spec.SECRETS
 
 _CHAT_LIMIT = 30  # turns kept per company, in-process only
+
+# Re-exported under the names the route table, `tests/test_ceo_powers.py` and
+# `tests/test_registries.py` already spell. The definitions are in `app/directives.py`, which is
+# what reads them: `_apply_directives` moved so a terminal could reach the CEO's powers too.
+_CEO_ACTIONS = app_directives.CEO_ACTIONS
+_CEO_SCHEMA = app_directives.CEO_SCHEMA
+PAUSABLE = app_directives.PAUSABLE
+_apply_directives = app_directives.apply
 # Completed tasks sent to the console. They accumulate for the life of a company
 # and this payload is polled every few seconds; the store keeps all of them.
 DONE_KEPT = 60
@@ -364,331 +372,22 @@ def _providers_payload() -> dict:
     }
 
 
-# What the CEO chat can propose. Each maps to an existing, audited endpoint the
-# operator confirms with a click, so the chat never mutates on its own and money
-# or production still passes the HITL gate on the resulting run. The LLM only
-# routes intent; it opens no new path.
-_CEO_ACTIONS: dict[str, dict] = {
-    "run_day": {
-        "endpoint": "/api/run",
-        "body": {"ticks": 24},
-        "label_en": "Run a day",
-        "label_fr": "Lancer une journée",
-    },
-    "run_loop": {
-        "endpoint": "/api/run",
-        "body": {"ticks": 24, "loop": True},
-        "label_en": "Run continuously",
-        "label_fr": "Lancer en continu",
-    },
-    "deploy": {
-        "endpoint": "/api/deploy",
-        "body": {},
-        "label_en": "Publish the site",
-        "label_fr": "Publier le site",
-    },
-    "build_site": {
-        "endpoint": "/api/site",
-        "body": {},
-        "label_en": "Build the site",
-        "label_fr": "Générer le site",
-    },
-    "backup": {
-        "endpoint": "/api/backup",
-        "body": {},
-        "label_en": "Back up now",
-        "label_fr": "Sauvegarder",
-    },
-    "use_claude": {
-        "endpoint": "/api/claude/setup",
-        "body": {},
-        "no_company": True,
-        "label_en": "Use my Claude subscription",
-        "label_fr": "Utiliser mon abonnement Claude",
-    },
-}
-
-# Roles the operator can stand down or bring back. Closed on purpose: a
-# directive naming a role that does not exist would be a promise nothing keeps,
-# which is the failure this whole mechanism exists to end.
-PAUSABLE = ("social", "outreach", "support", "ads", "finance", "strategy", "competitor", "design")
-
-_CEO_SCHEMA = {
-    "reply": {"type": "str", "required": True, "max_len": 800},
-    "intent": {"type": "str", "default": "answer", "choices": ["answer"] + list(_CEO_ACTIONS)},
-    "ticks": {"type": "int", "default": 24},
-    # What the CEO is committing the company to, in a form the runtime obeys.
-    # Without these the chat was a conversation held over a machine that could
-    # not hear it: an operator said "too early for cold emailing", the CEO
-    # answered "I will pause the campaigns", and the next tick drafted another.
-    "pause": {"type": "list", "default": []},
-    "resume": {"type": "list", "default": []},
-    # What the company should be working on. Read by `create_tasks`, which
-    # otherwise queues its housekeeping baseline on top of whatever the operator
-    # just asked for — and re-arms a role they had just stood down.
-    "focus": {"type": "str", "default": "", "max_len": 200},
-    # {"social": 24} — hours between turns, per role. The alternative was editing
-    # company.yaml, which is not a thing anyone does mid-conversation.
-    "cadence": {"type": "dict", "default": {}, "shape": '{"social": 24}'},
-    # {"design": "openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"} —
-    # one role's model, without moving a whole tier. Only three tiers are
-    # configurable and nine roles take theirs from one of them, so giving the
-    # design agent a model that can read a picture used to mean moving the normal
-    # tier: measured on a real configuration, 535 tok/s down to 49 across four
-    # roles to gain vision on one.
-    "model": {"type": "dict", "default": {}, "shape": '{"design": "claudecode:opus"}'},
-    # Bonus, and deliberately narrow: name a tool whose pending request the
-    # operator is approving in words. The console button stays exactly as it is;
-    # this is a second door, not a replacement.
-    "approve": {"type": "list", "default": []},
-}
-
-
-def _apply_directives(store, slug: str, data: dict, lang: str) -> str:
-    """Turn the CEO's `pause` / `resume` lists into standing directives.
-
-    Returns a line naming what changed, appended to the reply so the operator
-    reads the effect rather than the intention. A role the model invented is
-    dropped and not mentioned: promising to pause `marketing` — which is not a
-    role — would be exactly the empty promise this replaces.
-    """
-
-    def names(key):
-        raw = data.get(key) or []
-        if isinstance(raw, str):
-            raw = [raw]
-        return [n for n in (str(x).strip().lower() for x in raw) if n in PAUSABLE]
-
-    paused, resumed = names("pause"), names("resume")
-    for role in paused:
-        store.add_directive(slug, "pause", role, "asked in the CEO chat")
-    for role in resumed:
-        for d in store.directives(slug, "pause"):
-            if d["target"] == role:
-                store.clear_directive(d["id"])
-    # A stated priority, which `create_tasks` reads instead of its baseline.
-    focus = str(data.get("focus") or "").strip()
-    if focus:
-        store.add_directive(slug, "focus", "", focus)
-    elif isinstance(data.get("focus"), str) and "focus" in data:
-        for d in store.directives(slug, "focus"):
-            store.clear_directive(d["id"])
-
-    # Cadence, in hours, per role. Bounded: zero would busy-loop a role and a
-    # year would be indistinguishable from off, and neither is what anybody
-    # means. Out of range is dropped rather than clamped silently.
-    cadence = {}
-    raw_cadence = data.get("cadence")
-    if isinstance(raw_cadence, dict):
-        for role, hours in raw_cadence.items():
-            role = str(role).strip().lower()
-            try:
-                hours = int(hours)
-            except (TypeError, ValueError):
-                continue
-            if role in PAUSABLE and 1 <= hours <= 168:
-                store.add_directive(slug, "cadence", role, str(hours))
-                cadence[role] = hours
-
-    # One role's model. Refused rather than stored when the prefix is not a
-    # provider this build routes to: an unknown target makes every turn of that
-    # role fall through the chain to local, which reads as a slow day and not as a
-    # typo. The refusal is named in the reply below, because a pin the operator
-    # believes they set is worse than one they know was rejected.
-    pins, refused_pins = {}, []
-    raw_models = data.get("model")
-    if isinstance(raw_models, dict):
-        for role, model in raw_models.items():
-            role, model = str(role).strip().lower(), str(model).strip()
-            if role not in PAUSABLE or not model:
-                continue
-            if _known_target(model):
-                store.add_directive(slug, "model", role, model)
-                pins[role] = model
-            else:
-                refused_pins.append(f"{role} → {model}")
-
-    # Bonus: approving in words. Narrow on purpose — it approves a request that
-    # already exists and was already shown, and the console button is untouched.
-    approved = []
-    for name in {str(x).strip() for x in (data.get("approve") or [])}:
-        waiting = store.pending_approval_for(slug, name)
-        if waiting:
-            store.set_approval_status(waiting["id"], "approved", "approved in the CEO chat")
-            approved.append(name)
-
-    parts = []
-    if paused:
-        parts.append(
-            i18n.pick(
-                lang,
-                f"Stood down from the next tick: {', '.join(paused)}.",
-                f"Mis en veille dès le prochain tour : {', '.join(paused)}.",
-            )
-        )
-    if resumed:
-        parts.append(
-            i18n.pick(
-                lang, f"Started again: {', '.join(resumed)}.", f"Redémarré : {', '.join(resumed)}."
-            )
-        )
-    if focus:
-        parts.append(i18n.pick(lang, f"Priority set: {focus}", f"Priorité fixée : {focus}"))
-    if cadence:
-        spelled = ", ".join(f"{r} every {h}h" for r, h in cadence.items())
-        spelled_fr = ", ".join(f"{r} toutes les {h} h" for r, h in cadence.items())
-        parts.append(i18n.pick(lang, f"Cadence: {spelled}.", f"Cadence : {spelled_fr}."))
-    if pins:
-        spelled = ", ".join(f"{r} on {m}" for r, m in pins.items())
-        spelled_fr = ", ".join(f"{r} sur {m}" for r, m in pins.items())
-        parts.append(i18n.pick(lang, f"Model: {spelled}.", f"Modèle : {spelled_fr}."))
-    if refused_pins:
-        # Named, not swallowed. A pin the operator believes they set is worse than
-        # one they know was refused.
-        joined = ", ".join(refused_pins)
-        parts.append(
-            i18n.pick(
-                lang,
-                f"Refused, no provider by that name: {joined}.",
-                f"Refusé, aucun fournisseur de ce nom : {joined}.",
-            )
-        )
-    if approved:
-        parts.append(
-            i18n.pick(
-                lang, f"Approved: {', '.join(approved)}.", f"Approuvé : {', '.join(approved)}."
-            )
-        )
-    if any((paused, resumed, focus, cadence, pins, refused_pins, approved)):
-        log.info(
-            "%s: CEO paused=%s resumed=%s focus=%r cadence=%s approved=%s",
-            slug,
-            paused or "-",
-            resumed or "-",
-            focus,
-            cadence or "-",
-            approved or "-",
-        )
-    return " ".join(parts)
-
-
 def _chat(state: UiState, slug: str, message: str, lang: str = "en") -> dict:
-    store = state.store()
-    st = store.status(slug)
-    tick = int(store.load_state(slug).get("tick", 0))
-    open_tasks = store.list_tasks(slug, "approved")[:5]
-    spec = ROSTER[AgentRole.CEO]
-    snapshot = (
-        f"Company snapshot: tick {tick}, {st['actions']} actions logged, "
-        f"{st['tokens']} tokens spent, {st['pending_approvals']} approvals pending, "
-        f"{st['open_tasks']} open tasks. Top open tasks: "
-        + ("; ".join(t["title"] for t in open_tasks) or "none")
-        + "."
+    """`app.chat.once`, holding the console's own conversation history.
+
+    The service takes the history as a parameter — that one line, `state.chats`, was the whole
+    reason a terminal could not have this. What is left here is owning the deque, which is a
+    console concern: it lives in process memory and does not survive a restart, and pretending
+    otherwise is schema 19's job rather than this function's.
+    """
+    return app_chat.once(
+        state.store(),
+        _fresh_settings(),
+        slug,
+        message,
+        history=state.chats.setdefault(slug, deque(maxlen=_CHAT_LIMIT)),
+        lang=lang,
     )
-    system = (
-        f"{spec.system_prompt} You are chatting with your human operator through "
-        f"the corparius console. Be concise and concrete; reference the snapshot "
-        # Not "Write 'reply' in French". A model reads that as an instruction to
-        # translate the word, and answers "Réponse" — reproduced live against
-        # llama-3.3-70b, three questions in a row, each answered with the label
-        # instead of an answer. Name the field and the language separately.
-        f"when relevant. The `reply` field holds your answer to the operator, "
-        f"written in {'French' if lang == 'fr' else 'English'}; do not put a label "
-        f"or a heading in it, only what you want to say. "
-        f"Set 'intent' to one of {', '.join(_CEO_ACTIONS)} ONLY when the operator is "
-        f"clearly asking to do that thing now; otherwise 'answer'. You never execute; "
-        f"the operator confirms with a button. "
-        # The part that makes the answer true rather than polite.
-        f"You DO have real powers, and using them is how your answer becomes true "
-        f"rather than polite. Roles: {', '.join(PAUSABLE)}. "
-        f"`pause` / `resume`: role names, when the operator does or does not want that "
-        f"kind of work for now. A paused role stops on the next tick and the backlog "
-        f"stops queueing for it. "
-        f"`focus`: one short sentence when they say what the company should concentrate "
-        f"on; it replaces the routine backlog until they change it. Empty string clears it. "
-        f'`cadence`: {{"social": 24}} to change how many hours between a role\'s turns. '
-        # Added to the schema and to _apply_directives without ever being named
-        # here, so the CEO could not know the power existed. Asked to put design
-        # on claudecode:opus it answered "J'approuve l'utilisation de Claudecode
-        # Opus pour le design" and wrote nothing — the empty promise, arriving
-        # through the field meant to end it. A power the model is not told about
-        # is a power nothing can reach.
-        f'`model`: {{"design": "claudecode:opus"}} to put one role on one model, '
-        f"without moving a whole tier. The value must carry the provider prefix "
-        f"(`local:`, `cloud:`, `claudecode:` or a provider name), or it is refused. "
-        f"`approve`: tool names whose pending request they are approving in words. "
-        f"Never claim to have done any of these unless you put it in the field, and never "
-        f"name a role that is not in the list above. Leave them empty for an ordinary "
-        f"answer. {snapshot}"
-    )
-    history = state.chats.setdefault(slug, deque(maxlen=_CHAT_LIMIT))
-    messages = (
-        [{"role": "system", "content": system}]
-        + [{"role": m["role"], "content": m["text"]} for m in history]
-        + [{"role": "user", "content": message}]
-    )
-    # One structured call classifies intent and writes the reply. The harness
-    # returns the same shape whatever model answered; in mock or on a weak model
-    # it falls back to intent=answer, so the chat degrades to plain conversation.
-    router = HybridRouter(_fresh_settings())
-    result = structured.ask(router, messages, _CEO_SCHEMA, difficulty=spec.difficulty)
-    for u in result.usages:
-        store.record_usage(slug, "ceo", u.input_tokens, u.output_tokens)
-    # `or message` echoed the operator's own question back at them, which reads
-    # like an answer and is not one. When the model said nothing usable, say so.
-    reply = (result.data.get("reply") or "").strip()
-    unanswered = not reply
-    if unanswered:
-        reply = i18n.pick(
-            lang,
-            "The model did not answer. It may be rate-limited or the tier may be "
-            "misconfigured — the Providers tab shows which one replied.",
-            "Le modèle n'a pas répondu. Il est peut-être limité en débit, ou le palier "
-            "est mal configuré — l'onglet Providers montre lequel a répondu.",
-        )
-    # Act on it, then report what actually happened. The CEO used to answer
-    # "I will pause the campaigns" and change nothing; now the sentence and the
-    # state agree, or the sentence is corrected.
-    changed = _apply_directives(store, slug, result.data, lang)
-    if changed:
-        reply = "\n\n".join(part for part in (reply, changed) if part)
-        unanswered = False
-    intent = result.data.get("intent", "answer")
-    proposal = None
-    if intent in _CEO_ACTIONS and not result.fell_back:
-        spec_a = dict(_CEO_ACTIONS[intent])
-        body = dict(spec_a["body"])
-        if intent == "run_day":
-            body["ticks"] = max(1, min(int(result.data.get("ticks", 24)), 48))
-        proposal = {
-            "intent": intent,
-            "endpoint": spec_a["endpoint"],
-            "body": body,
-            "needs_company": not spec_a.get("no_company"),
-            "label": i18n.pick(lang, spec_a["label_en"], spec_a["label_fr"]),
-        }
-    provider, _, model = result.source.partition(":")  # "mock:haiku" -> mock, haiku
-    history.append({"role": "user", "text": message})
-    history.append(
-        {
-            "role": "assistant",
-            "text": reply,
-            "model": model,
-            "provider": provider,
-            "unanswered": unanswered,
-        }
-    )
-    return {
-        "ok": True,
-        "reply": reply,
-        # So the page can render a failure as a failure rather than as the CEO
-        # having said something odd.
-        "unanswered": unanswered,
-        "model": model,
-        "provider": provider,
-        "proposal": proposal,
-        "history": list(history),
-    }
 
 
 def _start_run(state: UiState, slug: str, ticks: int, loop: bool = False, lang: str = "en") -> dict:

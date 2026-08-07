@@ -34,6 +34,7 @@ from . import (
 )
 from . import company as company_mod
 from . import inbox as inbox_mod
+from .app import companies as app_companies
 from .app import errors as app_errors
 from .app import publish as app_publish
 from .app import settings as app_settings
@@ -740,41 +741,29 @@ _DEFAULT_AGENTS = company_mod.DEFAULT_AGENTS  # kept: the wizard's checkbox list
 
 
 def _create_company(state: UiState, body: dict) -> dict:
-    """The wizard. It asks for two fields and fills the rest from the same
-    validator the editor uses, so a company created here and one edited later
-    can never disagree about what a company is."""
-    # A template prefills offer/icp/agents; explicit body fields still win, so the
-    # operator's typed name and product override the template's examples.
-    tpl = company_mod.template(str(body.get("template", ""))) or {}
-    lang = "fr" if str(body.get("lang", "")).startswith("fr") else "en"
-    offer = {"product": body.get("product") or tpl.get(f"product_{lang}", "")}
-    if tpl:
-        offer["price_eur"] = tpl.get("price_eur")
-        offer["billing"] = tpl.get("billing", "stripe")
-    icp = {"segment": body.get("segment") or tpl.get(f"segment_{lang}", "")}
-    if tpl:
-        icp["channels"] = tpl.get("channels", [])
-        icp["pains"] = tpl.get(f"pains_{lang}", [])
-    agents = {**tpl.get("agents", {}), **dict(body.get("agents", {}))}
-    cfg, errors, warnings = company_mod.validate(
-        {
-            "name": body.get("name", ""),
-            "one_liner": body.get("one_liner", ""),
-            "offer": offer,
-            "icp": icp,
-            "agents": agents,
-            "budgets": {"session_tokens": body.get("session_tokens", 80000)},
-        }
-    )
-    if errors:
-        return {"ok": False, "error": "; ".join(errors)}
-    path = company_mod.path_for(cfg["slug"])
-    if path.exists():
-        return {"ok": False, "error": f"company '{cfg['slug']}' already exists"}
-    company_mod.dump(cfg, path)
-    state.store().save_state(cfg["slug"], {"tick": 0})
-    log.info("company created from the console: %s", cfg["slug"])
-    return {"ok": True, "slug": cfg["slug"], "companies": _companies(), "warnings": warnings}
+    """`app.companies.create`, with its refusal turned into a payload.
+
+    The wizard asks for two fields and fills the rest from the same validator the editor uses,
+    so a company created here and one edited later can never disagree about what a company is.
+    The service is what lets a terminal have that too — before this there was no way to create
+    a company from one at all.
+    """
+    try:
+        out = app_companies.create(
+            state.store(),
+            name=str(body.get("name", "")),
+            one_liner=str(body.get("one_liner", "")),
+            product=str(body.get("product") or ""),
+            segment=str(body.get("segment") or ""),
+            template=str(body.get("template", "")),
+            agents=dict(body.get("agents", {})),
+            session_tokens=int(body.get("session_tokens", app_companies.DEFAULT_SESSION_TOKENS)),
+            lang=str(body.get("lang", "")),
+        )
+    except app_errors.Refused as exc:
+        return {"ok": False, "error": str(exc)}
+    log.info("company created from the console: %s", out["slug"])
+    return {"ok": True, "slug": out["slug"], "companies": _companies(), "warnings": out["warnings"]}
 
 
 def _company_payload(slug: str) -> dict:

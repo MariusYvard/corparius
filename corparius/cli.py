@@ -63,6 +63,48 @@ def cmd_init(args) -> None:
     print(f"initialised {cfg.get('name')} ({cfg['slug']}). agents on: {on}")
 
 
+def cmd_new(args) -> int:
+    """Create a company from a terminal, through the console wizard's own validator.
+
+    There was no way to do this before. `init` looks like it and is not — it stamps the state of
+    a company that already exists — so an operator wrote companies/<slug>/company.yaml by hand,
+    guessing the shape and the required fields, with nothing running `company.validate` at
+    creation time. The wizard's design note is that a company created there and one edited later
+    "can never disagree about what a company is"; a hand-written file had none of that.
+    """
+    from .app import companies as app_companies
+    from .app import errors as app_errors
+
+    if args.list_templates:
+        for tpl in app_companies.templates(args.lang):
+            agents = ", ".join(tpl["agents"]) or "the defaults"
+            print(f"{tpl['id']:<12} {tpl['label']}")
+            print(f"{'':<12} agents: {agents}")
+        return 0
+    try:
+        out = app_companies.create(
+            _store(),
+            name=args.name,
+            one_liner=args.one_liner,
+            product=args.product,
+            segment=args.segment,
+            template=args.template,
+            session_tokens=args.session_tokens,
+            lang=args.lang,
+        )
+    except app_errors.Refused as exc:
+        print(exc)
+        return 1
+    print(f"created {out['config'].get('name')} ({out['slug']})")
+    print(f"  {company.path_for(out['slug'])}")
+    on = sorted(k for k, v in out["config"].get("agents", {}).items() if v)
+    print(f"  agents on: {', '.join(on)}")
+    for warning in out["warnings"]:
+        print(f"  repaired: {warning}")
+    print(f"next: corparius run --company {out['slug']} --ticks 12")
+    return 0
+
+
 def cmd_run(args) -> None:
     from .orchestrator import Runtime
 
@@ -876,6 +918,17 @@ def main(argv=None) -> int:
     sp.add_argument("--answer-to", default="", help="inbox item id to answer or dismiss")
     sp.add_argument("--answer", default="", help="the answer text")
     sp.set_defaults(fn=cmd_inbox)
+
+    sp = sub.add_parser("new", help="create a company (the console wizard, from a terminal)")
+    sp.add_argument("--name", default="", help="the company name; the slug is derived from it")
+    sp.add_argument("--product", default="", help="what it sells, in one line")
+    sp.add_argument("--segment", default="", help="who it sells to")
+    sp.add_argument("--one-liner", dest="one_liner", default="")
+    sp.add_argument("--template", default="", help="a starter template; --list-templates to see")
+    sp.add_argument("--list-templates", action="store_true", help="show the templates and exit")
+    sp.add_argument("--session-tokens", dest="session_tokens", type=int, default=80000)
+    sp.add_argument("--lang", default="en", help="the language its examples are written in")
+    sp.set_defaults(fn=cmd_new)
 
     sp = sub.add_parser("set", help="write a setting (KEY=value ...), the console's own path")
     sp.add_argument("pairs", nargs="+", metavar="KEY=value")

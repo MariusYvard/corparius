@@ -20,6 +20,14 @@ La console écrit tout ce que corparius lit. L'éditeur de société couvre chaq
 
 L'onglet Réglages couvre le reste, groupe par groupe, piloté par le registre `corparius/config/settings_spec.py` : ajouter un réglage est une ligne, pas une modification du HTML. Chaque champ affiche la couche qui lui répond et se met en lecture seule quand l'environnement du processus le fixe (voir la table de précédence du README) — un réglage n'est jamais ignoré en silence.
 
+**Sans navigateur : `corparius set CLE=valeur`.** La page et la commande passent par le même
+service (`corparius/app/settings.py`), donc elles refusent les mêmes valeurs avec les mêmes
+messages, et chaque clé part dans la couche qui peut la porter — le store pour un réglage
+ordinaire, `.env` pour une clé d'amorçage, avec le redémarrage annoncé. C'était la première des
+onze choses que la console savait faire et que la ligne de commande ne savait pas, parce que la
+logique vivait dans le gestionnaire HTTP : `_persist(state, …)` prenait un objet de console, et
+ce paramètre était toute la barrière.
+
 ## Compte mail
 
 Un compte, dans les deux sens. Choisissez le fournisseur, donnez l'adresse et un mot de passe d'application : les serveurs et ports SMTP et IMAP sont déduits et repliés sous « Réglages déduits ». Le bouton « Tester ce compte » envoie un vrai message et lit vraiment la boîte, puis rapporte les deux moitiés séparément — elles échouent pour des raisons différentes. Les diagnostics nomment le remède, pas le protocole.

@@ -152,7 +152,11 @@ RANKS: dict[str, int] = {
     "safety": 4,
     "sitegen": 4,
     "apps": 4,
-    # 5 — app
+    # 5 — app: the use cases, with no transport attached, so the console and the command line
+    # both reach them. `tests/test_app_layer.py` holds the two rules that keep this from being
+    # a folder of renamed handlers: no `Ctx` parameter, and no transport error raised.
+    "app/__init__": 5,
+    "app/settings": 5,
     "doctor": 5,
     "backup": 5,
     "selfupdate": 5,

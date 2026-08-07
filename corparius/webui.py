@@ -17,7 +17,6 @@ import base64
 import hmac
 import json
 import logging
-import os
 import threading
 import time
 from collections import deque
@@ -35,6 +34,7 @@ from . import (
 )
 from . import company as company_mod
 from . import inbox as inbox_mod
+from .app import settings as app_settings
 from .config import cfg, permissions, settings_spec
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .config.settings import Settings
@@ -824,58 +824,17 @@ def _delete_company(state: UiState, slug: str, confirm: str, purge: bool) -> dic
 
 
 def _persist(state: UiState, values: dict[str, str], unset: list[str] | None = None) -> dict:
-    """Write settings saved from the page, each to the layer it belongs to.
+    """`app.settings.persist`, with its refusal turned into a status code.
 
-    Bootstrap keys (cfg.BOOTSTRAP) go to .env: they must be readable before the
-    store can be opened, so they cannot live in it. Everything else goes to the
-    settings table, which outranks .env and survives a restart.
-
-    Nothing is written to os.environ. That layer belongs to whoever started the
-    process; writing it here would promote a console value above every later
-    edit and make cfg.source() report "env" for a value the console itself set.
-    A key the process environment already defines is reported back as shadowed
-    rather than silently ignored.
-
-    Returns the meta the caller merges into its payload.
+    The service takes `(store, env_file)` rather than a `UiState`, which is what makes it
+    reachable from the command line — the console object was the only reason it was not. What
+    is left here is the part that is genuinely about HTTP: a value with a newline in it comes
+    back as a 400 instead of a traceback, exactly as `_merge_env_file` does one layer down.
     """
-    unset = unset or []
-    boot = {k: v for k, v in values.items() if k in cfg.BOOTSTRAP}
-    stored = {k: v for k, v in values.items() if k not in cfg.BOOTSTRAP}
-    if boot:
-        _merge_env_file(state.env_file, boot)
-    if stored or unset:
-        store = state.store()
-        for key, value in stored.items():
-            store.set_setting(key, value, secret=key in _SECRET_VARS)
-        for key in unset:
-            store.delete_setting(key)
-        if any(k in cfg.BOOTSTRAP for k in unset):
-            _merge_env_file(state.env_file, {k: "" for k in unset if k in cfg.BOOTSTRAP})
-    cfg.invalidate()
-    meta: dict = {}
-    # Setting or clearing the passphrase from the page has to rewrite what is
-    # already stored, exactly as `corparius secrets on` does. Without this the
-    # field looked like it encrypted the operator's keys and only affected the
-    # next write — the trap that made the setting mean less than it said.
-    if "CORP_SECRET_KEY" in values or "CORP_SECRET_KEY" in unset:
-        from .config import secretbox
-
-        try:
-            changed = state.store().rewrite_secrets(to_encrypted=secretbox.enabled())
-        except Exception:  # noqa: BLE001 - a wrong passphrase must not 500 the page
-            meta["secrets_error"] = (
-                "The stored secrets could not be rewritten with that passphrase. "
-                "It has to be the one they were encrypted with."
-            )
-        else:
-            meta["secrets_rewritten"] = sorted(changed)
-    shadowed = [k for k in list(values) + unset if os.environ.get(k) is not None]
-    if shadowed:
-        meta["shadowed"] = sorted(shadowed)
-    restart = sorted(k for k in list(values) + unset if k in cfg.BOOTSTRAP)
-    if restart:
-        meta["restart_required"] = restart
-    return meta
+    try:
+        return app_settings.persist(state.store(), state.env_file, values, unset)
+    except dotenv.LineBreakRefused as exc:
+        raise _RequestRefused(400, str(exc)) from exc
 
 
 def _set_env(state: UiState, values: dict) -> dict:
@@ -1140,20 +1099,7 @@ def _set_settings(state: UiState, values: dict, unset: list) -> dict:
     """Validate against the registry, then persist. An empty value clears the
     setting rather than storing an empty string, so the layer below shows
     through again."""
-    clean: dict[str, str] = {}
-    drop: list[str] = [k for k in unset if k in settings_spec.BY_KEY]
-    errors: list[str] = []
-    for key, raw in values.items():
-        spec = settings_spec.BY_KEY.get(key)
-        if spec is None:
-            return {"ok": False, "error": f"unknown setting '{key}'"}
-        value, err = settings_spec.coerce(spec, raw)
-        if err:
-            errors.append(err)
-        elif value is None:
-            drop.append(key)
-        else:
-            clean[key] = value
+    clean, drop, errors = app_settings.validate(values, unset)
     if errors:
         return {"ok": False, "error": "; ".join(errors)}
     meta = _persist(state, clean, drop)

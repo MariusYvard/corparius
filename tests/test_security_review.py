@@ -153,6 +153,10 @@ def test_the_host_allow_list_is_still_not_settable_by_name():
 # Every module allowed to write a .env, and what for. A new name here is a new way into the
 # file that holds CORP_UI_ALLOWED_HOSTS, so adding one should cost a line in this list.
 DOTENV_CALLERS = {
+    # The service both callers share, and the reason this list grew rather than moved: the
+    # console's handler now delegates here, and so does `corparius set`. One writer, two
+    # callers — which is the point of `app/`.
+    "corparius/app/settings.py",
     "corparius/webui.py",  # the settings page and the providers panel
     "corparius/backup.py",  # a restore, from an archive someone else may have built
     "corparius/secretscli.py",  # `corparius secrets on`

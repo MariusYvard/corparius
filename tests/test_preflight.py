@@ -20,7 +20,7 @@ import types
 import pytest
 import requests
 
-from corparius import preflight
+from corparius import preflight, routing
 from corparius.preflight import BLOCKED, CAPACITY, UNKNOWN, USABLE
 
 
@@ -591,7 +591,8 @@ def test_recommended_routing_never_writes_a_tier_proved_uncallable():
     """The point of measuring 785 models. Without this the knowledge only
     filtered a dropdown, and "recommended routing" kept writing the pinned
     literal — which is exactly how openrouter's rotted default shipped."""
-    from corparius.llm import OPENAI_COMPAT_PROVIDERS, recommended_routing
+    from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
+    from corparius.routing import recommended_routing
 
     default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
     proven = {
@@ -609,7 +610,8 @@ def test_recommended_routing_never_writes_a_tier_proved_uncallable():
 def test_a_working_default_is_never_second_guessed_for_a_faster_one():
     """The defaults are chosen for capability, not latency. Only a *blocked*
     default is replaced."""
-    from corparius.llm import OPENAI_COMPAT_PROVIDERS, recommended_routing
+    from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
+    from corparius.routing import recommended_routing
 
     default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
     proven = {
@@ -624,7 +626,7 @@ def test_a_working_default_is_never_second_guessed_for_a_faster_one():
 def test_with_nothing_measured_routing_is_exactly_what_it_was():
     """No preflight run means no knowledge, and no knowledge must not change
     anybody's configuration."""
-    from corparius.llm import recommended_routing
+    from corparius.routing import recommended_routing
 
     assert recommended_routing(["groq", "cerebras"]) == recommended_routing(
         ["groq", "cerebras"], proven={}
@@ -635,7 +637,8 @@ def test_a_blocked_default_with_no_alternative_is_kept_and_reported(caplog):
     """Swapping it for nothing would be worse. Say so instead."""
     import logging
 
-    from corparius.llm import OPENAI_COMPAT_PROVIDERS, recommended_routing
+    from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
+    from corparius.routing import recommended_routing
 
     default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
     proven = {"groq": {default: {"state": BLOCKED, "ms": 0}}}
@@ -730,7 +733,7 @@ def test_a_model_that_cannot_return_json_ranks_last_however_fast_it_is():
     chain: `cerebras:gpt-oss-120b` answers in 38 tok/s and cannot produce a JSON
     object, and `openrouter:openai/gpt-oss-20b:free` neither. Every tool with a
     schema goes through `structured.ask`, so speed is worth nothing without it."""
-    order = preflight.rank(
+    order = routing.rank(
         _slice(
             fast_no_json={"tok_s": 900.0, "json_ok": False},
             slow_json={"tok_s": 12.0},
@@ -742,7 +745,7 @@ def test_a_model_that_cannot_return_json_ranks_last_however_fast_it_is():
 def test_reliability_outranks_throughput():
     """Two failures in five samples is a turn dropped in five, and no amount of
     tokens per second makes that up."""
-    order = preflight.rank(
+    order = routing.rank(
         _slice(
             flaky={"tok_s": 900.0, "samples": 5, "failures": 2, "reliability": 0.6},
             steady={"tok_s": 100.0},
@@ -754,7 +757,7 @@ def test_reliability_outranks_throughput():
 def test_throughput_decides_when_nothing_else_separates_them():
     """Measured 594 tok/s against 10.6 on two providers in the same chain — not
     a tiebreak, a real difference, but the last thing considered."""
-    assert preflight.rank(_slice(slow={"tok_s": 10.0}, quick={"tok_s": 594.0})) == [
+    assert routing.rank(_slice(slow={"tok_s": 10.0}, quick={"tok_s": 594.0})) == [
         "quick",
         "slow",
     ]
@@ -763,7 +766,7 @@ def test_throughput_decides_when_nothing_else_separates_them():
 def test_a_model_never_measured_is_not_punished_for_it():
     """Absence of evidence is not evidence. A catalogue sweep proves
     availability and measures nothing; those models must stay eligible."""
-    order = preflight.rank(
+    order = routing.rank(
         _slice(
             unmeasured={"samples": 0, "json_ok": False, "tok_s": 0.0},
             measured_bad={"json_ok": False, "tok_s": 900.0},
@@ -773,17 +776,18 @@ def test_a_model_never_measured_is_not_punished_for_it():
 
 
 def test_blocked_models_are_not_ranked_at_all():
-    assert "dead" not in preflight.rank(_slice(alive={}, dead={"state": BLOCKED}))
+    assert "dead" not in routing.rank(_slice(alive={}, dead={"state": BLOCKED}))
 
 
 def test_the_order_is_deterministic_when_everything_ties():
     """Two runs of routing must not disagree about which model to write."""
     tied = _slice(bravo={}, alpha={})
-    assert preflight.rank(tied) == preflight.rank(tied) == ["alpha", "bravo"]
+    assert routing.rank(tied) == routing.rank(tied) == ["alpha", "bravo"]
 
 
 def test_routing_takes_the_best_measured_model_not_merely_the_fastest():
-    from corparius.llm import OPENAI_COMPAT_PROVIDERS, recommended_routing
+    from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
+    from corparius.routing import recommended_routing
 
     default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
     proven = {
@@ -954,11 +958,11 @@ def test_the_hard_tier_takes_the_capable_model_not_the_fast_one():
     """Strategy and code run a few times a day. A slow model that reasons, with
     a 1M context and a 2026 generation, is the right trade there, and precisely
     the wrong one for a social post every two hours."""
-    assert preflight.rank(SLICE, "hard", CATALOGUE)[0] == BIG
+    assert routing.rank(SLICE, "hard", CATALOGUE)[0] == BIG
 
 
 def test_the_trivial_tier_takes_the_fast_small_one():
-    assert preflight.rank(SLICE, "trivial", CATALOGUE)[0] == "llama-3.1-8b-instruct"
+    assert routing.rank(SLICE, "trivial", CATALOGUE)[0] == "llama-3.1-8b-instruct"
 
 
 def test_normal_is_balanced_and_not_trivial_with_extra_steps():
@@ -972,11 +976,11 @@ def test_normal_is_balanced_and_not_trivial_with_extra_steps():
     mixed = dict(SLICE)
     # Slower than the 8B, far more capable; faster than the 120B, less capable.
     mixed["llama-3.3-70b-versatile"] = _measured(tok_s=594.0, ms=900)
-    trivial = preflight.rank(mixed, "trivial", CATALOGUE)
-    normal = preflight.rank(mixed, "normal", CATALOGUE)
+    trivial = routing.rank(mixed, "trivial", CATALOGUE)
+    normal = routing.rank(mixed, "normal", CATALOGUE)
     assert normal.index(BIG) <= trivial.index(BIG)
     # And neither is the hard ordering, which puts capability first outright.
-    assert preflight.rank(mixed, "hard", CATALOGUE) not in (trivial, normal)
+    assert routing.rank(mixed, "hard", CATALOGUE) not in (trivial, normal)
 
 
 def test_measured_beats_declared_on_every_tier():
@@ -986,25 +990,26 @@ def test_measured_beats_declared_on_every_tier():
     crippled = dict(SLICE)
     crippled[BIG] = _measured(tok_s=60.0, json_ok=False)
     for tier in ("trivial", "normal", "hard"):
-        assert preflight.rank(crippled, tier, CATALOGUE)[-1] == BIG, tier
+        assert routing.rank(crippled, tier, CATALOGUE)[-1] == BIG, tier
 
 
 def test_an_operator_score_outranks_the_derived_signals():
     """Someone who supplied a table knows something this code does not."""
     scores = {"llama3.18b": 99.0}
-    assert preflight.rank(SLICE, "hard", CATALOGUE, scores)[0] == "llama-3.1-8b-instruct"
+    assert routing.rank(SLICE, "hard", CATALOGUE, scores)[0] == "llama-3.1-8b-instruct"
 
 
 def test_with_no_catalogue_ranking_is_what_it_was():
     """A machine that has never fetched the catalogue must not find itself
     routed differently by accident."""
-    assert preflight.rank(SLICE, "normal") == preflight.rank(SLICE, "normal", {})
+    assert routing.rank(SLICE, "normal") == routing.rank(SLICE, "normal", {})
 
 
 def test_routing_asks_for_the_right_tier():
     """The trivial tier and the hard tier must not receive the same model just
     because one ranking function serves both."""
-    from corparius.llm import OPENAI_COMPAT_PROVIDERS, recommended_routing
+    from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
+    from corparius.routing import recommended_routing
 
     default = OPENAI_COMPAT_PROVIDERS["groq"]["default_model"]
     # The default is itself one of the models in SLICE, so it has to be marked

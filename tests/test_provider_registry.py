@@ -94,7 +94,7 @@ def test_the_two_paid_giants_are_not_in_the_free_routing_order():
     """`_ROUTING_ORDER` is what gets picked automatically. OpenAI and Alibaba
     bill per token from the first call, so landing there by default would spend
     an operator's money without them choosing it."""
-    from corparius.llm import _ROUTING_ORDER
+    from corparius.routing import _ROUTING_ORDER
 
     assert "openai" not in _ROUTING_ORDER and "alibaba" not in _ROUTING_ORDER
 

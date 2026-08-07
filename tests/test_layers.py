@@ -107,6 +107,12 @@ RANKS: dict[str, int] = {
     "claudecli": 3,
     "preflight": 3,
     "modelinfo": 3,
+    # Policy over measurements: which model a tier is pointed at, and the vocabulary of the
+    # evidence that decides it. Rank 3 rather than the `domain/routing_policy` the plan named,
+    # because `claudecli.setup` calls `recommended_routing` and `claudecli` is rank 3 — a
+    # rank-4 home would have created an upward import and undone the zero. The rule outranks
+    # the folder guess.
+    "routing": 3,
     "provider_check": 3,
     "ollama_setup": 3,
     "hardware": 3,
@@ -181,17 +187,23 @@ RANKS: dict[str, int] = {
 # upward import fails here with nothing to hide behind.
 KNOWN_RANK_VIOLATIONS: frozenset[tuple[str, str]] = frozenset()
 
-# The strongly connected components that still exist, each with the stage that ends it.
-# Five when the plan was written; `{cfg, secretbox}` went first, by splitting the module
-# rather than moving it. Every one of these lives on a *deferred* import — which is why the
-# rules above read function bodies, and why this list is possible to write at all.
+# The strongly connected components that still exist. **One**, of the five the restructuring
+# started with, and every one that died says the same thing: the cycle was never the problem,
+# it was the symptom of a module carrying two things.
+#
+#   {cfg, secretbox}                        stage 1 — cryptography split from policy
+#   {appserver, backup, doctor, selfupdate, webui}
+#                                           stage 1 — a body ceiling and a Host parser are
+#                                           not console features (kernel/httpkit)
+#   {agents, company, tools}                stage 3 — a data table and the machine that
+#                                           consumes it were one file (roster)
+#   {claudecli, llm, preflight}             stage 5 — `rank` and `recommended_routing` are
+#                                           decisions, living inside what they decide about
+#
+# Every one of them lived on a *deferred* import, which is why the rules above read function
+# bodies, and why this list was possible to write at all.
 KNOWN_CYCLES: frozenset[tuple[str, ...]] = frozenset(
     {
-        # Stage 5. `llm` asks `preflight` what works and `preflight` asks `claudecli`, and
-        # both ask `llm` back. `hardware` was in here too and left in stage 2: its only edge
-        # into `llm` was `_split`, so moving the provider table — and the splitter that needs
-        # to know what is in it — to `config/provider_table.py` dissolved that edge as well.
-        ("claudecli", "llm", "preflight"),
         # Stage 7. All of it is `cli._store`, which two sub-CLIs import.
         ("appcli", "cli", "secretscli"),
     }
@@ -471,7 +483,7 @@ def test_the_ratchet_only_ever_tightens():
     fixing a module."""
     assert len(KNOWN_RANK_VIOLATIONS) <= 2, "upward imports should only ever decrease"
     assert len(KNOWN_IMPURE) <= 3, "domain impurities should only ever decrease"
-    assert len(KNOWN_CYCLES) <= 2, "cycles should only ever decrease"
+    assert len(KNOWN_CYCLES) <= 1, "cycles should only ever decrease"
 
 
 def _ratchet(observed: set, known: frozenset, what: str) -> None:

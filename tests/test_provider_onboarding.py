@@ -7,8 +7,10 @@ that turn a connected key into a working full configuration are covered too.
 
 import types
 
+from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
 from corparius.config.settings_spec import LLM_SERVER_PRESETS
-from corparius.llm import OPENAI_COMPAT_PROVIDERS, list_models, recommended_routing
+from corparius.llm import list_models
+from corparius.routing import recommended_routing
 from corparius.webui import _providers_payload
 
 

@@ -90,12 +90,6 @@ def _mock_json(prompt: str, model: str) -> str:
     return json.dumps(out or {"result": f"[mock:{model}]"})
 
 
-# Preference for the general tiers: fast, generous models first; OpenRouter last
-# for the normal tier because its default is a reasoning model (slower), but
-# first choice for the hard tier for the same reason.
-_ROUTING_ORDER = ["groq", "cerebras", "mistral", "ovh", "openrouter"]
-
-
 def connected_providers() -> list[str]:
     """The OpenAI-compatible providers that actually have what they need to
     answer: a key, or a base URL for the ones that take none. The console and
@@ -110,101 +104,6 @@ def connected_providers() -> list[str]:
             and (cfg.get(spec.get("base_env", ""), "").strip() or spec.get("base"))
         )
     ]
-
-
-def recommended_routing(
-    configured: list[str],
-    local_trivial: str = "",
-    hard: str = "",
-    fallback_tail=(),
-    proven: dict[str, dict[str, dict]] | None = None,
-    catalogue: dict[str, dict] | None = None,
-    scores: dict[str, float] | None = None,
-) -> dict[str, str] | None:
-    """A coherent tier configuration from the free providers actually connected,
-    so no tier resolves to something the operator has not set up.
-
-    Returns the environment variables to write, or None when nothing usable is
-    connected. This closes the gap left by the defaults (trivial on a local model
-    that may be absent, normal/hard on paid Anthropic): enabling one free key set
-    only the normal tier and left the rest broken. Here every tier lands on a
-    connected provider - a reasoning model on hard when OpenRouter is in the mix,
-    fast general models elsewhere, local on trivial when Ollama is up - and the
-    fallback chain lists the remaining providers (the router always ends on local
-    after it).
-
-    `hard` overrides the top tier — that is what lets a metered account (a Claude
-    subscription, in practice) take the strategy and coder work while the free
-    providers carry the rest.
-
-    `local_trivial` is the local model to put on the trivial tier, or "" for
-    none. It replaced an `ollama_ready` boolean, which asked the wrong question:
-    a port answering says nothing about whether the machine can serve a tier.
-    The caller measures (see corparius/hardware.py) and passes the answer.
-
-    `fallback_tail` is the remote ladder walked once every free provider has
-    failed, before the router drops to local. It is deliberately separate from
-    `hard`: the chain is shared by *every* tier, so putting the top-tier model
-    there would let a failed social post escalate to the most expensive model in
-    the roster. Cheapest first — the everyday work degrades one rung at a time.
-
-    `proven` is what a preflight actually measured, from
-    `preflight.proven_map`. Without it this behaves exactly as before, on the
-    `default_model` literals — which are strings frozen on the day they were
-    written, and they rot: openrouter's pinned default stopped existing while
-    its paid variant stayed, so "recommended" routing wrote a tier that 404s.
-    With it, a default known to be blocked is never chosen, and the replacement
-    is the fastest model that province actually answered on. Measuring 785
-    models to populate a dropdown would have been a waste; this is what the
-    measurement is for.
-    """
-    picks = [
-        p
-        for p in _ROUTING_ORDER
-        if p in configured and OPENAI_COMPAT_PROVIDERS.get(p, {}).get("default_model")
-    ]
-    if not picks:
-        return None
-
-    def model(provider: str, tier: str = "normal") -> str:
-        default = OPENAI_COMPAT_PROVIDERS[provider]["default_model"]
-        known = (proven or {}).get(provider) or {}
-        if not known or known.get(default, {}).get("state") != "blocked":
-            # Nothing measured, or the default is fine. Never second-guess a
-            # working default on the strength of a faster alternative: the
-            # defaults are chosen for capability, not latency.
-            return f"{provider}:{default}"
-        from .preflight import rank
-
-        usable = rank(known, tier=tier, catalogue=catalogue, scores=scores)
-        if not usable:
-            log.warning(
-                "%s: the pinned default %s is not callable with this key, and nothing else "
-                "on it has been proved. Leaving it; run `corparius preflight --provider %s`.",
-                provider,
-                default,
-                provider,
-            )
-            return f"{provider}:{default}"
-        # Best measured model on that provider — schema-capable first, then
-        # reliable, then fast. See preflight.rank for why that order.
-        best = usable[0]
-        log.info("%s: %s is not callable; routing to %s, which answered", provider, default, best)
-        return f"{provider}:{best}"
-
-    normal_p = picks[0]
-    hard_p = "openrouter" if "openrouter" in picks else normal_p
-    # The chain is walked by every tier, so it is ranked as `normal`.
-    chain = [model(p) for p in picks if p != normal_p]
-    chain += [step for step in fallback_tail if step]
-    return {
-        "CORP_TRIVIAL_MODEL": (
-            f"local:{local_trivial}" if local_trivial else model(normal_p, "trivial")
-        ),
-        "CORP_NORMAL_MODEL": model(normal_p, "normal"),
-        "CORP_HARD_MODEL": hard or model(hard_p, "hard"),
-        "CORP_LLM_FALLBACK": ",".join(chain),
-    }
 
 
 def list_models(name: str, timeout: int = 8) -> list[str]:

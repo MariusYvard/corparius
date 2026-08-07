@@ -14,9 +14,9 @@ from email.utils import make_msgid
 
 import requests
 
+from ..config import cfg
+from ..kernel import i18n
 from . import deliverability
-from .config import cfg
-from .kernel import i18n
 
 
 def stripe_reconcile(timeout: int = 15) -> str | None:

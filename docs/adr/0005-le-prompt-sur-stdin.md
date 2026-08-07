@@ -36,4 +36,4 @@ Une branche par plateforme sur un budget de caractères, et un cas de repli à t
 
 ## Où c'est appliqué
 
-`corparius/llm.py:721-737` (le budget et sa mesure), `tests/test_claudecode_prompt.py`.
+`corparius/providers/llm.py:721-737` (le budget et sa mesure), `tests/test_claudecode_prompt.py`.

@@ -132,7 +132,8 @@ def cmd_task(args) -> None:
 
 
 def cmd_deploy(args) -> None:
-    from . import deploy, sitegen
+    from . import sitegen
+    from .providers import deploy
 
     cfg = _load_company(args.company)
     out_dir = str(paths.site_dir(settings.data_path, cfg["slug"]))
@@ -142,7 +143,7 @@ def cmd_deploy(args) -> None:
 
 
 def cmd_repo(args) -> None:
-    from . import companyrepo
+    from .providers import companyrepo
 
     company = _load_company(args.company)
     slug = company["slug"]
@@ -208,7 +209,7 @@ def cmd_preflight(args) -> None:
     The free tiers this project is built for look exactly like that when they
     wake up, and failing them would throw away models that work a minute later.
     """
-    from . import preflight
+    from .providers import preflight
 
     settings = Settings()
     if settings.llm_mock:
@@ -273,7 +274,7 @@ def cmd_preflight(args) -> None:
     # Refresh what the providers say a model *is*, alongside measuring what it
     # does. This is the one command that already goes to the network on purpose,
     # so it is the right place — routing itself never fetches.
-    from . import modelinfo
+    from .providers import modelinfo
 
     catalogue = modelinfo.refresh(_store())
     if catalogue:
@@ -349,7 +350,7 @@ def cmd_bench(args) -> None:
     alone was 6.9s on the machine this was written for — which is why it lives
     behind a command instead of running wherever the answer is wanted.
     """
-    from . import hardware
+    from .providers import hardware
 
     settings = Settings()
     store = _store()
@@ -399,7 +400,7 @@ def cmd_claude(args) -> None:
     turn on. It is one command now, and literally the same plan the console
     applies — same connected providers, same measured local verdict.
     """
-    from . import claudecli
+    from .providers import claudecli
 
     if getattr(args, "install", False) and not claudecli.installed():
         print(f"installing the Claude Code CLI: {claudecli.INSTALL_CMD}")
@@ -420,12 +421,12 @@ def cmd_claude(args) -> None:
     # reads as "nothing free is connected" and puts every tier on the
     # subscription — the expensive default plan()'s own docstring warns about,
     # and it ignored --all-tiers into the bargain.
-    from .hardware import recommended_local
-    from .llm import connected_providers
+    from .providers.hardware import recommended_local
+    from .providers.llm import connected_providers
 
     store = _store()
     local_trivial, _why = recommended_local(store, Settings())
-    from . import modelinfo, preflight
+    from .providers import modelinfo, preflight
 
     plan = claudecli.plan(
         connected_providers(),

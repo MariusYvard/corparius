@@ -124,7 +124,7 @@ def _router(monkeypatch, text="ok", usage=(10, 5, 0.0)):
             seen["max_tokens"] = max_tokens
             return LLMResult(text=text, usage=Usage(*usage), model="m", provider="p")
 
-    monkeypatch.setattr("corparius.llm.HybridRouter", _R)
+    monkeypatch.setattr("corparius.providers.llm.HybridRouter", _R)
     return seen
 
 
@@ -168,7 +168,7 @@ def test_an_unreachable_model_is_a_refusal_not_a_traceback(tmp_path, monkeypatch
         def generate(self, *a, **k):
             raise requests.ConnectionError("refused")
 
-    monkeypatch.setattr("corparius.llm.HybridRouter", _R)
+    monkeypatch.setattr("corparius.providers.llm.HybridRouter", _R)
     out = apps.run(apps.App(name="faq", system="s"), "t", Store(str(tmp_path)), "hi")
     assert out["ok"] is False and "no model" in out["error"]
 

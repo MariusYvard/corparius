@@ -5,7 +5,7 @@ qui appartiennent vraiment à l'opérateur : la configuration, les skills, les n
 travail, souvent les noms et les adresses des personnes que la société démarche. Le
 perdre, c'est perdre la société.
 
-Ce module (`corparius/companyrepo.py`) fait de chaque dossier de company un dépôt git
+Ce module (`corparius/providers/companyrepo.py`) fait de chaque dossier de company un dépôt git
 indépendant, avec un distant privé chez le fournisseur de l'opérateur.
 
 ## Pourquoi séparément du dépôt du framework

@@ -12,7 +12,7 @@ provider that reports nothing must read as "not reported", never as "free".
 import types
 
 from corparius.kernel.records import Usage
-from corparius.llm import OpenAICompatProvider
+from corparius.providers.llm import OpenAICompatProvider
 from corparius.safety import BudgetExceeded, TokenBudget
 from corparius.store import Store
 
@@ -33,7 +33,7 @@ def _reply(usage: dict):
 
 
 def _provider(monkeypatch, usage: dict) -> OpenAICompatProvider:
-    from corparius import llm
+    from corparius.providers import llm
 
     monkeypatch.setattr(llm.requests, "post", lambda *a, **k: _Response(_reply(usage)))
     return OpenAICompatProvider("openrouter", "https://openrouter.ai/api/v1", "k")

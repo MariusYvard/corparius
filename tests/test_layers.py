@@ -102,29 +102,26 @@ RANKS: dict[str, int] = {
     "store/state": 2,
     "store/tasks": 2,
     "store/token_usage": 2,
-    # 3 — providers
-    "llm": 3,
-    "claudecli": 3,
-    "preflight": 3,
-    "modelinfo": 3,
-    # Policy over measurements: which model a tier is pointed at, and the vocabulary of the
-    # evidence that decides it. Rank 3 rather than the `domain/routing_policy` the plan named,
-    # because `claudecli.setup` calls `recommended_routing` and `claudecli` is rank 3 — a
-    # rank-4 home would have created an upward import and undone the zero. The rule outranks
-    # the folder guess.
-    "routing": 3,
-    "provider_check": 3,
-    "ollama_setup": 3,
-    "hardware": 3,
-    "deploy": 3,
-    "companyrepo": 3,
-    "leadsource": 3,
-    "enrich": 3,
-    "signals": 3,
-    "mailbox": 3,
-    "integrations": 3,
-    "deliverability": 3,
-    "sitecheck": 3,
+    # 3 — providers. The folder is the point: rank 3 was seventeen hand-maintained
+    # entries here, and is now derivable from the path.
+    "providers/__init__": 3,
+    "providers/claudecli": 3,
+    "providers/companyrepo": 3,
+    "providers/deliverability": 3,
+    "providers/deploy": 3,
+    "providers/enrich": 3,
+    "providers/hardware": 3,
+    "providers/integrations": 3,
+    "providers/leadsource": 3,
+    "providers/llm": 3,
+    "providers/mailbox": 3,
+    "providers/modelinfo": 3,
+    "providers/ollama_setup": 3,
+    "providers/preflight": 3,
+    "providers/provider_check": 3,
+    "providers/routing": 3,
+    "providers/signals": 3,
+    "providers/sitecheck": 3,
     # 4 — domain
     # The roster is data — roles, cadences, playbooks naming tools as strings — and it is
     # free to import. It was the first 150 lines of `agents.py`, and that adjacency is what

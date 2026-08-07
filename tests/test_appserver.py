@@ -107,7 +107,7 @@ def model(monkeypatch):
         def generate(self, messages, difficulty=None, model=None, max_tokens=512):
             return LLMResult(text="answered", usage=Usage(10, 5, 0.0), model="m", provider="p")
 
-    monkeypatch.setattr("corparius.llm.HybridRouter", _R)
+    monkeypatch.setattr("corparius.providers.llm.HybridRouter", _R)
 
 
 _DEFAULT = object()  # not None: `None` is itself a body worth testing
@@ -350,7 +350,7 @@ def test_a_model_that_cannot_be_reached_is_a_503_not_a_traceback(server, home, m
         def generate(self, *a, **k):
             raise requests.ConnectionError("refused")
 
-    monkeypatch.setattr("corparius.llm.HybridRouter", _Down)
+    monkeypatch.setattr("corparius.providers.llm.HybridRouter", _Down)
     _app(home)
     status, data, _ = _post(server)
     assert status == 503 and data["ok"] is False

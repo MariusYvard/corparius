@@ -237,7 +237,7 @@ def test_no_subcommand_is_an_error_not_a_traceback(capsys):
 
 
 def test_bench_measures_prints_and_caches(tmp_path, monkeypatch, capsys):
-    from corparius import hardware
+    from corparius.providers import hardware
 
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     monkeypatch.setattr(
@@ -265,7 +265,7 @@ def test_bench_measures_prints_and_caches(tmp_path, monkeypatch, capsys):
 def test_bench_json_carries_the_verdict_not_only_the_numbers(tmp_path, monkeypatch, capsys):
     """A script that re-derives "fast enough" from tokens_per_second will derive
     it differently from the router, and then the two disagree."""
-    from corparius import hardware
+    from corparius.providers import hardware
 
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     monkeypatch.setattr(hardware, "installed_models", lambda **k: [{"name": "m", "size": 1}])
@@ -288,7 +288,7 @@ def test_bench_json_carries_the_verdict_not_only_the_numbers(tmp_path, monkeypat
 
 
 def test_bench_exits_nonzero_when_there_is_nothing_to_measure(monkeypatch, capsys):
-    from corparius import hardware
+    from corparius.providers import hardware
 
     monkeypatch.setattr(hardware, "installed_models", lambda **k: [])
     with pytest.raises(SystemExit) as exc:

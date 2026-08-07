@@ -1,7 +1,7 @@
 """Lead research must fall back cleanly and never depend on one source."""
 
-from corparius import leadsource
-from corparius.leadsource import LocalDatasetSource
+from corparius.providers import leadsource
+from corparius.providers.leadsource import LocalDatasetSource
 
 
 def test_the_local_source_is_available_only_when_a_list_exists(tmp_path, monkeypatch):

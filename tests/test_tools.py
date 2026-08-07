@@ -184,7 +184,7 @@ def test_triage_invents_no_numbers_without_a_mailbox(monkeypatch):
     company, connected or not. Calling them "sample counts" made them a labelled
     fabrication, not a fact — and they went into the action log, which the flow
     metrics read."""
-    from corparius import mailbox
+    from corparius.providers import mailbox
 
     monkeypatch.setattr(mailbox, "configured", lambda: False)
     out = TOOLS["triage_inbox"].run(
@@ -197,7 +197,7 @@ def test_triage_invents_no_numbers_without_a_mailbox(monkeypatch):
 def test_support_does_not_pay_for_a_reply_to_nobody(monkeypatch):
     """needs_draft means the model is called before the effect can discover
     there is nothing to do. The skip has to happen first or the call is spent."""
-    from corparius import mailbox
+    from corparius.providers import mailbox
 
     monkeypatch.setattr(mailbox, "configured", lambda: False)
     ctx = type("Ctx", (), {"company": {"slug": "t", "name": "T"}})()
@@ -205,7 +205,7 @@ def test_support_does_not_pay_for_a_reply_to_nobody(monkeypatch):
 
 
 def test_a_tool_with_a_mailbox_is_not_skipped(monkeypatch):
-    from corparius import mailbox
+    from corparius.providers import mailbox
 
     monkeypatch.setattr(mailbox, "configured", lambda: True)
     ctx = type("Ctx", (), {"company": {"slug": "t", "name": "T"}})()

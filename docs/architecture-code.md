@@ -29,8 +29,8 @@ Un module de rang *n* n'importe que des rangs **≤ n**. Jamais au-dessus.
 | --- | --- | --- | --- |
 | 0 | `kernel/` | **fait** — `paths`, `records`, `i18n`, `text`, `dotenv`, `crypto`, `vectors`, `proc`, `httpkit` | **tout import corparius**, même d'un rang inférieur — il n'y en a pas |
 | 1 | `config/` | **fait** — `cfg`, `store_layer`, `settings`, `settings_spec`, `provider_table`, `permissions`, `secretbox` | le store, les fournisseurs, le domaine |
-| 2 | `store/` | schéma, migrations, un dépôt par table | tout ce qui est au-dessus |
-| 3 | `providers/` | modèles, courrier, déploiements, dépôts, prospects, matériel | le domaine, l'app, le transport |
+| 2 | `store/` | **fait** — schéma, migrations, un mixin par table, la façade | tout ce qui est au-dessus |
+| 3 | `providers/` | **fait** — 17 modules : modèles, routage, courrier, déploiements, dépôts, prospects, matériel | le domaine, l'app, le transport |
 | 4 | `domain/` | `roster` ✅, exécuteur, `tools/{spec,effects,registry}` ✅, entreprise, documents, orchestrateur, site | **toute dépendance hôte** : `requests`, `subprocess`, `sqlite3`, `smtplib`, `imaplib`, `socket`, `time.sleep` |
 | 5 | `app/` | les cas d'usage que l'API **et** la CLI appellent | le transport |
 | 6 | `api/`, `cli/` | HTTP, CLI, MCP | — rien n'importe ces dossiers |
@@ -64,12 +64,12 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 
 ## Où en est le chantier
 
-Étapes 1, 2 et le cœur de la 3 faites. Mesuré :
+Étapes 1 à 5 faites. Mesuré :
 
 | Compteur | Au plan | Aujourd'hui |
 | --- | --- | --- |
 | **Arêtes montantes** | 4 | **0** |
-| Cycles d'imports | 5 | **2** |
+| Cycles d'imports | 5 | **1** |
 | Modules important `subprocess` | 4 | **1** (`kernel/proc.py`) |
 | Ce que charge la lecture d'un réglage | `requests`, `subprocess`, `ssl`, `sqlite3` | **`sqlite3`** |
 | Ce que charge la lecture de la liste des outils | + `smtplib`, `imaplib` | **rien** |

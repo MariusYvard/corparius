@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 
-from .config.provider_table import OPENAI_COMPAT_PROVIDERS
+from ..config.provider_table import OPENAI_COMPAT_PROVIDERS
 
 log = logging.getLogger("corparius.routing")
 

@@ -1,6 +1,6 @@
 """The deliverability guard must block suppressed addresses and honour the cap."""
 
-from corparius import deliverability
+from corparius.providers import deliverability
 
 
 def test_allows_by_default(monkeypatch):

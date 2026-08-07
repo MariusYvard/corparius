@@ -73,7 +73,7 @@ def _model(monkeypatch, text="an answer"):
         def generate(self, *a, **k):
             return LLMResult(text=text, usage=Usage(5, 5, 0.0), model="m", provider="p")
 
-    monkeypatch.setattr("corparius.llm.HybridRouter", _R)
+    monkeypatch.setattr("corparius.providers.llm.HybridRouter", _R)
 
 
 def test_the_faq_is_baked_into_the_page(tmp_path, monkeypatch, faq_app):
@@ -142,7 +142,7 @@ def test_an_unreachable_model_omits_the_section_and_builds_anyway(tmp_path, monk
         def generate(self, *a, **k):
             raise requests.ConnectionError("refused")
 
-    monkeypatch.setattr("corparius.llm.HybridRouter", _Down)
+    monkeypatch.setattr("corparius.providers.llm.HybridRouter", _Down)
     path = sitegen.build_site(_faq_company(), str(tmp_path / "site"), store=Store(str(tmp_path)))
     html = Path(path).read_text(encoding="utf-8")
     assert 'id="faq"' not in html and "<h1>" in html

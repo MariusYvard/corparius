@@ -18,8 +18,9 @@ import types
 import pytest
 
 from corparius import inbox as inbox_mod
-from corparius import mailbox, webui
+from corparius import webui
 from corparius.config import settings_spec
+from corparius.providers import mailbox
 from corparius.store import Store
 from corparius.tools.registry import TOOLS
 

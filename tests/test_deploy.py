@@ -1,9 +1,9 @@
 """Deployment must never depend on one host: the chain falls back to a local,
 self-hosted target that is always available."""
 
-from corparius import deploy
 from corparius.config import cfg
-from corparius.deploy import LocalDirProvider, NetlifyProvider
+from corparius.providers import deploy
+from corparius.providers.deploy import LocalDirProvider, NetlifyProvider
 
 
 def test_local_provider_is_always_available():

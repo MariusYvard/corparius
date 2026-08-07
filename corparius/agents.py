@@ -312,7 +312,7 @@ class Executor:
         except Exception:  # noqa: BLE001 - a probe table that cannot be read is not a verdict
             pass
         try:
-            from . import modelinfo
+            from .providers import modelinfo
 
             return bool(modelinfo.describe(model, modelinfo.cached(store))["vision_declared"])
         except Exception:  # noqa: BLE001 - no catalogue means no claim, not a crash

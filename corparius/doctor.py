@@ -17,7 +17,7 @@ from .config import cfg, permissions
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from .config.settings import Settings
 from .kernel import paths
-from .llm import list_models
+from .providers.llm import list_models
 from .store import Store
 from .store.schema import SCHEMA_VERSION
 
@@ -349,7 +349,7 @@ def _check_site(s: Settings) -> tuple:
     # used to be unsayable: `build_sales_site` reported "Sales site built" for a
     # page nobody had asked for while six hand-written ones sat in the company's
     # own repository, and nothing anywhere named the difference.
-    from . import sitecheck
+    from .providers import sitecheck
 
     owned = {slug: paths.owned_site(slug) for slug in slugs}
     mine = [f"{slug} ({len(sorted(p.glob('*.html')))} page(s))" for slug, p in owned.items() if p]
@@ -587,7 +587,7 @@ def _check_machine(s: Settings, store: Store | None) -> tuple:
     and the doctor is run on every launcher start and served over HTTP. Probing
     here would be the polled-endpoint mistake with a much bigger timer.
     """
-    from . import hardware
+    from .providers import hardware
 
     spec = hardware.specs()
     cores = spec["cores"] or "?"
@@ -672,7 +672,7 @@ def _check_ollama(s: Settings) -> tuple:
                 "ollama",
                 note + f". Optional: {' && '.join(f'ollama pull {m}' for m in absent)}",
             )
-        from . import hardware
+        from .providers import hardware
 
         # A model bigger than the machine will never load, however reachable
         # Ollama is. Answered from specs alone — no measurement needed.
@@ -773,7 +773,7 @@ def _check_claude_cli(s: Settings) -> tuple:
                 "off, but the `claude` CLI is installed here. `corparius claude` points every "
                 "tier at your subscription — no API key, no credits.",
             )
-        from . import claudecli
+        from .providers import claudecli
 
         if claudecli.desktop_installed():
             # Having Claude Desktop reads as "already installed" to anyone who
@@ -792,7 +792,7 @@ def _check_claude_cli(s: Settings) -> tuple:
         # Whether it is logged in needs a real call, which the doctor will not
         # spend a subscription message on; the console's Test button does that.
         return ("ok", "claude cli", "found on PATH. Test the login from the console (Providers).")
-    from . import claudecli
+    from .providers import claudecli
 
     desktop = (
         " Claude Desktop is installed, but that is the chat app, not this CLI."
@@ -811,7 +811,7 @@ def _check_deploy_order() -> tuple:
     """The local provider is always available, so anything ordered after it is
     unreachable. Setting NETLIFY_AUTH_TOKEN and expecting a publish is the
     footgun this catches."""
-    from . import deploy as deploy_mod
+    from .providers import deploy as deploy_mod
 
     order = cfg.get_csv("CORP_DEPLOY_PROVIDERS", "netlify,s3,ssh,local")
     unknown = [n for n in order if n not in deploy_mod.REGISTRY]
@@ -937,7 +937,7 @@ def _check_preflight(s: Settings, store: Store | None) -> tuple:
     which is why this outranks `_check_model_catalog` and why that one now
     stands down whenever a preflight has been run.
     """
-    from . import preflight
+    from .providers import preflight
 
     if s.llm_mock:
         return ("ok", "preflight", "mock mode: nothing to prove")

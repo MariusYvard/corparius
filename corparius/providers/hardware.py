@@ -33,7 +33,7 @@ import time
 
 import requests
 
-from .config import cfg
+from ..config import cfg
 
 log = logging.getLogger("corparius.hardware")
 
@@ -362,7 +362,7 @@ def recommended_local(store, settings, models=None) -> tuple[str, str]:
     polled-endpoint mistake again. `models` lets a caller that has just listed
     them hand the list over rather than pay a second round-trip for it.
     """
-    from .config.provider_table import split_target
+    from ..config.provider_table import split_target
 
     prefer = split_target(getattr(settings, "trivial_model", ""))[1]
     prof = profile(store, max_age_days=getattr(settings, "bench_max_age_days", 30))

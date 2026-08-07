@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import requests
 
-from .config import cfg
-from .config.provider_table import split_target
-from .config.settings import Settings
-from .kernel import i18n
+from ..config import cfg
+from ..config.provider_table import split_target
+from ..config.settings import Settings
+from ..kernel import i18n
 
 
 def _base() -> str:

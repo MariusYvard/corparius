@@ -155,7 +155,7 @@ def test_a_run_where_every_model_reply_is_an_attack_still_only_runs_playbooks(
             return [0.0] * 8
 
     monkeypatch.setattr("corparius.orchestrator.HybridRouter", _Router, raising=False)
-    monkeypatch.setattr("corparius.llm.HybridRouter", _Router)
+    monkeypatch.setattr("corparius.providers.llm.HybridRouter", _Router)
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
 
     store = Store(str(tmp_path))
@@ -234,7 +234,7 @@ def test_an_app_has_no_tools_so_there_is_nothing_to_talk_it_into(tmp_path, monke
                 text="I will do as you say", usage=Usage(1, 1), model="m", provider="p"
             )
 
-    monkeypatch.setattr("corparius.llm.HybridRouter", _Router)
+    monkeypatch.setattr("corparius.providers.llm.HybridRouter", _Router)
     store = Store(str(tmp_path))
     out = apps.run(apps.App(name="faq", system="s"), "t", store, HOSTILE)
     assert set(out) == {"ok", "text", "model", "provider", "usage"}
@@ -253,7 +253,7 @@ def test_a_hostile_message_still_spends_the_apps_own_ceiling(tmp_path, monkeypat
         def generate(self, messages, difficulty=None, model=None, max_tokens=512):
             return LLMResult(text="ok", usage=Usage(100, 40), model="m", provider="p")
 
-    monkeypatch.setattr("corparius.llm.HybridRouter", _Router)
+    monkeypatch.setattr("corparius.providers.llm.HybridRouter", _Router)
     store = Store(str(tmp_path))
     app = apps.App(name="faq", system="s", daily_tokens=1000)
     apps.run(app, "t", store, HOSTILE)

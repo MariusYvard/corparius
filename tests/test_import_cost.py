@@ -85,7 +85,7 @@ COST: dict[str, frozenset[str]] = {
     "tools.registry": frozenset({"requests", "subprocess", "sqlite3", "smtplib", "imaplib", "ssl"}),
     # Stage 5 should take `subprocess` off this line: the Claude CLI becomes one provider
     # among others behind `kernel/proc.py`, and the router stops knowing it exists.
-    "llm": frozenset({"requests", "subprocess", "sqlite3", "ssl"}),
+    "providers.llm": frozenset({"requests", "subprocess", "sqlite3", "ssl"}),
     # Interfaces and app services legitimately reach everything. Recorded so a *rise* is
     # visible, not because it should fall.
     "doctor": frozenset({"requests", "subprocess", "sqlite3", "ssl"}),

@@ -208,7 +208,7 @@ def test_no_model_is_called(store, monkeypatch):
     """Deterministic by construction. Hermes ships its LLM consolidation pass disabled by
     default; this does not have the pass at all, because merging two skills is the one
     operation here that can lose meaning."""
-    import corparius.llm as llm_mod
+    import corparius.providers.llm as llm_mod
 
     monkeypatch.setattr(
         llm_mod.HybridRouter,

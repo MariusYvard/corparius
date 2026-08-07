@@ -15,8 +15,8 @@ from __future__ import annotations
 import json
 import shutil
 
-from .config import cfg
-from .kernel import i18n, proc
+from ..config import cfg
+from ..kernel import i18n, proc
 
 # CLI model aliases, not dated ids: the CLI resolves `haiku`, `sonnet` and
 # `opus` to whatever the current release is, so the tiers track it without

@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from corparius import leadsource, mailbox
+from corparius.providers import leadsource, mailbox
 from corparius.store import Store
 from corparius.tools import effects as tools
 from corparius.tools.effects import NO_LEAD_SOURCE, TRIES_BEFORE_STAND_DOWN
@@ -205,7 +205,8 @@ def test_distinct_walls_both_land(tmp_path, monkeypatch):
 
 
 def test_find_targets_records_it_when_no_source_is_configured(tmp_path, monkeypatch):
-    from corparius import documents, enrich, leadsource
+    from corparius import documents
+    from corparius.providers import enrich, leadsource
 
     monkeypatch.setattr(documents.paths, "companies_dir", lambda: tmp_path)
     (tmp_path / "c").mkdir()
@@ -225,7 +226,8 @@ def test_find_targets_records_it_when_no_source_is_configured(tmp_path, monkeypa
 def test_a_configured_source_records_nothing(tmp_path, monkeypatch):
     """A wall that is not there must not be written down: a walls.md full of things
     that are fine is the wall of warnings again."""
-    from corparius import documents, enrich, leadsource
+    from corparius import documents
+    from corparius.providers import enrich, leadsource
 
     monkeypatch.setattr(documents.paths, "companies_dir", lambda: tmp_path)
     (tmp_path / "c").mkdir()

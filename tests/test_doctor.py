@@ -75,6 +75,29 @@ def test_every_check_that_needs_a_store_is_handed_one(tmp_path):
         )
 
 
+def test_no_two_checks_share_a_name():
+    """A check's `name` is its key, and nothing said so.
+
+    Four tests in this file — and the console — do `{r["name"]: r for r in results}`. A
+    duplicate name therefore does not read as two checks: the second silently **replaces** the
+    first, and every assertion about the first starts describing the second. It happened while
+    a check reading the routing journal was added next to `_check_tier_coherence`, both called
+    "routing", and `test_tier_coherence` below would have quietly started asserting against the
+    wrong one.
+
+    A registry keyed by name with no uniqueness guard is the same defect this project keeps
+    finding in other registries (test_registries.py). Here it is.
+    """
+    import collections
+
+    names = [r["name"] for r in run_checks()]
+    duplicated = sorted(n for n, count in collections.Counter(names).items() if count > 1)
+    assert not duplicated, (
+        f"two checks answer to the same name: {duplicated}. The name is the key the console "
+        "and these tests index by, so one of them is invisible."
+    )
+
+
 def test_mock_mode_is_green_without_network(tmp_path):
     results = run_checks(_s(tmp_path, llm_mock=True))
     by = {r["name"]: r for r in results}

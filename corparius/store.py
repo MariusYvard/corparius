@@ -18,7 +18,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS actions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company TEXT, agent TEXT, tool TEXT, parameters TEXT,
-    output TEXT, ok INTEGER, ts REAL
+    output TEXT, ok INTEGER, ts REAL,
+    source TEXT, attempts INTEGER, fell_back INTEGER, errors TEXT
 );
 CREATE TABLE IF NOT EXISTS token_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,7 +103,7 @@ CREATE TABLE IF NOT EXISTS model_probes (
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -320,6 +321,33 @@ def _migration_15(db: sqlite3.Connection) -> None:
         pass  # already there: fresh stores get it from SCHEMA
 
 
+def _migration_18(db: sqlite3.Connection) -> None:
+    """Where a drafted answer came from, kept next to the action.
+
+    `structured.ask` returns `ok`, `fell_back`, `attempts`, `source` and `errors`, and this
+    table stored the boolean. Counted across the package: 12 callers read `.data`, 3 read
+    `.ok`, 1 reads `.source`, 1 reads `.fell_back`, none read the other two. So after a turn,
+    which provider answered and whether the chain fell back existed nowhere — and an operator
+    read "Nothing usable drafted" as a broken site generator while two providers were
+    answering 429, 365 026 tokens in.
+
+    NULL on every existing row, and that is a third state the columns keep: **not recorded**
+    is not the same answer as "no provider", and collapsing the two would make the console
+    tell an operator their history says something it does not. Same reasoning as
+    `_migration_16`'s `vision_ok`.
+    """
+    for column, kind in (
+        ("source", "TEXT"),
+        ("attempts", "INTEGER"),
+        ("fell_back", "INTEGER"),
+        ("errors", "TEXT"),
+    ):
+        try:
+            db.execute(f"ALTER TABLE actions ADD COLUMN {column} {kind}")
+        except sqlite3.OperationalError:
+            pass
+
+
 def _migration_17(db: sqlite3.Connection) -> None:
     """When each skill was last actually used, and how often.
 
@@ -382,6 +410,7 @@ MIGRATIONS = {
     15: _migration_15,
     16: _migration_16,
     17: _migration_17,
+    18: _migration_18,
 }
 
 
@@ -505,11 +534,34 @@ class Store:
         return self.db.execute("PRAGMA user_version").fetchone()[0]
 
     @_locked
-    def record_action(self, company, agent, tool, parameters, output, ok) -> None:
+    def record_action(self, company, agent, tool, parameters, output, ok, trace=None) -> None:
+        """One action, and where its drafted content came from.
+
+        `trace` is a `kernel.records.Trace`, or None for the paths that never called a model —
+        a skipped tool, a raised exception, a deterministic write. None leaves the four columns
+        NULL, which reads as "not recorded" rather than "no provider answered".
+
+        Not a keyword each caller has to remember: the executor holds the harness result at the
+        moment it logs (agents.py) and is the only caller that has one. The other five pass
+        nothing and mean it.
+        """
         self.db.execute(
-            "INSERT INTO actions (company, agent, tool, parameters, output, ok, ts)"
-            " VALUES (?,?,?,?,?,?,?)",
-            (company, agent, tool, json.dumps(parameters), output, int(ok), time.time()),
+            "INSERT INTO actions"
+            " (company, agent, tool, parameters, output, ok, ts, source, attempts, fell_back,"
+            " errors) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                company,
+                agent,
+                tool,
+                json.dumps(parameters),
+                output,
+                int(ok),
+                time.time(),
+                trace.source if trace else None,
+                trace.attempts if trace else None,
+                int(trace.fell_back) if trace else None,
+                trace.errors if trace else None,
+            ),
         )
         self.db.commit()
 
@@ -561,11 +613,45 @@ class Store:
     @_locked
     def recent_actions(self, company, limit=25) -> list[dict]:
         rows = self.db.execute(
-            "SELECT agent, tool, ok, ts, substr(output,1,160) output FROM actions "
+            "SELECT agent, tool, ok, ts, substr(output,1,160) output,"
+            " source, attempts, fell_back, errors FROM actions "
             "WHERE company=? ORDER BY id DESC LIMIT ?",
             (company, limit),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    @_locked
+    def routing_health(self, company, limit=200) -> dict:
+        """Which providers answered the last drafted turns, and how often the chain fell back.
+
+        The reader that makes schema 18 mean something. `_empty_draft` says it at the moment of
+        failure and only when a tool calls it; this says it about a *history*, which is the
+        thing nobody could see. An operator read "Nothing usable drafted" as a broken site
+        generator while groq and cerebras were both answering 429 — the pattern was in the run
+        and there was nowhere to look at it.
+
+        NULL `source` rows are excluded, not counted as failures: they are the turns that
+        called no model — a skipped tool, a deterministic write — and folding them in would
+        make a quiet day look like an outage.
+        """
+        rows = self.db.execute(
+            "SELECT source, fell_back, attempts FROM actions"
+            " WHERE company=? AND source IS NOT NULL AND source != ''"
+            " ORDER BY id DESC LIMIT ?",
+            (company, int(limit)),
+        ).fetchall()
+        answered: dict[str, int] = {}
+        fell_back = retries = 0
+        for row in rows:
+            answered[row["source"]] = answered.get(row["source"], 0) + 1
+            fell_back += 1 if row["fell_back"] else 0
+            retries += max(0, (row["attempts"] or 1) - 1)
+        return {
+            "drafted": len(rows),
+            "answered_by": dict(sorted(answered.items(), key=lambda kv: -kv[1])),
+            "fell_back": fell_back,
+            "retries": retries,
+        }
 
     @_locked
     def count_actions_by_tool(self, company, tool) -> int:

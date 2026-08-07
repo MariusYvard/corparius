@@ -32,7 +32,7 @@ Un module de rang *n* n'importe que des rangs **≤ n**. Jamais au-dessus.
 | 2 | `store/` | **fait** — schéma, migrations, un mixin par table, la façade | tout ce qui est au-dessus |
 | 3 | `providers/` | **fait** — 17 modules : modèles, routage, courrier, déploiements, dépôts, prospects, matériel | le domaine, l'app, le transport |
 | 4 | `domain/` | `roster` ✅, exécuteur, `tools/{spec,effects,registry}` ✅, entreprise, documents, orchestrateur, site | **toute dépendance hôte** : `requests`, `subprocess`, `sqlite3`, `smtplib`, `imaplib`, `socket`, `time.sleep` |
-| 5 | `app/` | les cas d'usage que l'API **et** la CLI appellent | le transport |
+| 5 | `app/` | **entamé** — `settings`, `tasks`, `publish`, `companies`, `chat`, `directives`, `errors` | le transport, et **jamais un paramètre `Ctx`** |
 | 6 | `api/`, `cli/` | HTTP, CLI, MCP | — rien n'importe ces dossiers |
 
 Le rang 0 porte aussi la seule strictesse mypy du paquet : `disallow_untyped_defs` s'applique
@@ -64,7 +64,7 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 
 ## Où en est le chantier
 
-Étapes 1 à 5 faites. Mesuré :
+Étapes 1 à 5 faites, l'étape 6 entamée. Mesuré :
 
 | Compteur | Au plan | Aujourd'hui |
 | --- | --- | --- |
@@ -73,6 +73,8 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Modules important `subprocess` | 4 | **1** (`kernel/proc.py`) |
 | Ce que charge la lecture d'un réglage | `requests`, `subprocess`, `ssl`, `sqlite3` | **`sqlite3`** |
 | Ce que charge la lecture de la liste des outils | + `smtplib`, `imaplib` | **rien** |
+| Modules à plat | 53 | **26** |
+| Choses que la console sait faire et la CLI non | 11 | **8** |
 
 **Zéro arête montante**, et c'est pour ça que la liste est écrite en cliquet plutôt qu'en
 commentaire : chacune des quatre a été rayée par l'étape qui la nommait, et l'ensemble vide
@@ -113,6 +115,60 @@ tests utilisent) ; `settings_spec` et `secretbox` gardent leur nom dans `config/
 une variable locale 77 fois ici, `secrets` est stdlib et `secretscli` avait déjà un
 `import secrets as _secrets`). Et `modeltarget` n'est pas dans le kernel : il a besoin du
 registre de fournisseurs, donc il vit avec lui au rang 1.
+
+## L'étape 6, et ce qu'elle a trouvé
+
+Le plan résume son intérêt en une phrase : la logique métier vit dans les gestionnaires HTTP,
+donc **la console sait faire des choses que la ligne de commande ne sait pas**. Six services sont
+descendus dans `app/`, et trois capacités qui n'existaient pas dans un terminal sont apparues :
+`corparius set` (écrire un réglage), `corparius new` (créer une entreprise), `corparius ceo`
+(parler au CEO, avec ses pouvoirs).
+
+Deux règles font que `app/` est une couche et pas un dossier de gestionnaires renommés, et
+`tests/test_app_layer.py` tient les deux : **jamais de paramètre `Ctx`** — annoté ou non, et la
+version non annotée compte plus, parce que chaque gestionnaire de ce codebase l'appelle `ctx`
+sans annotation — et **jamais d'erreur de transport levée**. Un service qui lève le 400 de la
+console ne peut être appelé que par la console. Il lève l'échec ; la route le traduit.
+`tests/test_route_table.py` affirme l'inverse pour les gestionnaires, et c'est la paire qui rend
+le découpage réel.
+
+**Deux bugs vivants sont sortis de là**, tous deux trouvés en lisant un gestionnaire à côté de sa
+commande et en comparant ce que chacun savait :
+
+- le **backlog** : la console validait l'agent et l'outil et appelait `executable_fields` à
+  l'approbation ; `cmd_task` appelait `store.update_task` directement et n'avait rien de tout ça.
+  Approuver depuis un terminal laissait la tâche sans outil, donc elle se fermait « done (no tool
+  mapped) » sans rien faire — 24 tâches pour un rôle, 22 ainsi ;
+- la **publication** : la console honorait `paths.owned_site(slug)` ; `cmd_deploy` construisait
+  toujours le chemin généré. Sur l'entreprise du propriétaire, la console publiait
+  `companies/vigil/site/public` et la ligne de commande `data/sites/vigil`, en annonçant un
+  succès.
+
+Les trouver à la main a marché deux fois et **ne passe pas à l'échelle** :
+`tests/test_two_callers_agree.py` déclare les paires qui doivent partager un service, affirme que
+les deux atteignent *ce* service, et plafonne la taille d'un adaptateur — parce qu'un adaptateur
+qui reprend de la logique est exactement comment les deux côtés ont divergé, un commit à la fois.
+
+## Un vrai tour, sur la vraie configuration
+
+La liste de vérification du plan demande « un vrai tour sur la vraie entreprise ». Lancé sur une
+copie de `vigil` en mode mock — pour ne rien dépenser ni toucher à l'état du propriétaire —
+24 ticks, dix agents, aucune erreur. Ce que ça a prouvé et qu'aucun test unitaire ne prouve :
+
+| | |
+| --- | --- |
+| Schéma | **18**, migré en place sur un store neuf |
+| Tours rédigés portant leur trace | **12**, avec le modèle qui a répondu |
+| Actions sans trace | 61 — celles qui n'ont appelé aucun modèle, `NULL` comme prévu |
+| `promesse-clinique` | **24 usages en 24 ticks** |
+
+Les deux dernières lignes valent d'être lues ensemble. `routing_health` répond enfin à « qui a
+répondu » — `haiku` 6 fois, `gemma4:e4b` 5, `sonnet` 1 — et c'est précisément la visibilité dont
+l'absence a coûté 365 026 jetons. Et `promesse-clinique` à 24 sur 24 confirme sa déclaration
+`always:` par la mesure : elle est bien sur chaque prompt. Le curateur a donc de vraies données,
+et n'archivera aucune des trois compétences de `vigil`, qui sont toutes en usage.
+
+Un tour contre de vrais fournisseurs reste à l'opérateur : il dépense ses jetons.
 
 ## Le cliquet
 

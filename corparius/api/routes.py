@@ -1,0 +1,120 @@
+"""The table. Rank 6.
+
+One tuple, read by the dispatcher, by the security tests and by the API-version ratchet. It is
+the single place that answers "what does this console expose, and to whom" — which is exactly
+what it did not answer when `do_GET` and `do_POST` were two if/elif chains with the token check
+in one of them.
+
+Exact matches first and prefixes only after every exact route has missed, so `/api/site` can
+never be shadowed by a prefix that happens to start the same way.
+"""
+
+from __future__ import annotations
+
+from .. import (
+    documents,
+)
+from . import handlers
+from .contracts import Route
+
+# Exact matches, checked first.
+ROUTES: tuple[Route, ...] = (
+    Route("GET", "/", handlers.page, public=True),
+    Route("GET", "/api/v1/meta", handlers.meta, public=True),
+    Route("GET", "/api/session", handlers.session, public=True),
+    Route("GET", "/api/companies", handlers.companies_get),
+    Route("GET", "/api/overview", handlers.overview, needs_slug=True),
+    Route("GET", "/api/providers", handlers.providers_get),
+    Route("GET", "/api/golive", handlers.golive, needs_slug=True),
+    Route("GET", "/api/settings", handlers.settings_get),
+    Route("GET", "/api/company", handlers.company_get, needs_slug=True),
+    Route("GET", "/api/ollama", handlers.ollama_get),
+    Route("GET", "/api/drafts", handlers.drafts_get, needs_slug=True),
+    Route("GET", "/api/documents", handlers.documents_get, needs_slug=True),
+    Route("GET", "/api/document/text", handlers.document_text, needs_slug=True),
+    Route("GET", "/api/site", handlers.site_get, needs_slug=True),
+    Route("GET", "/api/payments", handlers.payments_get),
+    Route("GET", "/api/doctor", handlers.doctor),
+    Route("GET", "/api/update", handlers.update),
+    Route("POST", "/api/update/apply", handlers.update_apply),
+    Route("GET", "/api/plugins", handlers.plugins_get),
+    Route("GET", "/api/theme", handlers.theme_get),
+    Route("GET", "/api/chat", handlers.chat_get, needs_slug=True),
+    Route("POST", "/api/companies", handlers.companies_post),
+    Route("POST", "/api/approvals", handlers.approvals_post),
+    Route("POST", "/api/drafts", handlers.drafts_post, needs_slug=True),
+    # base64 costs a third on the way in, so the ceiling is documents.MAX_UPLOAD
+    # plus that plus the JSON envelope. Stated as arithmetic rather than a round
+    # number, so raising the file limit cannot silently leave the route behind.
+    Route(
+        "POST",
+        "/api/documents",
+        handlers.documents_post,
+        needs_slug=True,
+        max_body=documents.MAX_UPLOAD * 4 // 3 + (1 << 16),
+    ),
+    # Keeps the tight default ceiling: it carries a path, not a file.
+    Route("POST", "/api/documents/delete", handlers.documents_delete, needs_slug=True),
+    Route("POST", "/api/rules", handlers.rules_post, needs_slug=True),
+    Route("POST", "/api/memory", handlers.memory_post),
+    Route("POST", "/api/inbox", handlers.inbox_post),
+    Route("POST", "/api/tasks", handlers.tasks_post),
+    Route("POST", "/api/site", handlers.site_post),
+    Route("POST", "/api/deploy", handlers.deploy_post),
+    Route("POST", "/api/backup", handlers.backup_post),
+    Route("POST", "/api/run/stop", handlers.run_stop),
+    Route("POST", "/api/run", handlers.run_post),
+    Route("POST", "/api/providers", handlers.providers_post),
+    Route("POST", "/api/tiers/recommend", handlers.tiers_recommend),
+    Route("POST", "/api/provider/models", handlers.provider_models),
+    Route("POST", "/api/settings", handlers.settings_post),
+    Route("POST", "/api/plugins", handlers.plugins_post),
+    Route("POST", "/api/skills/scope", handlers.skill_scope, needs_slug=True),
+    Route("POST", "/api/theme", handlers.theme_post),
+    Route("POST", "/api/test/mail", handlers.test_mail),
+    Route("POST", "/api/test/payments", handlers.test_payments),
+    Route("POST", "/api/test/claude", handlers.test_claude),
+    Route("POST", "/api/claude/setup", handlers.claude_setup),
+    Route("POST", "/api/claude/install", handlers.claude_install),
+    Route("POST", "/api/test/provider", handlers.test_provider),
+    Route("POST", "/api/preflight", handlers.preflight),
+    Route("GET", "/api/preflight/sweep", handlers.sweep_get),
+    Route("POST", "/api/preflight/sweep", handlers.sweep_post),
+    Route("POST", "/api/ollama/pull", handlers.ollama_pull),
+    Route("POST", "/api/ollama/bench", handlers.ollama_bench),
+    Route("POST", "/api/company", handlers.company_post),
+    Route("POST", "/api/company/delete", handlers.company_delete),
+    Route("POST", "/api/chat", handlers.chat_post),
+)
+
+
+# Prefix matches, checked only after every exact route has missed, so /api/site
+# can never be shadowed by a prefix that happens to start the same way.
+PREFIX_ROUTES: tuple[Route, ...] = (Route("GET", "/site/", handlers.site_serve, public=True),)
+
+
+# Every route there is, in one name. `ROUTES` and `PREFIX_ROUTES` are two tables because they
+# are matched differently — exact first, so `/api/site` can never be shadowed by a prefix that
+# happens to start the same way — but anything *auditing* the surface has to see both.
+#
+# It did not. `tests/test_webui_security.py` asserted that every non-public route demands a
+# token by iterating `ROUTES` alone, so a prefix route added non-public would have been outside
+# a security check that reads as exhaustive. A partial registry is the defect this project keeps
+# finding in other registries; here it was in the one guarding the token.
+ALL_ROUTES: tuple[Route, ...] = ROUTES + PREFIX_ROUTES
+
+
+_EXACT = {(r.method, r.path): r for r in ROUTES}
+
+
+assert len(_EXACT) == len(ROUTES), "duplicate (method, path) in ROUTES"
+
+
+def match(method: str, path: str) -> Route | None:
+    route = _EXACT.get((method, path))
+    if route is not None:
+        return route
+    for candidate in PREFIX_ROUTES:
+        if candidate.method == method and path.startswith(candidate.path):
+            return candidate
+    return None

@@ -10,7 +10,8 @@ import pathlib
 
 import pytest
 
-from corparius import backup, selfupdate, webui
+from corparius import backup, selfupdate
+from corparius.api import adapters, contracts, handlers
 
 # --- 1. the update tag walked out of the repository ------------------------
 
@@ -73,7 +74,7 @@ def test_the_console_never_takes_the_tag_from_the_request(monkeypatch):
         selfupdate, "apply", lambda tag: seen.setdefault("tag", tag) or {"ok": True, "backup": ""}
     )
     ctx = type("Ctx", (), {"body": {"tag": "../../../../attacker/evil/releases/download/v1"}})()
-    status, _payload = webui._route_update_apply(ctx)
+    status, _payload = handlers.update_apply(ctx)
     assert status == 200
     assert seen["tag"] == "v0.2.0", "the body's tag reached the downloader"
 
@@ -96,8 +97,8 @@ def test_a_line_break_in_a_value_cannot_append_a_setting(tmp_path):
     """
     path = _env(tmp_path)
     hostile = "p4ss\nCORP_UI_ALLOWED_HOSTS=evil.example\nCORP_PLUGINS_ALLOW_UNVERIFIED=true"
-    with pytest.raises(webui._RequestRefused) as refused:
-        webui._merge_env_file(path, {"CORP_SECRET_KEY": hostile})
+    with pytest.raises(contracts.RequestRefused) as refused:
+        adapters.merge_env_file(path, {"CORP_SECRET_KEY": hostile})
     assert refused.value.status == 400
     got = path.read_text(encoding="utf-8")
     assert "CORP_UI_ALLOWED_HOSTS" not in got
@@ -107,20 +108,20 @@ def test_a_line_break_in_a_value_cannot_append_a_setting(tmp_path):
 def test_a_carriage_return_is_refused_too(tmp_path):
     """Same primitive, different byte."""
     path = _env(tmp_path)
-    with pytest.raises(webui._RequestRefused):
-        webui._merge_env_file(path, {"CORP_UI_TOKEN": "t\rCORP_UI_ALLOWED_HOSTS=evil.example"})
+    with pytest.raises(contracts.RequestRefused):
+        adapters.merge_env_file(path, {"CORP_UI_TOKEN": "t\rCORP_UI_ALLOWED_HOSTS=evil.example"})
     assert "evil.example" not in path.read_text(encoding="utf-8")
 
 
 def test_the_refusal_names_the_field_so_it_is_fixable(tmp_path):
     path = _env(tmp_path)
-    with pytest.raises(webui._RequestRefused, match="CORP_UI_TOKEN"):
-        webui._merge_env_file(path, {"CORP_UI_TOKEN": "a\nb"})
+    with pytest.raises(contracts.RequestRefused, match="CORP_UI_TOKEN"):
+        adapters.merge_env_file(path, {"CORP_UI_TOKEN": "a\nb"})
 
 
 def test_an_ordinary_value_still_writes(tmp_path):
     path = _env(tmp_path)
-    webui._merge_env_file(path, {"CORP_UI_TOKEN": "a-perfectly-normal-token"})
+    adapters.merge_env_file(path, {"CORP_UI_TOKEN": "a-perfectly-normal-token"})
     assert "CORP_UI_TOKEN=a-perfectly-normal-token" in path.read_text(encoding="utf-8")
 
 
@@ -147,7 +148,7 @@ def test_a_crafted_archive_cannot_write_a_setting_through_a_restore(tmp_path, mo
 def test_the_host_allow_list_is_still_not_settable_by_name():
     """The original invariant, unchanged: it protects the surface it is reached
     through, so it cannot be written through that surface."""
-    assert "CORP_UI_ALLOWED_HOSTS" not in webui.ALLOWED_VARS
+    assert "CORP_UI_ALLOWED_HOSTS" not in adapters.ALLOWED_VARS
 
 
 # Every module allowed to write a .env, and what for. A new name here is a new way into the
@@ -157,7 +158,7 @@ DOTENV_CALLERS = {
     # console's handler now delegates here, and so does `corparius set`. One writer, two
     # callers — which is the point of `app/`.
     "corparius/app/settings.py",
-    "corparius/webui.py",  # the settings page and the providers panel
+    "corparius/api/adapters.py",  # the settings page and the providers panel
     "corparius/backup.py",  # a restore, from an archive someone else may have built
     "corparius/secretscli.py",  # `corparius secrets on`
 }

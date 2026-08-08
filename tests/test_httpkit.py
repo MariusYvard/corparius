@@ -4,7 +4,7 @@ It is a security primitive: the DNS-rebinding defence compares its result agains
 allow-list, so a host that parses wrongly is a host that is checked wrongly. `webui` and
 `appserver` both stand on it, which is why it is in the kernel rather than in either.
 
-`tests/test_webui_security.py` still exercises it through `webui._host_only` — deliberately,
+`tests/test_webui_security.py` still exercises it through `httpkit.host_only` — deliberately,
 because that re-export is what the console's own guard calls, and a test that only reached
 the kernel would stop noticing if the console quietly grew a second parser.
 """
@@ -46,9 +46,10 @@ def test_both_servers_read_the_same_definitions():
     """The point of the module. `appserver` used to import these from `webui`, which is the
     whole of what made the two a cycle — and a second copy of a security primitive is how
     the two guards come to disagree."""
-    from corparius import appserver, webui
+    from corparius import appserver
+    from corparius.kernel import httpkit
 
-    assert webui.MAX_BODY is httpkit.MAX_BODY
-    assert webui._host_only is httpkit.host_only
+    assert httpkit.MAX_BODY is httpkit.MAX_BODY
+    assert httpkit.host_only is httpkit.host_only
     assert appserver.host_only is httpkit.host_only
     assert appserver.MAX_BODY is httpkit.MAX_BODY

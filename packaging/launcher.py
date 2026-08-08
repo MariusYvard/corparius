@@ -117,9 +117,9 @@ def main() -> int:
         cli_main(argv)  # commands that fail raise SystemExit themselves
         return 0
 
+    from corparius.api import serve
     from corparius.config.settings import Settings
     from corparius.doctor import main as doctor_main
-    from corparius.webui import serve
 
     _log("running the doctor (see the Settings tab for details any time)")
     doctor_main(quiet=True)

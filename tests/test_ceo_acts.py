@@ -5,7 +5,7 @@ import threading
 
 import pytest
 
-from corparius import webui
+from corparius.api.server import build_server
 from corparius.app import chat as chat_mod
 from corparius.config import cfg
 from corparius.config.settings import Settings
@@ -21,7 +21,7 @@ def server(tmp_path, monkeypatch):
     monkeypatch.delenv("CORP_UI_TOKEN", raising=False)
     cfg.set_dotenv_path(tmp_path / ".env")
     cfg.invalidate()
-    srv = webui.build_server(Settings(), host="127.0.0.1", port=0, env_file=tmp_path / ".env")
+    srv = build_server(Settings(), host="127.0.0.1", port=0, env_file=tmp_path / ".env")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()

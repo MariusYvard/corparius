@@ -360,8 +360,9 @@ corparius/
   companyrepo.py   give a company its own git repository
   hitl.py          approval gate and queue
   orchestrator.py  scheduler (cadences) + runtime (the tick loop)
-  store.py         SQLite persistence
-  webui.py         operator console server (stdlib HTTP, JSON API)
+  store/           SQLite persistence (schema + one mixin per table)
+  api/             the operator console's transport: state, contracts,
+                   adapters, handlers, routes, server (stdlib HTTP, JSON API)
   webui.html       operator console page (single file, no build step)
   cli.py           init / run / status / tasks / board / flow / site / deploy / ui
   mcp_server.py    optional MCP server (drive corparius from an MCP host)

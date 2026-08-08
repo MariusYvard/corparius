@@ -230,7 +230,7 @@ def test_discarding_releases_it_too(tmp_path, monkeypatch):
 
 
 def test_the_console_lists_what_was_written(tmp_path, monkeypatch):
-    from corparius import webui
+    from corparius.api import handlers, state
 
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
@@ -242,9 +242,9 @@ def test_the_console_lists_what_was_written(tmp_path, monkeypatch):
     store.add_draft("t", "social", "linkedin", "Vigil : 90s pour voir venir", state="queued")
     store.close()
 
-    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     ctx = type("Ctx", (), {"slug": "t", "store": state.store, "body": {}})()
-    _status, payload = webui._route_drafts_get(ctx)
+    _status, payload = handlers.drafts_get(ctx)
     state.close()
     assert payload["queued"] == 1
     assert payload["drafts"][0]["body"].startswith("Vigil")
@@ -252,12 +252,12 @@ def test_the_console_lists_what_was_written(tmp_path, monkeypatch):
 
 
 def test_the_console_refuses_a_state_that_is_not_one(tmp_path, monkeypatch):
-    from corparius import webui
+    from corparius.api import handlers, state
 
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
-    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     ctx = type("Ctx", (), {"slug": "t", "store": state.store, "body": {"id": 1, "state": "sent"}})()
-    status, payload = webui._route_drafts_post(ctx)
+    status, payload = handlers.drafts_post(ctx)
     state.close()
     assert status == 400 and payload["ok"] is False

@@ -140,19 +140,19 @@ def test_the_deploy_tool_publishes_the_companys_own_site(tmp_path, monkeypatch):
 def test_the_console_previews_the_same_site_it_would_publish(tmp_path, monkeypatch):
     """A preview showing one page while the deploy pushes another is the worst of
     both: the operator approves what they were shown."""
-    from corparius import webui
+    from corparius.api import handlers, state
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
     _site(tmp_path / "c", pages=("index.html",))
-    monkeypatch.setattr(webui, "_companies", lambda: ["c"])
+    monkeypatch.setattr(state, "companies", lambda: ["c"])
 
     class Ctx:
         slug = "c"
         path = "/site/c/"
 
-    code, body = webui._route_site_get(Ctx())[:2]
+    code, body = handlers.site_get(Ctx())[:2]
     assert code == 200 and body["built"] is True and body["owned"] is True
-    code, served, _ = webui._route_site_serve(Ctx())
+    code, served, _ = handlers.site_serve(Ctx())
     assert code == 200 and b"index.html" in served
 
 
@@ -342,14 +342,14 @@ def test_the_deploy_refuses_rather_than_publishing_placeholders(tmp_path, monkey
 
 
 def _served(slug, path):
-    from corparius import webui
+    from corparius.api import handlers
 
     class Ctx:
         pass
 
     ctx = Ctx()
     ctx.path = f"/site/{slug}{path}"
-    return webui._route_site_serve(ctx)
+    return handlers.site_serve(ctx)
 
 
 def test_the_preview_serves_the_stylesheet(tmp_path, monkeypatch):
@@ -358,10 +358,10 @@ def test_the_preview_serves_the_stylesheet(tmp_path, monkeypatch):
     /assets/style.css came back 404 — so the preview rendered the operator's real
     copy in Times New Roman with blue underlined links. They sent a screenshot of it
     and reasonably read it as the site being broken."""
-    from corparius import webui
+    from corparius.api import state
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
-    monkeypatch.setattr(webui, "_companies", lambda: ["c"])
+    monkeypatch.setattr(state, "companies", lambda: ["c"])
     folder = _site(tmp_path / "c", pages=("index.html", "tech.html"))
     (folder / "assets").mkdir()
     (folder / "assets" / "style.css").write_text("body{color:red}", encoding="utf-8")
@@ -371,10 +371,10 @@ def test_the_preview_serves_the_stylesheet(tmp_path, monkeypatch):
 
 
 def test_the_preview_serves_the_other_pages_and_folders(tmp_path, monkeypatch):
-    from corparius import webui
+    from corparius.api import state
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
-    monkeypatch.setattr(webui, "_companies", lambda: ["c"])
+    monkeypatch.setattr(state, "companies", lambda: ["c"])
     folder = _site(tmp_path / "c", pages=("index.html", "tech.html"))
     (folder / "blog").mkdir()
     (folder / "blog" / "index.html").write_text("<title>blog</title>", encoding="utf-8")
@@ -388,10 +388,10 @@ def test_the_preview_serves_the_other_pages_and_folders(tmp_path, monkeypatch):
 def test_the_preview_refuses_to_leave_the_site_folder(tmp_path, monkeypatch):
     """The company folder holds its config, its skills and its migration notes next
     to the site. Checked on the resolved path, not on the text of the URL."""
-    from corparius import webui
+    from corparius.api import state
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
-    monkeypatch.setattr(webui, "_companies", lambda: ["c"])
+    monkeypatch.setattr(state, "companies", lambda: ["c"])
     _site(tmp_path / "c", pages=("index.html",))
     (tmp_path / "c" / "company.yaml").write_text("slug: c\n", encoding="utf-8")
     (tmp_path / ".env").write_text("SECRET=1\n", encoding="utf-8")
@@ -410,39 +410,40 @@ def test_the_preview_refuses_to_leave_the_site_folder(tmp_path, monkeypatch):
 def test_only_the_declared_types_are_served(tmp_path, monkeypatch):
     """The preview is not a general file server. A .py or a .yaml inside the site
     folder is a source file, not a page."""
-    from corparius import webui
+    from corparius.api import handlers, state
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
-    monkeypatch.setattr(webui, "_companies", lambda: ["c"])
+    monkeypatch.setattr(state, "companies", lambda: ["c"])
     folder = _site(tmp_path / "c", pages=("index.html",))
     (folder / "build.py").write_text("print(1)", encoding="utf-8")
     (folder / "config.yaml").write_text("k: v", encoding="utf-8")
 
     assert _served("c", "/build.py")[0] == 404
     assert _served("c", "/config.yaml")[0] == 404
-    assert ".py" not in webui.SITE_TYPES and ".yaml" not in webui.SITE_TYPES
+    assert ".py" not in handlers.SITE_TYPES and ".yaml" not in handlers.SITE_TYPES
 
 
 def test_an_unknown_company_is_refused_before_any_path_is_built(tmp_path, monkeypatch):
-    from corparius import webui
+    from corparius.api import state
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
-    monkeypatch.setattr(webui, "_companies", lambda: ["c"])
+    monkeypatch.setattr(state, "companies", lambda: ["c"])
     assert _served("nosuch", "/index.html")[0] == 404
 
 
 def test_a_generated_page_still_previews(tmp_path, monkeypatch):
     """The company with no site of its own has not changed."""
-    from corparius import sitegen, webui
+    from corparius import sitegen
+    from corparius.api import state
 
     monkeypatch.setattr(paths, "companies_dir", lambda: tmp_path)
-    monkeypatch.setattr(webui, "_companies", lambda: ["c"])
+    monkeypatch.setattr(state, "companies", lambda: ["c"])
     (tmp_path / "c").mkdir()
     data = tmp_path / "data"
     sitegen.build_site(
         {"slug": "c", "name": "C", "offer": {"product": "p"}}, str(data / "sites" / "c")
     )
-    monkeypatch.setattr(webui, "_fresh_settings", lambda: type("S", (), {"data_path": str(data)})())
+    monkeypatch.setattr(state, "fresh_settings", lambda: type("S", (), {"data_path": str(data)})())
     assert _served("c", "/")[0] == 200
 
 

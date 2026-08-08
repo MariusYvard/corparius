@@ -412,7 +412,7 @@ def test_the_model_picker_hides_what_is_proved_uncallable(tmp_path, monkeypatch)
     than offering nothing."""
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
-    from corparius import webui
+    from corparius.api import handlers, state
     from corparius.providers import llm
     from corparius.store import Store
 
@@ -427,9 +427,9 @@ def test_the_model_picker_hides_what_is_proved_uncallable(tmp_path, monkeypatch)
     store.close()
     monkeypatch.setattr(llm, "list_models", lambda name, timeout=8: ["good", "bad", "untried"])
 
-    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     ctx = types.SimpleNamespace(body={"name": "nvidia"}, state=state, lang="en")
-    status, payload = webui._route_provider_models(ctx)
+    status, payload = handlers.provider_models(ctx)
     state.close()
 
     assert status == 200 and payload["ok"]
@@ -554,12 +554,12 @@ def test_two_sweeps_at_once_are_refused(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_LLM_MOCK", "false")
-    from corparius import webui
+    from corparius.api import handlers, state
 
-    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     state.sweep = {"running": True}
     ctx = types.SimpleNamespace(body={}, state=state, lang="en")
-    status, payload = webui._route_sweep_post(ctx)
+    status, payload = handlers.sweep_post(ctx)
     state.close()
     assert status == 400 and "already running" in payload["error"]
 
@@ -572,12 +572,12 @@ def test_the_progress_endpoint_reads_state_and_calls_nobody(tmp_path, monkeypatc
     monkeypatch.setattr(
         requests, "post", lambda *a, **k: pytest.fail("the progress endpoint called a provider")
     )
-    from corparius import webui
+    from corparius.api import handlers, state
 
-    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     preflight.remember(state.store(), [preflight.Probe("groq", "a", state=USABLE, status=200)])
     ctx = types.SimpleNamespace(body={}, state=state, lang="en")
-    status, payload = webui._route_sweep_get(ctx)
+    status, payload = handlers.sweep_get(ctx)
     state.close()
     assert status == 200
     assert payload["known"] == 1 and payload["usable_by_provider"] == {"groq": 1}

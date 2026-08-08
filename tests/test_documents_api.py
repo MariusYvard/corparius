@@ -16,9 +16,12 @@ import threading
 
 import pytest
 
-from corparius import documents, webui
+from corparius import documents
+from corparius.api import routes
+from corparius.api.server import build_server
 from corparius.config import cfg
 from corparius.config.settings import Settings
+from corparius.kernel import httpkit
 
 from .test_webui import _call
 
@@ -38,7 +41,7 @@ def server(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_HOME", str(root))
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
     cfg.invalidate()
-    srv = webui.build_server(Settings(), host="127.0.0.1", port=0, env_file=tmp_path / ".env")
+    srv = build_server(Settings(), host="127.0.0.1", port=0, env_file=tmp_path / ".env")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()
@@ -190,7 +193,7 @@ def test_an_unknown_or_traversing_slug_is_refused(server, slug):
 def test_the_endpoint_is_not_public(server):
     """It reads the operator's own files. It has to sit behind the token like
     every other read."""
-    route = webui._match("GET", "/api/documents")
+    route = routes.match("GET", "/api/documents")
     assert route is not None and route.public is False
 
 
@@ -293,11 +296,11 @@ def test_a_body_over_the_route_ceiling_is_refused_without_being_read(server):
     """The ceiling belongs to the route: this one carries a file and the others
     carry a handful of fields, so raising it for everybody would widen every
     other endpoint at the same time."""
-    route = webui._match("POST", "/api/documents")
-    assert route.max_body > webui.MAX_BODY, "a 6 MB file cannot fit the default"
+    route = routes.match("POST", "/api/documents")
+    assert route.max_body > httpkit.MAX_BODY, "a 6 MB file cannot fit the default"
     assert route.max_body >= documents.MAX_UPLOAD, "and base64 costs a third on top"
     # Every other POST keeps the tight default.
-    assert webui._match("POST", "/api/drafts").max_body == webui.MAX_BODY
+    assert routes.match("POST", "/api/drafts").max_body == httpkit.MAX_BODY
 
 
 def test_a_body_that_is_not_base64_says_so_rather_than_writing_it(drop, server):
@@ -356,9 +359,9 @@ def test_reading_cannot_reach_outside_the_folder(drop, server, path):
 
 
 def test_reading_is_a_get_and_needs_no_wide_body_ceiling(server):
-    route = webui._match("GET", "/api/document/text")
+    route = routes.match("GET", "/api/document/text")
     assert route is not None and route.public is False
-    assert route.max_body == webui.MAX_BODY
+    assert route.max_body == httpkit.MAX_BODY
 
 
 # --------------------------------------------------------------------------
@@ -442,8 +445,8 @@ def test_removing_from_an_unknown_company_is_refused(server):
 def test_removal_keeps_the_tight_body_ceiling(server):
     """It carries a path, not a file. Only the endpoint that takes a file gets the
     wide ceiling, and that stays visible in the table."""
-    assert webui._match("POST", "/api/documents/delete").max_body == webui.MAX_BODY
-    assert webui._match("POST", "/api/documents").max_body > webui.MAX_BODY
+    assert routes.match("POST", "/api/documents/delete").max_body == httpkit.MAX_BODY
+    assert routes.match("POST", "/api/documents").max_body > httpkit.MAX_BODY
 
 
 def test_the_page_is_told_the_limits_rather_than_repeating_them(drop, server):

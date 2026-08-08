@@ -84,14 +84,14 @@ def test_the_console_resolves_everything_the_panel_needs(tmp_path, monkeypatch):
     (tmp_path / "companies" / "t" / "company.yaml").write_text(
         "slug: t\nname: T\nhitl_tools: [send_outreach]\n", encoding="utf-8"
     )
-    from corparius import webui
+    from corparius.api import adapters, state
 
     store = Store(str(tmp_path))
     _raise_one(store)
     store.close()
 
-    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
-    overview = webui._overview(state, "t")
+    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
+    overview = adapters.overview(state, "t")
     state.close()
     approval = next(a for a in overview["approvals"] if a["tool"] == "send_outreach")
     detail = approval["detail"]
@@ -110,7 +110,7 @@ def test_an_approval_written_before_this_column_existed_still_renders(tmp_path, 
     (tmp_path / "companies" / "t" / "company.yaml").write_text(
         "slug: t\nname: T\n", encoding="utf-8"
     )
-    from corparius import webui
+    from corparius.api import adapters, state
     from corparius.kernel.records import ApprovalRequest
 
     store = Store(str(tmp_path))
@@ -123,8 +123,8 @@ def test_an_approval_written_before_this_column_existed_still_renders(tmp_path, 
     store.db.commit()
     store.close()
 
-    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
-    approval = next(a for a in webui._overview(state, "t")["approvals"] if a["id"] == "old")
+    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
+    approval = next(a for a in adapters.overview(state, "t")["approvals"] if a["id"] == "old")
     state.close()
     assert approval["detail"]["draft"] == ""
     assert approval["detail"]["does"] == TOOLS["send_outreach"].description

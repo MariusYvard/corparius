@@ -231,8 +231,15 @@ def test_doctor_exits_with_its_own_status(cfg_path, monkeypatch):
 
 
 def test_ui_hands_its_exit_code_back(monkeypatch):
-    """serve() returns 1 when the port is taken; the CLI must not swallow it."""
-    monkeypatch.setattr("corparius.webui.serve", lambda s, host=None, port=None: 1)
+    """serve() returns 1 when the port is taken; the CLI must not swallow it.
+
+    The patch names `corparius.api.serve`, not `corparius.api.server.serve`, and the difference
+    is not cosmetic: `cmd_ui` does `from .api import serve`, which resolves the attribute on the
+    package. Aimed one module too deep during the split, this test passed anyway — the real
+    `serve` ran and returned 1 because port 8600 happened to be in use. A green test measuring
+    nothing, which is the shape this suite exists to refuse.
+    """
+    monkeypatch.setattr("corparius.api.serve", lambda s, host=None, port=None: 1)
     with pytest.raises(SystemExit) as exc:
         cli.main(["ui", "--port", "8601"])
     assert exc.value.code == 1
@@ -518,7 +525,7 @@ def test_the_frozen_launcher_answers_help_instead_of_opening_a_browser(monkeypat
     reached = {}
     monkeypatch.setattr(launcher, "_announce_update", lambda: None)
     monkeypatch.setattr("corparius.doctor.main", lambda quiet=False: None)
-    monkeypatch.setattr("corparius.webui.serve", lambda *a, **k: reached.setdefault("ui", True))
+    monkeypatch.setattr("corparius.api.serve", lambda *a, **k: reached.setdefault("ui", True))
     monkeypatch.setattr("corparius.cli.main", lambda argv: pytest.fail(f"CLI got {argv}"))
     monkeypatch.setattr(_sys, "argv", ["corparius", "--no-browser"])
     launcher.main()
@@ -539,7 +546,7 @@ def test_the_frozen_launcher_still_serves_the_console_with_no_command(monkeypatc
     monkeypatch.setattr(launcher, "_prepare_home", lambda: None)
     monkeypatch.setattr(launcher, "_announce_update", lambda: None)
     monkeypatch.setattr("corparius.doctor.main", lambda quiet=False: 0)
-    monkeypatch.setattr("corparius.webui.serve", lambda s: served.setdefault("served", True) or 0)
+    monkeypatch.setattr("corparius.api.serve", lambda s: served.setdefault("served", True) or 0)
 
     def explode(argv):
         raise AssertionError("a bare launch went to the CLI")

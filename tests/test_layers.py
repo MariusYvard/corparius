@@ -175,7 +175,18 @@ RANKS: dict[str, int] = {
     "appexport": 5,
     "plugins": 5,
     # 6 — interfaces
-    "webui": 6,
+    # Stage 6's second half. `webui.py` was one module of 2 468 lines that was the console, its
+    # business logic, its dotenv writer, its HTTP server and its route table at once; these six
+    # import in a straight line and never back. `contracts` is separate from `routes` for that
+    # reason alone — a `Route` next to `ROUTES` would make `handlers` import the table that
+    # imports it, and within one rank the ranks would not have caught it.
+    "api/__init__": 6,
+    "api/state": 6,
+    "api/contracts": 6,
+    "api/adapters": 6,
+    "api/handlers": 6,
+    "api/routes": 6,
+    "api/server": 6,
     "appserver": 6,
     "cli": 6,
     "appcli": 6,
@@ -276,7 +287,9 @@ OWNERS: dict[str, tuple[frozenset[str], str]] = {
     # that only one of the seven had written down why it needed.
     "subprocess": (frozenset({"kernel/proc"}), "kernel/proc.py"),
     # → api/** only.
-    "http.server": (frozenset({"webui", "appserver"}), "api/**"),
+    # Done, stage 6. `webui` was the second owner; the transport now lives in `api/server`,
+    # and `appserver` is the MCP server, a different door on the same product.
+    "http.server": (frozenset({"api/server", "appserver"}), "api/**"),
 }
 
 

@@ -90,7 +90,7 @@ COST: dict[str, frozenset[str]] = {
     # visible, not because it should fall.
     "doctor": frozenset({"requests", "subprocess", "sqlite3", "ssl"}),
     "orchestrator": frozenset({"requests", "subprocess", "sqlite3", "smtplib", "imaplib", "ssl"}),
-    "webui": frozenset({"requests", "subprocess", "sqlite3", "smtplib", "imaplib", "ssl"}),
+    "api": frozenset({"requests", "subprocess", "sqlite3", "smtplib", "imaplib", "ssl"}),
 }
 
 _PROBE = (

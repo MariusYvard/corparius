@@ -8,7 +8,7 @@ taking one has not been lifted out of the transport, it has been relabelled.
 
 **No transport error.** A service that raises the console's 400 can only ever be called by the
 console. It raises what the failure *is*, and the route translates. The pattern already exists
-one rank down: `kernel/dotenv.merge` raises `LineBreakRefused`, and `webui._merge_env_file`
+one rank down: `kernel/dotenv.merge` raises `LineBreakRefused`, and `adapters.merge_env_file`
 turns that into a status code.
 
 The measured reason the folder exists: eleven things the console could do and the command line
@@ -85,9 +85,12 @@ def test_no_service_raises_a_transport_error():
 
 
 def test_the_app_layer_imports_no_transport():
-    """`webui`, `appserver` and `http.server` are rank 6. An app service importing one would
-    be an upward import — `tests/test_layers.py` would catch it too, and this says why."""
-    banned = {"webui", "appserver", "http.server", "http"}
+    """`api`, `appserver` and `http.server` are rank 6. An app service importing one would
+    be an upward import — `tests/test_layers.py` would catch it too, and this says why.
+
+    `webui` is in the list still, and deliberately: the module is gone, so an import of it can
+    only be a leftover — but it costs one word to say that a resurrection would not pass."""
+    banned = {"api", "webui", "appserver", "http.server", "http"}
     offenders = []
     for path in SOURCES:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):

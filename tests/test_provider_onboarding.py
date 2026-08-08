@@ -7,11 +7,11 @@ that turn a connected key into a working full configuration are covered too.
 
 import types
 
+from corparius.api.adapters import providers_payload
 from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS
 from corparius.config.settings_spec import LLM_SERVER_PRESETS
 from corparius.providers.llm import list_models
 from corparius.providers.routing import recommended_routing
-from corparius.webui import _providers_payload
 
 
 def test_every_real_provider_has_an_https_signup_link():
@@ -55,7 +55,7 @@ def test_payload_surfaces_the_onboarding_metadata(monkeypatch, tmp_path):
     from corparius.config import cfg
 
     cfg.invalidate()
-    payload = _providers_payload()
+    payload = providers_payload()
     by_name = {p["name"]: p for p in payload["providers"]}
     groq = by_name["groq"]
     assert groq["signup"] == "https://console.groq.com/keys"

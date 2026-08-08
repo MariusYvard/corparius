@@ -15,7 +15,8 @@ hides a button instead of discovering a 404.
 
 import pytest
 
-from corparius import webui
+from corparius.api import routes
+from corparius.api.server import build_server
 from corparius.app import meta
 
 V1 = "/api/v1/"
@@ -26,7 +27,7 @@ LEGACY_COUNT = 54
 
 
 def _paths() -> list[str]:
-    return [r.path for r in webui.ALL_ROUTES]
+    return [r.path for r in routes.ALL_ROUTES]
 
 
 def _legacy() -> list[str]:
@@ -74,7 +75,7 @@ def server(tmp_path, monkeypatch):
     cfg.invalidate()
     import threading
 
-    srv = webui.build_server(Settings(), host="127.0.0.1", port=0, env_file=tmp_path / ".env")
+    srv = build_server(Settings(), host="127.0.0.1", port=0, env_file=tmp_path / ".env")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()

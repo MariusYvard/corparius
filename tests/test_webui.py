@@ -11,7 +11,7 @@ from http.client import HTTPConnection
 
 import pytest
 
-from corparius import webui
+from corparius.api.server import build_server, drain_and_close
 from corparius.config import cfg
 from corparius.config.settings import Settings
 from corparius.kernel.records import ApprovalRequest
@@ -36,7 +36,7 @@ def server(tmp_path, monkeypatch):
     monkeypatch.setenv("CORP_HOME", str(home))
     cfg.invalidate()
     settings = Settings()
-    srv = webui.build_server(settings, host="127.0.0.1", port=0, env_file=tmp_path / ".env")
+    srv = build_server(settings, host="127.0.0.1", port=0, env_file=tmp_path / ".env")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()
@@ -80,7 +80,7 @@ def test_shutdown_drains_a_loop_run_before_closing_the_store(server, caplog):
     state = server.RequestHandlerClass.state
     assert any(r.get("stop") for r in state.runs.values()), "no run was active to drain"
     with caplog.at_level(logging.ERROR):
-        webui._drain_and_close(state)
+        drain_and_close(state)
     assert "closed database" not in caplog.text.lower()
     assert state._store is None  # closed and cleared
     assert not any(
@@ -316,12 +316,15 @@ def test_payments_mock_when_no_key(server, monkeypatch):
 def test_unexpected_error_is_humanized_not_a_traceback(server, monkeypatch):
     # Force an unexpected failure inside a handler and confirm the operator gets a
     # sentence, not str(exc) or a traceback. The detail stays in the server log.
-    import corparius.webui as webui_mod
+    from corparius.api import adapters
 
     def boom(*a, **k):
         raise RuntimeError("secret internal detail xyzzy")
 
-    monkeypatch.setattr(webui_mod, "_overview", boom)
+    # `handlers.overview` reaches the adapter through its module, so patching the module
+    # attribute is what the handler will actually look up. A `from .adapters import overview`
+    # in the handler would have made this patch silently miss.
+    monkeypatch.setattr(adapters, "overview", boom)
     status, data = _call(server, "GET", "/api/overview?company=example")
     assert status == 500 and data["ok"] is False
     assert "xyzzy" not in data["error"]  # internals do not leak
@@ -568,7 +571,7 @@ def test_the_done_column_is_bounded_and_says_the_true_count(server):
     them, oldest first, pushing everything below the board off the page — and
     the renderer cut at thirty without saying so, so the header disagreed with
     the column under it."""
-    from corparius.webui import DONE_KEPT
+    from corparius.api.adapters import DONE_KEPT
 
     store = server.RequestHandlerClass.state.store()
     for i in range(DONE_KEPT + 12):

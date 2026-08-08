@@ -58,10 +58,10 @@ def store(tmp_path):
 def test_the_registry_is_reached_when_the_console_approves(store):
     """The end that was missing. An operator pressing Approve has to leave the
     task in the same state the CEO would have left it in."""
-    from corparius.webui import _edit_task
+    from corparius.api.adapters import edit_task
 
     task_id = store.add_task("c", "Remove the unverified badge", "design", status="proposed")
-    code, body = _edit_task(store, {"id": task_id, "decision": "approved"})
+    code, body = edit_task(store, {"id": task_id, "decision": "approved"})
     assert code == 200, body
     row = store.get_task(task_id)
     assert row["status"] == "approved"
@@ -79,20 +79,20 @@ def test_the_registry_is_reached_when_the_ceo_approves(store):
 def test_both_ends_leave_a_task_in_the_same_state(store):
     """Stated as the property rather than as two examples, because the next
     approval path added should have to satisfy it too."""
-    from corparius.webui import _edit_task
+    from corparius.api.adapters import edit_task
 
     by_console = store.add_task("c", "A", "support", status="proposed")
     by_ceo = store.add_task("c", "B", "support", status="proposed")
-    _edit_task(store, {"id": by_console, "decision": "approved"})
+    edit_task(store, {"id": by_console, "decision": "approved"})
     tools._review_proposals(_Ctx(store, role="ceo"))
     assert store.get_task(by_console)["tool"] == store.get_task(by_ceo)["tool"] != ""
 
 
 def test_a_tool_the_operator_chose_is_not_overwritten(store):
-    from corparius.webui import _edit_task
+    from corparius.api.adapters import edit_task
 
     task_id = store.add_task("c", "A", "support", status="proposed")
-    _edit_task(store, {"id": task_id, "decision": "approved", "tool": "write_site_content"})
+    edit_task(store, {"id": task_id, "decision": "approved", "tool": "write_site_content"})
     assert store.get_task(task_id)["tool"] == "write_site_content"
 
 
@@ -270,16 +270,14 @@ def test_a_proposal_is_not_counted_as_the_operators_when_a_ceo_reviews_them(tmp_
     early-access users with nothing behind it read, to the operator, as the company
     stopping to ask permission for trivia. The CEO reviews proposals; that is what
     a CEO is for."""
-    from corparius import webui
+    from corparius.api import adapters, state
 
-    monkeypatch.setattr(
-        webui, "_load_company", lambda slug: {"slug": slug, "agents": {"ceo": True}}
-    )
+    monkeypatch.setattr(state, "load_company", lambda slug: {"slug": slug, "agents": {"ceo": True}})
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
-    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     try:
         state.store().add_task("c", "Remove the unverified badge", "design", status="proposed")
-        assert webui._overview(state, "c")["proposals_need_you"] is False
+        assert adapters.overview(state, "c")["proposals_need_you"] is False
     finally:
         state.close()
 
@@ -287,31 +285,29 @@ def test_a_proposal_is_not_counted_as_the_operators_when_a_ceo_reviews_them(tmp_
 def test_it_is_the_operators_when_no_ceo_will_look(tmp_path, monkeypatch):
     """A CEO switched off, and the proposals really would sit there forever.
     Saying nothing then is worse than one badge too many."""
-    from corparius import webui
+    from corparius.api import adapters, state
 
     monkeypatch.setattr(
-        webui, "_load_company", lambda slug: {"slug": slug, "agents": {"ceo": False}}
+        state, "load_company", lambda slug: {"slug": slug, "agents": {"ceo": False}}
     )
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
-    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     try:
         state.store().add_task("c", "A", "design", status="proposed")
-        assert webui._overview(state, "c")["proposals_need_you"] is True
+        assert adapters.overview(state, "c")["proposals_need_you"] is True
     finally:
         state.close()
 
 
 def test_it_is_the_operators_when_the_ceo_is_stood_down(tmp_path, monkeypatch):
-    from corparius import webui
+    from corparius.api import adapters, state
 
-    monkeypatch.setattr(
-        webui, "_load_company", lambda slug: {"slug": slug, "agents": {"ceo": True}}
-    )
+    monkeypatch.setattr(state, "load_company", lambda slug: {"slug": slug, "agents": {"ceo": True}})
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
-    state = webui.UiState(webui._fresh_settings(), tmp_path / ".env")
+    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     try:
         state.store().add_directive("c", "pause", "ceo", "paused by the operator")
-        assert webui._overview(state, "c")["proposals_need_you"] is True
+        assert adapters.overview(state, "c")["proposals_need_you"] is True
     finally:
         state.close()
 
@@ -364,12 +360,10 @@ def test_changing_the_agent_in_the_editor_re_offers_its_tools():
 
 def test_the_api_accepts_what_the_editor_now_sends(store):
     """The other end of the wire, exercised rather than read."""
-    from corparius.webui import _edit_task
+    from corparius.api.adapters import edit_task
 
     task_id = store.add_task("c", "Remove the badge", "support", status="approved")
-    code, body = _edit_task(
-        store, {"id": task_id, "target": "design", "tool": "write_site_content"}
-    )
+    code, body = edit_task(store, {"id": task_id, "target": "design", "tool": "write_site_content"})
     assert code == 200, body
     row = store.get_task(task_id)
     assert (row["target"], row["tool"]) == ("design", "write_site_content")
@@ -378,10 +372,10 @@ def test_the_api_accepts_what_the_editor_now_sends(store):
 def test_an_unknown_tool_is_refused_rather_than_stored(store):
     """A task scoped to a tool nobody has never applies, silently — worse than the
     untooled task it was meant to fix."""
-    from corparius.webui import _edit_task
+    from corparius.api.adapters import edit_task
 
     task_id = store.add_task("c", "x", "support", status="approved")
-    code, body = _edit_task(store, {"id": task_id, "tool": "no_such_tool"})
+    code, body = edit_task(store, {"id": task_id, "tool": "no_such_tool"})
     assert code == 400 and "unknown tool" in body["error"]
-    code, body = _edit_task(store, {"id": task_id, "target": "webmaster"})
+    code, body = edit_task(store, {"id": task_id, "target": "webmaster"})
     assert code == 400 and "unknown agent" in body["error"]

@@ -9,7 +9,7 @@ changing it fails here.
 
 import pytest
 
-from corparius import webui
+from corparius.api import contracts, routes
 
 # Every route that answers without a token. Adding to this list is a decision
 # about what the console exposes, so it has to be made here, in a diff a
@@ -27,7 +27,7 @@ PUBLIC = {
 
 
 def _all_routes():
-    return list(webui.ROUTES) + list(webui.PREFIX_ROUTES)
+    return list(routes.ROUTES) + list(routes.PREFIX_ROUTES)
 
 
 def test_public_routes_are_exactly_the_declared_set():
@@ -40,12 +40,12 @@ def test_routes_default_to_authenticated():
     False, so forgetting to think about auth yields the safe answer."""
     from dataclasses import fields
 
-    default = {f.name: f.default for f in fields(webui.Route)}["public"]
+    default = {f.name: f.default for f in fields(contracts.Route)}["public"]
     assert default is False
 
 
 def test_no_duplicate_routes():
-    seen = [(r.method, r.path) for r in webui.ROUTES]
+    seen = [(r.method, r.path) for r in routes.ROUTES]
     assert len(seen) == len(set(seen))
 
 
@@ -61,23 +61,23 @@ def test_methods_are_get_or_post():
 @pytest.mark.parametrize(
     "method,path,expected",
     [
-        ("GET", "/api/site", "_route_site_get"),  # exact wins
-        ("GET", "/site/acme/", "_route_site_serve"),  # prefix only after exact misses
-        ("GET", "/site/", "_route_site_serve"),
-        ("POST", "/api/site", "_route_site_post"),
+        ("GET", "/api/site", "site_get"),  # exact wins
+        ("GET", "/site/acme/", "site_serve"),  # prefix only after exact misses
+        ("GET", "/site/", "site_serve"),
+        ("POST", "/api/site", "site_post"),
     ],
 )
 def test_exact_routes_are_never_shadowed_by_a_prefix(method, path, expected):
     """/site/ is the only non-exact match in the table. If prefixes were checked
     first, or in the same pass, /api/site would be ambiguous."""
-    route = webui._match(method, path)
+    route = routes.match(method, path)
     assert route is not None and route.handler.__name__ == expected
 
 
 def test_unknown_paths_and_methods_do_not_match():
-    assert webui._match("GET", "/api/nope") is None
-    assert webui._match("POST", "/") is None  # the page is GET-only
-    assert webui._match("GET", "/api/run") is None  # runs are POST-only
+    assert routes.match("GET", "/api/nope") is None
+    assert routes.match("POST", "/") is None  # the page is GET-only
+    assert routes.match("GET", "/api/run") is None  # runs are POST-only
 
 
 def test_mutating_routes_are_exactly_the_post_routes():

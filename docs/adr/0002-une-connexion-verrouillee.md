@@ -32,5 +32,5 @@ qu'une vérification. Le découpage en mixins ajoute le test qui l'exige.
 
 ## Où c'est appliqué
 
-`corparius/store.py:368-388` (le décorateur et son raisonnement), `webui.py:178-190` (la
+`corparius/store.py:368-388` (le décorateur et son raisonnement), `api/state.py` (la
 connexion prêtée par la console).

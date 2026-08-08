@@ -157,13 +157,13 @@ def test_the_service_carries_no_status_code(store):
 
 
 def test_the_console_adapter_only_unpacks_and_translates():
-    """`webui._edit_task` should be unpacking a body and mapping one exception. If it grows
+    """`adapters.edit_task` should be unpacking a body and mapping one exception. If it grows
     logic again, the two callers start to differ again — which is the whole history here."""
     import inspect
 
-    from corparius import webui
+    from corparius.api import adapters
 
-    source = inspect.getsource(webui._edit_task)
+    source = inspect.getsource(adapters.edit_task)
     assert "app_tasks.edit(" in source
     assert "Refused" in source and "400" in source
     # No validation left behind: those words belong to the service now.

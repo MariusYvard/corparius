@@ -64,8 +64,8 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 
 ## Où en est le chantier
 
-Étapes 1 à 5 faites, l'étape 6 faite pour sa moitié qui compte, l'étape 8 commencée par son
-contrat. Mesuré :
+Étapes 1 à 6 faites, l'étape 8 commencée par son contrat. Les sept dossiers du plan existent :
+`kernel/`, `config/`, `store/`, `providers/`, `tools/`, `app/`, `api/`. Mesuré :
 
 | Compteur | Au plan | Aujourd'hui |
 | --- | --- | --- |
@@ -74,7 +74,7 @@ contrat. Mesuré :
 | Modules important `subprocess` | 4 | **1** (`kernel/proc.py`) |
 | Ce que charge la lecture d'un réglage | `requests`, `subprocess`, `ssl`, `sqlite3` | **`sqlite3`** |
 | Ce que charge la lecture de la liste des outils | + `smtplib`, `imaplib` | **rien** |
-| Modules à plat | 53 | **29** |
+| Modules à plat | 53 | **28** |
 | Choses que la console sait faire et la CLI non | 11 | **3**, toutes cosmétiques |
 | Commandes CLI | 27 | **33** |
 | Routes sous contrat versionné | 0 | **1** sur 55 |
@@ -161,25 +161,62 @@ Les trouver à la main a marché deux fois et **ne passe pas à l'échelle** :
 les deux atteignent *ce* service, et plafonne la taille d'un adaptateur — parce qu'un adaptateur
 qui reprend de la logique est exactement comment les deux côtés ont divergé, un commit à la fois.
 
-### Ce qui reste de l'étape 6
-
 Neuf services sont descendus et neuf paires sont sous cliquet. Les trois écarts qui restent
 sont cosmétiques ou déjà couverts autrement : le thème de la console, les charges utiles de
-rendu (`_settings_payload`, `_providers_payload`, `_company_payload`), et `_ollama_pull` /
-`_claude_setup`, dont les cousins `bench` et `claude` existent déjà côté ligne de commande.
-
-La seconde moitié de l'étape — déplacer le transport de `webui.py` vers `api/` — est purement
-structurelle : 57 gestionnaires, la table de routes et le serveur. Elle n'ouvre plus aucune
-capacité, et les deux gardes qui la protégeront existent déjà
-(`tests/test_route_table.py` pour les deux bouts de la table, `tests/test_app_layer.py` pour
-la règle inverse).
+rendu (`settings_payload`, `providers_payload`, `company_payload`), et `ollama_pull` /
+`claude_setup`, dont les cousins `bench` et `claude` existent déjà côté ligne de commande.
 
 Le motif qui a produit ces neuf déplacements vaut d'être noté, parce qu'il s'est répété
 identiquement : **la barrière n'a jamais été la logique, toujours un paramètre.**
-`_persist(state, …)` prenait un `UiState` ; `_chat` lisait `state.chats` ; `_overview` lisait
-`state.runs`. Trois fois, un objet de console dans une signature était la seule raison qu'un
+`persist(ui, …)` prenait un `UiState` ; `chat` lisait `ui.chats` ; `overview` lisait
+`ui.runs`. Trois fois, un objet de console dans une signature était la seule raison qu'un
 terminal ne puisse pas appeler la fonction. `app_mail.check` n'en avait aucun et son extraction
 a coûté un fichier et une commande.
+
+### La seconde moitié : `webui.py` n'existe plus
+
+1 881 lignes en six modules qui s'importent en ligne droite et jamais en arrière :
+
+| Module | Lignes | Ce qu'il porte |
+| --- | --- | --- |
+| `api/state.py` | 84 | `UiState` — et rien de ce qu'il tient ne survit à un redémarrage |
+| `api/contracts.py` | 75 | `Ctx` et `Route`, deux formes de données |
+| `api/adapters.py` | 551 | la moitié console de chaque cas d'usage |
+| `api/handlers.py` | 877 | 57 fonctions, une par point d'entrée |
+| `api/routes.py` | 120 | la table |
+| `api/server.py` | 302 | le serveur stdlib et les contrôles avant un gestionnaire |
+
+**Par couche, pas par page.** Un `handlers/settings.py` et un `handlers/site.py` auraient
+recréé le fichier-dieu une fois par onglet ; ce qui garde `handlers.py` lisible, c'est que la
+réflexion est dans `app/` et que les points d'entrée sont des adaptateurs.
+
+`contracts` est un module séparé de `routes` pour une seule raison, et elle est structurelle :
+un `Route` défini à côté de `ROUTES` ferait importer par `handlers` la table qui l'importe.
+C'est la forme des cinq cycles que ce chantier a supprimés — et **à l'intérieur d'un même rang,
+les rangs ne l'auraient pas vu**, ce qui est exactement pourquoi `KNOWN_CYCLES` existe.
+
+Trois choses que le déplacement a rendues plus vraies que « déplacées » :
+
+**Le tiret bas des 57 gestionnaires est parti.** Il n'existait que parce que tout vivait dans
+un fichier de 2 468 lignes, où `_route_meta` distinguait un gestionnaire de ses voisins. Dans
+un module dont chaque fonction est un gestionnaire, c'était le nom du module, répété 57 fois.
+Et le cliquet en est plus fort : `tests/test_route_table.py` ne cherche plus un motif de nom,
+il compare « défini ici » à « dans la table », et lit le **module** au lieu d'un chemin — sa
+première version lisait `Path("corparius/webui.py")`, ce qu'un déplacement transforme en scan
+vide. Trois tests de cette suite lisaient un chemin au déplacement précédent et les trois ont
+cassé ; c'est la deuxième fois, et c'est le correctif qui la termine.
+
+**Sept alias sont morts.** `MAX_BODY`, `_LOOPBACK`, `_host_only` étaient des ré-exports de
+`kernel/httpkit` ; `_CEO_ACTIONS`, `_CEO_SCHEMA`, `PAUSABLE`, `_apply_directives` de
+`app/directives`. Chacun existait parce qu'un appelant l'épelait ainsi. Les appelants bougeant
+dans le même commit, ils épellent maintenant la vraie maison.
+
+**`state` ne désigne plus qu'une chose.** Dans `api/`, `state` est le module et `ui` est l'objet
+de la console — parce que `fresh_settings`, `companies` et `load_company` sont monkeypatchés par
+les tests, et **un nom importé dans trois modules a trois points de patch** : on en patche un et
+les deux autres gardent la vraie fonction, en silence. Les atteindre par `state.X` n'en laisse
+qu'un. C'est la même classe de défaut que le reste du chantier a trouvée ailleurs, mais dans un
+test au lieu du produit : une garantie qui s'affaiblit sans un mot.
 
 ## L'étape 8 a commencé par sa brique la moins spectaculaire
 

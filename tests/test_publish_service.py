@@ -5,7 +5,7 @@ Measured on the owner's real company before this existed:
     console publishes  companies/vigil/site/public    the operator's own site
     CLI publishes      data/sites/vigil               the generated one
 
-`webui._deploy` consulted `paths.owned_site(slug)` — the company's own folder wins, "exactly as
+`adapters.deploy` consulted `paths.owned_site(slug)` — the company's own folder wins, "exactly as
 it does for the agent's deploy tool", because the console publishing something different from
 what the roster publishes would be the worst of both. `cli.cmd_deploy` built
 `paths.site_dir(data_path, slug)` and never asked. So on any company whose operator edits their

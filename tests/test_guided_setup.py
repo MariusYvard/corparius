@@ -18,7 +18,7 @@ import types
 import pytest
 
 from corparius import inbox as inbox_mod
-from corparius import webui
+from corparius.api import adapters
 from corparius.app import mail as app_mail
 from corparius.config import settings_spec
 from corparius.providers import mailbox
@@ -99,7 +99,7 @@ def test_a_step_nobody_can_verify_says_so_rather_than_staying_unticked(monkeypat
 
 
 def test_the_console_is_given_the_steps():
-    payload = webui._settings_payload()
+    payload = adapters.settings_payload()
     assert payload["mail_steps"]
     assert set(payload["mail_steps"]) == set(settings_spec.MAIL_STEPS)
 

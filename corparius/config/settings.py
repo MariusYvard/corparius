@@ -99,7 +99,7 @@ class Settings:
         default_factory=lambda: cfg.get_int("CORP_MAX_IDENTICAL_TOOL_CALLS", 2)
     )
 
-    # Operator console (corparius/webui.py). Binds to localhost; set CORP_UI_TOKEN
+    # Operator console (corparius/api/). Binds to localhost; set CORP_UI_TOKEN
     # to require the X-Corp-Token header on every mutating call. These are
     # bootstrap keys (cfg.BOOTSTRAP): the console writes them to .env, and they
     # only take effect on restart.

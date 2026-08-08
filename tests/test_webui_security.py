@@ -17,9 +17,11 @@ from http.client import HTTPConnection
 
 import pytest
 
-from corparius import webui
+from corparius.api import adapters, routes
+from corparius.api.server import build_server
 from corparius.config import cfg
 from corparius.config.settings import Settings
+from corparius.kernel import httpkit
 
 
 @pytest.fixture()
@@ -29,7 +31,7 @@ def server(tmp_path, monkeypatch):
     monkeypatch.delenv("CORP_UI_TOKEN", raising=False)
     monkeypatch.delenv("CORP_UI_ALLOWED_HOSTS", raising=False)
     cfg.invalidate()
-    srv = webui.build_server(Settings(), host="127.0.0.1", port=0, env_file=tmp_path / ".env")
+    srv = build_server(Settings(), host="127.0.0.1", port=0, env_file=tmp_path / ".env")
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield srv
     srv.shutdown()
@@ -157,11 +159,11 @@ def test_bracketed_ipv6_loopback_is_accepted(server):
 
 
 def test_host_only_peels_ipv6_brackets():
-    assert webui._host_only("[::1]:8600") == "::1"
-    assert webui._host_only("[::1]") == "::1"
-    assert webui._host_only("127.0.0.1:8600") == "127.0.0.1"
-    assert webui._host_only("localhost") == "localhost"
-    assert webui._host_only("EVIL.example:80") == "evil.example"
+    assert httpkit.host_only("[::1]:8600") == "::1"
+    assert httpkit.host_only("[::1]") == "::1"
+    assert httpkit.host_only("127.0.0.1:8600") == "127.0.0.1"
+    assert httpkit.host_only("localhost") == "localhost"
+    assert httpkit.host_only("EVIL.example:80") == "evil.example"
 
 
 def test_an_operator_can_name_their_own_host(server, monkeypatch):
@@ -178,7 +180,7 @@ def test_allowed_hosts_cannot_be_set_through_the_api(server):
     successful cross-site write to /api/settings would otherwise let an attacker
     add their own host and disable the defence for good."""
     assert "CORP_UI_ALLOWED_HOSTS" in cfg.BOOTSTRAP
-    assert "CORP_UI_ALLOWED_HOSTS" not in webui.ALLOWED_VARS
+    assert "CORP_UI_ALLOWED_HOSTS" not in adapters.ALLOWED_VARS
 
 
 # --- body limits ----------------------------------------------------------
@@ -191,7 +193,7 @@ def test_oversized_body_is_refused_without_reading_it(server):
             "POST",
             "/api/run",
             raw_body=b"{}",
-            headers={"Content-Length": str(webui.MAX_BODY + 1)},
+            headers={"Content-Length": str(httpkit.MAX_BODY + 1)},
         )
         == 413
     )
@@ -230,7 +232,7 @@ def test_every_non_public_route_requires_the_token(server, monkeypatch):
     cfg.invalidate()
     # `ALL_ROUTES`, not `ROUTES`: the prefix table was outside this check, so a non-public
     # prefix route would have been outside a guard that reads as exhaustive.
-    for route in webui.ALL_ROUTES:
+    for route in routes.ALL_ROUTES:
         if route.public or route.method != "GET":
             continue
         path = route.path + ("?company=example" if route.needs_slug else "")

@@ -757,7 +757,7 @@ def cmd_restore(args) -> None:
 
 
 def cmd_ui(args) -> None:
-    from .webui import serve
+    from .api import serve
 
     raise SystemExit(serve(settings, host=args.host, port=args.port))
 

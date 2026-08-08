@@ -40,41 +40,44 @@ CLI_MODULES = (
     Path("corparius/skillcli.py"),
 )
 CLI = Path("corparius/cli.py")  # for the "is it still there" guard; the scans use CLI_MODULES
-WEBUI = Path("corparius/webui.py")
+# The console is two files since stage 6 split `webui.py`: the adapters are its half of each use
+# case, and two of the nine pairs are reached straight from a handler with no adapter between —
+# `app_mail.check` never had a `UiState` to take, so there was nothing to extract.
+CONSOLE = (Path("corparius/api/adapters.py"), Path("corparius/api/handlers.py"))
 
 # (console service, CLI command) -> the app service both must reach.
 # Adding a row here is how a pair becomes enforced; the assertion is that both sides reach it.
 SHARED = {
-    ("_edit_task", "task"): "app_tasks.edit",
-    ("_deploy", "deploy"): "app_publish.publish",
-    ("_set_settings", "set"): "app_settings.persist",
-    ("_create_company", "new"): "app_companies.create",
-    ("_chat", "ceo"): "app_chat.once",
-    ("_route_test_mail", "mail"): "app_mail.check",
-    ("_delete_company", "delete"): "app_companies.delete",
-    ("_route_skill_scope", "skills"): "app_skills.scope",
-    ("_overview", "status"): "app_overview.build",
+    ("edit_task", "task"): "app_tasks.edit",
+    ("deploy", "deploy"): "app_publish.publish",
+    ("set_settings", "set"): "app_settings.persist",
+    ("create_company", "new"): "app_companies.create",
+    ("chat", "ceo"): "app_chat.once",
+    ("test_mail", "mail"): "app_mail.check",
+    ("delete_company", "delete"): "app_companies.delete",
+    ("skill_scope", "skills"): "app_skills.scope",
+    ("overview", "status"): "app_overview.build",
 }
 
 # Pairs that look like a pair and are not, with the reason. Audited by reading both sides.
 DIFFERENT_JOBS = {
-    ("_start_run", "run"): (
+    ("start_run", "run"): (
         "The console starts a background thread and polls it; the CLI runs in the foreground "
         "and prints the result. Same Runtime, same arguments — a difference of purpose, not of "
-        "knowledge. The console reads `_fresh_settings()` at start time so a value saved from "
+        "knowledge. The console reads `state.fresh_settings()` at start time so a value saved from "
         "the page applies; on a one-shot CLI process that is the same settings object."
     ),
-    ("_create_company", "init"): (
+    ("create_company", "init"): (
         "`init` does not create a company, it stamps the state of one that exists — a different "
         "job, so not a divergence. The gap this row used to name (no CLI way to create a company "
-        "at all) is closed: `corparius new` pairs with `_create_company` through "
+        "at all) is closed: `corparius new` pairs with `adapters.create_company` through "
         "`app_companies.create`, and that pair is in SHARED below."
     ),
-    ("_ollama_pull", "bench"): (
+    ("ollama_pull", "bench"): (
         "`bench` measures what is installed; the pull downloads. Neighbours in the console's "
         "setup card, unrelated operations."
     ),
-    ("_claude_setup", "claude"): (
+    ("claude_setup", "claude"): (
         "The CLI's `claude` command already calls `claudecli.setup` directly, which is the "
         "same function the console's handler wraps. The wrapper is a payload shape, not logic — "
         "worth revisiting when `app/setup.py` exists, not worth a shim now."
@@ -87,17 +90,23 @@ def _console_services() -> set[str]:
 
     Handlers were excluded at first, on the theory that a pair is service-to-command. `mail`
     disproved it: `app_mail.check` never had a `UiState`, so there was no intermediate service
-    to extract and the console reaches it straight from `_route_test_mail`. That is the
+    to extract and the console reaches it straight from `handlers.test_mail`. That is the
     *better* shape — one fewer hop — and excluding it would have meant the pair could not be
     declared, which is the wrong incentive.
 
     Including them also puts the thirty-line ceiling on handlers, where it belongs for the same
     reason: an adapter that grows logic is how two callers come to differ.
+
+    Every top-level function of both console files. The filter used to be
+    `name.startswith("_")`, which worked only because everything lived in one file where the
+    underscore was how a handler was told from its neighbours. It is gone with the split, and
+    good: a name-shaped filter is one more thing that can quietly stop matching.
     """
     return {
         n.name
-        for n in ast.parse(WEBUI.read_text(encoding="utf-8")).body
-        if isinstance(n, ast.FunctionDef) and n.name.startswith("_")
+        for path in CONSOLE
+        for n in ast.parse(path.read_text(encoding="utf-8")).body
+        if isinstance(n, ast.FunctionDef)
     }
 
 
@@ -143,7 +152,7 @@ def _app_calls(*paths: Path) -> set[str]:
 def test_the_sources_are_still_there():
     """The guard on the guard: a moved file would make every assertion below vacuous, which is
     how the flat glob in test_registries.py nearly disarmed the whole restructuring."""
-    assert WEBUI.is_file()
+    assert all(p.is_file() for p in CONSOLE), "a console file moved"
     assert all(p.is_file() for p in CLI_MODULES), "a CLI module moved"
     assert len(_cli_commands()) >= 20, "the CLI command scan found almost nothing"
     assert len(_console_services()) >= 20, "the console service scan found almost nothing"
@@ -153,7 +162,7 @@ def test_the_sources_are_still_there():
 def test_both_callers_reach_the_shared_service(pair, service):
     """The property the two bugs violated. Not "both call something" — both call *this*."""
     console_fn, command = pair
-    assert service in _app_calls(WEBUI), f"the console no longer reaches {service}"
+    assert service in _app_calls(*CONSOLE), f"the console no longer reaches {service}"
     assert service in _app_calls(*CLI_MODULES), f"the command line no longer reaches {service}"
 
 
@@ -162,12 +171,20 @@ def test_the_console_handler_kept_no_logic_of_its_own(pair, service):
     """An adapter that grows logic is how the two sides start to differ again. The console's
     handler should unpack a request and map one exception."""
     console_fn, _ = pair
-    tree = ast.parse(WEBUI.read_text(encoding="utf-8"))
-    fn = next(n for n in tree.body if getattr(n, "name", "") == console_fn)
-    lines = fn.end_lineno - fn.lineno + 1
-    assert lines <= 30, (
-        f"{console_fn} is {lines} lines. It should unpack and translate; anything more belongs "
-        "in the service, or the command line will not have it."
+    # The name can be borne by a function in either file — `overview` is both a handler and the
+    # adapter it calls — so the ceiling applies to whichever ones carry it, not to the first
+    # found. Taking the first would have let the two-line handler answer for the adapter.
+    sizes = {
+        f"{path.name}:{n.name}": n.end_lineno - n.lineno + 1
+        for path in CONSOLE
+        for n in ast.parse(path.read_text(encoding="utf-8")).body
+        if getattr(n, "name", "") == console_fn
+    }
+    assert sizes, f"no console function named {console_fn}"
+    too_long = {k: v for k, v in sizes.items() if v > 30}
+    assert not too_long, (
+        f"{too_long}. A console adapter should unpack and translate; anything more belongs in "
+        "the service, or the command line will not have it."
     )
 
 

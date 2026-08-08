@@ -95,6 +95,29 @@ CREATE TABLE IF NOT EXISTS model_probes (
     vision_ok INTEGER,
     PRIMARY KEY (provider, model)
 );
+
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    company TEXT NOT NULL DEFAULT '',
+    state TEXT NOT NULL DEFAULT 'running',
+    progress TEXT NOT NULL DEFAULT '',
+    -- What was asked for, as JSON. Without it a client that reconnects cannot tell a six-tick
+    -- run from a continuous one, which is the difference between waiting and intervening.
+    params TEXT NOT NULL DEFAULT '',
+    owner_pid INTEGER NOT NULL DEFAULT 0,
+    owner_token TEXT NOT NULL DEFAULT '',
+    result TEXT NOT NULL DEFAULT '',
+    cancel_requested INTEGER NOT NULL DEFAULT 0,
+    idempotency_key TEXT NOT NULL DEFAULT '',
+    started_at REAL NOT NULL,
+    ended_at REAL
+);
+-- Partial, so the jobs started without a key do not collide with one another. A phone on 4G that
+-- retries "start a run" must not start two, and only a request carrying a key is asking for that
+-- promise.
+CREATE UNIQUE INDEX IF NOT EXISTS jobs_idempotency
+    ON jobs(idempotency_key) WHERE idempotency_key <> '';
 """
 
 
@@ -102,7 +125,7 @@ CREATE TABLE IF NOT EXISTS model_probes (
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -391,6 +414,37 @@ def _migration_16(db: sqlite3.Connection) -> None:
         pass  # already there: fresh stores get it from SCHEMA
 
 
+def _migration_19(db: sqlite3.Connection) -> None:
+    """Work that outlives the process that started it.
+
+    The one thing a second client most needed and could not have. `UiState.runs` is a dict in
+    the console's process: a run started from a phone vanished on restart with no record it had
+    existed, which is why `capabilities.durable_jobs` reported false.
+
+    Nothing is migrated *into* this table — an in-memory run that was lost is lost, and inventing
+    rows for it would be inventing history. Existing stores get the table and start recording
+    from the next run.
+
+    `owner_token` rather than the `owner_boot` the plan named: there is no portable boot id in the
+    stdlib, and a PID alone is worse than nothing because PIDs are reused — a new console that
+    inherited the old one's number would call the orphan its own and report a dead run as live
+    forever. See `store/jobs.py`.
+    """
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS jobs ("
+        " id TEXT PRIMARY KEY, kind TEXT NOT NULL, company TEXT NOT NULL DEFAULT '',"
+        " state TEXT NOT NULL DEFAULT 'running', progress TEXT NOT NULL DEFAULT '',"
+        " params TEXT NOT NULL DEFAULT '',"
+        " owner_pid INTEGER NOT NULL DEFAULT 0, owner_token TEXT NOT NULL DEFAULT '',"
+        " result TEXT NOT NULL DEFAULT '', cancel_requested INTEGER NOT NULL DEFAULT 0,"
+        " idempotency_key TEXT NOT NULL DEFAULT '', started_at REAL NOT NULL, ended_at REAL)"
+    )
+    db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS jobs_idempotency"
+        " ON jobs(idempotency_key) WHERE idempotency_key <> ''"
+    )
+
+
 MIGRATIONS = {
     1: _migration_1,
     2: _migration_2,
@@ -410,4 +464,5 @@ MIGRATIONS = {
     16: _migration_16,
     17: _migration_17,
     18: _migration_18,
+    19: _migration_19,
 }

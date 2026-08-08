@@ -64,10 +64,11 @@ def capabilities(settings, store=None) -> dict[str, bool]:
         # would be offering a RuntimeError.
         "secrets_at_rest": _secrets_ready(),
         "plugins": cfg.get_bool("CORP_PLUGINS_ENABLED"),
-        # A second client is what this endpoint exists for, and it is not possible yet: nothing
-        # survives a restart of the console (the plan's schema 19). Reported as false rather
-        # than omitted, so a client is told *no* instead of having to guess from a missing key.
-        "durable_jobs": False,
+        # True since schema 19. A run is a row in `jobs`, so it survives a restart of the console
+        # — and a run the console was holding when it died reads back as `interrupted` rather than
+        # as silence. Which schema the store is actually at is `schema_version` in this same
+        # payload, so a client that needs to be sure does not have to trust this flag alone.
+        "durable_jobs": True,
     }
 
 

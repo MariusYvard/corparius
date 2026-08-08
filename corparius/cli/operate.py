@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 
+from ..app import runs as app_runs
 from ..app.support import open_store
 from ..config.settings import Settings
 from . import support
@@ -49,13 +50,49 @@ def cmd_ceo(args) -> int:
     return 0
 
 
-def cmd_run(args) -> None:
+def cmd_run(args) -> int:
+    """Run in the foreground, and record it in `jobs` like any other run.
+
+    Recorded because a run is a run whoever started it. Without the row, `corparius status` in
+    another terminal — or the console, or a phone — would report "not running" while this process
+    was mid-tick, which is the same phantom the v1 work removed from `/api/overview`. It also
+    means this run can be stopped from anywhere: `should_stop` reads `cancel_requested`, and that
+    is the whole cost of it.
+
+    `running_job` is the guard, so two terminals cannot run the same company at once. That was
+    never checked at all before; the console checked its own memory and the CLI checked nothing.
+    """
     from ..orchestrator import Runtime
+    from ..store import jobs as jobs_store
 
     cfg = support.load_company(args.company)
     store = open_store()
-    result = Runtime(Settings(), store).run(cfg, ticks=args.ticks, loop=args.loop)
+    slug = cfg["slug"]
+    if store.running_job(app_runs.KIND, slug):
+        print(f"a run is already in progress for {slug}")
+        return 1
+    job = store.start_job(
+        app_runs.KIND,
+        slug,
+        progress="starting",
+        params={"ticks": args.ticks, "loop": bool(args.loop)},
+    )["id"]
+    try:
+        result = Runtime(Settings(), store).run(
+            cfg,
+            ticks=args.ticks,
+            loop=args.loop,
+            should_stop=lambda: store.cancel_requested(job),
+        )
+    except BaseException:
+        # `BaseException`, so Ctrl-C on a `--loop` run does not leave the row saying `running`
+        # forever — which the next process would then mark `interrupted`, true but a day late.
+        store.finish_job(job, jobs_store.FAILED, {"error": "the run did not finish"})
+        raise
+    ended = jobs_store.CANCELLED if store.cancel_requested(job) else jobs_store.DONE
+    store.finish_job(job, ended, result)
     print(json.dumps(result, indent=2))
+    return 0
 
 
 def cmd_status(args) -> int:
@@ -78,7 +115,11 @@ def cmd_status(args) -> int:
 
     cfg = support.load_company(args.company)
     store = open_store()
-    data = app_overview.build(store, Settings(), cfg["slug"], company=cfg)
+    # The run comes from `jobs` now, so a terminal sees a run the console started — and says
+    # `interrupted` about one whose process went away instead of saying nothing.
+    data = app_overview.build(
+        store, Settings(), cfg["slug"], company=cfg, run=app_runs.view(store, cfg["slug"])
+    )
     if args.json:
         print(json.dumps(data, indent=2, default=str))
         return 0

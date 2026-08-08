@@ -54,6 +54,7 @@ INVALID = "invalid"  # the request was understood and is wrong; `detail` says wh
 UNAUTHENTICATED = "unauthenticated"  # no token or the wrong one
 FORBIDDEN = "forbidden"  # a token that is not enough, or a request from somewhere not allowed
 TOO_LARGE = "too_large"  # over the route's ceiling, refused before the body was read
+CONFLICT = "conflict"  # already running, already answered: ask again later, not differently
 INTERNAL = "internal"  # a bug here; the detail is in the server log and not in the response
 
 CODES = frozenset(
@@ -61,6 +62,7 @@ CODES = frozenset(
         UNKNOWN_COMPANY,
         NOT_FOUND,
         INVALID,
+        CONFLICT,
         UNAUTHENTICATED,
         FORBIDDEN,
         TOO_LARGE,
@@ -114,6 +116,10 @@ class Ctx:
     body: dict
     slug: str
     lang: str
+    # `Idempotency-Key`, and the only header a handler is given. The whole headers dict would let
+    # a handler reach for anything and blur what the transport is responsible for; one named field
+    # says exactly what crosses.
+    idempotency_key: str = ""
 
     def store(self) -> Store:
         return self.state.store()

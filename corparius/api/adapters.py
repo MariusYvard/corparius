@@ -29,6 +29,7 @@ from ..app import errors as app_errors
 from ..app import mail as app_mail
 from ..app import overview as app_overview
 from ..app import publish as app_publish
+from ..app import runs as app_runs
 from ..app import settings as app_settings
 from ..app import tasks as app_tasks
 from ..config import cfg, settings_spec
@@ -41,10 +42,27 @@ from ..providers import (
     ollama_setup,
 )
 from ..providers.llm import connected_providers
+from ..store import jobs as jobs_store
 from ..tools.spec import SPEC
 from . import contracts, state
 from .contracts import RequestRefused
 from .state import UiState
+
+# `owner_token` is how the startup sweep decides whether a `running` job belongs to this process,
+# and a client has nothing it could do with it. Publishing a value that gates a state transition
+# is needless even on loopback, so the transport decides what crosses rather than the row deciding
+# for it. `owner_pid` stays: a person can act on a PID.
+_PRIVATE_JOB_FIELDS = ("owner_token",)
+
+
+def publishable_job(job: dict) -> dict:
+    """A job row as a client sees it.
+
+    Here and not in `handlers.py` for the second time in this stage: that file's invariant is that
+    every function in it is an endpoint, and `tests/test_route_table.py` caught this one on sight
+    exactly as it caught `for_company`.
+    """
+    return {k: v for k, v in job.items() if k not in _PRIVATE_JOB_FIELDS}
 
 
 def for_company(slug: str):
@@ -131,7 +149,7 @@ def overview(ui: UiState, slug: str) -> tuple[int, dict]:
         state.fresh_settings(),
         slug,
         company=company,
-        run=ui.runs.get(slug, {}),
+        run=run_view(ui, slug),
     )
 
 
@@ -209,50 +227,124 @@ def chat(ui: UiState, slug: str, message: str, lang: str = "en") -> dict:
     )
 
 
-def start_run(ui: UiState, slug: str, ticks: int, loop: bool = False, lang: str = "en") -> dict:
+def run_view(ui: UiState, slug: str) -> dict:
+    """`app.runs.view`, plus the one thing only this process knows.
+
+    The in-memory `Event` is the console's own click landing microseconds before the column it
+    also sets. Everything else comes from the job row, which is why a restarted console reports
+    `interrupted` instead of reporting nothing.
+    """
+    held = ui.runs.get(slug) or {}
+    stop = held.get("stop")
+    return app_runs.view(ui.store(), slug, stopping=bool(stop is not None and stop.is_set()))
+
+
+def start_run(
+    ui: UiState, slug: str, ticks: int, loop: bool = False, lang: str = "en", key: str = ""
+) -> tuple[int, dict]:
+    """Start a run, and record it where a restart cannot lose it.
+
+    Three things changed when `jobs` arrived, and each removes a guess:
+
+    **The guard is the store.** "A run is already in progress" used to be `ui.runs`, a dict in
+    this process — so a run left behind by a crashed console was invisible to the next one and a
+    second run would start on top of it. `running_job` is durable, and startup marks what this
+    process does not own as `interrupted` before anything can ask.
+
+    **`key` is `Idempotency-Key`.** A phone on 4G that retries this must not start two runs, so a
+    repeated key returns the *same* job with `created: false` rather than a refusal the client
+    would have to interpret.
+
+    **The stop signal is both.** The event for this console's own button, the column for anybody
+    else's — read together by the `should_stop` the orchestrator already polls at every tick.
+    """
     company = state.load_company(slug)
     if company is None:
-        return {"ok": False, "error": f"unknown company '{slug}'"}
+        return 404, {"ok": False, "error": f"unknown company '{slug}'"}
+    store = ui.store()
+    # The key is consulted **before** the already-running guard, and the order is the whole point.
+    # The first version checked the guard first, so a phone retrying the request it had just made
+    # was told "a run is already in progress" — by its own run. Exactly the situation the key
+    # exists to make harmless, answered with the error it exists to prevent. Found by the test.
+    if key:
+        seen = store.job_for_key(key)
+        if seen:
+            return 200, {"ok": True, "job": seen["id"], "created": False, **run_view(ui, slug)}
+    already = store.running_job(app_runs.KIND, slug)
+    if already:
+        return 409, {
+            "ok": False,
+            "error": "a run is already in progress",
+            "job": already["id"],
+        }
+    started = store.start_job(
+        app_runs.KIND,
+        slug,
+        idempotency_key=key,
+        progress="starting",
+        params={"ticks": int(ticks), "loop": bool(loop)},
+    )
+    job_id = started["id"]
+    if not started["created"]:
+        # Two requests carrying one key arrived close enough together to race past the read above.
+        # The unique index is what actually decides, and this is the loser being told so.
+        return 200, {"ok": True, "job": job_id, "created": False, **run_view(ui, slug)}
     stop = threading.Event()
     with ui.lock:
-        if ui.runs.get(slug, {}).get("running"):
-            return {"ok": False, "error": "a run is already in progress"}
-        ui.runs[slug] = {"running": True, "result": None, "stop": stop, "loop": loop}
+        ui.runs[slug] = {"job": job_id, "stop": stop}
 
     def _worker() -> None:
         try:
-            runtime = Runtime(state.fresh_settings(), ui.store())
-            result = runtime.run(company, ticks=ticks, loop=loop, should_stop=stop.is_set)
-            ui.runs[slug] = {"running": False, "result": result}
+            runtime = Runtime(state.fresh_settings(), store)
+            result = runtime.run(
+                company,
+                ticks=ticks,
+                loop=loop,
+                should_stop=lambda: stop.is_set() or store.cancel_requested(job_id),
+            )
+            ended = jobs_store.CANCELLED if store.cancel_requested(job_id) else jobs_store.DONE
+            store.finish_job(job_id, ended, result)
         except Exception:  # surface, never swallow; detail to the log, not the operator
             log.exception("run failed for %s", slug)
-            ui.runs[slug] = {
-                "running": False,
-                "result": {
+            store.finish_job(
+                job_id,
+                jobs_store.FAILED,
+                {
                     "error": i18n.pick(
                         lang,
                         "The run stopped on an unexpected error. See the server log for details.",
                         "Le run s'est arrêté sur une erreur inattendue. Voir le journal du serveur.",
                     )
                 },
-            }
+            )
+        finally:
+            with ui.lock:
+                ui.runs.pop(slug, None)
 
     threading.Thread(target=_worker, daemon=True, name=f"corparius-run-{slug}").start()
-    return {"ok": True, "running": True, "loop": loop}
+    return 200, {"ok": True, "running": True, "loop": loop, "job": job_id, "created": True}
 
 
-def stop_run(ui: UiState, slug: str) -> dict:
-    """Ask the loop to stop. It lands within a tick; the thread is never killed,
-    so the company's clock and the action log stay consistent."""
-    with ui.lock:
-        run = ui.runs.get(slug) or {}
-        if not run.get("running"):
-            return {"ok": False, "error": "no run in progress"}
-        stop = run.get("stop")
-    if stop is None:
-        return {"ok": False, "error": "this run cannot be stopped"}
-    stop.set()
-    return {"ok": True, "stopping": True}
+def stop_run(ui: UiState, slug: str) -> tuple[int, dict]:
+    """Ask the run to stop. It lands within a tick; the thread is never killed, so the company's
+    clock and the action log stay consistent.
+
+    The column is written first and it is the one that matters: a client that is not this process
+    — a phone, another terminal — has no event to set, and this is what lets it stop a run it did
+    not start. The event is then set as well, because for the console's own button a tick is
+    long enough to feel like nothing happened.
+    """
+    store = ui.store()
+    job = store.running_job(app_runs.KIND, slug)
+    if job is None:
+        return 404, {"ok": False, "error": "no run in progress"}
+    store.request_cancel(job["id"])
+    store.set_job_progress(job["id"], "stopping")
+    held = ui.runs.get(slug) or {}
+    stop = held.get("stop")
+    if stop is not None:
+        stop.set()
+    return 200, {"ok": True, "stopping": True, "job": job["id"]}
 
 
 _DEFAULT_AGENTS = company_mod.DEFAULT_AGENTS  # kept: the wizard's checkbox list

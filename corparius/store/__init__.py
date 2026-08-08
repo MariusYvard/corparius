@@ -34,6 +34,7 @@ from .decisions import DecisionsMixin
 from .directives import DirectivesMixin
 from .drafts import DraftsMixin
 from .inbox import InboxMixin
+from .jobs import JobsMixin
 from .machine import MachineMixin
 from .memory import MemoryMixin
 from .model_catalogue import ModelCatalogueMixin
@@ -56,6 +57,7 @@ class Store(
     DirectivesMixin,
     DraftsMixin,
     InboxMixin,
+    JobsMixin,
     MachineMixin,
     MemoryMixin,
     ModelCatalogueMixin,

@@ -281,7 +281,17 @@ class Handler(BaseHTTPRequestHandler):
             if not route.public and not self._authorized():
                 self._refuse(401, contracts.UNAUTHENTICATED, "missing or wrong X-Corp-Token")
                 return
-            ctx = Ctx(state=self.state, path=url.path, query=query, body=body, slug=slug, lang=lang)
+            ctx = Ctx(
+                state=self.state,
+                path=url.path,
+                query=query,
+                body=body,
+                slug=slug,
+                lang=lang,
+                # The one header a handler is given, and it is given because a client on a bad
+                # connection has no other way to say "this is the request I already sent".
+                idempotency_key=(self.headers.get("Idempotency-Key") or "").strip()[:200],
+            )
             self._send(*route.handler(ctx))
         except RequestRefused as refused:
             # Raised from body parsing: a chunked body, a malformed Content-Length, or one over
@@ -317,6 +327,14 @@ def build_server(
     path = env_file or ROOT / ".env"
     cfg.set_dotenv_path(path)  # the console and the resolver must agree on it
     ui = UiState(settings, path)
+    # A job left `running` by a process that is gone becomes `interrupted`, here, before anything
+    # can ask. Not resumed: "it stopped, start it again" is honest, and picking it up silently
+    # would claim the ticks it did not run and the day boundary it never banked. The comparison is
+    # on a per-process token rather than the PID, because a reused PID would make a dead run look
+    # live forever — see `store/jobs.py`.
+    orphans = ui.store().interrupt_orphans()
+    if orphans:
+        log.info("marked %d job(s) interrupted: %s", len(orphans), ", ".join(orphans))
     handler = type("BoundHandler", (Handler,), {"state": ui})
     return ThreadingHTTPServer(
         (host or settings.ui_host, settings.ui_port if port is None else port), handler

@@ -116,6 +116,33 @@ bande passante, pas le travail — la charge est construite puis hachée, donc l
 lieu. `Cache-Control` vaut `no-cache` sur ces routes (garde et redemande) et reste `no-store`
 ailleurs : `no-store` interdirait de garder la copie, et il n'y aurait rien à revalider.
 
+### Le travail durable
+
+Un tour est une ligne dans `jobs` (schéma 19), donc il survit au redémarrage de la console — et un
+tour que la console tenait quand elle est morte se relit `interrupted` plutôt que de disparaître
+sans trace.
+
+```text
+POST /api/v1/runs?      {company, ticks, loop}   démarre ; honore Idempotency-Key
+POST /api/v1/runs/stop  {company}                demande l'arrêt, depuis n'importe où
+GET  /api/v1/jobs?company=                       les 20 derniers, le plus récent d'abord
+```
+
+**`Idempotency-Key` est honoré, pas documenté comme une intention.** Deux requêtes portant la même
+clé donnent **un** travail : la seconde répond `created: false` avec le même `job`. Un téléphone en
+4G qui n'a jamais vu la première réponse ne peut donc pas lancer un second tour en redemandant.
+
+**L'arrêt est durable.** `cancel_requested` est une colonne, donc le client qui arrête un tour n'a
+pas besoin d'être le processus qui le fait tourner. La console garde en plus un `Event` en mémoire,
+parce qu'un tick est assez long pour qu'un bouton ait l'air cassé.
+
+**Un travail interrompu n'est jamais repris.** Au démarrage, un travail encore `running` qu'aucun
+processus vivant ne possède passe à `interrupted`, et la vue d'ensemble le dit en mots. Reprendre en
+silence revendiquerait des ticks qui n'ont pas eu lieu.
+
+`corparius run` enregistre aussi son travail, donc `corparius status` ailleurs voit le tour de la
+console et deux terminaux ne peuvent pas lancer la même entreprise en même temps.
+
 ### Les refus
 
 Une route v1 refuse dans une enveloppe :

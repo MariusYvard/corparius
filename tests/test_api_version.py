@@ -163,14 +163,19 @@ def test_no_capability_is_declared_rather_than_resolved(server):
     assert all(isinstance(v, bool) for v in caps.values()), "a capability is yes or no"
 
 
-def test_durable_jobs_says_no_rather_than_going_missing(server):
-    """The one thing a second client most needs and cannot have yet: nothing survives a restart
-    of the console. Reported false, not omitted — a client told *no* does not have to guess from
-    an absent key."""
+def test_durable_jobs_is_reported_as_a_yes_or_no_and_is_now_yes(server):
+    """This read `is False` for one commit, and the assertion it carried was the important half:
+    reported, not omitted — a client told *no* does not have to guess from an absent key.
+
+    Schema 19 made it true. A run is a row in `jobs`, so it survives a restart of the console, and
+    one the console was holding when it died reads back as `interrupted` rather than as silence.
+    The flag stays asserted rather than deleted, because "the key is there and it is a boolean" is
+    the promise, and the day it goes back to false a client must still find it.
+    """
     from .test_webui import _call
 
     _status, data = _call(server, "GET", "/api/v1/meta")
-    assert data["capabilities"]["durable_jobs"] is False
+    assert data["capabilities"]["durable_jobs"] is True
 
 
 def test_the_capabilities_open_no_socket(tmp_path, monkeypatch):

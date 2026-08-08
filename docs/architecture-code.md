@@ -77,10 +77,12 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Modules à plat | 53 | **27** |
 | Choses que la console sait faire et la CLI non | 11 | **3**, toutes cosmétiques |
 | Commandes CLI | 27 | **33** |
-| Routes sous contrat versionné | 0 | **5** sur 59 |
+| Routes sous contrat versionné | 0 | **8** sur 62 |
 | Registres avec les deux bouts tenus | 1 | **4** (outils, routes, commandes, codes d'erreur) |
 | Instructions non testées de la CLI | 216 | **65** |
 | Octets de la ressource sondée | 48 530 | **2 859** (et 0 si rien n'a changé) |
+| Ce qui survit à un redémarrage de la console | rien | **les tours**, schéma 19 |
+| Schéma | 16 | **19** |
 
 **Zéro arête montante**, et c'est pour ça que la liste est écrite en cliquet plutôt qu'en
 commentaire : chacune des quatre a été rayée par l'étape qui la nommait, et l'ensemble vide
@@ -426,6 +428,69 @@ plafond qui punit le fait de l'écrire pousse contre la règle du projet : les d
 les mesures, et les perdre est la seule chose que le plan interdit explicitement. Il compte des
 instructions maintenant, seuil 20 — mesuré : les neuf paires vont de 1 à 17, et le 17 est
 `start_run`, qui est du vrai travail de console.
+
+## L'étape 8, quatrième brique : le travail survit au processus
+
+`UiState.runs` est un dictionnaire dans le processus de la console. Un tour lancé depuis un
+téléphone disparaissait au redémarrage **sans trace qu'il ait existé**, et
+`capabilities.durable_jobs` répondait `false` pour exactement ça. Schéma 19 : une table `jobs`, et
+le drapeau répond `true`.
+
+### Trois refus de deviner
+
+**Un travail interrompu est `interrupted`, jamais repris.** Au démarrage, un travail encore marqué
+`running` que ce processus ne possède pas passe à `interrupted`. Le reprendre en silence
+revendiquerait les ticks qu'il n'a pas faits et la frontière de journée qu'il n'a pas banquée. Et
+la console le dit en mots : « The console stopped while this run was in progress. Nothing was
+resumed; start it again when you are ready. »
+
+**La propriété est un jeton par processus, pas le PID.** Le plan disait `owner_boot` ; il n'y a pas
+d'identifiant de démarrage portable dans la bibliothèque standard — `/proc/sys/kernel/random/boot_id`
+n'a pas d'équivalent Windows, et ce projet livre sur trois OS. Le PID seul est *pire que rien* ici :
+les PID sont réutilisés, donc une nouvelle console qui hérite du numéro de l'ancienne déciderait que
+l'orphelin est le sien et rapporterait un tour mort comme vivant, indéfiniment. `owner_token` est un
+jeton aléatoire frappé une fois par processus, ce qui répond exactement à « est-ce le mien ».
+`owner_pid` reste à côté, pour une personne qui lit la table, et n'est jamais ce qu'on compare — et
+il n'est pas publié dans l'API, parce qu'une valeur qui commande une transition d'état n'a rien à
+faire dans une réponse.
+
+**L'annulation est durable, et l'`Event` en mémoire reste.** `cancel_requested` est une colonne
+parce que le client qui arrête un tour n'est pas le processus qui le fait tourner. `should_stop` lit
+les deux : l'événement arrive en microsecondes pour le bouton de la console, la colonne en un tick
+pour tout le monde d'autre. Ce paramètre était **déjà** injecté — `orchestrator.run` le sonde à
+chaque tick et à chaque frontière de journée — donc ça a coûté un lambda.
+
+### Ce que le test a trouvé avant les utilisateurs
+
+**L'ordre de la clé d'idempotence était inversé.** `start_run` vérifiait d'abord la garde « un tour
+est déjà en cours », puis la clé. Donc un téléphone qui réessayait la requête qu'il venait de faire
+se faisait répondre « un tour est déjà en cours » — *par son propre tour*. Exactement la situation
+que la clé existe pour rendre inoffensive, répondue avec l'erreur qu'elle existe pour éviter. La
+clé se consulte maintenant en premier, et `job_for_key` existe pour ça.
+
+**Et le premier test du redémarrage ne pouvait pas marcher.** Il montait deux serveurs dans le même
+interpréteur, ce qui ne prouve rien : `OWNER` est frappé par processus — à raison, puisque
+`shutdown()` sur un objet serveur ne tue pas le thread qui fait tourner les ticks. Deux
+`build_server` dans un interpréteur sont **un** propriétaire. Le test tue maintenant un vrai
+sous-processus, ce qui est la seule version honnête de « la console a disparu » — et c'est mot pour
+mot la cinquième vérification du plan.
+
+Conséquence qui vaut d'être notée : ce test, le plus soigneux du fichier, **ne contribue rien à la
+couverture** — ses assertions tournent dans un autre interpréteur, donc la branche `interrupted`
+de `app/runs.py` se lisait comme non testée. Les mêmes propriétés sont donc aussi affirmées en
+processus, un niveau plus bas. `app/runs.py` 100 %, `store/jobs.py` 99,1 %.
+
+### Une capacité gagnée dans les deux sens
+
+`corparius run` enregistre son travail comme n'importe quel autre. Sans la ligne, `corparius status`
+dans un autre terminal — ou la console, ou un téléphone — rapporterait « pas en cours » pendant que
+ce processus est en plein tick : le même fantôme que le travail v1 a retiré de `/api/overview`. Et
+un tour lancé au terminal est maintenant arrêtable depuis n'importe où, parce que `should_stop` lit
+la colonne. Deux terminaux ne peuvent plus lancer la même entreprise en même temps non plus — ce
+n'était vérifié nulle part : la console vérifiait sa propre mémoire et la CLI ne vérifiait rien.
+
+`app/runs.py` est au rang 5 et pas dans `api/adapters.py` précisément pour ça : la vue durable est
+la même pour les deux appelants, ce qui est le motif de l'étape 6 appliqué à une capacité neuve.
 
 ## Un vrai tour, sur la vraie configuration
 

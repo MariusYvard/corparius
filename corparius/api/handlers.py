@@ -48,7 +48,7 @@ from ..providers import (
 from ..providers.integrations import stripe_check, stripe_payments
 from ..providers.llm import connected_providers
 from ..tools.spec import SPEC
-from . import adapters, state
+from . import adapters, contracts, state
 
 log = logging.getLogger("corparius.api.handlers")
 
@@ -125,7 +125,7 @@ def v1_summary(ctx):
             state.fresh_settings(),
             ctx.slug,
             company=company,
-            run=ctx.state.runs.get(ctx.slug, {}),
+            run=adapters.run_view(ctx.state, ctx.slug),
         ),
     }
 
@@ -152,6 +152,61 @@ def v1_activity(ctx):
     if refusal:
         return refusal
     return 200, {"ok": True, **app_overview.activity(ctx.store(), ctx.slug)}
+
+
+def v1_jobs(ctx):
+    """Work this company has done or is doing, newest first.
+
+    The resource a client polls to find out whether the run it started is still going — and, after
+    a restart it did not witness, that the answer is `interrupted` rather than silence. It is a
+    read, so it carries an ETag like every other v1 GET.
+    """
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    return 200, {
+        "ok": True,
+        "jobs": [
+            adapters.publishable_job(j) for j in ctx.store().list_jobs(company=ctx.slug, limit=20)
+        ],
+    }
+
+
+def v1_runs_post(ctx):
+    """Start a run, durably. The first v1 write, and the one a phone needs.
+
+    `Idempotency-Key` is honoured here rather than being advice in a document: a retry over a bad
+    connection gets the same job back with `created: false`, so a client that never saw the first
+    answer cannot start a second run by asking again.
+    """
+    ticks = max(1, min(int(ctx.body.get("ticks", 6)), 48))
+    status, payload = adapters.start_run(
+        ctx.state,
+        ctx.slug,
+        ticks,
+        loop=bool(ctx.body.get("loop")),
+        lang=ctx.lang,
+        key=ctx.idempotency_key,
+    )
+    if status == 409:
+        return contracts.refuse(
+            409, contracts.CONFLICT, payload["error"], job=payload.get("job", "")
+        )
+    if status == 404:
+        return contracts.refuse(404, contracts.UNKNOWN_COMPANY, payload["error"], slug=ctx.slug)
+    return status, payload
+
+
+def v1_runs_stop(ctx):
+    """Ask the run to stop, from anywhere.
+
+    The durable half of the signal is a column, which is what makes this work at all from a client
+    that is not the process doing the running.
+    """
+    status, payload = adapters.stop_run(ctx.state, ctx.slug)
+    if status == 404:
+        return contracts.refuse(404, contracts.NOT_FOUND, payload["error"], slug=ctx.slug)
+    return status, payload
 
 
 def session(ctx):
@@ -668,13 +723,18 @@ def backup_post(ctx):
 
 
 def run_stop(ctx):
-    return 200, adapters.stop_run(ctx.state, ctx.slug)
+    return adapters.stop_run(ctx.state, ctx.slug)
 
 
 def run_post(ctx):
     ticks = max(1, min(int(ctx.body.get("ticks", 6)), 48))
-    return 200, adapters.start_run(
-        ctx.state, ctx.slug, ticks, loop=bool(ctx.body.get("loop")), lang=ctx.lang
+    return adapters.start_run(
+        ctx.state,
+        ctx.slug,
+        ticks,
+        loop=bool(ctx.body.get("loop")),
+        lang=ctx.lang,
+        key=ctx.idempotency_key,
     )
 
 

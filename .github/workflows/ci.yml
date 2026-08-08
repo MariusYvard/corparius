@@ -133,6 +133,18 @@ jobs:
           # response *is* a 404 and `-f` would make curl discard the body we came to read.
           curl -sS "http://127.0.0.1:8600/api/v1/summary?company=nope" \
             | grep -q '"code": "unknown_company"'
+          # Durable work, and the header that keeps a retry from doubling it. Two identical POSTs
+          # with one Idempotency-Key have to answer with one job — the second saying created:false
+          # — which is the promise a client on a bad connection depends on.
+          one=$(curl -sS -X POST -H 'Content-Type: application/json' -H 'Idempotency-Key: smoke-1' \
+                -d '{"company":"example","ticks":1}' http://127.0.0.1:8600/api/v1/runs)
+          two=$(curl -sS -X POST -H 'Content-Type: application/json' -H 'Idempotency-Key: smoke-1' \
+                -d '{"company":"example","ticks":1}' http://127.0.0.1:8600/api/v1/runs)
+          echo "$one" | grep -q '"created": true'
+          echo "$two" | grep -q '"created": false'
+          test "$(echo "$one" | grep -o '"job": "[a-f0-9]*"')" = "$(echo "$two" | grep -o '"job": "[a-f0-9]*"')" \
+            || { echo "one key answered with two jobs"; kill "$pid" 2>/dev/null; exit 1; }
+          curl -fsS "http://127.0.0.1:8600/api/v1/jobs?company=example" | grep -q '"kind": "run"'
           echo "smoke OK: console up, example seeded, mock mode, update-check off, v1 meta + ETag/304"
           kill "$pid" 2>/dev/null || true
 

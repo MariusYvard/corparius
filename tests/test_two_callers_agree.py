@@ -172,23 +172,41 @@ def test_both_callers_reach_the_shared_service(pair, service):
 
 @pytest.mark.parametrize(("pair", "service"), sorted(SHARED.items()))
 def test_the_console_handler_kept_no_logic_of_its_own(pair, service):
-    """An adapter that grows logic is how the two sides start to differ again. The console's
-    handler should unpack a request and map one exception."""
+    """An adapter that grows logic is how the two sides start to differ again. The console's half
+    should unpack a request and map one exception.
+
+    Counted in **statements, not lines**, and the change has a reason. The line-count version
+    tripped at 33 on `adapters.overview` — a function with **four** statements and a docstring
+    explaining a defect the v1 work found in it, that `/api/overview?company=nope` answered 200
+    with a phantom company. A cap that punishes writing that down is a cap pushing against this
+    project's own rule: the docstrings carry the measurements, and losing them is the one thing
+    the plan says not to do. Statements measure logic, which is what the guard is about.
+    """
     console_fn, _ = pair
     # The name can be borne by a function in either file — `overview` is both a handler and the
     # adapter it calls — so the ceiling applies to whichever ones carry it, not to the first
     # found. Taking the first would have let the two-line handler answer for the adapter.
-    sizes = {
-        f"{path.name}:{n.name}": n.end_lineno - n.lineno + 1
-        for path in CONSOLE
-        for n in ast.parse(path.read_text(encoding="utf-8")).body
-        if getattr(n, "name", "") == console_fn
-    }
+    sizes = {}
+    for path in CONSOLE:
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            if getattr(node, "name", "") != console_fn:
+                continue
+            body = node.body
+            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+                body = body[1:]  # the docstring is not logic
+            sizes[f"{path.name}:{node.name}"] = sum(
+                1
+                for child in ast.walk(ast.Module(body=body, type_ignores=[]))
+                if isinstance(child, ast.stmt)
+            )
     assert sizes, f"no console function named {console_fn}"
-    too_long = {k: v for k, v in sizes.items() if v > 30}
+    # 20, measured: the nine pairs run from 1 to 17 statements, and the 17 is `start_run` —
+    # a thread, an event and a guard against a second run, which is genuinely the console's own
+    # work and not the service's. A cap below that would be a cap on the wrong function.
+    too_long = {k: v for k, v in sizes.items() if v > 20}
     assert not too_long, (
-        f"{too_long}. A console adapter should unpack and translate; anything more belongs in "
-        "the service, or the command line will not have it."
+        f"{too_long} statements. A console adapter should unpack and translate; anything more "
+        "belongs in the service, or the command line will not have it."
     )
 
 

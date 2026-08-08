@@ -77,9 +77,10 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Modules à plat | 53 | **27** |
 | Choses que la console sait faire et la CLI non | 11 | **3**, toutes cosmétiques |
 | Commandes CLI | 27 | **33** |
-| Routes sous contrat versionné | 0 | **1** sur 55 |
-| Registres avec les deux bouts tenus | 1 | **3** (outils, routes, commandes) |
+| Routes sous contrat versionné | 0 | **5** sur 59 |
+| Registres avec les deux bouts tenus | 1 | **4** (outils, routes, commandes, codes d'erreur) |
 | Instructions non testées de la CLI | 216 | **65** |
+| Octets de la ressource sondée | 48 530 | **2 859** (et 0 si rien n'a changé) |
 
 **Zéro arête montante**, et c'est pour ça que la liste est écrite en cliquet plutôt qu'en
 commentaire : chacune des quatre a été rayée par l'étape qui la nommait, et l'ensemble vide
@@ -330,6 +331,101 @@ Et le smoke du binaire gelé touche cette route. C'est de l'économie de garde :
 résout depuis `providers`, `config` et `store`, donc **une requête prouve que les sept
 sous-paquets s'importent** sous PyInstaller — un import paresseux que son analyse a manqué
 échoue en CI et non au premier clic d'un exploitant.
+
+## L'étape 8, deuxième et troisième briques : l'enveloppe et les ressources étroites
+
+### Ce que 57 charges utiles disaient
+
+Mesuré sur `api/` : **57 charges utiles portent une clé `error`, et les 57 portent une phrase en
+anglais.** 32 sont des littéraux (« no run in progress »), 11 sont `str(exc)`, 8 des f-strings. Un
+second client ne peut rien en faire sauf comparer des sous-chaînes, ce qui casse dès qu'on
+reformule un message — et reformuler un message pour une personne, ce projet le fait souvent et
+exprès.
+
+`{"ok": false, "error": {"code", "message", "detail"}}` sépare les trois destinataires : le code
+est pour le client, le message pour la personne, et `detail` porte les particularités
+(quelle entreprise, quelle clé, combien d'octets) au lieu qu'elles soient soudées dans la prose.
+
+**Les 54 routes historiques gardent la chaîne plate, et c'est une décision.** La page livrée lit
+`data.error` comme une chaîne à quatorze endroits — `throw new Error(data.error || …)` — donc un
+objet s'y afficherait « [object Object] » précisément sur les échecs qu'un exploitant a le plus
+besoin de lire. Reconstruire cette page, c'est l'étape 9. Une forme qui diffère par version,
+c'est *la définition* du versionnement.
+
+Le vocabulaire est fermé et les deux bouts sont tenus. **Et la deuxième moitié a servi tout de
+suite** : la première version de la liste contenait aussi `refused` et `conflict`, et le test les
+a signalés comme jamais envoyés — à raison, aucune route v1 n'accepte encore de POST. C'était un
+vocabulaire écrit pour des routes imaginaires. Deux mots de plus ont failli passer autrement :
+`invalid` et `too_large` étaient calculés dans une variable, donc invisibles au scan — un code
+que l'AST ne voit pas est un code que personne ne peut grepper non plus. Écrits en clair.
+
+### 48 530 octets toutes les cinq secondes
+
+Mesuré clé par clé sur la vraie entreprise, trois clés font **94 %** :
+
+| Clé | Octets | Part |
+| --- | --- | --- |
+| `tasks` | 21 115 | 43,5 % |
+| `memory` | 17 706 | 36,5 % |
+| `recent_actions` | 6 765 | 13,9 % |
+| les 26 autres ensemble | 2 944 | 6,1 % |
+
+D'où quatre parties dans `app/overview.py` — `summary`, `tasks`, `memory`, `activity` — et
+`summary` fait **2 859 octets**, soit **17,0× moins** que ce que la page sonde. Vérifié sur la
+machine réelle, pas déduit.
+
+**La mesure a changé la forme du découpage.** Le plan nommait `/approvals` et `/inbox` comme
+ressources séparées ; mesurées, elles font 613 octets à deux, et ce sont les deux choses qu'un
+exploitant ne doit pas avoir à redemander. Découper sur la supposition du plan plutôt que sur le
+nombre aurait coûté deux allers-retours pour ne rien gagner.
+
+`build` est inchangé et vaut exactement l'union des quatre parties. **Et le premier test qui
+l'affirmait était vide** : `build` *est* `{**summary, **tasks, **memory, **activity}`, donc
+comparer ses clés à l'union des parties compare une chose à elle-même — il passait pendant que
+`activity` renvoyait `{}`. Trouvé en réintroduisant le défaut, ce qui est la seule raison pour
+laquelle les jeux de clés sont maintenant *déclarés* au lieu d'être dérivés.
+
+### L'ETag, et ce qu'il économise vraiment
+
+Chaque GET v1 porte un validateur ; `If-None-Match` répond 304 sans corps. Sur la vraie
+entreprise : `/api/v1/memory` passe de 17 754 octets à **0**.
+
+Ce que ça économise est **la bande passante, pas le travail** : la charge est construite puis
+hachée, donc un 304 a quand même fait la requête. C'est écrit à côté du code, parce que « un
+client au repos ne paie rien » serait la surenchère facile. Ce qui rend la requête petite, c'est
+de réduire ce que le client sonde.
+
+Un détail qui compte : `Cache-Control` passe à `no-cache` sur les GET v1 et reste `no-store`
+ailleurs. `no-store` interdit de garder la copie, ce qui rendrait la revalidation impossible — le
+client n'aurait rien à revalider et l'ETag serait de la décoration. `no-cache` veut dire « garde
+et redemande avant de réutiliser ».
+
+### Deux défauts trouvés en fumant les nouvelles routes
+
+**`/api/overview?company=nope` répondait 200** avec une charge complète décrivant une entreprise
+au tick 0 sans rien fait : « il n'y a pas d'entreprise comme ça » et « cette entreprise n'a rien
+fait » étaient la même réponse. `corparius status` a toujours refusé cette entrée, donc les deux
+appelants du même savoir divergeaient — et `test_two_callers_agree` ne pouvait pas l'attraper,
+parce qu'il demande quel service chaque côté atteint et les deux atteignent celui-là. La forme
+reste la phrase historique ; seul le statut change.
+
+**Un test de sécurité intermittent.** La suite a échoué une fois sur deux mille sur
+`test_rebinding_is_blocked_on_writes_too`. Le contrôle de Host refusait sans lire le corps
+annoncé, et fermer sur des données non lues envoie un RST qui peut emporter la réponse — le
+danger exact que le code énonce deux lignes plus bas, pour le 401. Un refus de sécurité que le
+client ne reçoit parfois pas est le pire genre d'intermittent. Corrigé, et la première version du
+test qui l'affirmait ne mesurait rien : elle envoyait deux requêtes sur une connexion en supposant
+du keep-alive, et ce serveur est en **HTTP/1.0**. Neuvième fois de ce chantier que j'écris
+l'invariant avant de regarder ce que le produit fait.
+
+### Un cliquet corrigé plutôt que contourné
+
+Le plafond « un adaptateur de console reste petit » comptait des **lignes**, et il a sauté à 33
+sur une fonction de **quatre instructions** dont la docstring explique le défaut ci-dessus. Un
+plafond qui punit le fait de l'écrire pousse contre la règle du projet : les docstrings portent
+les mesures, et les perdre est la seule chose que le plan interdit explicitement. Il compte des
+instructions maintenant, seuil 20 — mesuré : les neuf paires vont de 1 à 17, et le 17 est
+`start_run`, qui est du vrai travail de console.
 
 ## Un vrai tour, sur la vraie configuration
 

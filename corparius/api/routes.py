@@ -21,6 +21,12 @@ from .contracts import Route
 ROUTES: tuple[Route, ...] = (
     Route("GET", "/", handlers.page, public=True),
     Route("GET", "/api/v1/meta", handlers.meta, public=True),
+    # The narrow resources. `/api/overview` stays for the shipped page; these four are what a
+    # second client polls, and `summary` is 2 859 bytes where the whole is 48 530.
+    Route("GET", "/api/v1/summary", handlers.v1_summary, needs_slug=True),
+    Route("GET", "/api/v1/tasks", handlers.v1_tasks, needs_slug=True),
+    Route("GET", "/api/v1/memory", handlers.v1_memory, needs_slug=True),
+    Route("GET", "/api/v1/activity", handlers.v1_activity, needs_slug=True),
     Route("GET", "/api/session", handlers.session, public=True),
     Route("GET", "/api/companies", handlers.companies_get),
     Route("GET", "/api/overview", handlers.overview, needs_slug=True),

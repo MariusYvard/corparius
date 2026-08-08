@@ -16,9 +16,26 @@ stopped, what the agent wrote and what saying yes will do. "An approval that sho
 and 80 characters of JSON is a decision made blind" — and it was made blind from a terminal,
 where `corparius approvals` shows exactly that.
 
-**This payload is 54 KB and the console polls it every five seconds** — 37 MB an hour per
-client. Splitting it into narrow, separately-pollable resources is stage 8 of the plan, and it
-happens here now that there is a here: one function to split rather than a handler to unpick.
+**This payload was 48 KB and the console polls it every five seconds** — 34 MB an hour per
+client. Stage 8 splits it, and measuring first changed the shape of the split. On the real
+company, three keys are **94%** of it:
+
+```text
+  21 115  43.5%  tasks           six columns, `done` bounded at 60 of 71
+  17 706  36.5%  memory          46 facts, and they change almost never
+   6 765  13.9%  recent_actions  the last 25
+   2 944   6.1%  the other 26 keys together
+```
+
+So the parts are `summary`, `tasks`, `memory` and `activity`, and **`approvals` and `inbox` stay
+in the summary** — the plan named them as separate resources, and the measurement says they are
+613 bytes together. They are also the two things an operator must not have to ask a second time
+for. Splitting on the plan's guess rather than on the number would have cost two round trips to
+save nothing.
+
+`build` is unchanged and is now exactly the union of the four parts. `tests/test_overview_parts.py`
+holds that: a key that fell out of every part would vanish from the legacy payload, and a key in
+two parts is a value with two homes, which is how two copies of a thing start to disagree.
 """
 
 from __future__ import annotations
@@ -36,15 +53,76 @@ DONE_KEPT = 60
 
 
 def build(store, settings, slug: str, company: dict | None = None, run: dict | None = None) -> dict:
+    """The whole thing, for the console's legacy `/api/overview` and for `corparius status`.
+
+    Kept byte-identical in its key set because 54 routes and a 3 617-line page read it. The v1
+    resources are the four parts below; this is their union, and it stays until the page is
+    rebuilt (stage 9).
+    """
+    return {
+        **summary(store, settings, slug, company=company, run=run),
+        **tasks(store, slug),
+        **memory(store, settings, slug),
+        **activity(store, slug),
+    }
+
+
+def tasks(store, slug: str) -> dict:
+    """The kanban. 21 KB of the 48, and the half that changes on every tick.
+
+    `done_total` travels with it rather than with the summary, because it is the true count for
+    a column whose rows are bounded — a header reading 60 when the company has completed three
+    hundred is the failure it exists to prevent, and it can only be checked next to the rows.
+    """
+    rows = store.list_tasks(slug)
+    by_status: dict[str, list] = {
+        "proposed": [],
+        "approved": [],
+        "in_progress": [],
+        "waiting": [],
+        "done": [],
+    }
+    for t in rows:
+        by_status.setdefault(t["status"], []).append(t)
+    # Finished work is history, and it only ever grows. Newest first, because a
+    # column that opens on the first task the company ever completed is showing
+    # the least useful end of it, and bounded, because this payload is polled.
+    done_total = len(by_status["done"])
+    by_status["done"] = list(reversed(by_status["done"]))[:DONE_KEPT]
+    return {"tasks": by_status, "done_total": done_total}
+
+
+def memory(store, settings, slug: str) -> dict:
+    """46 facts, 17.7 KB, and they change almost never — so this is the resource an ETag pays
+    for most. `memory_enabled` travels with the list because an empty list and a switched-off
+    feature are different answers and a caller must not have to guess which it got.
+    """
+    return {
+        "memory": store.list_memory(slug) if settings.memory_enabled else [],
+        "memory_enabled": settings.memory_enabled,
+    }
+
+
+def activity(store, slug: str) -> dict:
+    """The last 25 actions. 6.8 KB, and it is a log: a client that has seen them has seen them."""
+    return {"recent_actions": store.recent_actions(slug)}
+
+
+def summary(
+    store, settings, slug: str, company: dict | None = None, run: dict | None = None
+) -> dict:
+    """Everything else: 2.9 KB, and the one a client should poll.
+
+    Including `approvals` and `inbox`, which are 613 bytes together and are the two things an
+    operator must not have to make a second request to see.
+    """
     st = store.status(slug)
     flow = store.flow_metrics(slug)
-    tasks = store.list_tasks(slug)
     tick = int(store.load_state(slug).get("tick", 0))
     # Through the Store API rather than store.db: the connection is guarded by a
     # lock now, so reaching past it from here would be the unsynchronised access
     # that lock exists to prevent.
     spend = store.spend_by_agent(slug)
-    actions = store.recent_actions(slug)
     frozen = store.count_actions_by_tool(slug, "circuit_breaker_freeze")
     approvals = store.list_approvals(slug, "pending")
     s = settings
@@ -83,30 +161,12 @@ def build(store, settings, slug: str, company: dict | None = None, run: dict | N
             "on_reject": "Nothing runs, and the agent moves on to the rest of its playbook.",
         }
     run = run or {}
-    by_status: dict[str, list] = {
-        "proposed": [],
-        "approved": [],
-        "in_progress": [],
-        "waiting": [],
-        "done": [],
-    }
-    for t in tasks:
-        by_status.setdefault(t["status"], []).append(t)
-    # Finished work is history, and it only ever grows. Newest first, because a
-    # column that opens on the first task the company ever completed is showing
-    # the least useful end of it, and bounded, because this payload is polled.
-    done_total = len(by_status["done"])
-    by_status["done"] = list(reversed(by_status["done"]))[:DONE_KEPT]
     return {
         "ok": True,
         "company": slug,
         "tick": tick,
         "status": st,
         "flow": flow,
-        "tasks": by_status,
-        # The true count, not the number of rows sent: the column header must
-        # not read 60 when the company has completed three hundred.
-        "done_total": done_total,
         # Whether a proposal is actually the operator's to decide.
         #
         # It normally is not: the CEO reviews proposals on its own cadence, which
@@ -143,8 +203,6 @@ def build(store, settings, slug: str, company: dict | None = None, run: dict | N
             if (company_cfg.get("agents", {}) or {}).get(role.value, False)
         },
         "role_tool": ROLE_TOOL,
-        "memory": store.list_memory(slug) if s.memory_enabled else [],
-        "memory_enabled": s.memory_enabled,
         "permission_mode": engine.mode,
         "ask_above": engine.ask_above,
         "spend_by_agent": spend,
@@ -152,7 +210,6 @@ def build(store, settings, slug: str, company: dict | None = None, run: dict | N
         # 0.00 is indistinguishable from a free run, and the page would tell
         # an operator on a paid key that they spent nothing.
         "cost_reported": store.cost_reported(slug),
-        "recent_actions": actions,
         "freezes": frozen,
         "session_budget": s.session_token_budget,
         "llm_mock": s.llm_mock,

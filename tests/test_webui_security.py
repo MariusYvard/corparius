@@ -144,6 +144,56 @@ def test_rebinding_is_blocked_on_writes_too(server):
     )
 
 
+def test_a_refused_host_reads_the_body_it_is_refusing():
+    """The 403 has to arrive, and on a POST that means draining the body first.
+
+    Found as a flake: this suite failed once in about two thousand runs on the test above. The
+    Host check refused without reading the announced body, and closing over unread data is an RST
+    that can carry the response away with it — the exact hazard the code states two lines further
+    down, for the 401.
+
+    Asserted against `_drain_body` directly, and the first version of this test is why. It sent
+    two requests down one connection on the theory that only a consumed request can be followed
+    by another — true of HTTP/1.1, and this server is **HTTP/1.0**: it closes after every
+    response, so the connection is reopened either way and the test passed with the drain removed.
+    Measuring the trip instead of the behaviour, for the ninth time in this restructuring.
+
+    Bounded on purpose: a client announcing four gigabytes under a rebound name gets the reset,
+    which is the same trade `_json_body` documents at 413.
+    """
+    from corparius.api.server import Handler
+    from corparius.kernel import httpkit
+
+    class _Stub:
+        def __init__(self, headers):
+            self.headers = headers
+            self.read_calls = []
+
+        @property
+        def rfile(self):
+            return self
+
+        def read(self, n):
+            self.read_calls.append(n)
+            return b"x" * n
+
+    stub = _Stub({"Content-Length": "4096"})
+    Handler._drain_body(stub)
+    assert stub.read_calls == [4096], "a body the client announced has to be consumed"
+
+    stub = _Stub({})
+    Handler._drain_body(stub)
+    assert stub.read_calls == [], "a GET announces nothing and there is nothing to read"
+
+    stub = _Stub({"Content-Length": "not a number"})
+    Handler._drain_body(stub)
+    assert stub.read_calls == [], "attacker-controlled, so it must not raise either"
+
+    stub = _Stub({"Content-Length": str(httpkit.MAX_BODY + 1)})
+    Handler._drain_body(stub)
+    assert stub.read_calls == [], "over the ceiling, the reset is the right answer"
+
+
 def test_loopback_hosts_are_accepted(server):
     port = server.socket.getsockname()[1]
     for host in (f"127.0.0.1:{port}", f"localhost:{port}", "127.0.0.1"):

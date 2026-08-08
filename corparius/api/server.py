@@ -9,6 +9,7 @@ deliberately *not* read when a client announces more than the ceiling.
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import logging
@@ -20,19 +21,24 @@ from urllib.parse import parse_qs, urlparse
 from ..config import cfg
 from ..config.settings import Settings
 from ..kernel import httpkit, paths
-from . import state
+from . import contracts, state
 from .adapters import oops
 from .contracts import Ctx, RequestRefused
 from .routes import match
 from .state import UiState
 
+V1 = "/api/v1/"
+
 log = logging.getLogger("corparius.api.server")
 
 
-# Writable home (for the .env the console writes); a shipped resource for the
-# single-file console HTML. Both resolve to the repository layout from a source
-# checkout and to the frozen bundle when packaged. Kept as module attributes so
-# the tests can monkeypatch them.
+# The writable home, for the .env the console writes. Resolves to the repository layout from a
+# source checkout and to the frozen bundle when packaged.
+#
+# The comment here used to end "kept as module attributes so the tests can monkeypatch them",
+# about this and `PAGE`. Measured while splitting the file: no test patches either one. The
+# reason was true of some earlier version and outlived it, which is the failure mode of a
+# comment that states a purpose instead of a fact.
 ROOT = paths.user_home()
 
 
@@ -46,12 +52,60 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # quiet by default, keep the app log
         log.debug("%s " + fmt, self.address_string(), *args)
 
+    def _is_v1(self) -> bool:
+        return urlparse(self.path).path.startswith(V1)
+
+    def _refuse(self, status: int, code: str, message: str, **detail) -> None:
+        """One refusal, two shapes, chosen by the version in the path.
+
+        A v1 client gets `{"error": {"code", …}}` and can branch on it; the 54 legacy routes get
+        the flat sentence the shipped page has read for its whole life. The four checks below
+        are the ones every request passes regardless of route, so a client that could branch on
+        a handler's refusal and not on a 401 would be able to branch on almost nothing.
+        """
+        if self._is_v1():
+            self._send(status, contracts.envelope(code, message, **detail))
+        else:
+            self._send(status, {"ok": False, "error": message})
+
+    def _matches_etag(self, tag: str) -> bool:
+        """`If-None-Match`, honestly parsed: a list, and `*` means "any copy at all".
+
+        Weak validators (`W/"…"`) compare equal to the strong one here, which is correct for
+        this: the entity either hashed the same or it did not.
+        """
+        header = self.headers.get("If-None-Match", "")
+        if not header:
+            return False
+        offered = [x.strip().removeprefix("W/") for x in header.split(",")]
+        return "*" in offered or tag in offered
+
     def _send(self, code: int, payload: dict | bytes, ctype="application/json") -> None:
         body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
-        self.send_response(code)
+        # A v1 GET that answered gets a validator, so a client at rest re-downloads nothing.
+        # What this saves is **bandwidth, not work**: the payload is built and then hashed, so
+        # the query still runs. Narrowing what a client polls is what makes the query small —
+        # `/api/v1/summary` is 2 859 bytes where `/api/overview` is 48 530 — and this is what
+        # makes the unchanged 2 859 free on the wire.
+        if code == 200 and self.command == "GET" and self._is_v1():
+            tag = '"' + hashlib.sha256(body).hexdigest()[:32] + '"'
+            if self._matches_etag(tag):
+                self.send_response(304)
+                self.send_header("ETag", tag)
+                # `no-store` on the rest of the API forbids keeping the copy at all, which would
+                # make revalidation impossible — the client would have nothing to revalidate.
+                # `no-cache` is the one that means "keep it, and ask before reusing it".
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                return  # 304 carries no body, by the spec and by the point of it
+            self.send_response(code)
+            self.send_header("ETag", tag)
+            self.send_header("Cache-Control", "no-cache")
+        else:
+            self.send_response(code)
+            self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Type", ctype + "; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
@@ -150,6 +204,26 @@ class Handler(BaseHTTPRequestHandler):
             return False  # "null" origin: a sandboxed iframe or a file:// page
         return parsed.netloc.lower() == (self.headers.get("Host") or "").strip().lower()
 
+    def _drain_body(self) -> None:
+        """Read the announced body so a refusal reaches the client instead of a reset.
+
+        The rule is stated a few lines below, for the 401: "closing the connection on an unread
+        body makes the client see a reset instead of our 401". The Host check did not honour it,
+        and that made `test_rebinding_is_blocked_on_writes_too` fail about once in two thousand
+        runs — the 403 is written, then the connection closes over an unread body, and that is an
+        RST which can take the response with it. A security refusal the client sometimes does not
+        receive is the worst kind of intermittent.
+
+        Bounded by the default ceiling and deliberately not honoured above it: a client announcing
+        four gigabytes gets the reset, which is the same trade `_json_body` documents at 413.
+        """
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return
+        if 0 < length <= httpkit.MAX_BODY:
+            self.rfile.read(length)
+
     def _dispatch(self, method: str) -> None:
         url = urlparse(self.path)
         query = {k: v[0] for k, v in parse_qs(url.query).items()}
@@ -162,14 +236,13 @@ class Handler(BaseHTTPRequestHandler):
                     "refused Host %r (set CORP_UI_ALLOWED_HOSTS to allow it)",
                     self.headers.get("Host"),
                 )
-                self._send(
+                self._drain_body()
+                self._refuse(
                     403,
-                    {
-                        "ok": False,
-                        "error": "Host not allowed. If you reach this console through a "
-                        "proxy or another name, list it in CORP_UI_ALLOWED_HOSTS "
-                        "(comma separated) and restart.",
-                    },
+                    contracts.FORBIDDEN,
+                    "Host not allowed. If you reach this console through a proxy or another "
+                    "name, list it in CORP_UI_ALLOWED_HOSTS (comma separated) and restart.",
+                    setting="CORP_UI_ALLOWED_HOSTS",
                 )
                 return
             # POST carries its parameters in the body; GET has none to read. The
@@ -189,7 +262,7 @@ class Handler(BaseHTTPRequestHandler):
             lang = str(source.get("lang", ""))
             slug = str(source.get("company", ""))
             if route is None or (route.needs_slug and not slug):
-                self._send(404, {"ok": False, "error": "not found"})
+                self._refuse(404, contracts.NOT_FOUND, "not found", path=url.path)
                 return
             # Writes must come from our own page. Reads are exempt: they carry
             # no side effect, and a cross-site reader cannot see the response
@@ -200,21 +273,33 @@ class Handler(BaseHTTPRequestHandler):
                     url.path,
                     self.headers.get("Origin"),
                 )
-                self._send(403, {"ok": False, "error": "cross-site request refused"})
+                self._refuse(403, contracts.FORBIDDEN, "cross-site request refused")
                 return
             # One check, both verbs, driven by the route's own `public` flag.
             # This used to run in do_POST only, which left every read endpoint
             # open even when the operator had configured a token.
             if not route.public and not self._authorized():
-                self._send(401, {"ok": False, "error": "missing or wrong X-Corp-Token"})
+                self._refuse(401, contracts.UNAUTHENTICATED, "missing or wrong X-Corp-Token")
                 return
             ctx = Ctx(state=self.state, path=url.path, query=query, body=body, slug=slug, lang=lang)
             self._send(*route.handler(ctx))
         except RequestRefused as refused:
-            self._send(refused.status, {"ok": False, "error": refused.message})
+            # Raised from body parsing: a chunked body, a malformed Content-Length, or one over
+            # the route's ceiling. `too_large` is the one a client acts on differently — it
+            # shrinks what it sends rather than retrying the same thing.
+            #
+            # Written out rather than a ternary on purpose. The first version computed the code
+            # into a variable and `tests/test_error_envelope.py` reported both words as never
+            # sent, because a code the AST cannot see is a code nobody can grep for either.
+            if refused.status == 413:
+                self._refuse(413, contracts.TOO_LARGE, refused.message)
+            else:
+                self._refuse(refused.status, contracts.INVALID, refused.message)
         except Exception:
             log.exception("%s %s failed", method, self.path)
-            self._send(500, {"ok": False, "error": oops(lang)})
+            # The detail stays in the server log. An internal error's particulars are the one
+            # thing a response must not carry: they are ours, not the caller's.
+            self._refuse(500, contracts.INTERNAL, oops(lang))
 
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         self._dispatch("GET")

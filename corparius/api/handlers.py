@@ -33,6 +33,7 @@ from .. import company as company_mod
 from ..app import errors as app_errors
 from ..app import mail as app_mail
 from ..app import meta as app_meta
+from ..app import overview as app_overview
 from ..app import skills as app_skills
 from ..config import cfg, permissions
 from ..config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
@@ -64,7 +65,7 @@ def companies_get(ctx):
 
 
 def overview(ctx):
-    return 200, adapters.overview(ctx.state, ctx.slug)
+    return adapters.overview(ctx.state, ctx.slug)
 
 
 def providers_get(ctx):
@@ -92,6 +93,65 @@ def meta(ctx):
     so the next route added outside v1 has to say why.
     """
     return 200, {"ok": True, **app_meta.describe(state.fresh_settings(), ctx.state.store())}
+
+
+# --- the v1 resources -----------------------------------------------------------
+#
+# `/api/overview` is 48 530 bytes on the real company and the page polls it every five seconds:
+# 34 MB an hour, per client. Measured key by key, three lists are 94% of it, so the split is
+# those three out and everything else in `summary` — 2 859 bytes, a 17× reduction for the one a
+# client should actually poll. The parts are in `app/overview.py`; these four are the transport.
+#
+# All four are v1, so all four answer a refusal in the envelope and all four carry an `ETag`.
+# What that buys is bandwidth, not work: the payload is still built before it is hashed. Saying
+# so here because "a client at rest pays nothing" would be the easy overclaim, and the query is
+# not free — narrowing what a client polls is what makes the query small.
+
+
+def v1_summary(ctx):
+    """The small one: the clock, the flow, what needs a person, and the run in flight.
+
+    Including `approvals` and `inbox`, which the plan named as separate resources and which
+    measure 613 bytes together — and which are the two things an operator must not have to make
+    a second request to see.
+    """
+    company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    return 200, {
+        "ok": True,
+        **app_overview.summary(
+            ctx.store(),
+            state.fresh_settings(),
+            ctx.slug,
+            company=company,
+            run=ctx.state.runs.get(ctx.slug, {}),
+        ),
+    }
+
+
+def v1_tasks(ctx):
+    """21 KB of the 48, and the part that changes on every tick."""
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    return 200, {"ok": True, **app_overview.tasks(ctx.store(), ctx.slug)}
+
+
+def v1_memory(ctx):
+    """17.7 KB that changes almost never, which is what makes the ETag worth having here."""
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    return 200, {"ok": True, **app_overview.memory(ctx.store(), state.fresh_settings(), ctx.slug)}
+
+
+def v1_activity(ctx):
+    """The last 25 actions. A log: a client that has seen them has seen them."""
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    return 200, {"ok": True, **app_overview.activity(ctx.store(), ctx.slug)}
 
 
 def session(ctx):

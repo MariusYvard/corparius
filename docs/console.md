@@ -1,6 +1,6 @@
 # Console opérateur
 
-La console web (corparius/webui.py, corparius/webui.html) sert une page unique sur http://127.0.0.1:8600 via la bibliothèque standard, sans dépendance ni étape de build. Elle lit le même store SQLite que le CLI et pilote le même Runtime.
+La console web (corparius/api/, corparius/webui.html) sert une page unique sur http://127.0.0.1:8600 via la bibliothèque standard, sans dépendance ni étape de build. Elle lit le même store SQLite que le CLI et pilote le même Runtime.
 
 ## Lancement
 
@@ -65,8 +65,8 @@ La carte "Site de vente" de la vue d'ensemble montre un aperçu réduit du site 
 
 ### Le contrat, et ce qui n'en fait pas partie
 
-`GET /api/v1/meta` est **la seule route versionnée**, et c'est celle qu'un second client
-interroge en premier. Elle est publique, comme `/api/session` et pour la même raison une étape
+`GET /api/v1/meta` est la **première** route versionnée, et c'est celle qu'un second client
+interroge en premier — les quatre ressources étroites ci-dessous sont les autres. Elle est publique, comme `/api/session` et pour la même raison une étape
 plus tôt : un client doit pouvoir apprendre à quoi il parle avant de pouvoir s'y authentifier.
 Elle ne nomme aucun secret, aucune entreprise et aucune *valeur* de réglage.
 
@@ -93,12 +93,59 @@ configurée *marche* est la question de `corparius doctor`, et elle se pose quan
 `durable_jobs` répond `false` plutôt que de manquer : un client à qui on dit *non* n'a pas à
 le deviner depuis une clé absente.
 
+### Les ressources étroites
+
+`/api/overview` fait **48 530 octets** sur la vraie entreprise et la page le sonde toutes les cinq
+secondes : 34 Mo par heure et par client. Mesuré clé par clé, trois clés font 94 % — `tasks`
+21 115, `memory` 17 706, `recent_actions` 6 765 — donc quatre ressources :
+
+```text
+GET /api/v1/summary?company=    2 859 o   l'horloge, le flux, ce qui attend une personne
+GET /api/v1/tasks?company=     21 156 o   le kanban
+GET /api/v1/memory?company=    17 754 o   46 faits, qui ne changent presque jamais
+GET /api/v1/activity?company=   6 797 o   les 25 dernières actions
+```
+
+`summary` est **17,0× plus petit** que ce que la page sonde, et il garde `approvals` et `inbox` —
+613 octets à deux, et les deux choses qu'un exploitant ne doit pas avoir à redemander. Le plan les
+nommait comme ressources séparées ; la mesure a dit non.
+
+**Chaque GET v1 porte un `ETag`.** Renvoyez-le en `If-None-Match` et une ressource inchangée
+répond `304` sans corps : `/api/v1/memory` passe de 17 754 octets à 0. Ce que ça économise est la
+bande passante, pas le travail — la charge est construite puis hachée, donc la requête a bien eu
+lieu. `Cache-Control` vaut `no-cache` sur ces routes (garde et redemande) et reste `no-store`
+ailleurs : `no-store` interdirait de garder la copie, et il n'y aurait rien à revalider.
+
+### Les refus
+
+Une route v1 refuse dans une enveloppe :
+
+```json
+{"ok": false, "error": {"code": "unknown_company",
+                        "message": "no company here is called 'nope'",
+                        "detail": {"slug": "nope"}}}
+```
+
+Sept codes, et c'est un ensemble fermé parce qu'un client fait un `switch` dessus :
+`unknown_company`, `not_found`, `invalid`, `unauthenticated`, `forbidden`, `too_large`,
+`internal`. Le code est pour le client, le message pour la personne, `detail` porte les
+particularités au lieu qu'elles soient soudées dans la phrase. Les contrôles qui précèdent tout
+gestionnaire — Host, taille, origine, jeton — parlent le même vocabulaire : un client qui pourrait
+distinguer le refus d'un gestionnaire mais pas un 401 ne pourrait presque rien distinguer.
+
 Les 54 routes non préfixées ci-dessous sont la **forme interne de la console** : elles ont
 changé chaque fois que la page changeait, ce qui allait très bien tant que la page était le
 seul client. C'est un ensemble *déclaré* — `tests/test_api_version.py` en épingle le compte,
-donc une route ajoutée hors de `v1` est une ligne délibérée dans ce fichier.
+donc une route ajoutée hors de `v1` est une ligne délibérée dans ce fichier. **Elles gardent la
+phrase plate** (`{"ok": false, "error": "unknown company 'nope'"}`) : la page lit `data.error`
+comme une chaîne à quatorze endroits, et un objet s'y afficherait « [object Object] » précisément
+sur les échecs qu'on a le plus besoin de lire.
 
-GET `/api/v1/meta`, `/api/companies`, `/api/overview?company=`, `/api/company?company=`, `/api/settings`, `/api/session`, `/api/providers`, `/api/doctor`, `/api/site?company=`, `/api/documents?company=`, `/api/document/text?company=&path=`, `/api/payments`, `/api/chat?company=`, `/site/<slug>/`.
+Deux noms ont leur lecture en v1 et leur écriture encore en historique, `tasks` et `memory` : on
+sonde `GET /api/v1/tasks` et on poste une décision à `POST /api/tasks`. Les lectures ont bougé les
+premières parce que c'est là qu'était le coût. C'est déclaré dans le test, pas subi.
+
+GET `/api/companies`, `/api/overview?company=`, `/api/company?company=`, `/api/settings`, `/api/session`, `/api/providers`, `/api/doctor`, `/api/site?company=`, `/api/documents?company=`, `/api/document/text?company=&path=`, `/api/payments`, `/api/chat?company=`, `/site/<slug>/`.
 
 POST `/api/companies` {name, product, agents, session_tokens}, `/api/company` {company, config}, `/api/company/delete` {company, confirm, purge_store}, `/api/settings` {values, unset}, `/api/providers` {values}, `/api/site` {company, headline}, `/api/deploy` {company}, `/api/backup`, `/api/run` {company, ticks, loop}, `/api/run/stop` {company}, `/api/approvals` {id, decision, note, remember}, `/api/rules` {company, tool}, `/api/memory` {id, action}, `/api/inbox` {id, answer}, `/api/tasks` {id, decision | title, priority, target, tool}, `/api/chat` {company, message}, `/api/documents` {company, name, data}, `/api/documents/delete` {company, path}, `/api/test/mail` {to}, `/api/test/payments`.
 

@@ -277,7 +277,7 @@ def test_a_proposal_is_not_counted_as_the_operators_when_a_ceo_reviews_them(tmp_
     state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     try:
         state.store().add_task("c", "Remove the unverified badge", "design", status="proposed")
-        assert adapters.overview(state, "c")["proposals_need_you"] is False
+        assert adapters.overview(state, "c")[1]["proposals_need_you"] is False
     finally:
         state.close()
 
@@ -294,7 +294,7 @@ def test_it_is_the_operators_when_no_ceo_will_look(tmp_path, monkeypatch):
     state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     try:
         state.store().add_task("c", "A", "design", status="proposed")
-        assert adapters.overview(state, "c")["proposals_need_you"] is True
+        assert adapters.overview(state, "c")[1]["proposals_need_you"] is True
     finally:
         state.close()
 
@@ -307,7 +307,7 @@ def test_it_is_the_operators_when_the_ceo_is_stood_down(tmp_path, monkeypatch):
     state = state.UiState(state.fresh_settings(), tmp_path / ".env")
     try:
         state.store().add_directive("c", "pause", "ceo", "paused by the operator")
-        assert adapters.overview(state, "c")["proposals_need_you"] is True
+        assert adapters.overview(state, "c")[1]["proposals_need_you"] is True
     finally:
         state.close()
 

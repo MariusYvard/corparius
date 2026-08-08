@@ -120,7 +120,20 @@ jobs:
           echo "$meta" | grep -q '"api_version": 1'
           echo "$meta" | grep -q '"schema_version": '
           echo "$meta" | grep -q '"models": true'   # mock mode is a capability, not its absence
-          echo "smoke OK: console up, example seeded, mock mode, update-check off, v1 meta answers"
+          # A narrow resource and its validator, which is the second half of the contract: the
+          # ETag has to be issued and honoured, and a 304 is what proves the branch runs in the
+          # frozen build rather than only under pytest.
+          tag=$(curl -fsS -D - -o /dev/null "http://127.0.0.1:8600/api/v1/summary?company=example" \
+                | tr -d '\r' | awk 'tolower($1) == "etag:" { print $2 }')
+          test -n "$tag" || { echo "no ETag on a v1 resource"; kill "$pid" 2>/dev/null; exit 1; }
+          code=$(curl -fsS -o /dev/null -w '%{http_code}' -H "If-None-Match: $tag" \
+                 "http://127.0.0.1:8600/api/v1/summary?company=example")
+          test "$code" = "304" || { echo "unchanged summary answered $code, not 304"; kill "$pid" 2>/dev/null; exit 1; }
+          # And the v1 envelope, which a second client branches on. No `-f` here on purpose: the
+          # response *is* a 404 and `-f` would make curl discard the body we came to read.
+          curl -sS "http://127.0.0.1:8600/api/v1/summary?company=nope" \
+            | grep -q '"code": "unknown_company"'
+          echo "smoke OK: console up, example seeded, mock mode, update-check off, v1 meta + ETag/304"
           kill "$pid" 2>/dev/null || true
 
   # Build the wheel, install it into a clean environment, and run it from a

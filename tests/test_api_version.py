@@ -23,7 +23,7 @@ V1 = "/api/v1/"
 
 # Every route that predates the contract. They are the console's own shape and they stay for a
 # version — the plan says so — but the list only ever shortens, and nothing joins it.
-LEGACY_COUNT = 54
+LEGACY_COUNT = 54  # unchanged by the v1 additions: nothing left the legacy set
 
 
 def _paths() -> list[str]:
@@ -52,13 +52,47 @@ def test_at_least_one_route_is_versioned():
     assert [p for p in _paths() if p.startswith(V1)], "no v1 route at all"
 
 
-def test_no_path_is_both_versioned_and_not():
-    """`/api/v1/meta` and `/api/meta` would be two routes an operator would reasonably expect to
-    be the same, and nothing would say which won."""
-    versioned = {p[len(V1) :] for p in _paths() if p.startswith(V1)}
-    unversioned = {p[len("/api/") :] for p in _legacy()}
-    both = sorted(versioned & unversioned)
-    assert not both, f"these exist under both spellings: {both}"
+def _by_version():
+    """Every endpoint as `(method, suffix)`, split by which side of the contract it is on."""
+    v1, legacy = set(), set()
+    for r in routes.ALL_ROUTES:
+        if r.path.startswith(V1):
+            v1.add((r.method, r.path.removeprefix(V1)))
+        elif r.path.startswith("/api/"):
+            legacy.add((r.method, r.path.removeprefix("/api/")))
+    return v1, legacy
+
+
+def test_no_endpoint_is_both_versioned_and_not():
+    """`GET /api/v1/meta` and `GET /api/meta` would be two routes an operator would reasonably
+    expect to be the same, and nothing would say which won.
+
+    On `(method, suffix)` rather than the suffix alone, and the distinction is real: `tasks` and
+    `memory` now have a v1 **GET** and a legacy **POST**, which are different operations on the
+    same noun and HTTP says so. The suffix-only version of this failed on exactly that; relaxing
+    it to pass would have been wrong on its own, so the pairs it used to catch are declared below
+    where a reader sees them.
+    """
+    v1, legacy = _by_version()
+    both = sorted(v1 & legacy)
+    assert not both, f"these answer the same method under both spellings: {both}"
+
+
+# The reads that moved to v1 ahead of their writes. Declared, because it is the one place a client
+# meets the migration: it polls `GET /api/v1/tasks` and still posts a decision to
+# `POST /api/tasks`. Reads moved first because that is where the cost was — `/api/overview` was
+# 48 530 bytes every five seconds — and the writes move when a v1 client needs to make one.
+SPLIT_NOUNS = {"tasks", "memory"}
+
+
+def test_the_nouns_split_across_versions_are_declared():
+    """A ratchet on the migration debt, so "reads on v1, writes not" stays a decision rather than
+    becoming the accidental shape of the API."""
+    v1, legacy = _by_version()
+    split = {s for _m, s in v1} & {s for _m, s in legacy}
+    assert split == SPLIT_NOUNS, (
+        f"nouns split across versions are {sorted(split)}, declared {sorted(SPLIT_NOUNS)}"
+    )
 
 
 # --- what meta says -------------------------------------------------------------

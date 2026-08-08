@@ -42,9 +42,28 @@ from ..providers import (
 )
 from ..providers.llm import connected_providers
 from ..tools.spec import SPEC
-from . import state
+from . import contracts, state
 from .contracts import RequestRefused
 from .state import UiState
+
+
+def for_company(slug: str):
+    """The company a request names, or the refusal to send instead.
+
+    Here rather than in `handlers.py` because it is not an endpoint, and that file's invariant is
+    that every function in it is one — `tests/test_route_table.py` holds both ends of the table
+    against it, and the first version of this lived there and broke that guard on sight.
+
+    `state.load_company` returns None for a slug the glob never produced, which is also the
+    path-traversal guard: only names that exist are ever opened.
+    """
+    company = state.load_company(slug)
+    if company is None:
+        return None, contracts.refuse(
+            404, contracts.UNKNOWN_COMPANY, f"no company here is called {slug!r}", slug=slug
+        )
+    return company, None
+
 
 log = logging.getLogger("corparius.api.adapters")
 
@@ -81,17 +100,37 @@ def merge_env_file(path: Path, values: dict[str, str]) -> None:
         raise RequestRefused(400, str(exc)) from exc
 
 
-def overview(ui: UiState, slug: str) -> dict:
+def overview(ui: UiState, slug: str) -> tuple[int, dict]:
     """`app.overview.build`, holding the console's own in-flight run.
 
     The service takes the run as a parameter — that one line, `ui.runs`, was the whole reason
     a terminal could not have this, exactly as `ui.chats` was for the chat.
+
+    **A company that is not here is a 404**, and it was a 200 until the v1 resources were written
+    beside it. `state.load_company` returns None for an unknown slug, `build` then read
+    `company_cfg = {}`, and the answer was a complete payload describing a company at tick 0 with
+    nothing done — so "there is no such company" and "that company has done nothing" were the
+    same response. Measured while smoking the v1 routes on the real machine:
+    `/api/overview?company=nope` answered 200 and reported a phantom.
+
+    `corparius status` has always refused it (`support.load_company` exits with a message), so
+    the two callers of the same knowledge disagreed — which is the thing
+    `tests/test_two_callers_agree.py` exists to catch and could not, because it compares which
+    service each side reaches and both reach this one.
+
+    The shape stays the legacy flat sentence; only the status changes. The page never sends an
+    unknown slug — it offers the list it was given — except in the one case that matters: a
+    company deleted in another tab, still being polled here. A banner saying it is gone is the
+    truth; an empty dashboard is not.
     """
-    return app_overview.build(
+    company = state.load_company(slug)
+    if company is None:
+        return 404, {"ok": False, "error": f"unknown company '{slug}'"}
+    return 200, app_overview.build(
         ui.store(),
         state.fresh_settings(),
         slug,
-        company=state.load_company(slug),
+        company=company,
         run=ui.runs.get(slug, {}),
     )
 

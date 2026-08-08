@@ -91,7 +91,7 @@ def test_the_console_resolves_everything_the_panel_needs(tmp_path, monkeypatch):
     store.close()
 
     state = state.UiState(state.fresh_settings(), tmp_path / ".env")
-    overview = adapters.overview(state, "t")
+    _status, overview = adapters.overview(state, "t")
     state.close()
     approval = next(a for a in overview["approvals"] if a["tool"] == "send_outreach")
     detail = approval["detail"]
@@ -124,7 +124,8 @@ def test_an_approval_written_before_this_column_existed_still_renders(tmp_path, 
     store.close()
 
     state = state.UiState(state.fresh_settings(), tmp_path / ".env")
-    approval = next(a for a in adapters.overview(state, "t")["approvals"] if a["id"] == "old")
+    _status, payload = adapters.overview(state, "t")
+    approval = next(a for a in payload["approvals"] if a["id"] == "old")
     state.close()
     assert approval["detail"]["draft"] == ""
     assert approval["detail"]["does"] == TOOLS["send_outreach"].description

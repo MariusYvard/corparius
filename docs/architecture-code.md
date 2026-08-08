@@ -60,7 +60,7 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 5. **Les cycles se comptent à part.** Les rangs n'interdisent pas un cycle *à l'intérieur*
    d'un rang, et ce trou était réel : dès que `secretbox` est passé au rang 1, une arête vers
    `cfg` redevenait légale. Les composantes fortement connexes ont donc leur propre liste,
-   `KNOWN_CYCLES`, avec l'étape qui dissout chacune. **Cinq au départ, deux aujourd'hui.**
+   `KNOWN_CYCLES`, avec l'étape qui dissout chacune. **Cinq au départ, zéro aujourd'hui.**
 
 ## Où en est le chantier
 
@@ -69,7 +69,7 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Compteur | Au plan | Aujourd'hui |
 | --- | --- | --- |
 | **Arêtes montantes** | 4 | **0** |
-| Cycles d'imports | 5 | **1** |
+| **Cycles d'imports** | 5 | **0** |
 | Modules important `subprocess` | 4 | **1** (`kernel/proc.py`) |
 | Ce que charge la lecture d'un réglage | `requests`, `subprocess`, `ssl`, `sqlite3` | **`sqlite3`** |
 | Ce que charge la lecture de la liste des outils | + `smtplib`, `imaplib` | **rien** |
@@ -102,12 +102,21 @@ fait pas et ne doit pas — `agents` **est** l'exécuteur, et dérouler un playb
 d'avoir les effets. Ce qui est devenu libre, c'est `roster` (les 150 premières lignes
 d'`agents.py`) et `tools/spec`.
 
-**Aucun cycle n'est mort par son déplacement**, mais par ce que le déplacement a rendu
-visible : `{cfg, secretbox}` en séparant la cryptographie de la politique ;
-`{appserver, backup, doctor, selfupdate, webui}` parce qu'un serveur HTTP en importait un
-autre pour trois constantes ; `{agents, company, tools}` parce qu'une table de données et la
-machine qui la consomme vivaient dans un fichier. Chaque fois, le cycle était le symptôme
-d'un module qui portait deux choses.
+**Les cinq cycles sont morts, et aucun par la rupture d'une arête.** Chacun est parti quand
+la chose qui n'y appartenait pas a bougé :
+
+| Cycle | Ce que le module portait en trop | Étape |
+| --- | --- | --- |
+| `{cfg, secretbox}` | la cryptographie **et** la politique | 1 |
+| `{appserver, backup, doctor, selfupdate, webui}` | un serveur HTTP **et** des primitives HTTP | 1 |
+| `{agents, company, tools}` | une table de données **et** la machine qui la consomme | 3 |
+| `{claudecli, llm, preflight}` | un fournisseur **et** la décision de l'utiliser | 5 |
+| `{appcli, cli, secretscli}` | une CLI **et** le seul endroit qui ouvre le store | 7 |
+
+Le dernier tenait à **deux lignes** : `cli._store` était le seul endroit qui résolvait un chemin
+de données, donc deux sous-CLI allaient le chercher dans le module qui les importe. Le motif est
+donc constant sur les cinq : **le cycle n'était jamais le problème, c'était le symptôme d'un
+module qui portait deux choses.**
 
 Trois écarts au plan, tous pour la même raison — ses noms propres entrent en collision avec
 la bibliothèque standard ou avec le vocabulaire de ce codebase. `models` est devenu

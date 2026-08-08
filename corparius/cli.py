@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from . import company
+from .app.support import open_store
 from .config.settings import Settings, settings, setup_logging
 from .kernel import paths
 from .store import Store
@@ -18,20 +19,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _store() -> Store:
-    """One construction point for the commands that open the store. Each CLI
-    command is a short-lived, single-threaded process that exits right after, so
-    unlike the console (see UiState.store) there is no connection to share or
-    close - but keeping the construction in one place means a future argument or
-    a pragma lands in exactly one spot.
+    """`app.support.open_store`, under the name sixty call sites already spell.
 
-    Settings() rather than the module-level `settings` snapshot. In a real run
-    the two agree, because the snapshot is taken microseconds earlier at import.
-    In a test they do not: the snapshot is taken at collection, before the
-    hermetic fixture redirects CORP_DATA_PATH, so a test calling a cmd_* function
-    wrote to the developer's own store. Resolving here is what keeps the CLI
-    inside the same layering everything else obeys.
+    It used to hold the logic, and `appcli` and `secretscli` reached back into this module to
+    borrow it — while `main()` imports all four sub-CLIs to register their parsers. That was
+    `{appcli, cli, secretscli}`, the last import cycle in the package, and it was two lines.
     """
-    return Store(Settings().data_path)
+    return open_store()
 
 
 def _company_path(slug_or_path: str) -> str:

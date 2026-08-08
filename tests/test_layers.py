@@ -166,6 +166,7 @@ RANKS: dict[str, int] = {
     "app/mail": 5,
     "app/skills": 5,
     "app/overview": 5,
+    "app/support": 5,
     "doctor": 5,
     "backup": 5,
     "selfupdate": 5,
@@ -212,12 +213,26 @@ KNOWN_RANK_VIOLATIONS: frozenset[tuple[str, str]] = frozenset()
 #
 # Every one of them lived on a *deferred* import, which is why the rules above read function
 # bodies, and why this list was possible to write at all.
-KNOWN_CYCLES: frozenset[tuple[str, ...]] = frozenset(
-    {
-        # Stage 7. All of it is `cli._store`, which two sub-CLIs import.
-        ("appcli", "cli", "secretscli"),
-    }
-)
+# **Empty**, like KNOWN_RANK_VIOLATIONS above, and for the same reason it is written as a
+# ratchet rather than a comment: each of the five was struck off by the step that named it, and
+# `observed == known` still holds — so the next cycle fails here with nothing to hide behind.
+#
+#   {cfg, secretbox}                stage 1 — cryptography split from policy
+#   {appserver, backup, doctor, selfupdate, webui}
+#                                   stage 1 — a body ceiling and a Host parser are not console
+#                                   features (kernel/httpkit)
+#   {agents, company, tools}        stage 3 — a data table and the machine that consumes it
+#                                   were one file (roster)
+#   {claudecli, llm, preflight}     stage 5 — `rank` and `recommended_routing` are decisions,
+#                                   living inside what they decide about
+#   {appcli, cli, secretscli}       stage 7 — two lines: `cli._store` was the only place that
+#                                   opened a store, so two sub-CLIs reached back into the module
+#                                   that imports them
+#
+# The pattern held every time: **the cycle was never the problem, it was the symptom of a module
+# carrying two things.** Not one of the five was fixed by breaking an edge — each died when the
+# thing that did not belong moved out.
+KNOWN_CYCLES: frozenset[tuple[str, ...]] = frozenset()
 
 # Rank 4 may not touch the host at all. Two exceptions today, same cause.
 BANNED_IN_DOMAIN = ("requests", "subprocess", "sqlite3", "smtplib", "imaplib", "socket")
@@ -493,7 +508,7 @@ def test_the_ratchet_only_ever_tightens():
     fixing a module."""
     assert len(KNOWN_RANK_VIOLATIONS) <= 2, "upward imports should only ever decrease"
     assert len(KNOWN_IMPURE) <= 3, "domain impurities should only ever decrease"
-    assert len(KNOWN_CYCLES) <= 1, "cycles should only ever decrease"
+    assert len(KNOWN_CYCLES) == 0, "cycles should only ever decrease"
 
 
 def _ratchet(observed: set, known: frozenset, what: str) -> None:

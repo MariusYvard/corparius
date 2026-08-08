@@ -25,9 +25,11 @@ def _fail(msg: str) -> NoReturn:
 
 
 def _store():
-    from .cli import _store as cli_store
+    """The shared construction point. It was `from .cli import _store`, which is what made this
+    module and `cli` a cycle — `cli.main()` imports this one to register its parsers."""
+    from .app.support import open_store
 
-    return cli_store()
+    return open_store()
 
 
 def _write_env(value: str) -> None:

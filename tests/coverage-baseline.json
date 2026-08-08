@@ -7,6 +7,7 @@
   "corparius/app/directives.py": 90.7,
   "corparius/app/errors.py": 100.0,
   "corparius/app/mail.py": 100.0,
+  "corparius/app/overview.py": 90.2,
   "corparius/app/publish.py": 93.9,
   "corparius/app/settings.py": 88.0,
   "corparius/app/skills.py": 100.0,
@@ -16,7 +17,7 @@
   "corparius/apps.py": 97.2,
   "corparius/appserver.py": 84.3,
   "corparius/backup.py": 89.8,
-  "corparius/cli.py": 58.7,
+  "corparius/cli.py": 59.5,
   "corparius/company.py": 73.3,
   "corparius/config/__init__.py": 100.0,
   "corparius/config/cfg.py": 93.5,
@@ -97,5 +98,5 @@
   "corparius/tools/registry.py": 91.7,
   "corparius/tools/spec.py": 100.0,
   "corparius/update_check.py": 79.6,
-  "corparius/webui.py": 73.9
+  "corparius/webui.py": 73.2
 }

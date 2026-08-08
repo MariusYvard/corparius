@@ -218,19 +218,53 @@ def cmd_run(args) -> None:
     print(json.dumps(result, indent=2))
 
 
-def cmd_status(args) -> None:
+def cmd_status(args) -> int:
+    """How the company is doing, through the same service the console polls.
+
+    It printed four numbers — actions, tokens, pending approvals, a count per agent — and could
+    not show **money spent**, the **flow** (work in progress, what is blocked, which role is the
+    bottleneck), the session budget, or whether a run is going. An operator on a headless box had
+    the cheapest half of what the product already knew about their company.
+
+    Every field below was measured off a real payload rather than assumed. The first version of
+    this function read `flow["done"]` and `status["cost"]`, neither of which exists — the shapes
+    are `throughput` and a per-agent `spend_by_agent` list, and `cost_reported` is a separate
+    boolean precisely because a provider reporting nothing must read as "not reported" and never
+    as free.
+
+    `--json` prints the whole payload, which is what a script wants and what the console gets.
+    """
+    from .app import overview as app_overview
+
     cfg = _load_company(args.company)
     store = _store()
-    s = store.status(cfg["slug"])
-    tick = store.load_state(cfg["slug"]).get("tick", 0)
+    data = app_overview.build(store, Settings(), cfg["slug"], company=cfg)
+    if args.json:
+        print(json.dumps(data, indent=2, default=str))
+        return 0
+
+    st, flow = data["status"], data["flow"]
     print(f"== {cfg.get('name')} ({cfg['slug']}) ==")
-    print(f"clock: tick {tick}")
+    print(f"clock: tick {data['tick']}" + ("  (a run is going)" if data.get("running") else ""))
+    spent = sum(row["cost"] for row in data["spend_by_agent"])
+    # "not reported" and "free" are different facts, and `cost_reported` exists so they cannot be
+    # confused. A provider that says nothing about money must never read as costing nothing.
+    money = f"{spent:.4f} EUR" if data.get("cost_reported") else "not reported"
+    print(f"actions: {st['actions']}   tokens: {st['tokens']} of {data['session_budget']}")
+    print(f"money:   {money}")
     print(
-        f"actions: {s['actions']}  tokens: {s['tokens']}  "
-        f"pending approvals: {s['pending_approvals']}"
+        f"flow:    {flow['wip']} in progress, {flow['waiting']} waiting, "
+        f"{flow['throughput']} done"
+        + (f"   bottleneck: {flow['bottleneck']}" if flow.get("bottleneck") else "")
     )
-    for agent, n in sorted(s["by_agent"].items()):
-        print(f"  {agent:12} {n}")
+    if st["pending_approvals"]:
+        print(f"waiting on you: {st['pending_approvals']} approval(s) — corparius approvals")
+    if data.get("freezes"):
+        print(f"the circuit breaker has frozen a day {data['freezes']} time(s)")
+    tokens = {row["agent"]: row["t"] for row in data["spend_by_agent"]}
+    for agent, n in sorted(st["by_agent"].items()):
+        print(f"  {agent:12} {n:>4} actions  {tokens.get(agent, 0):>8} tokens")
+    return 0
 
 
 def cmd_site(args) -> None:
@@ -906,7 +940,9 @@ def main(argv=None) -> int:
     sp.add_argument("--loop", action="store_true", help="keep running day after day")
     sp.set_defaults(fn=cmd_run)
 
-    with_company(sub.add_parser("status")).set_defaults(fn=cmd_status)
+    sp = with_company(sub.add_parser("status"))
+    sp.add_argument("--json", action="store_true", help="the whole payload, as the console gets it")
+    sp.set_defaults(fn=cmd_status)
 
     sp = with_company(sub.add_parser("site"))
     sp.add_argument("--headline", default="", help="override the hero headline")

@@ -53,6 +53,7 @@ SHARED = {
     ("_route_test_mail", "mail"): "app_mail.check",
     ("_delete_company", "delete"): "app_companies.delete",
     ("_route_skill_scope", "skills"): "app_skills.scope",
+    ("_overview", "status"): "app_overview.build",
 }
 
 # Pairs that look like a pair and are not, with the reason. Audited by reading both sides.

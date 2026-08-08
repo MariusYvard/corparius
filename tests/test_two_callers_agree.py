@@ -38,6 +38,7 @@ SHARED = {
     ("_set_settings", "set"): "app_settings.persist",
     ("_create_company", "new"): "app_companies.create",
     ("_chat", "ceo"): "app_chat.once",
+    ("_route_test_mail", "mail"): "app_mail.check",
 }
 
 # Pairs that look like a pair and are not, with the reason. Audited by reading both sides.
@@ -67,10 +68,21 @@ DIFFERENT_JOBS = {
 
 
 def _console_services() -> set[str]:
+    """The console's own functions, route handlers included.
+
+    Handlers were excluded at first, on the theory that a pair is service-to-command. `mail`
+    disproved it: `app_mail.check` never had a `UiState`, so there was no intermediate service
+    to extract and the console reaches it straight from `_route_test_mail`. That is the
+    *better* shape — one fewer hop — and excluding it would have meant the pair could not be
+    declared, which is the wrong incentive.
+
+    Including them also puts the thirty-line ceiling on handlers, where it belongs for the same
+    reason: an adapter that grows logic is how two callers come to differ.
+    """
     return {
         n.name
         for n in ast.parse(WEBUI.read_text(encoding="utf-8")).body
-        if isinstance(n, ast.FunctionDef) and n.name.startswith("_") and "_route" not in n.name
+        if isinstance(n, ast.FunctionDef) and n.name.startswith("_")
     }
 
 

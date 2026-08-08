@@ -19,6 +19,7 @@ import pytest
 
 from corparius import inbox as inbox_mod
 from corparius import webui
+from corparius.app import mail as app_mail
 from corparius.config import settings_spec
 from corparius.providers import mailbox
 from corparius.store import Store
@@ -77,13 +78,13 @@ def test_a_step_reports_done_from_the_settings_not_from_a_checkbox(monkeypatch):
     values = {}
     monkeypatch.setattr(cfg, "get", lambda key, default="": values.get(key, default))
 
-    steps = webui._mail_steps()["gmail"]
+    steps = app_mail.steps()["gmail"]
     checkable = [s for s in steps if s["checkable"]]
     assert checkable and not any(s["done"] for s in checkable)
 
     values["CORP_SMTP_USER"] = "a@b.c"
     values["CORP_SMTP_PASSWORD"] = "x" * 16
-    assert all(s["done"] for s in webui._mail_steps()["gmail"] if s["checkable"])
+    assert all(s["done"] for s in app_mail.steps()["gmail"] if s["checkable"])
 
 
 def test_a_step_nobody_can_verify_says_so_rather_than_staying_unticked(monkeypatch):
@@ -92,7 +93,7 @@ def test_a_step_nobody_can_verify_says_so_rather_than_staying_unticked(monkeypat
     from corparius.config import cfg
 
     monkeypatch.setattr(cfg, "get", lambda key, default="": "")
-    steps = webui._mail_steps()["proton"]
+    steps = app_mail.steps()["proton"]
     assert any(not s["checkable"] for s in steps)
     assert all(not s["done"] for s in steps if not s["checkable"])
 

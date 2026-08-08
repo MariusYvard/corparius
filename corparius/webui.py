@@ -37,6 +37,7 @@ from .app import chat as app_chat
 from .app import companies as app_companies
 from .app import directives as app_directives
 from .app import errors as app_errors
+from .app import mail as app_mail
 from .app import publish as app_publish
 from .app import settings as app_settings
 from .app import tasks as app_tasks
@@ -49,11 +50,10 @@ from .orchestrator import Runtime
 from .providers import (
     claudecli,
     hardware,
-    mailbox,
     ollama_setup,
     provider_check,
 )
-from .providers.integrations import smtp_check, stripe_check, stripe_payments
+from .providers.integrations import stripe_check, stripe_payments
 from .providers.llm import connected_providers
 from .roster import ROSTER
 from .store import Store
@@ -673,34 +673,6 @@ def _oops(lang: str = "en") -> str:
     )
 
 
-def _mail_check(to: str = "", lang: str = "en") -> dict:
-    """Prove the mail account in one press: send, then read. Reported as two
-    lines because they fail for different reasons and an operator needs to know
-    which half is broken."""
-    send = smtp_check(to, lang=lang)
-    read = mailbox.check(lang=lang)
-    sending = i18n.pick(lang, "Sending", "Envoi")
-    reading = i18n.pick(lang, "Reading", "Lecture")
-    lines = [f"{sending}: {send['detail']}", f"{reading}: {read['detail']}"]
-    if not send["configured"] and not read["configured"]:
-        return {
-            "ok": False,
-            "detail": i18n.pick(
-                lang,
-                "No mail account set yet. Pick a provider above, give the address "
-                "and an app password.",
-                "Aucun compte mail réglé. Choisissez un fournisseur ci-dessus, donnez "
-                "l'adresse et un mot de passe d'application.",
-            ),
-        }
-    return {
-        "ok": bool(send["ok"] and read["ok"]),
-        "send_ok": send["ok"],
-        "read_ok": read["ok"],
-        "detail": "\n".join(lines),
-    }
-
-
 def _settings_payload() -> dict:
     return {
         "ok": True,
@@ -708,39 +680,8 @@ def _settings_payload() -> dict:
         "fields": [settings_spec.describe(f.key) for f in settings_spec.SPEC],
         "warning": {"en": settings_spec.WARN_EN, "fr": settings_spec.WARN_FR},
         "mail_presets": settings_spec.MAIL_PRESETS,
-        "mail_steps": _mail_steps(),
+        "mail_steps": app_mail.steps(),
     }
-
-
-def _mail_steps() -> dict:
-    """The per-provider steps, each carrying whether it is actually done.
-
-    Resolved here rather than in the page because "done" is a fact about this
-    installation's settings, not about the browser — the same reason the
-    approval panel resolves what a tool does server-side.
-
-    A step with no `needs` is one corparius cannot check: installing Proton
-    Bridge, reading a password off somebody else's dashboard. Those report
-    `checkable: false` and the console shows them as something to do rather
-    than as something outstanding, because a step that can never turn green is
-    worse than no state at all.
-    """
-    out: dict[str, list[dict]] = {}
-    for provider, steps in settings_spec.MAIL_STEPS.items():
-        resolved = []
-        for step in steps:
-            needs = step.get("needs") or []
-            resolved.append(
-                {
-                    "en": step["en"],
-                    "fr": step["fr"],
-                    "url": step.get("url", ""),
-                    "checkable": bool(needs),
-                    "done": bool(needs) and all(cfg.get(key, "").strip() for key in needs),
-                }
-            )
-        out[provider] = resolved
-    return out
 
 
 def _set_settings(state: UiState, values: dict, unset: list) -> dict:
@@ -1488,7 +1429,7 @@ def _route_theme_post(ctx):
 def _route_test_mail(ctx):
     # One button, both directions. A real send and a real read: setting a mail
     # account and hoping is the friction, and this is the answer to "did it work?".
-    return 200, {"ok": True, "result": _mail_check(str(ctx.body.get("to", "")), ctx.lang)}
+    return 200, {"ok": True, "result": app_mail.check(str(ctx.body.get("to", "")), ctx.lang)}
 
 
 def _route_test_payments(ctx):

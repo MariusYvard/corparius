@@ -154,7 +154,7 @@ explains each one:
 | Ship | `site` `deploy` `repo` `apps` |
 | Models | `bench` `preflight` `claude` |
 | Extend | `plugin` `skills` |
-| Keep it running | `doctor` `ui` `set` `backup` `restore` `update` `secrets` |
+| Keep it running | `doctor` `ui` `set` `mail` `backup` `restore` `update` `secrets` |
 
 ## Operator console
 

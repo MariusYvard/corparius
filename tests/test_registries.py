@@ -59,7 +59,7 @@ ALL_SRC = "\n".join(SRC.values())
 # + kernel/ (10: __init__, crypto, dotenv, httpkit, i18n, paths, proc, records, text,
 # vectors) + config/ (8: __init__, cfg, permissions, provider_table, secretbox, settings,
 # settings_spec, store_layer — all but two moved in from the flat package).
-MODULE_COUNT = 98
+MODULE_COUNT = 99
 
 
 def test_every_source_file_is_scanned():

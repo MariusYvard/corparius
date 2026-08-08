@@ -139,6 +139,40 @@ def cmd_ceo(args) -> int:
     return 0
 
 
+def cmd_mail(args) -> int:
+    """Prove the mail account, from a terminal.
+
+    Nothing in the CLI sent a test message. `doctor` reports whether the settings are *present*,
+    which on a headless box is the difference between believing the mail is wired and knowing
+    it — and this project's discipline is the second one. The console had the button; the machine
+    that most needs it did not.
+
+    It spends a real message, and it says so: that is the bargain `integrations.smtp_check`
+    documents, because nothing cheaper actually proves the setup.
+    """
+    from .app import mail as app_mail
+
+    if args.steps:
+        for provider, steps in sorted(app_mail.steps().items()):
+            print(provider)
+            for step in steps:
+                mark = " " if not step["checkable"] else ("x" if step["done"] else " ")
+                text = step["fr"] if args.lang.startswith("fr") else step["en"]
+                note = "" if step["checkable"] else "   (corparius cannot check this one)"
+                print(f"  [{mark}] {text}{note}")
+        return 0
+    out = app_mail.check(args.to, lang=args.lang)
+    print(out["detail"])
+    if not out["ok"]:
+        # The service's copy says "below" and "above": it was written for the settings page, and
+        # a terminal has no below. Rather than rewrite strings the console also shows, say the
+        # thing a terminal can act on — which is a command that exists now.
+        print()
+        print("set them with: corparius set CORP_SMTP_HOST=... CORP_SMTP_USER=...")
+        print("what is left, per provider: corparius mail --steps")
+    return 0 if out["ok"] else 1
+
+
 def cmd_run(args) -> None:
     from .orchestrator import Runtime
 
@@ -952,6 +986,12 @@ def main(argv=None) -> int:
     sp.add_argument("--answer-to", default="", help="inbox item id to answer or dismiss")
     sp.add_argument("--answer", default="", help="the answer text")
     sp.set_defaults(fn=cmd_inbox)
+
+    sp = sub.add_parser("mail", help="prove the mail account by sending and reading one message")
+    sp.add_argument("--to", default="", help="where to send the test; defaults to the account")
+    sp.add_argument("--steps", action="store_true", help="what is left to set up, per provider")
+    sp.add_argument("--lang", default="en")
+    sp.set_defaults(fn=cmd_mail)
 
     sp = with_company(sub.add_parser("ceo", help="ask the CEO something (the console chat)"))
     sp.add_argument("message", help="what to ask")

@@ -118,6 +118,19 @@ CREATE TABLE IF NOT EXISTS jobs (
 -- promise.
 CREATE UNIQUE INDEX IF NOT EXISTS jobs_idempotency
     ON jobs(idempotency_key) WHERE idempotency_key <> '';
+
+-- Devices allowed to reach this installation. No `company` column on purpose: a device is paired
+-- to an installation, and giving it one would make `purge_company` silently revoke a phone.
+CREATE TABLE IF NOT EXISTS clients (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    salt TEXT NOT NULL,
+    scopes TEXT NOT NULL DEFAULT 'read',
+    created_at REAL NOT NULL,
+    last_seen REAL,
+    revoked INTEGER NOT NULL DEFAULT 0
+);
 """
 
 
@@ -125,7 +138,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS jobs_idempotency
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -445,6 +458,25 @@ def _migration_19(db: sqlite3.Connection) -> None:
     )
 
 
+def _migration_20(db: sqlite3.Connection) -> None:
+    """Named devices instead of one shared secret.
+
+    `CORP_UI_TOKEN` has no name, no scope and no way to withdraw it from one device without
+    changing it for all of them. It stays as the bootstrap credential; this is what a second
+    client gets, so that revoking a lost phone does not log out the laptop.
+
+    Nothing is migrated in. An existing `CORP_UI_TOKEN` is not turned into a row: it is a setting
+    the operator chose and can still use, and inventing a device named after it would claim a
+    pairing that never happened.
+    """
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS clients ("
+        " id TEXT PRIMARY KEY, name TEXT NOT NULL, token_hash TEXT NOT NULL,"
+        " salt TEXT NOT NULL, scopes TEXT NOT NULL DEFAULT 'read', created_at REAL NOT NULL,"
+        " last_seen REAL, revoked INTEGER NOT NULL DEFAULT 0)"
+    )
+
+
 MIGRATIONS = {
     1: _migration_1,
     2: _migration_2,
@@ -465,4 +497,5 @@ MIGRATIONS = {
     17: _migration_17,
     18: _migration_18,
     19: _migration_19,
+    20: _migration_20,
 }

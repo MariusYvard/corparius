@@ -186,6 +186,60 @@ Toutes les réponses portent un champ `ok`, qui qualifie la requête et non son 
 
 Le serveur écoute sur 127.0.0.1 par défaut. Les secrets envoyés depuis la page sont en écriture seule : stockés, jamais renvoyés, l'API n'expose qu'un booléen `configured`. Seules les clés du registre sont modifiables ; toute autre variable est refusée. Si `CORP_UI_TOKEN` est défini, chaque appel mutateur doit porter l'en-tête `X-Corp-Token` — la page l'envoie et propose de le saisir sur un 401. Le doctor **échoue** si la console est exposée hors localhost sans token : elle peut dépenser de l'argent et publier.
 
+### Un identifiant par appareil
+
+`CORP_UI_TOKEN` reste l'identifiant d'amorçage : un secret partagé, sans nom, sans portée, et
+qu'on ne peut pas retirer à un téléphone sans le changer pour le portable. `corparius pair` donne
+l'autre forme.
+
+```bash
+corparius pair --name "Marius iPhone" --act   # affiché une seule fois
+corparius clients                             # ce qui est appairé, et vu quand
+corparius revoke --id <id>                    # refusé dès la requête suivante
+```
+
+L'appareil envoie `Authorization: Bearer <token>` ; `X-Corp-Token` reste un alias pour une version.
+Le secret n'est **jamais** stocké — seul un SHA-256 sur un sel par client, et il n'y a aucun moyen
+de le redemander. Pourquoi SHA-256 et pas scrypt : [ADR 0009](adr/0009-sha256-pour-un-jeton-d-appareil.md),
+mesuré à 87 ms et 16 MiB par requête pour protéger 256 bits qui n'ont pas besoin d'être protégés.
+
+**Deux portées, pas dix.** `read` regarde, `act` agit aussi. Un appareil `read` qui tente une
+écriture reçoit **403 et pas 401** : son identifiant est bon et la réponse est quand même non — un
+client à qui on répond 401 se ré-appairerait, ce qui ne changerait rien.
+
+### Le palier CSRF qui s'est resserré
+
+Le contrôle d'origine a trois paliers, et le troisième disait « ni `Sec-Fetch-Site` ni `Origin` ⇒
+autorisé ». C'était un compromis local raisonnable — c'est ce qui fait marcher curl, le smoke de la
+CI, la suite de tests et le serveur MCP sans configuration. Mais **une application native n'envoie
+ni l'un ni l'autre non plus**, donc dès qu'un second client existe pour de vrai, ce palier cesse de
+vouloir dire « pas un navigateur, donc local » et devient la porte par laquelle passe une écriture
+distante.
+
+Il exige maintenant **le loopback ou un appareil appairé**. Le loopback est vérifié sur l'adresse du
+pair, que l'appelant ne peut pas fabriquer.
+
+`CORP_UI_ALLOWED_ORIGINS` autorise une origine croisée — un serveur de développement front est une
+autre origine, ce qui est tout l'arrangement de l'étape 9 — avec `do_OPTIONS` pour le préflight.
+**Jamais `*`, jamais `Origin` renvoyé en écho** : refléter, c'est la même permission épelée pour
+avoir l'air prudent. Comme `CORP_UI_ALLOWED_HOSTS`, c'est une clé d'amorçage et pas un réglage :
+un contrôle de sécurité ne doit pas être modifiable par la surface qu'il protège.
+
+### TLS : non, et le doctor le vérifie
+
+`http.server` avec un certificat auto-signé est une catastrophe d'expérience sur iOS et apprendrait
+aux exploitants à cliquer à travers les avertissements de certificat. La réponse honnête est de
+rester en loopback et d'atteindre la console par un tunnel — WireGuard, Tailscale, SSH, ou un proxy
+inverse qui termine TLS.
+
+Ce qui n'est honnête que si quelque chose vérifie. Le doctor **échoue** quand un appareil est
+appairé et que la console écoute hors loopback sans TLS : un jeton d'appareil est un identifiant
+porteur, donc il est dans chaque requête sur le fil, et un avertissement sur un identifiant qui
+fuit est un avertissement qu'on n'écoute pas deux fois. `CORP_UI_BEHIND_TLS=true` est l'exploitant
+qui affirme qu'un proxy termine devant — une affirmation, pas une détection, et c'est dit tel quel :
+vu de l'intérieur du processus, une requête venue d'un proxy local et une requête venue d'un
+portable au fond d'un café sont identiques.
+
 Les secrets sont stockés en clair dans `data/corparius.sqlite` par défaut (comme ils l'étaient dans `.env`) ; le panneau et le doctor le disent. `corparius secrets on` les chiffre au repos, y compris ceux déjà enregistrés, avec la phrase de passe `CORP_SECRET_KEY` — une clé d'amorçage, donc elle vit dans `.env` ou l'environnement du processus, jamais dans la base qu'elle protège. Dans les deux cas aucune archive de `backup` ne sort un secret en clair : chiffré il voyage comme cryptogramme, non chiffré il est blanchi et `REDACTED.txt` nomme ce qu'il faudra ressaisir. Sur POSIX la base est passée en 0600 ; sur Windows c'est sans effet.
 
 Un run lancé depuis la page tourne dans un thread du même processus et passe par le firewall habituel (budget, loop guard, circuit breaker, gate HITL). Une boucle lancée depuis la console vit dans le processus console : la fermer l'arrête, contrairement au profil docker `loop`. Le bouton Stop pose un drapeau que le runtime consulte à chaque tick — le thread n'est jamais tué, et seules les heures réellement jouées sont comptées.

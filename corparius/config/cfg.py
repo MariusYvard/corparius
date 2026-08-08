@@ -44,6 +44,12 @@ ROOT = paths.user_home()
 # ordinary setting, a successful cross-site write to /api/settings could add the
 # attacker's own host to the allow-list and disable the defence permanently. A
 # security control must not be writable through the surface it protects.
+#
+# CORP_UI_ALLOWED_ORIGINS and CORP_UI_BEHIND_TLS are here for the same sentence,
+# word for word. The first decides which cross-origin pages may write; the second
+# is the operator's assertion that a TLS proxy terminates in front, which the
+# doctor reads before deciding whether an off-loopback console with a paired
+# device is a failure. Both would be self-defeating as settings the API can write.
 BOOTSTRAP = (
     "CORP_DATA_PATH",
     "CORP_LOG_LEVEL",
@@ -51,6 +57,8 @@ BOOTSTRAP = (
     "CORP_UI_PORT",
     "CORP_UI_TOKEN",
     "CORP_UI_ALLOWED_HOSTS",
+    "CORP_UI_ALLOWED_ORIGINS",
+    "CORP_UI_BEHIND_TLS",
     "CORP_SECRET_KEY",
 )
 

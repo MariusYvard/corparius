@@ -20,7 +20,8 @@ from urllib.parse import parse_qs, urlparse
 
 from ..config import cfg
 from ..config.settings import Settings
-from ..kernel import httpkit, paths
+from ..kernel import httpkit, paths, tokens
+from ..store import clients as clients_store
 from . import contracts, state
 from .adapters import oops
 from .contracts import Ctx, RequestRefused
@@ -28,6 +29,19 @@ from .routes import match
 from .state import UiState
 
 V1 = "/api/v1/"
+
+
+def _allowed_origins() -> frozenset[str]:
+    """Origins permitted to make a cross-origin request, exactly as written.
+
+    A bootstrap key rather than a stored setting, because it decides who may reach the console and
+    that must not depend on the console being reachable. **Never `*`** and never `Origin` reflected
+    back: reflecting is the same permission spelled to look careful, and `*` would hand the API to
+    any page the operator happens to have open.
+    """
+    raw = cfg.get("CORP_UI_ALLOWED_ORIGINS", "")
+    return frozenset(o.strip().rstrip("/") for o in raw.split(",") if o.strip())
+
 
 log = logging.getLogger("corparius.api.server")
 
@@ -106,6 +120,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Type", ctype + "; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        # The preflight alone is not enough: without this on the real answer a browser refuses to
+        # let the page read it, which looks exactly like the server being down. Only for an
+        # allow-listed origin, and echoed from the list rather than from the request.
+        origin = (self.headers.get("Origin") or "").strip()
+        if origin and origin in _allowed_origins():
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
         self.end_headers()
         self.wfile.write(body)
 
@@ -142,13 +163,68 @@ class Handler(BaseHTTPRequestHandler):
         # 500. Treat it as no fields, the same as an empty body.
         return parsed if isinstance(parsed, dict) else {}
 
-    def _authorized(self) -> bool:
+    def _presented(self) -> str:
+        """The credential a client sent, from either spelling.
+
+        `Authorization: Bearer` is what a second client will reach for; `X-Corp-Token` is what the
+        shipped page has always sent and stays an alias for a version. Bearer wins when both are
+        present, because a client that sets it meant it.
+        """
+        auth = (self.headers.get("Authorization") or "").strip()
+        if auth[:7].lower() == "bearer ":
+            return auth[7:].strip()
+        return (self.headers.get("X-Corp-Token") or "").strip()
+
+    def _device(self):
+        """The paired device this request is, or None.
+
+        Costs one indexed lookup and one SHA-256 — the id travels in the clear inside the
+        credential precisely so it does not cost one hash per paired device. See
+        `kernel/tokens.py` for why the hash is SHA-256 and not scrypt; the short version is that
+        87 ms and 16 MiB per attempt would be a denial-of-service lever protecting 256 bits of
+        entropy that need no protecting.
+        """
+        client_id, secret = tokens.split(self._presented())
+        if not client_id:
+            return None
+        row = self.state.store().client(client_id)
+        if row is None or row["revoked"]:
+            return None
+        if not tokens.verify(secret, row["salt"], row["token_hash"]):
+            return None
+        return row
+
+    def _from_loopback(self) -> bool:
+        """Whether the peer is on this machine. The address, not a header — a header is whatever
+        the caller says it is, and this decides whether an unauthenticated write is allowed."""
+        return (self.client_address[0] if self.client_address else "") in httpkit.LOOPBACK
+
+    def _authorized(self, device=None) -> bool:
+        """Either credential opens the door; a device also has to be in scope.
+
+        Order matters and reads as the sentence it is: a valid device is authorised whatever
+        `CORP_UI_TOKEN` says, because it was paired deliberately and the shared token is the
+        bootstrap secret rather than the authority.
+        """
+        if device is not None:
+            return True
         token = cfg.get("CORP_UI_TOKEN", "").strip()
         if not token:
             return True  # no token configured: the zero-config local default
-        supplied = self.headers.get("X-Corp-Token", "")
+        supplied = self._presented()
         # compare_digest wants two byte strings and raises on non-ASCII str.
         return hmac.compare_digest(token.encode("utf-8"), supplied.encode("utf-8", "replace"))
+
+    def _in_scope(self, device, method: str) -> bool:
+        """Two scopes, derived from the method exactly as `mutating` is.
+
+        `read` may GET; `act` may do both. Ten scopes would be a permission system nobody gets
+        right, and this product already has one of those for what an *agent* may do — what a
+        *device* may do is look, or also act.
+        """
+        if device is None:
+            return True  # the shared token has no scope, and never had one
+        return method == "GET" or device["scopes"] == clients_store.ACT
 
     def _host_allowed(self) -> bool:
         """Reject a request whose Host is not one this console answers to.
@@ -175,7 +251,7 @@ class Handler(BaseHTTPRequestHandler):
             return True
         return host in httpkit.LOOPBACK or not host
 
-    def _same_origin(self) -> bool:
+    def _same_origin(self, device=None) -> bool:
         """Reject a cross-site write.
 
         Three tiers, in order. Both headers are on the browser's forbidden list,
@@ -184,10 +260,20 @@ class Handler(BaseHTTPRequestHandler):
         1. Sec-Fetch-Site, which current browsers always send. `none` is a
            bookmark or the address bar; `same-origin` is our own page.
         2. Origin, compared against the Host we were reached on.
-        3. Neither present: not a browser. Allowed - this is what keeps curl,
-           the CI smoke job, the test suite's HTTPConnection and the MCP server
-           working with no configuration. The token check still applies to them
-           independently.
+        3. Neither present: not a browser. Allowed **only from loopback, or with a paired
+           device** — and that tightening is the point of this stage.
+
+           It used to be allowed outright, and that was a reasonable local compromise: it is what
+           keeps curl, the CI smoke job, the test suite's HTTPConnection and the MCP server
+           working with no configuration, and the token check still applies to them
+           independently. But a native app sends neither header either, so the moment a second
+           client is a real thing, this tier stops being "not a browser, therefore local" and
+           becomes the door a remote write comes through. Loopback is checked on the peer
+           address, which the caller cannot set; a device is checked on its credential.
+
+        4. An allow-listed origin, for a front-end dev server. `CORP_UI_ALLOWED_ORIGINS` is an
+           explicit list — never `*`, and never reflected back from `Origin`, which would be the
+           same thing spelled to look careful.
 
         Tier 1 is also what blocks a plain <form> POST from a malicious page -
         the classic no-JS CSRF - without a CSRF token, a cookie, or a login
@@ -198,11 +284,13 @@ class Handler(BaseHTTPRequestHandler):
             return site in ("same-origin", "none")
         origin = (self.headers.get("Origin") or "").strip()
         if not origin:
-            return True
+            return self._from_loopback() or device is not None
         parsed = urlparse(origin)
         if not parsed.netloc:
             return False  # "null" origin: a sandboxed iframe or a file:// page
-        return parsed.netloc.lower() == (self.headers.get("Host") or "").strip().lower()
+        if parsed.netloc.lower() == (self.headers.get("Host") or "").strip().lower():
+            return True
+        return origin in _allowed_origins()
 
     def _drain_body(self) -> None:
         """Read the announced body so a refusal reaches the client instead of a reset.
@@ -267,7 +355,8 @@ class Handler(BaseHTTPRequestHandler):
             # Writes must come from our own page. Reads are exempt: they carry
             # no side effect, and a cross-site reader cannot see the response
             # anyway without CORS, which is never granted.
-            if method == "POST" and not self._same_origin():
+            device = self._device()
+            if method == "POST" and not self._same_origin(device):
                 log.warning(
                     "refused cross-site POST %s from Origin %r",
                     url.path,
@@ -278,9 +367,25 @@ class Handler(BaseHTTPRequestHandler):
             # One check, both verbs, driven by the route's own `public` flag.
             # This used to run in do_POST only, which left every read endpoint
             # open even when the operator had configured a token.
-            if not route.public and not self._authorized():
-                self._refuse(401, contracts.UNAUTHENTICATED, "missing or wrong X-Corp-Token")
+            if not route.public and not self._authorized(device):
+                self._refuse(
+                    401,
+                    contracts.UNAUTHENTICATED,
+                    "missing or wrong credential (Authorization: Bearer, or X-Corp-Token)",
+                )
                 return
+            if not self._in_scope(device, method):
+                # A `read` device asking to act. Distinct from a 401 on purpose: the credential is
+                # good and the answer is still no, so a client must not respond by re-pairing.
+                self._refuse(
+                    403,
+                    contracts.FORBIDDEN,
+                    f"this device is paired for {clients_store.READ} only",
+                    scope=device["scopes"],
+                )
+                return
+            if device is not None:
+                self.state.store().touch_client(device["id"])
             ctx = Ctx(
                 state=self.state,
                 path=url.path,
@@ -310,6 +415,31 @@ class Handler(BaseHTTPRequestHandler):
             # The detail stays in the server log. An internal error's particulars are the one
             # thing a response must not carry: they are ours, not the caller's.
             self._refuse(500, contracts.INTERNAL, oops(lang))
+
+    def do_OPTIONS(self) -> None:  # noqa: N802 (stdlib naming)
+        """The preflight a browser sends before a cross-origin write.
+
+        Needed because a front-end dev server is a different origin from the console it talks to,
+        which is stage 9's whole arrangement. Answered **only** for an origin on the list: an
+        unlisted one gets a 403 and no CORS headers at all, rather than a 200 that says nothing —
+        a client that cannot tell "not allowed" from "allowed but silent" retries forever.
+        """
+        origin = (self.headers.get("Origin") or "").strip()
+        if origin and origin in _allowed_origins():
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header(
+                "Access-Control-Allow-Headers",
+                "Content-Type, Authorization, X-Corp-Token, Idempotency-Key, If-None-Match",
+            )
+            # No `Access-Control-Allow-Credentials`: there are no cookies here, and granting it
+            # would invite a browser to attach ambient authority to a cross-origin write.
+            self.send_header("Access-Control-Max-Age", "600")
+            self.send_header("Vary", "Origin")
+            self.end_headers()
+            return
+        self._refuse(403, contracts.FORBIDDEN, "origin not allowed", origin=origin)
 
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         self._dispatch("GET")

@@ -110,6 +110,54 @@ def _check_exposure(s: Settings) -> tuple:
     )
 
 
+def _check_devices(s: Settings, store: Store | None) -> tuple:
+    """A paired device plus an off-loopback console is a token crossing a network in the clear.
+
+    The plan's decision, and it is a refusal rather than a feature: **no TLS here.**
+    `http.server` with a self-signed certificate is a catastrophe of an experience on iOS, and
+    shipping one would teach operators to click through certificate warnings. The honest answer is
+    to stay on loopback and reach the console through a tunnel — WireGuard, Tailscale, SSH, or a
+    reverse proxy that terminates TLS.
+
+    Which is only honest if something checks. This is that check, and it **fails** rather than
+    warns: a device token is a bearer credential, so an off-loopback console without TLS puts it
+    in every request on the wire, and a warning about a leaked credential is a warning nobody
+    acts on twice.
+
+    `CORP_UI_BEHIND_TLS` is the operator asserting a proxy terminates in front. An assertion and
+    not a detection, which is stated plainly here because a check that claimed to detect it would
+    be lying: from inside this process, a request arriving on plain HTTP from a local proxy and
+    one arriving from a laptop across a café look identical.
+    """
+    from .config import cfg
+
+    if store is None:
+        return ("warn", "devices", "the store did not open, so paired devices are unknown")
+    if not store.any_client():
+        return ("ok", "devices", "no paired device; the console answers to CORP_UI_TOKEN only")
+    paired = [c for c in store.list_clients(include_revoked=False)]
+    named = ", ".join(f"{c['name']} ({c['scopes']})" for c in paired[:4])
+    local = {"127.0.0.1", "localhost", "::1"}
+    if s.ui_host in local:
+        return ("ok", "devices", f"{len(paired)} paired device(s) on a loopback console: {named}")
+    if cfg.get_bool("CORP_UI_BEHIND_TLS"):
+        return (
+            "ok",
+            "devices",
+            f"{len(paired)} paired device(s), console on {s.ui_host}, "
+            "CORP_UI_BEHIND_TLS asserts TLS terminates in front",
+        )
+    return (
+        "fail",
+        "devices",
+        f"{len(paired)} paired device(s) and the console is on {s.ui_host} with no TLS. A device "
+        "token is a bearer credential and it is in every request on the wire. Bind 127.0.0.1 and "
+        "reach it through a tunnel (WireGuard, Tailscale, SSH), or terminate TLS in front and set "
+        "CORP_UI_BEHIND_TLS=true.",
+        "settings",
+    )
+
+
 def _check_secrets_at_rest(s: Settings) -> tuple:
     from .config import secretbox
 
@@ -1070,6 +1118,7 @@ def _all_checks(s: Settings, store: Store | None) -> list[tuple]:
         _check_permissions(s),
         _check_store(s, store),
         _check_secrets_at_rest(s),
+        _check_devices(s, store),
         _check_companies(),
         _check_machine(s, store),
         _check_ollama(s),

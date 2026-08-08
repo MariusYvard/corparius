@@ -29,11 +29,12 @@ import pytest
 
 from corparius import cli
 
-# The eight group modules. Named rather than discovered, for the reason every registry in this
+# The nine group modules. Named rather than discovered, for the reason every registry in this
 # project is: a `glob` that stopped matching would weaken every assertion below without failing
 # one, which is exactly how the flat glob in test_registries.py nearly disarmed the whole
 # restructuring.
 GROUPS = (
+    "access",
     "lifecycle",
     "operate",
     "backlog",

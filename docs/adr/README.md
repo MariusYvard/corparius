@@ -24,3 +24,4 @@ le remplacent pas**, et une décision qui change se change aux deux endroits.
 | [0006](0006-sept-coutures-de-greffons.md) | Sept coutures de greffons, consommées paresseusement | — |
 | [0007](0007-les-couches-sont-des-rangs.md) | Les couches sont des rangs, tenus par un test | 4 arêtes montantes, 5 cycles |
 | [0008](0008-un-jeton-par-processus-pas-un-pid.md) | La propriété d'un travail est un jeton, pas un PID | Les PID sont réutilisés |
+| [0009](0009-sha256-pour-un-jeton-d-appareil.md) | SHA-256 pour un jeton d'appareil, scrypt pour une passphrase | 87 ms et 16 MiB par requête |

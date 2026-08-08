@@ -12,6 +12,7 @@ prove      preflight bench claude mail   a key being set is not a model answerin
 maintain   doctor backup restore update  acts on the install, not on a company
 configure  set memory rules
 console    ui
+access     pair clients revoke              which devices may reach this installation
 support    resolving a company, and --company
 ```
 
@@ -48,14 +49,34 @@ def build_parser() -> argparse.ArgumentParser:
     ask each parser which function it dispatches to. When this lived inside `main` the only way
     to see the tree was to run a command.
     """
-    from . import backlog, configure, console, lifecycle, maintain, operate, prove, publish
+    from . import (
+        access,
+        backlog,
+        configure,
+        console,
+        lifecycle,
+        maintain,
+        operate,
+        prove,
+        publish,
+    )
 
     p = argparse.ArgumentParser(prog="corparius", description="Run autonomous AI micro-companies.")
     sub = p.add_subparsers(dest="cmd", required=True)
     # The order is the order `--help` lists them, so it is chosen rather than inherited: it
     # reads like a working session. The old listing was accretion order — whatever was added
     # when — which put `new`, the first command anyone types, twenty-fifth.
-    for group in (lifecycle, operate, backlog, publish, configure, prove, maintain, console):
+    for group in (
+        lifecycle,
+        operate,
+        backlog,
+        publish,
+        configure,
+        prove,
+        maintain,
+        console,
+        access,
+    ):
         group.register(sub)
 
     # The four sub-CLIs, which own their own parsers. They register themselves for the same

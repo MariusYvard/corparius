@@ -82,7 +82,8 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Instructions non testées de la CLI | 216 | **65** |
 | Octets de la ressource sondée | 48 530 | **2 859** (et 0 si rien n'a changé) |
 | Ce qui survit à un redémarrage de la console | rien | **les tours**, schéma 19 |
-| Schéma | 16 | **19** |
+| Identifiants d'accès | 1 partagé | **un par appareil**, révocable, avec portée |
+| Schéma | 16 | **20** |
 
 **Zéro arête montante**, et c'est pour ça que la liste est écrite en cliquet plutôt qu'en
 commentaire : chacune des quatre a été rayée par l'étape qui la nommait, et l'ensemble vide
@@ -491,6 +492,61 @@ n'était vérifié nulle part : la console vérifiait sa propre mémoire et la C
 
 `app/runs.py` est au rang 5 et pas dans `api/adapters.py` précisément pour ça : la vue durable est
 la même pour les deux appelants, ce qui est le motif de l'étape 6 appliqué à une capacité neuve.
+
+## L'étape 8, dernière brique : un appareil, pas un secret partagé
+
+`CORP_UI_TOKEN` est un secret partagé sans nom, sans portée, et qu'on ne peut pas retirer à un
+téléphone sans le changer pour le portable. Schéma 20 : une table `clients`. Mais la table n'est pas
+la partie intéressante — c'est ce qui a dû se resserrer autour d'elle.
+
+### Le palier qui devenait porteur
+
+Le contrôle d'origine avait trois paliers et le troisième disait « ni `Sec-Fetch-Site` ni `Origin`
+⇒ autorisé ». Le code disait pourquoi, et il avait raison : c'est ce qui fait marcher curl, le smoke
+de la CI, le `HTTPConnection` de la suite et le serveur MCP sans configuration.
+
+**Mais une application native n'envoie ni l'un ni l'autre non plus.** Dès qu'un second client est
+réel, ce palier cesse de vouloir dire « pas un navigateur, donc local » et devient la porte par
+laquelle passe une écriture distante. Il exige maintenant le loopback — vérifié sur l'adresse du
+pair, que l'appelant ne peut pas fabriquer — ou un appareil appairé.
+
+Un test qui aurait vérifié ça de bout en bout n'aurait rien vérifié : sur cette suite la connexion
+*est* en loopback, donc elle fournit elle-même la chose testée. `_same_origin` est donc interrogé
+directement avec une adresse de pair distante. C'est le même piège que le drain du corps deux
+commits plus tôt, reconnu à vue cette fois.
+
+### SHA-256 et pas scrypt — [ADR 0009](adr/0009-sha256-pour-un-jeton-d-appareil.md)
+
+Le plan disait scrypt, « la primitive que `secretbox` utilise déjà ». Mesuré avant de choisir :
+
+```text
+scrypt n=2**14 r=8 p=1    87,1 ms    ~16 MiB par appel
+sha256                     0,0014 ms
+```
+
+Un facteur 62 000, à chaque requête authentifiée d'une API sondée. Une KDF mémoire-dure existe pour
+rendre chères les devinettes à **faible entropie** ; l'entrée ici est `token_urlsafe(32)` — 256 bits
+— générée par nous et **jamais acceptée d'un appelant**. scrypt n'achète rien contre 2^256, et ce
+qu'il coûterait est un levier de déni de service offert à un appelant non authentifié : 87 ms et
+16 MiB par tentative. `secretbox` garde scrypt et doit le garder, parce que là l'entrée est une
+passphrase humaine. Même primitive, question différente.
+
+### TLS : non, et un échec du doctor pour que ce soit honnête
+
+`http.server` plus un certificat auto-signé est une catastrophe d'expérience sur iOS et apprendrait
+aux exploitants à cliquer à travers les avertissements. La décision du plan est le tunnel — et une
+décision de ne pas faire quelque chose n'est honnête que si quelque chose vérifie. Le doctor
+**échoue** quand un appareil appairé coexiste avec une écoute hors loopback sans TLS : un jeton
+d'appareil est un identifiant porteur, donc il est dans chaque requête sur le fil.
+
+`CORP_UI_BEHIND_TLS` est une **affirmation** de l'exploitant, pas une détection, et le docstring le
+dit : vu de l'intérieur du processus, une requête venue d'un proxy local et une venue d'un portable
+au fond d'un café sont identiques. Prétendre détecter serait mentir.
+
+Les deux nouvelles clés sont des clés d'amorçage, et la phrase que `CORP_UI_ALLOWED_HOSTS` portait
+déjà se reprend mot pour mot : **un contrôle de sécurité ne doit pas être modifiable par la surface
+qu'il protège.** Une écriture inter-sites réussie sur `/api/settings` qui pourrait ajouter sa propre
+origine désactiverait la défense définitivement.
 
 ## Un vrai tour, sur la vraie configuration
 

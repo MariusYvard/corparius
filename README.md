@@ -155,6 +155,7 @@ explains each one:
 | Models | `bench` `preflight` `claude` |
 | Extend | `plugin` `skills` |
 | Keep it running | `doctor` `ui` `set` `mail` `backup` `restore` `update` `secrets` |
+| Let a device in | `pair` `clients` `revoke` |
 
 ## Operator console
 

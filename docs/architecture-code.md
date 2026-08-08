@@ -32,7 +32,7 @@ Un module de rang *n* n'importe que des rangs **≤ n**. Jamais au-dessus.
 | 2 | `store/` | **fait** — schéma, migrations, un mixin par table, la façade | tout ce qui est au-dessus |
 | 3 | `providers/` | **fait** — 17 modules : modèles, routage, courrier, déploiements, dépôts, prospects, matériel | le domaine, l'app, le transport |
 | 4 | `domain/` | `roster` ✅, exécuteur, `tools/{spec,effects,registry}` ✅, entreprise, documents, orchestrateur, site | **toute dépendance hôte** : `requests`, `subprocess`, `sqlite3`, `smtplib`, `imaplib`, `socket`, `time.sleep` |
-| 5 | `app/` | **entamé** — `settings`, `tasks`, `publish`, `companies`, `chat`, `directives`, `errors` | le transport, et **jamais un paramètre `Ctx`** |
+| 5 | `app/` | **10 services** — `settings`, `tasks`, `publish`, `companies`, `chat`, `directives`, `mail`, `skills`, `overview`, `errors` | le transport, et **jamais un paramètre `Ctx`** |
 | 6 | `api/`, `cli/` | HTTP, CLI, MCP | — rien n'importe ces dossiers |
 
 Le rang 0 porte aussi la seule strictesse mypy du paquet : `disallow_untyped_defs` s'applique
@@ -64,7 +64,7 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 
 ## Où en est le chantier
 
-Étapes 1 à 5 faites, l'étape 6 entamée. Mesuré :
+Étapes 1 à 5 faites, l'étape 6 faite pour sa moitié qui compte. Mesuré :
 
 | Compteur | Au plan | Aujourd'hui |
 | --- | --- | --- |
@@ -74,7 +74,8 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Ce que charge la lecture d'un réglage | `requests`, `subprocess`, `ssl`, `sqlite3` | **`sqlite3`** |
 | Ce que charge la lecture de la liste des outils | + `smtplib`, `imaplib` | **rien** |
 | Modules à plat | 53 | **29** |
-| Choses que la console sait faire et la CLI non | 11 | **8** |
+| Choses que la console sait faire et la CLI non | 11 | **3**, toutes cosmétiques |
+| Commandes CLI | 27 | **33** |
 
 **Zéro arête montante**, et c'est pour ça que la liste est écrite en cliquet plutôt qu'en
 commentaire : chacune des quatre a été rayée par l'étape qui la nommait, et l'ensemble vide
@@ -148,6 +149,26 @@ Les trouver à la main a marché deux fois et **ne passe pas à l'échelle** :
 `tests/test_two_callers_agree.py` déclare les paires qui doivent partager un service, affirme que
 les deux atteignent *ce* service, et plafonne la taille d'un adaptateur — parce qu'un adaptateur
 qui reprend de la logique est exactement comment les deux côtés ont divergé, un commit à la fois.
+
+### Ce qui reste de l'étape 6
+
+Neuf services sont descendus et neuf paires sont sous cliquet. Les trois écarts qui restent
+sont cosmétiques ou déjà couverts autrement : le thème de la console, les charges utiles de
+rendu (`_settings_payload`, `_providers_payload`, `_company_payload`), et `_ollama_pull` /
+`_claude_setup`, dont les cousins `bench` et `claude` existent déjà côté ligne de commande.
+
+La seconde moitié de l'étape — déplacer le transport de `webui.py` vers `api/` — est purement
+structurelle : 56 gestionnaires, la table de routes et le serveur. Elle n'ouvre plus aucune
+capacité, et les deux gardes qui la protégeront existent déjà
+(`tests/test_route_table.py` pour les deux bouts de la table, `tests/test_app_layer.py` pour
+la règle inverse).
+
+Le motif qui a produit ces neuf déplacements vaut d'être noté, parce qu'il s'est répété
+identiquement : **la barrière n'a jamais été la logique, toujours un paramètre.**
+`_persist(state, …)` prenait un `UiState` ; `_chat` lisait `state.chats` ; `_overview` lisait
+`state.runs`. Trois fois, un objet de console dans une signature était la seule raison qu'un
+terminal ne puisse pas appeler la fonction. `app_mail.check` n'en avait aucun et son extraction
+a coûté un fichier et une commande.
 
 ## Un vrai tour, sur la vraie configuration
 

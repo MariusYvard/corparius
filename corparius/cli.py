@@ -173,6 +173,42 @@ def cmd_mail(args) -> int:
     return 0 if out["ok"] else 1
 
 
+def cmd_delete(args) -> int:
+    """Move a company out of the way, and optionally purge what the store recorded about it.
+
+    There was no way to do this from a terminal, so the obvious alternative was
+    `rm -rf companies/<slug>` — which skips the trash *and* leaves every row the store holds
+    about that company behind. Thirteen tables' worth, including its standing permissions: a new
+    company created on the same slug would have inherited authorisations nobody granted it.
+
+    The trash half destroys nothing. `--purge` is the half that cannot be undone, which is why
+    it is a separate flag and why `--confirm` has to spell the slug — the same guard the
+    console's dialog uses, because a destructive action reachable two ways must not be easier
+    one of them.
+    """
+    from .app import companies as app_companies
+    from .app import errors as app_errors
+
+    cfg = _load_company(args.company)
+    slug = cfg["slug"]
+    try:
+        out = app_companies.delete(_store(), slug, args.confirm, args.purge)
+    except app_errors.Refused as exc:
+        print(exc)
+        if not args.confirm:
+            print(f"pass --confirm {slug} to go ahead")
+        return 1
+    print(f"{slug} moved to {out['trashed']}")
+    if not out["purged"]:
+        print("the store still holds what it recorded; add --purge to drop that too")
+        return 0
+    for table, n in sorted(out["removed"].items()):
+        print(f"  {table}: {n} row(s) removed")
+    if not out["removed"]:
+        print("  the store held nothing for it")
+    return 0
+
+
 def cmd_run(args) -> None:
     from .orchestrator import Runtime
 
@@ -986,6 +1022,13 @@ def main(argv=None) -> int:
     sp.add_argument("--answer-to", default="", help="inbox item id to answer or dismiss")
     sp.add_argument("--answer", default="", help="the answer text")
     sp.set_defaults(fn=cmd_inbox)
+
+    sp = with_company(sub.add_parser("delete", help="move a company to companies/.trash/"))
+    sp.add_argument("--confirm", default="", help="the slug again, to prove you meant this one")
+    sp.add_argument(
+        "--purge", action="store_true", help="also drop everything the store recorded about it"
+    )
+    sp.set_defaults(fn=cmd_delete)
 
     sp = sub.add_parser("mail", help="prove the mail account by sending and reading one message")
     sp.add_argument("--to", default="", help="where to send the test; defaults to the account")

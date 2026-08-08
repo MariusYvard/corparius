@@ -499,18 +499,18 @@ def _save_company(state: UiState, slug: str, body: dict) -> dict:
 
 
 def _delete_company(state: UiState, slug: str, confirm: str, purge: bool) -> dict:
-    if slug not in _companies():
-        return {"ok": False, "error": f"unknown company '{slug}'"}
-    if confirm != slug:
-        return {"ok": False, "error": "type the company slug to confirm"}
+    """`app.companies.delete`, with its refusal turned into a payload.
+
+    The trash half destroys nothing — the config is moved, so a mistake is a `mv` away from
+    undone — which is what makes the same operation safe to offer from a terminal. The console
+    adds the list of companies, because that is what its page redraws.
+    """
     try:
-        dest = company_mod.trash(slug)
-    except FileNotFoundError:
-        return {"ok": False, "error": f"unknown company '{slug}'"}
-    if purge:
-        state.store().purge_company(slug)
-    log.info("company moved to trash from the console: %s -> %s", slug, dest)
-    return {"ok": True, "companies": _companies(), "trashed": str(dest), "purged": bool(purge)}
+        out = app_companies.delete(state.store(), slug, confirm, purge)
+    except app_errors.Refused as exc:
+        return {"ok": False, "error": str(exc)}
+    log.info("company moved to trash from the console: %s -> %s", slug, out["trashed"])
+    return {"ok": True, "companies": _companies(), **out}
 
 
 def _persist(state: UiState, values: dict[str, str], unset: list[str] | None = None) -> dict:

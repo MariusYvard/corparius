@@ -96,3 +96,37 @@ def templates(lang: str = "en") -> list[dict]:
         }
         for tpl in company_mod.TEMPLATES
     ]
+
+
+def delete(store, slug: str, confirm: str, purge: bool = False) -> dict:
+    """Move a company's config to `companies/.trash/`, and optionally purge its store rows.
+
+    **Nothing is destroyed by the trash half**, which is the whole reason this is safe to offer
+    from a terminal: the config is moved, so a mistake is a `mv` away from undone. `purge` is
+    the half that cannot be undone, and it is a separate argument for that reason.
+
+    `confirm` has to equal the slug. Typing a name is the cheapest possible proof that the
+    operator meant this company and not the one above it in a list — and the same guard the
+    console's dialog uses, because a destructive action reachable two ways must not be easier
+    one of them.
+
+    The traversal guard comes first and is not incidental: `slug not in list_slugs()` means only
+    a name the glob actually produced is ever turned into a path.
+    """
+    if slug not in company_mod.list_slugs():
+        raise Refused(f"unknown company '{slug}'")
+    if confirm != slug:
+        raise Refused("type the company slug to confirm")
+    try:
+        dest = company_mod.trash(slug)
+    except FileNotFoundError as exc:
+        raise Refused(f"unknown company '{slug}'") from exc
+    removed = store.purge_company(slug) if purge else {}
+    return {
+        "slug": slug,
+        "trashed": str(dest),
+        "purged": bool(purge),
+        # Per table, because "everything" was the claim that turned out to cover six of
+        # thirteen. An operator reading a count can tell what actually went.
+        "removed": {table: n for table, n in removed.items() if n},
+    }

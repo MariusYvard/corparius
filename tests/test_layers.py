@@ -188,7 +188,20 @@ RANKS: dict[str, int] = {
     "api/routes": 6,
     "api/server": 6,
     "appserver": 6,
-    "cli": 6,
+    # Stage 7. `cli.py` was 1 120 lines with a `main()` of 203 that was the whole argparse tree;
+    # each group now registers its own parsers, which is what made `tests/test_cli_registry.py`
+    # possible — the tree can be built and asked questions without running a command.
+    "cli/__init__": 6,
+    "cli/__main__": 6,
+    "cli/support": 6,
+    "cli/lifecycle": 6,
+    "cli/operate": 6,
+    "cli/backlog": 6,
+    "cli/publish": 6,
+    "cli/configure": 6,
+    "cli/prove": 6,
+    "cli/maintain": 6,
+    "cli/console": 6,
     "appcli": 6,
     "skillcli": 6,
     "plugincli": 6,

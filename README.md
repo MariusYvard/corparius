@@ -364,7 +364,8 @@ corparius/
   api/             the operator console's transport: state, contracts,
                    adapters, handlers, routes, server (stdlib HTTP, JSON API)
   webui.html       operator console page (single file, no build step)
-  cli.py           init / run / status / tasks / board / flow / site / deploy / ui
+  cli/             the command line, one module per command group: lifecycle,
+                   operate, backlog, publish, configure, prove, maintain, console
   mcp_server.py    optional MCP server (drive corparius from an MCP host)
 companies/example/ a sample company config, its skills, apps and documents
 docs/              architecture, safety, compliance, and the RE dossier

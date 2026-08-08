@@ -178,12 +178,12 @@ def _args(pairs, unset=""):
 def test_the_command_body_reports_both_layers(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
-    from corparius import cli
+    from corparius.cli import configure
     from corparius.config import cfg
 
     cfg.set_dotenv_path(tmp_path / ".env")
     cfg.invalidate()
-    cli.cmd_set(_args(["CORP_MEMORY_TOP_K=4", "CORP_UI_PORT=8997"]))
+    configure.cmd_set(_args(["CORP_MEMORY_TOP_K=4", "CORP_UI_PORT=8997"]))
     said = capsys.readouterr().out
     assert "CORP_MEMORY_TOP_K = 4   -> the store" in said
     assert "CORP_UI_PORT = 8997   -> .env" in said and "restart" in said
@@ -192,9 +192,9 @@ def test_the_command_body_reports_both_layers(tmp_path, monkeypatch, capsys):
 def test_the_command_body_prints_a_refusal(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
-    from corparius import cli
+    from corparius.cli import configure
 
-    cli.cmd_set(_args(["CORP_MEMORY_TOP_K=nope"]))
+    configure.cmd_set(_args(["CORP_MEMORY_TOP_K=nope"]))
     assert "expected a whole number" in capsys.readouterr().out
 
 
@@ -203,9 +203,9 @@ def test_the_command_body_says_when_there_is_nothing_to_do(tmp_path, monkeypatch
     Saying so beats reporting a write that did not happen."""
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
-    from corparius import cli
+    from corparius.cli import configure
 
-    cli.cmd_set(_args(["CORP_MEMORY_TOP_K="]))
+    configure.cmd_set(_args(["CORP_MEMORY_TOP_K="]))
     out = capsys.readouterr().out
     assert "cleared" in out or "nothing to write" in out
 
@@ -215,11 +215,11 @@ def test_the_command_body_reports_a_line_break_rather_than_raising(tmp_path, mon
     service's business, which is why the service raises the failure."""
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
-    from corparius import cli
+    from corparius.cli import configure
     from corparius.config import cfg
 
     cfg.set_dotenv_path(tmp_path / ".env")
-    cli.cmd_set(_args(["CORP_UI_TOKEN=a\nCORP_UI_ALLOWED_HOSTS=evil.example"]))
+    configure.cmd_set(_args(["CORP_UI_TOKEN=a\nCORP_UI_ALLOWED_HOSTS=evil.example"]))
     said = capsys.readouterr().out
     assert "line break is not allowed" in said
     if (tmp_path / ".env").is_file():

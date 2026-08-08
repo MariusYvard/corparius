@@ -64,8 +64,8 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 
 ## Où en est le chantier
 
-Étapes 1 à 6 faites, l'étape 8 commencée par son contrat. Les sept dossiers du plan existent :
-`kernel/`, `config/`, `store/`, `providers/`, `tools/`, `app/`, `api/`. Mesuré :
+Étapes 1 à 7 faites, l'étape 8 commencée par son contrat. Les sept dossiers du plan existent —
+`kernel/`, `config/`, `store/`, `providers/`, `tools/`, `app/`, `api/` — plus `cli/`. Mesuré :
 
 | Compteur | Au plan | Aujourd'hui |
 | --- | --- | --- |
@@ -74,10 +74,12 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Modules important `subprocess` | 4 | **1** (`kernel/proc.py`) |
 | Ce que charge la lecture d'un réglage | `requests`, `subprocess`, `ssl`, `sqlite3` | **`sqlite3`** |
 | Ce que charge la lecture de la liste des outils | + `smtplib`, `imaplib` | **rien** |
-| Modules à plat | 53 | **28** |
+| Modules à plat | 53 | **27** |
 | Choses que la console sait faire et la CLI non | 11 | **3**, toutes cosmétiques |
 | Commandes CLI | 27 | **33** |
 | Routes sous contrat versionné | 0 | **1** sur 55 |
+| Registres avec les deux bouts tenus | 1 | **3** (outils, routes, commandes) |
+| Instructions non testées de la CLI | 216 | **65** |
 
 **Zéro arête montante**, et c'est pour ça que la liste est écrite en cliquet plutôt qu'en
 commentaire : chacune des quatre a été rayée par l'étape qui la nommait, et l'ensemble vide
@@ -217,6 +219,82 @@ les tests, et **un nom importé dans trois modules a trois points de patch** : o
 les deux autres gardent la vraie fonction, en silence. Les atteindre par `state.X` n'en laisse
 qu'un. C'est la même classe de défaut que le reste du chantier a trouvée ailleurs, mais dans un
 test au lieu du produit : une garantie qui s'affaiblit sans un mot.
+
+## L'étape 7 : la CLI devient un registre
+
+1 120 lignes, 29 commandes, et un `main()` de **203 lignes** qui était l'arbre argparse entier.
+Découpé par groupe de commandes, nommé par ce que le groupe *fait* :
+
+| Module | Commandes |
+| --- | --- |
+| `cli/lifecycle.py` | `new` `init` `repo` `delete` — quelles entreprises existent |
+| `cli/operate.py` | `run` `status` `flow` `board` `ceo` |
+| `cli/backlog.py` | `tasks` `task` `approvals` `approve` `reject` `inbox` |
+| `cli/publish.py` | `site` `deploy` |
+| `cli/configure.py` | `set` `memory` `rules` |
+| `cli/prove.py` | `preflight` `bench` `claude` `mail` — une clé posée n'est pas un modèle qui répond |
+| `cli/maintain.py` | `doctor` `backup` `restore` `update` — agit sur l'installation, pas sur une entreprise |
+| `cli/console.py` | `ui` |
+
+**Chaque groupe enregistre ses propres parseurs**, et c'est ça le gain, pas le compte de lignes.
+Un groupe se lit de bout en bout — les commandes, leurs drapeaux et leurs textes d'aide dans un
+seul fichier — là où l'implémentation d'une commande et ses drapeaux étaient quatre cents lignes
+plus loin. C'est comme ça que `--company` a fini écrit vingt fois.
+
+**Et la CLI devient le troisième registre dont les deux bouts sont tenus**, après les outils et
+la table de routes. `tests/test_cli_registry.py` : chaque `cmd_*` qu'un groupe définit est
+atteignable depuis la table des parseurs, et chaque parseur nomme un `cmd_*` qui existe. Les deux
+défaillances sont celles que ce projet a déjà trouvées neuf fois ailleurs — une commande que
+personne n'a enregistrée est du code mort que rien ne signale ; un `set_defaults(fn=…)` oublié est
+un `AttributeError` pour la première personne qui tape cette commande, dans un terminal.
+
+Rien de tout ça n'était vérifiable avant. `main()` construisait l'arbre et parsait d'un seul
+souffle, donc la seule façon de voir ce qui était enregistré était de lancer une commande.
+`build_parser()` est toute la différence.
+
+### Le test d'acceptation : `--help` des 33 commandes, octet pour octet
+
+Capturé avant le découpage, comparé après. La sortie d'argparse porte le nom du programme, chaque
+drapeau, chaque valeur par défaut et chaque texte d'aide, donc un dump identique est une
+affirmation plus forte que n'importe quelle assertion que j'aurais pensé à écrire : **c'est le
+même arbre**. Les 33 aides par commande sont identiques ; la seule différence est l'ordre du
+listing de haut niveau — et il est maintenant *choisi*. L'ancien était l'ordre d'accrétion, ce
+qui plaçait `new`, la première commande que quiconque tape, vingt-cinquième sur vingt-neuf.
+
+### Ce que le cliquet par fichier a rendu visible
+
+`cli.py` mesurait 52 % en un bloc, ce qui ne disait rien de *quelle* moitié. Découpé :
+
+| Module | Avant | Après |
+| --- | --- | --- |
+| `cli/maintain.py` | 25,9 % | **99,1 %** |
+| `cli/prove.py` | 50,0 % | **88,8 %** |
+| `cli/configure.py` | 53,9 % | **89,6 %** |
+| `cli/backlog.py` | 66,4 % | **96,8 %** |
+
+**25,9 % pour les deux commandes qui remplacent le binaire en cours et remplacent les entreprises
+et le store.** Les modules dessous étaient testés ; ce qui ne l'était pas, c'est la *commande* —
+l'ordre dans lequel elle fait les choses, ce qu'elle refuse, et ce qu'un shell voit. Trois
+propriétés, chacune avec une façon d'être fausse qu'un test de module ne peut pas attraper :
+
+1. **Un refus sort non-zéro.** `corparius deploy` a imprimé « no provider succeeded » et sorti 0
+   pendant des mois. Un script autour de `update` lit le code de sortie, pas la prose.
+2. **L'invite vient après le rapport et avant l'écriture.** On confirme une restauration en ayant
+   lu ce que l'archive contient ; demander d'abord serait la confirmation de rien.
+3. **Répondre non n'appelle rien.** Pas « annule » — ne commence jamais. Affirmé en faisant
+   échouer le test si la fonction destructrice est atteinte du tout.
+
+Et une propriété d'honnêteté, reprise mot pour mot d'un commentaire de `cmd_preflight` : dire
+« retenu » après n'avoir rien appelé « prétendrait à une connaissance qui n'existe pas, ce qui est
+la défaillance que toute cette commande existe pour terminer ». Le commentaire est maintenant un
+test. Même chose pour la garde par nom de `approve --always` : un outil listé dans `hitl_tools`
+continue de demander quel que soit le nombre d'approbations — un seul `if`, non testé, et ce
+qu'il protège est la table des règles permanentes, celle qui survivait à la suppression d'une
+entreprise.
+
+**Non testé, dit plutôt que passé sous silence** : `cli/lifecycle.py` reste à 66,1 %, et c'est
+`cmd_repo` — quatre chemins qui appellent `git` par `companyrepo`. Total de la CLI : 216
+instructions non testées avant, **65** après.
 
 ## L'étape 8 a commencé par sa brique la moins spectaculaire
 

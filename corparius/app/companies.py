@@ -25,6 +25,31 @@ from .errors import Refused
 DEFAULT_SESSION_TOKENS = 80_000
 
 
+def load(slug_or_path: str) -> dict:
+    """Resolve a slug or a path and load the company, or refuse with a sentence.
+
+    The resolution and the refusal, without deciding what the caller does about it — which is
+    the whole reason this is not in `cli/`. It used to be `cli._load_company`, holding the
+    loading *and* a `sys.exit`, and `mcp_server` imported it: a bad company name in an MCP tool
+    call raised `SystemExit` inside a long-running server. A terminal should exit and a server
+    should refuse the call, so the knowledge is here and the two answers are at the two edges.
+
+    `os.path.isfile` first, because every command takes `--company` as "a slug or a path to a
+    company.yaml" and an operator with a file in front of them should be able to name it.
+    """
+    import os
+
+    path = slug_or_path if os.path.isfile(slug_or_path) else str(company_mod.path_for(slug_or_path))
+    try:
+        return company_mod.load(path)
+    except FileNotFoundError as exc:
+        raise Refused(f"company config not found: {path}") from exc
+    except ValueError as exc:
+        # `company.validate` already wrote this for a person; passing it through unchanged is
+        # what keeps the console and a terminal saying the same words about the same file.
+        raise Refused(str(exc)) from exc
+
+
 def create(
     store,
     *,

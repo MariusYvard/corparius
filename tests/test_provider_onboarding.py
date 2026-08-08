@@ -173,7 +173,7 @@ def test_the_one_command_writes_exactly_the_console_plan(tmp_path, monkeypatch, 
     machine as having nothing free and puts *every* tier on the subscription.
     The inputs are what has to match, not just the function.
     """
-    from corparius.cli import cmd_claude
+    from corparius.cli.prove import cmd_claude
     from corparius.providers import claudecli, hardware, llm
     from corparius.store import Store
 
@@ -193,7 +193,7 @@ def test_the_one_command_writes_exactly_the_console_plan(tmp_path, monkeypatch, 
 
 def test_the_one_command_honours_all_tiers(tmp_path, monkeypatch, capsys):
     """--all-tiers was parsed and then never read."""
-    from corparius.cli import cmd_claude
+    from corparius.cli.prove import cmd_claude
     from corparius.providers import claudecli, hardware, llm
     from corparius.store import Store
 
@@ -210,7 +210,7 @@ def test_the_one_command_honours_all_tiers(tmp_path, monkeypatch, capsys):
 def test_the_one_command_puts_a_capable_machine_on_local(tmp_path, monkeypatch, capsys):
     """The measured verdict has to reach the CLI too, or `corparius bench` says
     the machine can serve a tier and `corparius claude` ignores it."""
-    from corparius.cli import cmd_claude
+    from corparius.cli.prove import cmd_claude
     from corparius.providers import claudecli, hardware, llm
     from corparius.store import Store
 
@@ -223,17 +223,17 @@ def test_the_one_command_puts_a_capable_machine_on_local(tmp_path, monkeypatch, 
 
 
 def test_the_cli_store_honours_the_redirected_data_path(tmp_path, monkeypatch):
-    """cli._store() used the import-time settings snapshot, which is taken at
+    """`app.support.open_store` (once `cli._store`) used the import-time settings snapshot, taken at
     collection — before the hermetic fixture redirects CORP_DATA_PATH. A test
     calling any cmd_* function therefore wrote to the developer's own store."""
-    from corparius.cli import _store
+    from corparius.app.support import open_store
 
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "elsewhere"))
-    assert str(tmp_path / "elsewhere") in _store().path
+    assert str(tmp_path / "elsewhere") in open_store().path
 
 
 def test_check_only_changes_nothing(tmp_path, monkeypatch, capsys):
-    from corparius.cli import cmd_claude
+    from corparius.cli.prove import cmd_claude
     from corparius.providers import claudecli
     from corparius.store import Store
 
@@ -248,7 +248,7 @@ def test_a_failed_check_refuses_to_half_configure(tmp_path, monkeypatch):
     the operator worse off than before they ran anything."""
     import pytest
 
-    from corparius.cli import cmd_claude
+    from corparius.cli.prove import cmd_claude
     from corparius.providers import claudecli
     from corparius.store import Store
 
@@ -445,7 +445,7 @@ def test_the_command_installs_only_when_asked(tmp_path, monkeypatch, capsys):
     something a status check gets to decide."""
     import pytest
 
-    from corparius.cli import cmd_claude
+    from corparius.cli.prove import cmd_claude
     from corparius.providers import claudecli
 
     monkeypatch.setattr(claudecli, "installed", lambda: False)
@@ -463,7 +463,7 @@ def test_the_command_installs_only_when_asked(tmp_path, monkeypatch, capsys):
 
 
 def test_the_command_installs_then_configures(tmp_path, monkeypatch, capsys):
-    from corparius.cli import cmd_claude
+    from corparius.cli.prove import cmd_claude
     from corparius.providers import claudecli, hardware, llm
     from corparius.store import Store
 

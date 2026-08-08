@@ -1,10 +1,13 @@
 """The CLI is the whole entry point and had no test at all: 248 lines, thirteen
 commands, and the only thing exercising them was an operator typing.
 
-main() takes argv, so every command runs in-process here - no subprocess, no
-frozen binary. cli.settings is a module-level singleton captured at import, so
-it is patched rather than the environment: setting CORP_DATA_PATH after import
-would not move it.
+main() takes argv, so every command runs in-process here — no subprocess, no frozen binary.
+
+The fixtures set the **environment**, and that is new. They used to patch `cli.settings`, the
+import-time snapshot, "because setting CORP_DATA_PATH after import would not move it" — true
+of a snapshot, and the reason stage 7 stopped using one: eight command groups reading one
+snapshot is eight patch points, and patching a single module leaves the rest writing to the
+developer's own store. Every command constructs `Settings()` when it runs.
 """
 
 import json
@@ -14,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from corparius import cli
-from corparius.config.settings import Settings
+from corparius.config import cfg
 from corparius.store import Store
 
 COMPANY = """
@@ -30,13 +33,20 @@ hitl_tools: [send_financial_transaction]
 
 @pytest.fixture()
 def cfg_path(tmp_path, monkeypatch):
-    """A company file plus a data path the CLI's captured settings point at."""
+    """A company file plus a data path the commands will really use.
+
+    Sets the environment, not an object. This used to patch `cli.settings` — the import-time
+    snapshot — and it worked only because there was one module to patch. Stage 7 split the CLI
+    into eight groups, so one snapshot read from six of them would have been six patch points,
+    and patching one leaves five reading the developer's own store. The commands construct
+    `Settings()` when they run, exactly as `test_webui.py`'s fixture already assumed for the
+    console: "set the environment, not the instance".
+    """
     path = tmp_path / "company.yaml"
     path.write_text(COMPANY, encoding="utf-8")
-    settings = Settings()
-    settings.data_path = str(tmp_path / "data")
-    settings.llm_mock = True
-    monkeypatch.setattr(cli, "settings", settings)
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
+    monkeypatch.setenv("CORP_LLM_MOCK", "true")
+    cfg.invalidate()
     return str(path)
 
 
@@ -56,9 +66,8 @@ def test_a_missing_company_exits_with_a_message(capsys):
 def test_malformed_yaml_exits_with_a_message(tmp_path, monkeypatch):
     bad = tmp_path / "company.yaml"
     bad.write_text("just a string, not a mapping", encoding="utf-8")
-    settings = Settings()
-    settings.data_path = str(tmp_path / "data")
-    monkeypatch.setattr(cli, "settings", settings)
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
+    cfg.invalidate()
     with pytest.raises(SystemExit) as exc:
         cli.main(["status", "--company", str(bad)])
     assert "expected a mapping" in str(exc.value)

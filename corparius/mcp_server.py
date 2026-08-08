@@ -13,7 +13,7 @@ import os
 import threading
 
 from . import sitegen
-from .cli import _load_company
+from .app import companies as app_companies
 from .config.settings import settings
 from .kernel import paths
 from .providers import deploy as deploy_mod
@@ -39,7 +39,14 @@ def _store() -> Store:
 
 
 def _open(company: str):
-    cfg = _load_company(company)
+    """Resolve the company, or let the refusal reach the host as a tool error.
+
+    This used to be `cli._load_company`, which ends in `sys.exit` — so a bad company name in a
+    tool call raised `SystemExit` inside a process built to stay up. The resolving is now
+    `app_companies.load` and it raises `Refused`, a `ValueError`: a terminal turns that into an
+    exit code and a server reports a failed call, which is the answer each caller needs.
+    """
+    cfg = app_companies.load(company)
     return cfg, _store()
 
 

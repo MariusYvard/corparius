@@ -32,14 +32,15 @@ import pytest
 # registry that made `_cli_commands` blind to five of thirty-three commands, left in the other
 # half of the same test. `skills scope` is what found it: declared as a pair, and reported as
 # unreachable because it lives in `skillcli.py`.
-CLI_MODULES = (
-    Path("corparius/cli.py"),
+# Since stage 7 the main CLI is a package, so this is a glob plus the four sub-CLIs — and the
+# glob is checked below rather than trusted, because a glob that stops matching is exactly how
+# the flat one in test_registries.py nearly disarmed the restructuring.
+CLI_MODULES = tuple(sorted(Path("corparius/cli").glob("*.py"))) + (
     Path("corparius/appcli.py"),
     Path("corparius/plugincli.py"),
     Path("corparius/secretscli.py"),
     Path("corparius/skillcli.py"),
 )
-CLI = Path("corparius/cli.py")  # for the "is it still there" guard; the scans use CLI_MODULES
 # The console is two files since stage 6 split `webui.py`: the adapters are its half of each use
 # case, and two of the nine pairs are reached straight from a handler with no adapter between —
 # `app_mail.check` never had a `UiState` to take, so there was nothing to extract.
@@ -154,6 +155,9 @@ def test_the_sources_are_still_there():
     how the flat glob in test_registries.py nearly disarmed the whole restructuring."""
     assert all(p.is_file() for p in CONSOLE), "a console file moved"
     assert all(p.is_file() for p in CLI_MODULES), "a CLI module moved"
+    # The glob's own guard. Eight command groups, `support`, `__init__` and `__main__`, plus
+    # four sub-CLIs; a package that stopped being found would make every scan below read less.
+    assert len(CLI_MODULES) >= 15, f"the CLI scan found {len(CLI_MODULES)} modules"
     assert len(_cli_commands()) >= 20, "the CLI command scan found almost nothing"
     assert len(_console_services()) >= 20, "the console service scan found almost nothing"
 

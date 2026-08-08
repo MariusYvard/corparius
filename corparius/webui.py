@@ -37,6 +37,7 @@ from .app import companies as app_companies
 from .app import directives as app_directives
 from .app import errors as app_errors
 from .app import mail as app_mail
+from .app import meta as app_meta
 from .app import overview as app_overview
 from .app import publish as app_publish
 from .app import settings as app_settings
@@ -695,6 +696,20 @@ def _route_settings_get(ctx):
 def _route_company_get(ctx):
     result = _company_payload(ctx.slug)
     return (200 if result["ok"] else 404), result
+
+
+def _route_meta(ctx):
+    """What this core is and what it can do — the first thing a second client asks.
+
+    Public, like `/api/session`, and for the same reason: a client has to be able to learn what
+    it is talking to before it can authenticate to it. It names no secret, no company and no
+    setting value; `capabilities` is a set of booleans about configuration.
+
+    Versioned in the path from the start. The plan's rule is that every new route is `/api/v1/`
+    and the unprefixed ones are a declared legacy set — `tests/test_api_version.py` holds it,
+    so the next route added outside v1 has to say why.
+    """
+    return 200, {"ok": True, **app_meta.describe(_fresh_settings(), ctx.state.store())}
 
 
 def _route_session(ctx):
@@ -1508,6 +1523,7 @@ class Route:
 # Exact matches, checked first.
 ROUTES: tuple[Route, ...] = (
     Route("GET", "/", _route_page, public=True),
+    Route("GET", "/api/v1/meta", _route_meta, public=True),
     Route("GET", "/api/session", _route_session, public=True),
     Route("GET", "/api/companies", _route_companies_get),
     Route("GET", "/api/overview", _route_overview, needs_slug=True),

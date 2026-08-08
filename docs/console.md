@@ -63,7 +63,42 @@ La carte "Site de vente" de la vue d'ensemble montre un aperçu réduit du site 
 
 ## API
 
-GET `/api/companies`, `/api/overview?company=`, `/api/company?company=`, `/api/settings`, `/api/session`, `/api/providers`, `/api/doctor`, `/api/site?company=`, `/api/documents?company=`, `/api/document/text?company=&path=`, `/api/payments`, `/api/chat?company=`, `/site/<slug>/`.
+### Le contrat, et ce qui n'en fait pas partie
+
+`GET /api/v1/meta` est **la seule route versionnée**, et c'est celle qu'un second client
+interroge en premier. Elle est publique, comme `/api/session` et pour la même raison une étape
+plus tôt : un client doit pouvoir apprendre à quoi il parle avant de pouvoir s'y authentifier.
+Elle ne nomme aucun secret, aucune entreprise et aucune *valeur* de réglage.
+
+```json
+{"ok": true, "api_version": 1, "app_version": "0.3.3", "schema_version": 18,
+ "settings_count": 80,
+ "capabilities": {"models": true, "mail": false, "payments": false, "skills": true,
+                  "memory": true, "secrets_at_rest": false, "plugins": false,
+                  "durable_jobs": false}}
+```
+
+Trois versions qui ne sont pas interchangeables : `api_version` est le contrat (un petit
+entier, qu'on compare et que personne ne parse), `app_version` est la build, `schema_version`
+est le `PRAGMA user_version` **que la base porte** — une mise à jour migre sur place, donc ce
+qu'un client a besoin de savoir est ce que la base *est*, pas ce que cette build attend.
+
+`capabilities` est résolu depuis la configuration, jamais déclaré : `mail` est vrai quand un
+compte est configuré, pas quand la fonctionnalité existe dans le code. C'est ce qui fait qu'un
+client cache un bouton au lieu de découvrir un 404. Et jamais par une sonde réseau — cette
+route est faite pour être sondée, et la règle contre l'ouverture d'une socket depuis un point
+sondé a été écrite après que `/api/providers` en ouvrait une à chaque rafraîchissement. Donc
+`payments` demande si une clé Stripe est posée, pas si Stripe répond ; savoir si une chose
+configurée *marche* est la question de `corparius doctor`, et elle se pose quand on la pose.
+`durable_jobs` répond `false` plutôt que de manquer : un client à qui on dit *non* n'a pas à
+le deviner depuis une clé absente.
+
+Les 54 routes non préfixées ci-dessous sont la **forme interne de la console** : elles ont
+changé chaque fois que la page changeait, ce qui allait très bien tant que la page était le
+seul client. C'est un ensemble *déclaré* — `tests/test_api_version.py` en épingle le compte,
+donc une route ajoutée hors de `v1` est une ligne délibérée dans ce fichier.
+
+GET `/api/v1/meta`, `/api/companies`, `/api/overview?company=`, `/api/company?company=`, `/api/settings`, `/api/session`, `/api/providers`, `/api/doctor`, `/api/site?company=`, `/api/documents?company=`, `/api/document/text?company=&path=`, `/api/payments`, `/api/chat?company=`, `/site/<slug>/`.
 
 POST `/api/companies` {name, product, agents, session_tokens}, `/api/company` {company, config}, `/api/company/delete` {company, confirm, purge_store}, `/api/settings` {values, unset}, `/api/providers` {values}, `/api/site` {company, headline}, `/api/deploy` {company}, `/api/backup`, `/api/run` {company, ticks, loop}, `/api/run/stop` {company}, `/api/approvals` {id, decision, note, remember}, `/api/rules` {company, tool}, `/api/memory` {id, action}, `/api/inbox` {id, answer}, `/api/tasks` {id, decision | title, priority, target, tool}, `/api/chat` {company, message}, `/api/documents` {company, name, data}, `/api/documents/delete` {company, path}, `/api/test/mail` {to}, `/api/test/payments`.
 

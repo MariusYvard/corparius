@@ -112,7 +112,15 @@ jobs:
           curl -fsS http://127.0.0.1:8600/api/companies | grep -q '"example"'
           curl -fsS http://127.0.0.1:8600/api/doctor    | grep -q 'mock'
           curl -fsS http://127.0.0.1:8600/api/update    | grep -q '"enabled": false'
-          echo "smoke OK: console up, example seeded, mock mode, update-check off by default"
+          # Every sub-package imports in the frozen binary, proved in one request. `capabilities`
+          # resolves from `providers` (models, mail), `config` (payments, plugins, secrets) and
+          # `store` (the schema stamp the database is actually at), so a lazy import broken by
+          # PyInstaller's analysis fails here rather than the first time an operator clicks.
+          meta=$(curl -fsS http://127.0.0.1:8600/api/v1/meta)
+          echo "$meta" | grep -q '"api_version": 1'
+          echo "$meta" | grep -q '"schema_version": '
+          echo "$meta" | grep -q '"models": true'   # mock mode is a capability, not its absence
+          echo "smoke OK: console up, example seeded, mock mode, update-check off, v1 meta answers"
           kill "$pid" 2>/dev/null || true
 
   # Build the wheel, install it into a clean environment, and run it from a

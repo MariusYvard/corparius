@@ -17,6 +17,11 @@ from corparius import webui
 PUBLIC = {
     ("GET", "/"),  # the shipped page; carries no operator data
     ("GET", "/api/session"),  # how the page learns a token is required
+    # For the same reason as `/api/session`, one step earlier: a second client has to learn
+    # what it is talking to before it can authenticate to it — and refuse a core too old for
+    # it rather than failing one authenticated request at a time. It names no secret, no
+    # company and no setting *value*; `capabilities` is booleans about configuration.
+    ("GET", "/api/v1/meta"),
     ("GET", "/site/"),  # the generated site, rendered in an iframe
 }
 

@@ -64,7 +64,8 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 
 ## Où en est le chantier
 
-Étapes 1 à 5 faites, l'étape 6 faite pour sa moitié qui compte. Mesuré :
+Étapes 1 à 5 faites, l'étape 6 faite pour sa moitié qui compte, l'étape 8 commencée par son
+contrat. Mesuré :
 
 | Compteur | Au plan | Aujourd'hui |
 | --- | --- | --- |
@@ -76,6 +77,7 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Modules à plat | 53 | **29** |
 | Choses que la console sait faire et la CLI non | 11 | **3**, toutes cosmétiques |
 | Commandes CLI | 27 | **33** |
+| Routes sous contrat versionné | 0 | **1** sur 55 |
 
 **Zéro arête montante**, et c'est pour ça que la liste est écrite en cliquet plutôt qu'en
 commentaire : chacune des quatre a été rayée par l'étape qui la nommait, et l'ensemble vide
@@ -167,7 +169,7 @@ rendu (`_settings_payload`, `_providers_payload`, `_company_payload`), et `_olla
 `_claude_setup`, dont les cousins `bench` et `claude` existent déjà côté ligne de commande.
 
 La seconde moitié de l'étape — déplacer le transport de `webui.py` vers `api/` — est purement
-structurelle : 56 gestionnaires, la table de routes et le serveur. Elle n'ouvre plus aucune
+structurelle : 57 gestionnaires, la table de routes et le serveur. Elle n'ouvre plus aucune
 capacité, et les deux gardes qui la protégeront existent déjà
 (`tests/test_route_table.py` pour les deux bouts de la table, `tests/test_app_layer.py` pour
 la règle inverse).
@@ -178,6 +180,41 @@ identiquement : **la barrière n'a jamais été la logique, toujours un paramèt
 `state.runs`. Trois fois, un objet de console dans une signature était la seule raison qu'un
 terminal ne puisse pas appeler la fonction. `app_mail.check` n'en avait aucun et son extraction
 a coûté un fichier et une commande.
+
+## L'étape 8 a commencé par sa brique la moins spectaculaire
+
+`GET /api/v1/meta` est la première route versionnée du produit, et c'est celle qu'un second
+client ne peut pas ne pas avoir. Elle est dans `app/meta.py` — rang 5, donc appelable par un
+terminal autant que par un socket — et le transport n'en tient que la ligne qui l'enregistre.
+
+Ce qu'elle rend possible tient en deux phrases. Un client compare `api_version` et **refuse**
+un cœur trop vieux pour lui, au lieu d'échouer une requête à la fois. Et il lit
+`capabilities` pour cacher un bouton, au lieu de découvrir un 404 — ce qui n'est utile que
+parce que chaque capacité est *résolue* depuis la configuration : `mail` est vrai quand un
+compte est configuré, pas quand le code sait envoyer un courriel.
+
+**Et ce fichier a failli casser une règle du projet.** Sa première version demandait à
+`stripe_check()` si les paiements marchaient — c'est-à-dire lisait le solde Stripe en direct,
+depuis un point conçu pour être sondé. La règle contre la sonde réseau depuis un point sondé a
+justement été écrite après que `/api/providers` ouvrait une socket à chaque rafraîchissement.
+Corrigé avant le commit en une question de configuration ; savoir si une clé posée *marche*
+reste la question de `corparius doctor`, qui est posée quand un exploitant la pose.
+
+Le test l'a d'abord mal défendue, et l'erreur mérite d'être écrite parce que c'est la
+huitième fois de ce chantier que j'écris l'invariant avant de regarder ce qui se passe :
+`test_the_capabilities_open_no_socket` passait par le client HTTP de test et attrapait **la
+requête elle-même**. Une requête *est* une socket. Il appelle maintenant le service
+directement, ce qui est le seul endroit d'où la propriété est mesurable.
+
+Le reste de l'étape est déclaré, pas fait : 54 routes non préfixées sont un ensemble *déclaré*
+dont `tests/test_api_version.py` épingle le compte, donc une 55e hors de `v1` est une ligne
+délibérée. `durable_jobs` répond `false` — la chose dont un second client a le plus besoin et
+qu'il ne peut pas encore avoir, dite plutôt qu'omise.
+
+Et le smoke du binaire gelé touche cette route. C'est de l'économie de garde : `capabilities`
+résout depuis `providers`, `config` et `store`, donc **une requête prouve que les sept
+sous-paquets s'importent** sous PyInstaller — un import paresseux que son analyse a manqué
+échoue en CI et non au premier clic d'un exploitant.
 
 ## Un vrai tour, sur la vraie configuration
 

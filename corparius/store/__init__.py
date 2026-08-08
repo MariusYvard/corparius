@@ -162,12 +162,44 @@ class Store(
         return self.db.execute("PRAGMA user_version").fetchone()[0]
 
     @_locked
+    def company_tables(self) -> list[str]:
+        """Every table that records something *about a company*, asked of the schema.
+
+        Derived rather than listed, and that is the fix rather than a nicety. The list was six
+        names in `purge_company` and the schema had grown to **thirteen**, so a purge that says
+        it drops everything left seven tables behind: the company's durable `memory`, every
+        `draft` it wrote, the CEO's `decisions`, the operator's own `directives`, its `inbox`,
+        its `skill_usage` — and its `rules`.
+
+        `rules` is the one that mattered. It holds "approve, and stop asking", so a company
+        purged and recreated under the same slug inherited standing authorisations the operator
+        gave a different company, on tools up to WRITE_REMOTE. A permission surviving the thing
+        it was granted about.
+
+        A hardcoded thirteen would rot exactly as the six did. `tests/test_purge.py` asserts
+        this against the schema so the next table is covered the day it exists.
+        """
+        tables = [
+            row["name"]
+            for row in self.db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+        ]
+        return sorted(
+            name
+            for name in tables
+            if any(
+                col["name"] == "company" for col in self.db.execute(f"PRAGMA table_info({name})")
+            )
+        )
+
+    @_locked
     def purge_company(self, company) -> dict[str, int]:
         """Drop everything recorded for one company. Only ever called with an
         explicit confirmation from the operator; the config itself is moved to
         companies/.trash rather than deleted."""
         removed = {}
-        for table in ("actions", "token_usage", "approvals", "tasks", "state", "outreach"):
+        for table in self.company_tables():
             cur = self.db.execute(f"DELETE FROM {table} WHERE company=?", (company,))
             removed[table] = cur.rowcount
         self.db.commit()

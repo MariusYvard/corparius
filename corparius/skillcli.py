@@ -128,6 +128,40 @@ def _tool_names() -> set[str]:
     return set(SPEC)
 
 
+def cmd_scope(args) -> int:
+    """Name the tools a skill applies to, from a terminal.
+
+    `skills list` already prints `EVERY TOOL` next to an unscoped skill and totals the
+    characters that ride on every prompt. It could say what it cost and do nothing about it,
+    which is a worse shape than not knowing — the only fix was the console's panel, or finding
+    the file and hand-editing YAML.
+    """
+    from .app import errors as app_errors
+    from .app import skills as app_skills
+
+    settings = Settings()
+    if args.list_unscoped:
+        rows = app_skills.unscoped(args.company, settings)
+        if not rows:
+            print("no skill rides every prompt; nothing to scope")
+            return 0
+        for row in rows:
+            note = "  (declared always:)" if row["declared"] else ""
+            print(f"  {row['name']:22} [{row['scope']}] {row['chars']:>6} chars{note}")
+        print()
+        print("name the tools with: corparius skills scope NAME --tools a,b")
+        return 0
+    tools = [t.strip() for t in args.tools.split(",") if t.strip()]
+    try:
+        out = app_skills.scope(args.company, args.name, tools, settings)
+    except app_errors.Refused as exc:
+        print(exc)
+        return 1
+    print(f"{out['name']} now applies to: {', '.join(out['tools'])}")
+    print(f"  {out['path']}")
+    return 0
+
+
 def add_parser(sub) -> None:
     """Wire the `skills` command and its sub-actions into the CLI."""
     pp = sub.add_parser("skills", help="list, import and install what your company knows")
@@ -136,6 +170,15 @@ def add_parser(sub) -> None:
     sp = psub.add_parser("list", help="what is loaded, and what rides on every prompt")
     sp.add_argument("--company", default="", help="a company slug (default: shared skills)")
     sp.set_defaults(fn=cmd_list)
+
+    sp = psub.add_parser("scope", help="name the tools a skill applies to")
+    sp.add_argument("name", nargs="?", default="", help="the skill's name")
+    sp.add_argument("--tools", default="", help="comma-separated tool names")
+    sp.add_argument("--company", default="", help="a company's skills instead of the shared ones")
+    sp.add_argument(
+        "--list-unscoped", action="store_true", help="which skills ride every prompt, and cost"
+    )
+    sp.set_defaults(fn=cmd_scope)
 
     sp = psub.add_parser("import", help="adapt a SKILL.md written for another host")
     sp.add_argument("path", help="a SKILL.md, or the folder holding one")

@@ -27,7 +27,19 @@ from pathlib import Path
 
 import pytest
 
-CLI = Path("corparius/cli.py")
+# Every module that registers commands, not just `cli.py`. The four sub-CLIs add their own
+# parsers and call their own services, so a scan of one file sees neither — the same partial
+# registry that made `_cli_commands` blind to five of thirty-three commands, left in the other
+# half of the same test. `skills scope` is what found it: declared as a pair, and reported as
+# unreachable because it lives in `skillcli.py`.
+CLI_MODULES = (
+    Path("corparius/cli.py"),
+    Path("corparius/appcli.py"),
+    Path("corparius/plugincli.py"),
+    Path("corparius/secretscli.py"),
+    Path("corparius/skillcli.py"),
+)
+CLI = Path("corparius/cli.py")  # for the "is it still there" guard; the scans use CLI_MODULES
 WEBUI = Path("corparius/webui.py")
 
 # (console service, CLI command) -> the app service both must reach.
@@ -40,6 +52,7 @@ SHARED = {
     ("_chat", "ceo"): "app_chat.once",
     ("_route_test_mail", "mail"): "app_mail.check",
     ("_delete_company", "delete"): "app_companies.delete",
+    ("_route_skill_scope", "skills"): "app_skills.scope",
 }
 
 # Pairs that look like a pair and are not, with the reason. Audited by reading both sides.
@@ -115,17 +128,22 @@ def _cli_commands() -> set[str]:
     return set(listed.group(1).split(","))
 
 
-def _app_calls(path: Path) -> set[str]:
-    return {
-        f"app_{mod}.{fn}"
-        for mod, fn in re.findall(r"app_(\w+)\.(\w+)\(", path.read_text(encoding="utf-8"))
-    }
+def _app_calls(*paths: Path) -> set[str]:
+    """Which app services these modules reach. Takes several, because the CLI is five files."""
+    found = set()
+    for path in paths:
+        found |= {
+            f"app_{mod}.{fn}"
+            for mod, fn in re.findall(r"app_(\w+)\.(\w+)\(", path.read_text(encoding="utf-8"))
+        }
+    return found
 
 
 def test_the_sources_are_still_there():
     """The guard on the guard: a moved file would make every assertion below vacuous, which is
     how the flat glob in test_registries.py nearly disarmed the whole restructuring."""
-    assert CLI.is_file() and WEBUI.is_file()
+    assert WEBUI.is_file()
+    assert all(p.is_file() for p in CLI_MODULES), "a CLI module moved"
     assert len(_cli_commands()) >= 20, "the CLI command scan found almost nothing"
     assert len(_console_services()) >= 20, "the console service scan found almost nothing"
 
@@ -135,7 +153,7 @@ def test_both_callers_reach_the_shared_service(pair, service):
     """The property the two bugs violated. Not "both call something" — both call *this*."""
     console_fn, command = pair
     assert service in _app_calls(WEBUI), f"the console no longer reaches {service}"
-    assert service in _app_calls(CLI), f"the command line no longer reaches {service}"
+    assert service in _app_calls(*CLI_MODULES), f"the command line no longer reaches {service}"
 
 
 @pytest.mark.parametrize(("pair", "service"), sorted(SHARED.items()))

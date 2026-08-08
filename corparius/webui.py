@@ -40,6 +40,7 @@ from .app import errors as app_errors
 from .app import mail as app_mail
 from .app import publish as app_publish
 from .app import settings as app_settings
+from .app import skills as app_skills
 from .app import tasks as app_tasks
 from .config import cfg, permissions, settings_spec
 from .config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
@@ -1182,28 +1183,23 @@ def _route_plugins_get(ctx):
 
 
 def _route_skill_scope(ctx):
-    """Name the tools an unscoped skill applies to.
+    """`app.skills.scope`, with its refusal turned into a status code.
 
-    The one write the skills panel does. Refuses a tool that does not exist,
-    because a skill scoped to a name nobody has never applies — silently, which
-    is a worse outcome than the tax it was meant to fix.
+    The one write the skills panel does — and until the service existed, the only way to make
+    it at all. An unscoped skill rides every prompt of every turn, and `corparius skills list`
+    reported that cost from a terminal while offering nothing to do about it.
     """
-    from . import skills
-
-    s = _fresh_settings()
-    if not s.skills_enabled:
-        return 400, {"ok": False, "error": "skills are off"}
-    name = str(ctx.body.get("name", "")).strip()
-    tools = [str(t).strip() for t in (ctx.body.get("tools") or []) if str(t).strip()]
-    loader = skills.SkillLoader.for_company(ctx.slug or "", max_chars=s.skill_max_chars)
-    skill = next((sk for sk in loader.skills if sk.name == name), None)
-    if skill is None:
-        return 404, {"ok": False, "error": f"no skill named {name!r}"}
-    error = skills.scope_to(skill.path, tools)
-    if error:
-        return 400, {"ok": False, "error": error}
-    log.info("skill %s scoped to %s", name, ", ".join(tools))
-    return 200, {"ok": True, "name": name, "tools": tools}
+    try:
+        out = app_skills.scope(
+            ctx.slug or "",
+            str(ctx.body.get("name", "")),
+            list(ctx.body.get("tools") or []),
+            _fresh_settings(),
+        )
+    except app_errors.Refused as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    log.info("skill %s scoped to %s", out["name"], ", ".join(out["tools"]))
+    return 200, {"ok": True, "name": out["name"], "tools": out["tools"]}
 
 
 def _route_theme_get(ctx):

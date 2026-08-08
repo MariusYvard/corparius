@@ -39,6 +39,7 @@ SHARED = {
     ("_create_company", "new"): "app_companies.create",
     ("_chat", "ceo"): "app_chat.once",
     ("_route_test_mail", "mail"): "app_mail.check",
+    ("_delete_company", "delete"): "app_companies.delete",
 }
 
 # Pairs that look like a pair and are not, with the reason. Audited by reading both sides.

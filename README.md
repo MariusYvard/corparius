@@ -149,7 +149,7 @@ explains each one:
 
 | | |
 | --- | --- |
-| Run a company | `new` `init` `run` `status` `board` `flow` `tasks` `task` |
+| Run a company | `new` `delete` `init` `run` `status` `board` `flow` `tasks` `task` |
 | Decide | `ceo` `approvals` `approve` `reject` `rules` `inbox` `memory` |
 | Ship | `site` `deploy` `repo` `apps` |
 | Models | `bench` `preflight` `claude` |

@@ -160,3 +160,82 @@ def test_the_command_exits_non_zero_on_a_refusal(home, capsys):
     assert cli.main(["new", "--name", "Acme", "--product", "p"]) == 0
     assert cli.main(["new", "--name", "Acme", "--product", "p"]) == 1
     assert "already exists" in capsys.readouterr().out
+
+
+# --- deleting one ---------------------------------------------------------------
+#
+# There was no way to do this from a terminal either, so the obvious alternative was
+# `rm -rf companies/<slug>` — which skips the trash *and* leaves every row the store holds about
+# that company behind. Thirteen tables' worth, including its standing permissions, so a new
+# company created on the same slug would have inherited authorisations nobody granted it. That
+# purge was itself only clearing six of the thirteen until `tests/test_purge.py`.
+
+
+def test_the_trash_destroys_nothing(store, home):
+    """What makes this safe to offer from a terminal at all: the config is *moved*, so a mistake
+    is a `mv` away from undone."""
+    app_companies.create(store, name="Acme", product="p")
+    out = app_companies.delete(store, "acme", confirm="acme")
+    assert not (home / "companies" / "acme").exists()
+    trashed = home / "companies" / ".trash"
+    assert any(p.is_dir() for p in trashed.iterdir())
+    assert out["trashed"].startswith(str(trashed))
+
+
+def test_it_refuses_without_the_slug_typed_again(store, home):
+    """The cheapest possible proof the operator meant *this* company and not the one above it in
+    a list — and the same guard the console's dialog uses, because a destructive action reachable
+    two ways must not be easier one of them."""
+    app_companies.create(store, name="Acme", product="p")
+    with pytest.raises(Refused, match="type the company slug to confirm"):
+        app_companies.delete(store, "acme", confirm="")
+    assert (home / "companies" / "acme").is_dir(), "nothing may have moved"
+
+
+def test_a_company_that_is_not_there_is_refused_before_a_path_is_built(store, home):
+    """The traversal guard, and it is not incidental: only a name the glob actually produced is
+    ever turned into a path."""
+    with pytest.raises(Refused, match="unknown company"):
+        app_companies.delete(store, "../../etc", confirm="../../etc")
+
+
+def test_the_store_is_left_alone_unless_purge_is_asked_for(store, home):
+    """Two halves, and only one cannot be undone. Folding them together would make the
+    recoverable operation unavailable."""
+    app_companies.create(store, name="Acme", product="p")
+    store.remember("acme", "ceo", "un fait")
+    out = app_companies.delete(store, "acme", confirm="acme")
+    assert out["purged"] is False
+    assert store.list_memory("acme"), "the trash half must not touch the store"
+
+
+def test_purging_reports_what_went_per_table(store, home):
+    """ "Everything" was the claim that turned out to cover six of thirteen tables. A count per
+    table is what lets an operator see what actually happened."""
+    app_companies.create(store, name="Acme", product="p")
+    store.remember("acme", "ceo", "un fait")
+    store.add_rule("acme", "send_outreach", "always", "granted")
+    out = app_companies.delete(store, "acme", confirm="acme", purge=True)
+    assert out["purged"] is True
+    assert out["removed"]["memory"] >= 1
+    assert out["removed"]["rules"] >= 1
+    assert not store.find_rule("acme", "send_outreach")
+
+
+def test_the_command_refuses_and_says_what_to_type(home, capsys):
+    from corparius import cli
+
+    cli.main(["new", "--name", "Acme", "--product", "p"])
+    assert cli.main(["delete", "--company", "acme"]) == 1
+    said = capsys.readouterr().out
+    assert "type the company slug" in said and "--confirm acme" in said
+
+
+def test_the_command_says_the_store_still_holds_things(home, capsys):
+    """Without `--purge` the rows stay, and an operator who is not told that will believe the
+    company is gone."""
+    from corparius import cli
+
+    cli.main(["new", "--name", "Acme", "--product", "p"])
+    assert cli.main(["delete", "--company", "acme", "--confirm", "acme"]) == 0
+    assert "the store still holds what it recorded" in capsys.readouterr().out

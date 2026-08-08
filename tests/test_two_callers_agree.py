@@ -88,7 +88,31 @@ def _console_services() -> set[str]:
 
 
 def _cli_commands() -> set[str]:
-    return set(re.findall(r'add_parser\("([a-z-]+)"', CLI.read_text(encoding="utf-8")))
+    r"""The commands argparse actually offers, read off the parser.
+
+    This was `re.findall(r'add_parser\("([a-z-]+)"')` over `cli.py`, and it was blind to five of
+    the thirty-three: `preflight`, whose `add_parser(` is followed by a newline, and `apps`,
+    `plugin`, `secrets` and `skills` — four entire sub-CLIs, because they register themselves
+    from their own modules and the scan only read one file.
+
+    Found by trusting it. It said `plugincli` had no enable/disable, so a gap was reported that
+    does not exist: those three are added in a loop with a variable name. The code was right and
+    the scanner was wrong, which is the worse way round — a guard that under-reports passes.
+
+    `tests/test_readme.py` had this right already and says why: read it off the parser "rather
+    than kept in a second list here — which would rot the same way the README did".
+    """
+    import io
+    from contextlib import redirect_stdout
+
+    from corparius import cli
+
+    out = io.StringIO()
+    with pytest.raises(SystemExit), redirect_stdout(out):
+        cli.main(["--help"])
+    listed = re.search(r"\{([a-z,-]+)\}", out.getvalue())
+    assert listed, "could not read the command list out of --help"
+    return set(listed.group(1).split(","))
 
 
 def _app_calls(path: Path) -> set[str]:

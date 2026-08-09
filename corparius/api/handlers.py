@@ -449,6 +449,62 @@ SITE_TYPES: dict[str, str] = {
 }
 
 
+# What the built console is allowed to be made of. Narrower than `SITE_TYPES` on purpose: this
+# directory is produced by `npm run build` and nothing else, so anything outside this list arriving
+# in it means the build changed shape and somebody should look, rather than it being served.
+CONSOLE_TYPES = {
+    ".html": "text/html",
+    ".js": "text/javascript",
+    ".css": "text/css",
+    ".map": "application/json",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".woff2": "font/woff2",
+    ".json": "application/json",
+    ".ico": "image/x-icon",
+}
+
+
+def console(ctx):
+    """The built console, from `corparius/api/static/`.
+
+    Its own path — `/app/` — rather than a flag that decides whether it exists. An operator can look
+    at the new console without committing to it, and `/` keeps serving the single-file page it always
+    has. That is the plan's "behind a flag" arrangement, and serving both is the honest reading of
+    it: a flag that *replaced* the old page would make a half-built console the only way in.
+
+    Absent is a supported state and says so. The directory exists only after a build, and a source
+    checkout that has never run `npm run build` still has a working console at `/`. A 404 saying
+    "not built" with the command in it is worth more than an empty page.
+
+    The same two guards as the site preview, and for the same reason: resolve, then check the
+    resolved path is still inside the root. Checking the text of the URL instead is what
+    `..%2f..%2f.env` is for.
+    """
+    if not paths.console_built():
+        return 404, {
+            "ok": False,
+            "error": "the new console is not built here. Run `npm run build` in web/, or use / "
+            "for the single-file console.",
+        }
+    root = paths.console_dir()
+    rest = ctx.path[len("/app/") :] if ctx.path.startswith("/app/") else ""
+    rest = unquote(rest.split("?", 1)[0].split("#", 1)[0]).lstrip("/")
+    if not rest or rest.endswith("/"):
+        rest += "index.html"
+    try:
+        target = (root / rest).resolve()
+        target.relative_to(Path(root).resolve())
+    except (ValueError, OSError):
+        return 404, {"ok": False, "error": "not part of the console"}
+    kind = CONSOLE_TYPES.get(target.suffix.lower())
+    if kind is None:
+        return 404, {"ok": False, "error": f"{target.suffix or 'that file'} is not served"}
+    if not target.is_file():
+        return 404, {"ok": False, "error": "not part of the console"}
+    return 200, target.read_bytes(), kind
+
+
 def site_serve(ctx):
     """The preview, for a real site rather than a single page.
 

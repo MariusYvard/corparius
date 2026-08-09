@@ -2,6 +2,19 @@
 
 La console web (corparius/api/, corparius/webui.html) sert une page unique sur http://127.0.0.1:8600 via la bibliothèque standard, sans dépendance ni étape de build. Elle lit le même store SQLite que le CLI et pilote le même Runtime.
 
+## Deux consoles, pendant un temps
+
+La page d'origine — un seul fichier, sans étape de build — est servie sur `/` et y reste. La
+nouvelle, Vite + Svelte 5, est servie sur **`/app/`** quand elle a été construite.
+
+Les deux, plutôt qu'un drapeau qui remplace l'une par l'autre : un exploitant peut regarder la
+nouvelle sans s'y engager, et une console à moitié construite n'est jamais le seul moyen d'entrer.
+`npm run build` dans `web/` écrit dans `corparius/api/static/` ; sans ça, `/app/` répond 404 en
+nommant la commande, et `/` continue de marcher. Voir `web/README.md`.
+
+**Node n'est jamais nécessaire à l'exécution.** La construction est une étape de développement et de
+CI ; le wheel et le binaire gelé servent le résultat sans Node installé.
+
 ## Lancement
 
 ```bash

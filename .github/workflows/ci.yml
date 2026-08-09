@@ -90,6 +90,15 @@ jobs:
           cache: pip
       - name: Install dependencies and PyInstaller
         run: pip install -r requirements-dev.txt
+      # The console is built here, never at runtime. The spec picks up
+      # corparius/api/static/ only if it exists, so this step is what puts /app/ in the binary.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the console
+        run: npm ci --prefix web && npm run build --prefix web
       # Its own process: the example plugin registers into the shared provider
       # registries, which is why testpaths keeps it out of the main suite.
       - name: Validate the plugin template
@@ -145,7 +154,14 @@ jobs:
           test "$(echo "$one" | grep -o '"job": "[a-f0-9]*"')" = "$(echo "$two" | grep -o '"job": "[a-f0-9]*"')" \
             || { echo "one key answered with two jobs"; kill "$pid" 2>/dev/null; exit 1; }
           curl -fsS "http://127.0.0.1:8600/api/v1/jobs?company=example" | grep -q '"kind": "run"'
-          echo "smoke OK: console up, example seeded, mock mode, update-check off, v1 meta + ETag/304"
+          # The built console, inside the frozen bundle. `paths.console_dir()` resolves under
+          # sys._MEIPASS here and nowhere else, so this is the only place that mode is exercised —
+          # and a resource missing from a PyInstaller spec is invisible until someone runs the
+          # binary.
+          curl -fsS http://127.0.0.1:8600/app/ | grep -q '<div id="app">'
+          curl -fsS http://127.0.0.1:8600/app/console.js  > /dev/null
+          curl -fsS http://127.0.0.1:8600/app/console.css > /dev/null
+          echo "smoke OK: console up, example seeded, mock mode, update-check off, v1 meta + ETag/304, /app/ served"
           kill "$pid" 2>/dev/null || true
 
   # Build the wheel, install it into a clean environment, and run it from a
@@ -160,6 +176,16 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      # The console is built here and nowhere at runtime. `npm run build` writes into
+      # corparius/api/static/, which the wheel then carries — so the installed package serves it
+      # with no Node present, which the step below is what proves.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the console
+        run: npm ci --prefix web && npm run build --prefix web
       - name: Build the wheel
         run: pip install build && python -m build --wheel
       - name: Install into a clean venv and run
@@ -170,14 +196,34 @@ jobs:
           cd /tmp   # neutral cwd: the checkout's corparius/ must not shadow the install
           export CORP_HOME=/tmp/corp-home CORP_LLM_MOCK=true
           /tmp/venv/bin/python - <<'PY'
-          from corparius import paths, __file__ as f
+          from corparius.kernel import paths
+          from corparius import __file__ as f
           assert "site-packages" in f, f
           assert not paths._is_source_checkout()
           assert paths.page_file().is_file()
           assert (paths.example_company_src() / "company.yaml").is_file()
           assert paths.plugin_registry_file().is_file()
           assert "site-packages" not in str(paths.user_home())
-          print("installed-mode resources OK")
+          # The built console rides inside the wheel, at corparius/api/static/. This is the mode
+          # where getting it wrong is hardest to notice from a checkout, and the whole reason the
+          # build writes inside the package rather than beside it.
+          assert paths.console_built(), paths.console_dir()
+          assert (paths.console_dir() / "console.js").is_file()
+          print("installed-mode resources OK, console included")
           PY
           /tmp/venv/bin/corparius run --company example --ticks 4 | grep -q '"ticks_run": 4'
-          echo "wheel smoke OK: installed package runs a day offline"
+          # And it serves the built console with **no Node installed anywhere** — the promise the
+          # plan makes explicitly, and the reason the front-end build is a CI step and not a
+          # runtime one. `which node` is asserted absent rather than assumed: the runner has Node
+          # for the build job, and a venv that inherited it would make this pass for the wrong
+          # reason.
+          /tmp/venv/bin/corparius ui --port 8611 --host 127.0.0.1 &
+          pid=$!
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8611/api/session >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8611/app/ | grep -q '<div id="app">'
+          curl -fsS http://127.0.0.1:8611/app/console.js > /dev/null
+          kill "$pid" 2>/dev/null || true
+          echo "wheel smoke OK: installed package runs a day offline and serves /app/"

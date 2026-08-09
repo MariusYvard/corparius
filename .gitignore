@@ -36,3 +36,15 @@ htmlcov/
 # Seule companies/example/ reste versionnee, cest le gabarit livre avec le framework.
 companies/*
 !companies/example/
+
+# The front end's tools and its output.
+#
+# `node_modules/` is obvious. `corparius/api/static/` is **generated** by `npm run build` and is not
+# tracked: it is a build artefact declared in pyproject's wheel `artifacts` and in the PyInstaller
+# spec, produced by CI before either packages anything. A fresh checkout therefore has no `/app/`,
+# and that is the supported state the route reports — `/` still serves the single-file console.
+#
+# `package-lock.json` **is** tracked, and has to be: CI runs `npm ci`, which requires it, and caches
+# on its hash.
+/web/node_modules/
+/corparius/api/static/

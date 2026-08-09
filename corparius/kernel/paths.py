@@ -10,7 +10,8 @@ location, a distinction that only matters once corparius ships as a frozen
 binary (PyInstaller), where the code lives in a read-only bundle:
 
   * resource_dir()  read-only files shipped *with* the program: webui.html, the
-                    example company, .env.example. Under a frozen build this is
+                    built console under corparius/api/static/, the example
+                    company, .env.example. Under a frozen build this is
                     the extraction dir (sys._MEIPASS); from a source checkout it
                     is the repository root.
   * user_home()     the writable place for the operator's own state: the SQLite
@@ -183,6 +184,33 @@ def dotenv_file() -> Path:
 def page_file() -> Path:
     """The single-file operator console HTML (a shipped resource)."""
     return _resource("corparius", "webui.html")
+
+
+def console_dir() -> Path:
+    """The built console: a **directory** of assets, not one file.
+
+    Stage 9's only packaging change, and it needs no new machinery for the same reason `webui.html`
+    needs none: the build writes **inside the package**, at `corparius/api/static/`, so
+    `_resource("corparius", "api", "static")` resolves in all three distribution modes — beside the
+    package from a checkout, under `sys._MEIPASS` when frozen, inside site-packages from a wheel.
+    Writing it beside the package instead would have needed the `_data/` fallback that `companies/`
+    and `plugins/` need, for nothing.
+
+    It can be **absent**, and that is a supported state rather than an error: the directory only
+    exists after `npm run build`, and a source checkout that has never run it still has a working
+    console at `webui.html`. `console_built()` is the question a caller should ask.
+    """
+    return _resource("corparius", "api", "static")
+
+
+def console_built() -> bool:
+    """Whether the built console is present.
+
+    The entry point is the thing checked, not the directory: an empty or half-written `static/`
+    would pass a `is_dir()` test and then serve a 404 for the page itself, which reads to an
+    operator as the console being broken rather than as not built.
+    """
+    return (console_dir() / "index.html").is_file()
 
 
 def example_company_src() -> Path:

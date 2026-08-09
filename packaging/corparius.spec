@@ -27,6 +27,17 @@ datas = [
     # target dir "corparius" must match paths.page_file(), which looks for
     # resource_dir()/"corparius"/"webui.html" under a frozen build.
     (str(ROOT / "corparius" / "webui.html"), "corparius"),
+    # The built console, if it is here. A directory this time rather than a file, and the target
+    # must match paths.console_dir() -> resource_dir()/"corparius"/"api"/"static".
+    #
+    # Guarded, because PyInstaller fails the whole build on a datas entry that does not exist and a
+    # frozen build without the new console is a perfectly good product — `/` still serves the
+    # single-file page. CI runs `npm run build` first, so the release carries it.
+    *(
+        [(str(ROOT / "corparius" / "api" / "static"), "corparius/api/static")]
+        if (ROOT / "corparius" / "api" / "static" / "index.html").is_file()
+        else []
+    ),
     (str(ROOT / "companies" / "example"), "companies/example"),
     (str(ROOT / "plugins" / "registry.json"), "plugins"),
     # `corparius skills install starter` copies out of this one.

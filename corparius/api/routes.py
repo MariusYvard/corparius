@@ -101,7 +101,12 @@ ROUTES: tuple[Route, ...] = (
 
 # Prefix matches, checked only after every exact route has missed, so /api/site
 # can never be shadowed by a prefix that happens to start the same way.
-PREFIX_ROUTES: tuple[Route, ...] = (Route("GET", "/site/", handlers.site_serve, public=True),)
+PREFIX_ROUTES: tuple[Route, ...] = (
+    Route("GET", "/site/", handlers.site_serve, public=True),
+    # The built console. Public for the same reason `/` is: it carries no operator data, and it has
+    # to load before it can ask for a token. Every request it then makes is authenticated normally.
+    Route("GET", "/app/", handlers.console, public=True),
+)
 
 
 # Every route there is, in one name. `ROUTES` and `PREFIX_ROUTES` are two tables because they

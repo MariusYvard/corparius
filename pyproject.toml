@@ -48,7 +48,15 @@ path = "corparius/__init__.py"       # single source of truth, same file release
 packages = ["corparius"]
 # webui.html sits inside the package and ships as-is; page_file() finds it at
 # corparius/webui.html in every mode.
-artifacts = ["corparius/webui.html"]
+#
+# corparius/api/static/ is the built console, and it is here for the same reason: a resource inside
+# the package is found by paths._resource() in all three modes with no fallback. It is **generated**,
+# so it is listed as an artifact rather than tracked — `npm run build` in web/ produces it, CI does
+# that before building the wheel, and the wheel then serves it with no Node installed anywhere.
+#
+# A wheel built without that step simply has no /app/, which `paths.console_built()` reports and the
+# route says out loud. That is a worse console, not a broken one.
+artifacts = ["corparius/webui.html", "corparius/api/static/**"]
 
 # A wheel has no sibling companies/ or plugins/ in site-packages, so the two
 # read-only resources that live outside the package at build time ride along

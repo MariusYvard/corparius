@@ -23,6 +23,10 @@ PUBLIC = {
     # company and no setting *value*; `capabilities` is booleans about configuration.
     ("GET", "/api/v1/meta"),
     ("GET", "/site/"),  # the generated site, rendered in an iframe
+    # The built console, public for the same reason `/` is: it carries no operator data, and it has
+    # to load before it can ask for a token. Every request it then makes is authenticated normally,
+    # and the directory it serves from holds nothing but what `npm run build` put there.
+    ("GET", "/app/"),
 }
 
 

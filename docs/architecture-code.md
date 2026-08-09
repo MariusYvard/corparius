@@ -74,7 +74,7 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Modules important `subprocess` | 4 | **1** (`kernel/proc.py`) |
 | Ce que charge la lecture d'un réglage | `requests`, `subprocess`, `ssl`, `sqlite3` | **`sqlite3`** |
 | Ce que charge la lecture de la liste des outils | + `smtplib`, `imaplib` | **rien** |
-| Modules à plat | 53 | **27** |
+| Modules à plat | 53 | **26** |
 | Choses que la console sait faire et la CLI non | 11 | **3**, toutes cosmétiques |
 | Commandes CLI | 27 | **33** |
 | Routes sous contrat versionné | 0 | **8** sur 62 |
@@ -547,6 +547,79 @@ Les deux nouvelles clés sont des clés d'amorçage, et la phrase que `CORP_UI_A
 déjà se reprend mot pour mot : **un contrôle de sécurité ne doit pas être modifiable par la surface
 qu'il protège.** Une écriture inter-sites réussie sur `/api/settings` qui pourrait ajouter sa propre
 origine désactiverait la défense définitivement.
+
+## L'étape 9, première moitié : `sitegen/`
+
+1 339 lignes en un module, huit maintenant, et les imports vont dans un sens :
+`base` ← `palette`, `copy` ← `style`, `head`, `sections` ← `companions` ← `build`.
+
+| Module | Lignes | Ce qu'il porte |
+| --- | --- | --- |
+| `base` | 7 | `esc` et `norm`, les deux que tous les autres appellent |
+| `palette` | 181 | la couleur, et le contraste **calculé** plutôt que supposé |
+| `copy` | 239 | ce que la page dit, et les deux choses qu'elle refuse d'écrire |
+| `style` | 182 | la feuille de style, émise depuis une palette |
+| `head` | 129 | les balises qu'un visiteur ne voit jamais et qu'un robot lit d'abord |
+| `sections` | 174 | les blocs optionnels, absents sauf si la config les fournit |
+| `companions` | 114 | `robots.txt` et `sitemap.xml`, qui sont des fichiers et pas des balises |
+| `build` | 241 | une page, assemblée |
+
+**L'étape 9 refait la console, pas ça.** Une page de vente générée n'a pas de framework et n'en
+veut pas : elle est lue par un inconnu sur un téléphone en un aller-retour, et chaque octet est
+inline exprès. La décision Vite + Svelte concerne `webui.html`, qui est un autre programme qui se
+trouve être écrit dans le même langage.
+
+### Le test d'acceptation : la même page, au bit près
+
+Le site de `vigil` construit par le module de 1 339 lignes et par le paquet de huit :
+**17 499 octets, `sha256 5c5c3f64ab84889e33ecf7632102bc5c`**, les deux. Construit dans deux arbres
+séparés — l'ancien extrait de `git archive HEAD` — parce que comparer un artefact au même artefact
+est le piège que ce chantier a déjà attrapé une fois.
+
+### Des imports de noms, pas de modules — et c'est l'inverse de `api/`
+
+Dans `api/`, `handlers.overview` et `adapters.overview` étaient deux vraies fonctions avec un même
+nom : le préfixe de module était la seule façon de les distinguer. Ici, chaque nom est unique sur
+les huit fichiers — et **trois des noms de modules (`base`, `head`, `palette`) sont déjà des
+variables locales** dans le code déplacé, donc qualifier aurait fait résoudre `head.opening(...)`
+contre une chaîne de caractères. Mesuré sur l'original avant de choisir, plutôt que découvert une
+erreur mypy à la fois.
+
+### Trois fois la même leçon sur la prose
+
+L'outil de découpage a lu du commentaire comme du code, trois fois, et chaque fois d'une manière
+différente :
+
+1. une substitution par regex a réécrit `/* The signature: bars whose heights... */` en
+   `/* The palette.signature: ... */`, et « earn the same contrast through tracking » en « the
+   same palette.contrast through » ;
+2. la détection des imports a demandé à `base` d'importer `strings` depuis `copy`, parce que la
+   docstring de `norm` contient « whether two strings say the same thing » ;
+3. puis elle a demandé `opening` à `copy`, parce que `_unwrap` contient
+   `for opening, closing in _WRAPPERS` — un local qui partage un nom n'est pas une référence.
+
+Les trois sont corrigés par la même chose : **tokeniser, et retirer ce que le corps lie lui-même.**
+C'est la leçon du renommage `state` → `ui` dans `api/`, apprise là-bas et oubliée ici le temps
+d'une itération. Les commentaires portent les mesures qui justifient les décisions — c'est
+précisément pourquoi ce découpage déplace des plages de lignes au lieu de réémettre un AST, donc
+les abîmer annulerait la méthode.
+
+### Ce que le cliquet par fichier a trouvé, encore
+
+`sitegen.py` mesurait 84,5 % en un bloc. Découpé, `sections.py` sortait à **56,2 %** — et la moitié
+non testée était celle qui **écrit des affirmations sur une page qu'un client lit**. C'est là que
+vivent les deux règles dures du générateur, et les deux ont été écrites après qu'une page les a
+enfreintes en production :
+
+- une affirmation sans source est déposée — « la forme lisible par machine du témoignage inventé :
+  ça ressemble à une preuve et ça n'en est pas » ;
+- une citation sans nom est déposée — « une citation non attribuée sur une page commerciale est une
+  fabrication avec des guillemets autour ».
+
+Aucune des deux n'était testée. 97,7 % maintenant, et les deux prouvées non vides en republiant ce
+qu'elles refusent. Une de mes assertions décrivait au passage une commodité que le produit refuse
+exprès : un slug de page manquant n'est **pas** dérivé du titre, parce qu'un slug est une URL et un
+nom de fichier — le dériver du titre ferait bouger l'adresse à la prochaine réécriture du titre.
 
 ## Un vrai tour, sur la vraie configuration
 

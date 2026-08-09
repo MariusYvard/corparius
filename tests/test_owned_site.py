@@ -22,6 +22,8 @@ import requests
 
 from corparius.kernel import paths
 from corparius.providers import sitecheck
+from corparius.sitegen import companions as sitegen_companions
+from corparius.sitegen import head as sitegen_head
 
 
 def _site(base, name="public", pages=("index.html",), toml=None):
@@ -521,10 +523,9 @@ def _pages(folder, robots=None, noindex=()):
 
 
 def test_the_sitemap_lists_the_pages_that_exist(tmp_path):
-    from corparius import sitegen
 
     _pages(tmp_path)
-    out = sitegen.companions_for_folder(tmp_path, "https://vigil-abc.netlify.app/")
+    out = sitegen_companions.companions_for_folder(tmp_path, "https://vigil-abc.netlify.app/")
     assert "<loc>https://vigil-abc.netlify.app/</loc>" in out["sitemap.xml"]
     assert "<loc>https://vigil-abc.netlify.app/tech.html</loc>" in out["sitemap.xml"]
 
@@ -533,21 +534,19 @@ def test_nothing_is_written_without_an_address(tmp_path):
     """The same line sitegen has always drawn: an absolute tag is omitted rather than
     pointed at a guess, because a canonical link to the wrong address is worse for a
     site than no canonical link at all."""
-    from corparius import sitegen
 
     _pages(tmp_path)
-    assert sitegen.companions_for_folder(tmp_path, "") == {}
-    assert sitegen.point_absolute_tags(tmp_path, "") == 0
+    assert sitegen_companions.companions_for_folder(tmp_path, "") == {}
+    assert sitegen_head.point_absolute_tags(tmp_path, "") == 0
 
 
 def test_a_page_the_site_keeps_out_of_the_index_is_not_in_the_sitemap(tmp_path):
     """Measured: `merci.html` is noindex and disallowed in robots.txt, and the first
     version of this listed it anyway. A sitemap that contradicts the robots.txt beside
     it is a defect a crawler reports back."""
-    from corparius import sitegen
 
     _pages(tmp_path, robots="User-agent: *\nDisallow: /merci.html\n", noindex=("merci.html",))
-    out = sitegen.companions_for_folder(tmp_path, "https://x.fr")
+    out = sitegen_companions.companions_for_folder(tmp_path, "https://x.fr")
     assert "merci.html" not in out["sitemap.xml"]
     assert "tech.html" in out["sitemap.xml"]
 
@@ -557,7 +556,6 @@ def test_the_operators_robots_policy_is_preserved(tmp_path):
     robots.txt allows GPTBot, ClaudeBot, PerplexityBot and Google-Extended with a
     comment explaining why. Overwriting that to fix a hostname would be the product
     throwing away their SEO policy."""
-    from corparius import sitegen
 
     policy = (
         "User-agent: *\nAllow: /\nDisallow: /merci.html\n\n"
@@ -567,7 +565,9 @@ def test_the_operators_robots_policy_is_preserved(tmp_path):
         "Sitemap: https://old-host.fr/sitemap.xml\n"
     )
     _pages(tmp_path, robots=policy)
-    out = sitegen.companions_for_folder(tmp_path, "https://vigil-abc.netlify.app")["robots.txt"]
+    out = sitegen_companions.companions_for_folder(tmp_path, "https://vigil-abc.netlify.app")[
+        "robots.txt"
+    ]
     assert "GPTBot" in out and "ClaudeBot" in out
     assert "on purpose" in out, "the comment explaining the decision is part of it"
     assert "Disallow: /merci.html" in out
@@ -576,15 +576,13 @@ def test_the_operators_robots_policy_is_preserved(tmp_path):
 
 
 def test_a_site_with_no_robots_gets_a_plain_one(tmp_path):
-    from corparius import sitegen
 
     _pages(tmp_path)
-    out = sitegen.companions_for_folder(tmp_path, "https://x.fr")["robots.txt"]
+    out = sitegen_companions.companions_for_folder(tmp_path, "https://x.fr")["robots.txt"]
     assert out.startswith("User-agent: *") and "Sitemap: https://x.fr/sitemap.xml" in out
 
 
 def test_the_absolute_tags_are_pointed_at_the_real_host(tmp_path):
-    from corparius import sitegen
 
     _pages(tmp_path)
     (tmp_path / "index.html").write_text(
@@ -593,7 +591,7 @@ def test_the_absolute_tags_are_pointed_at_the_real_host(tmp_path):
         "<p>Voir https://old-host.fr dans la prose</p>",
         encoding="utf-8",
     )
-    assert sitegen.point_absolute_tags(tmp_path, "https://new.fr") >= 2
+    assert sitegen_head.point_absolute_tags(tmp_path, "https://new.fr") >= 2
     text = (tmp_path / "index.html").read_text(encoding="utf-8")
     # The host is swapped and the path kept: `/tech.html` has to stay `/tech.html`.
     assert 'rel="canonical" href="https://new.fr/"' in text
@@ -653,14 +651,13 @@ def test_a_canonical_is_inserted_where_there_is_none(tmp_path):
     operator does not own — right, by the rule that an absolute tag is omitted rather
     than pointed at a guess. But a function that only *rewrites* would have left those
     pages with no canonical at all once an address existed. Half a job."""
-    from corparius import sitegen
 
     (tmp_path / "index.html").write_text("<html><head><title>t</title></head></html>", "utf-8")
     (tmp_path / "tech.html").write_text("<html><head><title>t</title></head></html>", "utf-8")
     (tmp_path / "blog").mkdir()
     (tmp_path / "blog" / "index.html").write_text("<head><title>b</title></head>", "utf-8")
 
-    assert sitegen.point_absolute_tags(tmp_path, "https://x.fr") == 3
+    assert sitegen_head.point_absolute_tags(tmp_path, "https://x.fr") == 3
     root = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert '<link rel="canonical" href="https://x.fr/">' in root
     assert '<link rel="canonical" href="https://x.fr/tech.html">' in (
@@ -672,12 +669,11 @@ def test_a_canonical_is_inserted_where_there_is_none(tmp_path):
 
 
 def test_an_existing_canonical_is_not_duplicated(tmp_path):
-    from corparius import sitegen
 
     (tmp_path / "index.html").write_text(
         '<head><link rel="canonical" href="https://old.fr/"></head>', encoding="utf-8"
     )
-    sitegen.point_absolute_tags(tmp_path, "https://x.fr")
+    sitegen_head.point_absolute_tags(tmp_path, "https://x.fr")
     text = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert text.count('rel="canonical"') == 1 and "old.fr" not in text
 
@@ -685,8 +681,7 @@ def test_an_existing_canonical_is_not_duplicated(tmp_path):
 def test_nothing_is_inserted_into_markup_of_unknown_shape(tmp_path):
     """No </head> means a fragment rather than a page, and a tag is not pushed blindly
     into markup whose shape nobody knows."""
-    from corparius import sitegen
 
     (tmp_path / "part.html").write_text("<p>a fragment</p>", encoding="utf-8")
-    assert sitegen.point_absolute_tags(tmp_path, "https://x.fr") == 0
+    assert sitegen_head.point_absolute_tags(tmp_path, "https://x.fr") == 0
     assert (tmp_path / "part.html").read_text(encoding="utf-8") == "<p>a fragment</p>"

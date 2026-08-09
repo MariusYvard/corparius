@@ -348,7 +348,8 @@ corparius/
   selfupdate.py    replace this build with the newest release
   doctor.py        diagnose the installation and say what to fix
   i18n.py          the console and the agents in English or French
-  sitegen.py       single-file sales-page generator
+  sitegen/         single-file sales-page generator: palette, copy, style,
+                   head, sections, companions, build
   deploy.py        interchangeable deploy providers (local, Netlify, S3, SSH)
   leadsource.py    interchangeable lead sources (local dataset, headless browser)
   enrich.py        lead enrichment providers (local heuristic, API-ready)

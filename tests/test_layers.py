@@ -153,7 +153,17 @@ RANKS: dict[str, int] = {
     # spend-velocity breaker. It sat at rank 0 only because `cosine` and `hash_embed` were
     # in the same file, which is what made `store` (rank 2) import it.
     "safety": 4,
-    "sitegen": 4,
+    # Stage 9's first half. 1 339 lines in one module became eight, and the imports run one way:
+    # base <- palette, copy <- style, head, sections <- companions <- build.
+    "sitegen/__init__": 4,
+    "sitegen/base": 4,
+    "sitegen/palette": 4,
+    "sitegen/copy": 4,
+    "sitegen/style": 4,
+    "sitegen/head": 4,
+    "sitegen/sections": 4,
+    "sitegen/companions": 4,
+    "sitegen/build": 4,
     "apps": 4,
     # 5 — app: the use cases, with no transport attached, so the console and the command line
     # both reach them. `tests/test_app_layer.py` holds the two rules that keep this from being

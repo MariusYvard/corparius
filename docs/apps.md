@@ -100,7 +100,7 @@ site:
     - Est-ce que ça marche pour une reconversion ?
 ```
 
-`corparius site` exécute l'app une fois par question et écrit les réponses dans le HTML. **La page reste un seul fichier statique** : pas de JavaScript, aucun point d'accès à joindre, rien à laisser allumé. C'est la propriété que `sitegen.py` défend depuis le début, et un widget de conversation l'aurait échangée contre une fonctionnalité que personne n'a demandée.
+`corparius site` exécute l'app une fois par question et écrit les réponses dans le HTML. **La page reste un seul fichier statique** : pas de JavaScript, aucun point d'accès à joindre, rien à laisser allumé. C'est la propriété que `sitegen/` défend depuis le début, et un widget de conversation l'aurait échangée contre une fonctionnalité que personne n'a demandée.
 
 Un modèle injoignable omet la section et construit la page quand même. Ne pas publier parce qu'un fournisseur gratuit a eu un hoquet serait un mauvais échange pour une FAQ.
 

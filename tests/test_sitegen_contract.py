@@ -17,6 +17,8 @@ import re
 
 from corparius import company as company_mod
 from corparius import sitegen
+from corparius.sitegen import copy as sitegen_copy
+from corparius.sitegen import palette as sitegen_palette
 
 # Verbatim, from the generation that shipped.
 SHIPPED = (
@@ -72,12 +74,12 @@ def test_meta_commentary_is_refused_across_the_shapes_a_model_produces():
         "I would suggest: Hire faster",
         "As an AI language model, I cannot write marketing copy.",
         "Alternatively, try this",
-        "x" * (sitegen.MAX_HEADLINE + 1),
+        "x" * (sitegen_copy.MAX_HEADLINE + 1),
         "...",
         "",
         None,
     ]:
-        got = sitegen.clean_headline(raw)
+        got = sitegen_copy.clean_headline(raw)
         assert got is None or not re.search(
             r"(?i)alternatively|as an ai|i would suggest|option \d", got
         ), f"{raw!r} produced {got!r}"
@@ -89,13 +91,16 @@ def test_a_good_headline_passes_through_untouched():
         "Here is how you hire in 48 hours",
         "Ship faster. Sleep better.",
     ]:
-        assert sitegen.clean_headline(raw) == raw
+        assert sitegen_copy.clean_headline(raw) == raw
 
 
 def test_wrapping_quotes_and_labels_are_peeled_not_rendered():
-    assert sitegen.clean_headline('"Recrutez sans agence."') == "Recrutez sans agence."
-    assert sitegen.clean_headline("« Recrutez sans agence »") == "Recrutez sans agence"
-    assert sitegen.clean_headline("Headline: Hire without the agency") == "Hire without the agency"
+    assert sitegen_copy.clean_headline('"Recrutez sans agence."') == "Recrutez sans agence."
+    assert sitegen_copy.clean_headline("« Recrutez sans agence »") == "Recrutez sans agence"
+    assert (
+        sitegen_copy.clean_headline("Headline: Hire without the agency")
+        == "Hire without the agency"
+    )
 
 
 def test_a_refused_headline_falls_back_to_what_a_human_wrote(tmp_path):
@@ -129,16 +134,16 @@ def test_a_french_page_has_no_english_section_titles(tmp_path):
 def test_every_shipped_language_translates_the_whole_frame(tmp_path):
     """A half-translated table would render an empty heading. `strings()` merges
     over English, so this checks the entries themselves are complete."""
-    keys = set(sitegen.STRINGS["en"])
+    keys = set(sitegen_copy.STRINGS["en"])
     for code in company_mod.LANGUAGES:
-        assert code in sitegen.STRINGS, f"{code} is advertised in LANGUAGES but has no strings"
-        missing = keys - set(sitegen.STRINGS[code])
+        assert code in sitegen_copy.STRINGS, f"{code} is advertised in LANGUAGES but has no strings"
+        missing = keys - set(sitegen_copy.STRINGS[code])
         assert not missing, f"{code} is missing {sorted(missing)}"
-        assert all(v.strip() for v in sitegen.STRINGS[code].values()), code
+        assert all(v.strip() for v in sitegen_copy.STRINGS[code].values()), code
     # And the segment placeholder has to survive translation, or the page says
     # "For {segment}" to a real visitor.
     for code in company_mod.LANGUAGES:
-        assert "{segment}" in sitegen.STRINGS[code]["for"], code
+        assert "{segment}" in sitegen_copy.STRINGS[code]["for"], code
 
 
 def test_an_unknown_language_keeps_english_furniture_rather_than_inventing(tmp_path):
@@ -275,14 +280,14 @@ def test_a_long_description_is_a_paragraph_not_a_heading_or_a_hero_lede(tmp_path
 
 
 def test_the_opening_never_cuts_mid_word():
-    from corparius.sitegen import _opening
+    from corparius.sitegen.copy import opening
 
-    assert _opening("Court.") == "Court."
+    assert opening("Court.") == "Court."
     long = "Une phrase. " + "mot " * 200
-    got = _opening(long)
+    got = opening(long)
     assert got == "Une phrase."
     nosentence = "mot " * 200
-    got = _opening(nosentence)
+    got = opening(nosentence)
     assert got.endswith("…") and not got.endswith("mo…")
 
 
@@ -290,7 +295,7 @@ def test_the_look_follows_the_config_and_refuses_nonsense(tmp_path):
     dark = _build(tmp_path, site={"theme": "dark", "font": "sans", "accent": "#4ade80"})
     assert "#4ade80" in dark and "#12100e" in dark
     light = _build(tmp_path)
-    assert sitegen.DEFAULT_ACCENT in light and "#fbfaf8" in light
+    assert sitegen_palette.DEFAULT_ACCENT in light and "#fbfaf8" in light
 
     cfg, _, warnings = company_mod.validate(
         {"name": "T", "offer": {"product": "p"}, "site": {"accent": "rouge vif"}}
@@ -314,10 +319,10 @@ def test_the_page_has_something_on_it_that_is_not_a_paragraph(tmp_path):
 def test_the_signature_belongs_to_the_company_and_does_not_move(tmp_path):
     """Different per company so two corparius pages are not twins; identical
     across builds so a rebuild is not a redesign."""
-    assert sitegen.signature("vigil") != sitegen.signature("acme")
-    assert sitegen.signature("vigil") == sitegen.signature("vigil")
+    assert sitegen_palette.signature("vigil") != sitegen_palette.signature("acme")
+    assert sitegen_palette.signature("vigil") == sitegen_palette.signature("vigil")
     # Decorative, so it must be hidden from anyone using a screen reader.
-    assert 'aria-hidden="true"' in sitegen.signature("vigil")
+    assert 'aria-hidden="true"' in sitegen_palette.signature("vigil")
 
 
 def test_the_page_is_still_one_file_that_needs_nothing(tmp_path):

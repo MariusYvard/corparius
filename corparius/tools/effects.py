@@ -31,6 +31,8 @@ from ..providers import (
     signals,
     sitecheck,
 )
+from ..sitegen import companions as sitegen_companions
+from ..sitegen import head as sitegen_head
 from .spec import ROLE_TOOL, executable_fields
 
 log = logging.getLogger("corparius.tools")
@@ -294,9 +296,9 @@ def _deploy_site(ctx) -> ToolResult:
             # address and the pages that actually exist, then re-uploaded — a sitemap
             # that disagrees with where the site lives tells a crawler to index
             # somebody else.
-            for name, text in sitegen.companions_for_folder(out_dir, url).items():
+            for name, text in sitegen_companions.companions_for_folder(out_dir, url).items():
                 (out_dir / name).write_text(text, encoding="utf-8")
-            pointed = sitegen.point_absolute_tags(out_dir, url)
+            pointed = sitegen_head.point_absolute_tags(out_dir, url)
             again = deploy.deploy_result(str(out_dir))
             line += (
                 f". robots.txt, sitemap.xml and {pointed} canonical tag(s) rebuilt for {url}"

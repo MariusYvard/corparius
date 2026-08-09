@@ -14,14 +14,15 @@ import re
 import pytest
 
 from corparius import sitegen
-from corparius.sitegen import AA_LARGE, AA_TEXT, contrast, palette_for
+from corparius.sitegen import palette as sitegen_palette
+from corparius.sitegen.palette import AA_LARGE, AA_TEXT, contrast, palette_for
 
 # Themes crossed with accents chosen to break things: the default, a light green
 # that white text fails on (the one in the operator's screenshot), a very dark
 # blue that black text fails on, a mid grey with no hue to hide behind, and pure
 # white and pure black as the extremes an operator can type.
 THEMES = ("light", "dark")
-ACCENTS = (sitegen.DEFAULT_ACCENT, "#4ade80", "#0039CC", "#808080", "#ffffff", "#000000")
+ACCENTS = (sitegen_palette.DEFAULT_ACCENT, "#4ade80", "#0039CC", "#808080", "#ffffff", "#000000")
 
 
 def _pairs(theme, accent):
@@ -56,7 +57,7 @@ def test_the_exact_pair_that_shipped_unreadable():
     """A named regression, not just a matrix entry. `--ink` on the dark theme is
     #241f1a and the band's text was the page background, #12100e."""
     assert contrast("#241f1a", "#12100e") < 1.2, "the fixture is no longer the bug"
-    p = palette_for("dark", sitegen.DEFAULT_ACCENT)
+    p = palette_for("dark", sitegen_palette.DEFAULT_ACCENT)
     assert p["ink"] == "#241f1a"
     assert contrast(p["on_ink"], p["ink"]) >= AA_TEXT
 
@@ -108,22 +109,22 @@ def test_the_maths_is_the_wcag_maths():
     # The two canonical AA boundary greys on white.
     assert contrast("#767676", "#ffffff") == pytest.approx(4.54, abs=0.02)
     assert contrast("#949494", "#ffffff") == pytest.approx(3.03, abs=0.02)
-    assert sitegen.luminance("#ffffff") == pytest.approx(1.0)
-    assert sitegen.luminance("#000000") == pytest.approx(0.0)
+    assert sitegen_palette.luminance("#ffffff") == pytest.approx(1.0)
+    assert sitegen_palette.luminance("#000000") == pytest.approx(0.0)
     # Symmetric: which one is "the text" must not change the number.
     assert contrast("#c2410c", "#fbfaf8") == contrast("#fbfaf8", "#c2410c")
 
 
 def test_shorthand_and_case_are_accepted_because_an_operator_types_them():
     assert contrast("#fff", "#000") == pytest.approx(21.0)
-    assert sitegen.luminance("#FFF") == sitegen.luminance("#ffffff")
+    assert sitegen_palette.luminance("#FFF") == sitegen_palette.luminance("#ffffff")
 
 
 def test_muted_text_is_faded_as_far_as_it_can_go_and_no_further():
     """A muted colour that clears the threshold by a mile is not muted, it is
     just body text. This checks it is actually near the floor."""
     for theme in THEMES:
-        p = palette_for(theme, sitegen.DEFAULT_ACCENT)
+        p = palette_for(theme, sitegen_palette.DEFAULT_ACCENT)
         ratio = contrast(p["on_ink_muted"], p["ink"])
         assert AA_TEXT <= ratio < contrast(p["on_ink"], p["ink"]), theme
 
@@ -132,4 +133,4 @@ def test_a_decorative_element_is_not_held_to_a_text_threshold():
     """The signature bars are aria-hidden decoration. WCAG exempts those, and
     holding them to 4.5 would force a band loud enough to fight the headline."""
     assert AA_LARGE == 3.0
-    assert 'aria-hidden="true"' in sitegen.signature("t")
+    assert 'aria-hidden="true"' in sitegen_palette.signature("t")

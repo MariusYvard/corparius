@@ -79,6 +79,8 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Commandes CLI | 27 | **33** |
 | Routes sous contrat versionné | 0 | **8** sur 62 |
 | Registres avec les deux bouts tenus | 1 | **4** (outils, routes, commandes, codes d'erreur) |
+| Chaînes d'interface | 516 dans le HTML | **525 en JSON**, deux langues, jeux de clés égaux |
+| Collisions de préfixe i18n | 3 | **0**, et c'est une assertion |
 | Instructions non testées de la CLI | 216 | **65** |
 | Octets de la ressource sondée | 48 530 | **2 859** (et 0 si rien n'a changé) |
 | Ce qui survit à un redémarrage de la console | rien | **les tours**, schéma 19 |
@@ -620,6 +622,69 @@ Aucune des deux n'était testée. 97,7 % maintenant, et les deux prouvées non v
 qu'elles refusent. Une de mes assertions décrivait au passage une commodité que le produit refuse
 exprès : un slug de page manquant n'est **pas** dérivé du titre, parce qu'un slug est une URL et un
 nom de fichier — le dériver du titre ferait bouger l'adresse à la prochaine réécriture du titre.
+
+## L'étape 9, deuxième moitié : les 525 chaînes deviennent des données
+
+Le plan est explicite sur l'ordre : les chaînes d'interface partent **verbatim et avant** le
+framework, parce qu'une clé perdue pendant une reconstruction ressemble à un bug de style.
+`web/i18n/en.json` et `fr.json` sont la source de vérité ; la page livrée en garde une copie
+générée depuis eux, et `tests/test_i18n.py` les tient ensemble tant que les deux existent.
+
+525 clés par langue — le plan disait 516, elle a grossi — et les deux jeux étaient déjà égaux.
+
+### La collision qui a envoyé « Diagnostics » sur la carte Documents
+
+Le plan la cite comme la classe de bug que ce travail supprime, trouvée seulement par une vraie
+capture d'écran. Mesurée sur la table réelle, elle était toujours là :
+
+| Espace de noms | Sens | Clés |
+| --- | --- | --- |
+| `doc.` | **Diagnostics** | 5 |
+| `docs.` | **Documents** | 40 |
+| `co.` | l'éditeur d'entreprise | 36 |
+| `col.` | les colonnes du kanban | 10 |
+| `conn.` | l'erreur de connexion | 1 |
+
+Trois paires où l'une commence l'autre : `co`/`col`, `co`/`conn`, `doc`/`docs`. Deux espaces à une
+lettre près, voulant dire des choses entièrement différentes — quelqu'un chargé de changer « le
+titre de Documents » attrape `doc.title` une fois sur deux, et un regroupement par préfixe sans le
+point ramasse les deux ensembles à la fois.
+
+`doc.` → `diag.`, `co.` → `company.`. 43 espaces de noms, aucun préfixe d'un autre, **et c'est
+l'assertion** — la confusion ne peut plus revenir, elle n'est pas seulement corrigée.
+
+### Ce qu'un cliquet ne peut pas être ici
+
+128 clés ne sont référencées nulle part littéralement, et ce n'est **pas** une trouvaille : douze
+recherches construisent leur clé à l'exécution — `t("ib." + m.kind)`, `t("col." + key)`,
+`t("prov.pf." + p.state)`. Un scan statique les compterait mortes. Donc il n'y a pas de cliquet
+« chaque clé est utilisée », et c'est écrit dans le fichier de test : **une garde qui sur-rapporte
+se fait ignorer, et une garde ignorée est pire que pas de garde.** Ce qui est vérifiable l'est :
+chaque clé littérale que la page demande existe dans les deux langues, et chaque préfixe calculé a
+au moins une clé.
+
+### Le premier test que Python ne pouvait pas écrire
+
+Le bloc `const I18N` est maintenant **généré**. Un générateur qui émet une virgule en trop produit
+une page dont tout le script échoue à s'analyser — la console s'affiche en balisage nu, sans aucun
+comportement — et **toute** la suite Python passerait quand même, parce qu'aucun test n'exécute de
+JavaScript.
+
+`tests/test_page_javascript.py` : `node --check` sur les 3 325 lignes de script, puis le `t()` de la
+page évalué par le vrai moteur pour vérifier qu'aucune chaîne ne s'afficherait comme une clé brute.
+Écrire cette expression une deuxième fois en Python aurait voulu dire lui faire confiance pour
+rester en phase avec celle qui est livrée.
+
+Sauté là où node est absent, et ce n'est pas un compromis : **l'exécution ne doit jamais en avoir
+besoin.** Le wheel et le binaire gelé servent cette page sans Node installé, ce que le plan exige
+explicitement. Node est un outil de développement et de CI.
+
+Deux corrections en passant. Deux tests affirmaient `"col.proposedCeo":"Proposed, for the CEO"` —
+sans espace après les deux-points — donc ils épinglaient l'orthographe minifiée du bloc et non la
+chaîne ; ils lisent les données maintenant. Et `subprocess` a besoin de `encoding="utf-8"`
+explicite : `text=True` décode avec la page de code locale, cp1252 sur Windows, qui ne peut pas
+lire le français — l'échec n'est pas une exception dans le test, c'est un thread lecteur qui meurt
+dans `subprocess` et `stdout` qui arrive à `None`.
 
 ## Un vrai tour, sur la vraie configuration
 

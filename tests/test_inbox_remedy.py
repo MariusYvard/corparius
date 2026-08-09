@@ -15,6 +15,7 @@ So: the agent's note carries the measured fact, and the console carries the next
 step, in the operator's language. `fix` is the seam.
 """
 
+import pathlib
 import re
 from pathlib import Path
 
@@ -84,10 +85,22 @@ def test_the_provider_failure_notice_offers_to_run_the_preflight():
     control it presses are the same words on purpose."""
     src = _TOOLS_SRC
     assert 'fix="preflight"' in src, "the notice still only opens the providers tab"
-    html = PAGE.read_text(encoding="utf-8")
-    assert '"ib.fix.preflight":"Prove these models"' in html
-    assert '"prov.preflight":"Prove these models"' in html, "the two labels have drifted apart"
+    # Read from `web/i18n/en.json`, not from a substring of the page's script. The old form
+    # asserted `"ib.fix.preflight":"Prove these models"` — with no space after the colon — so it
+    # was checking the minified spelling of the block rather than the string, and it broke the
+    # moment the block was generated instead of hand-written. `tests/test_i18n.py` is what keeps
+    # the page and the JSON saying the same thing.
+    import json
+
+    strings = json.loads(pathlib.Path("web/i18n/en.json").read_text(encoding="utf-8"))
+    # The label of the fix and the label of the control it presses are the same words on purpose,
+    # and comparing the two values says that better than matching either one against a literal.
+    assert strings["ib.fix.preflight"] == strings["prov.preflight"], (
+        "the notice and the button it presses have drifted apart"
+    )
+    assert strings["ib.fix.preflight"] == "Prove these models"
     # And the handler actually presses it.
+    html = PAGE.read_text(encoding="utf-8")
     assert 'ibFix === "preflight"' in html and "#run-preflight" in html
 
 

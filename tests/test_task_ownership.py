@@ -313,12 +313,23 @@ def test_it_is_the_operators_when_the_ceo_is_stood_down(tmp_path, monkeypatch):
 
 
 def test_the_column_has_a_label_for_both_cases_in_both_languages():
+    """From the JSON, which is the source of truth since the strings became data.
+
+    This asserted a substring of the page's script — `"col.proposedCeo":"Proposed, for the CEO"`,
+    with no space after the colon — so it was pinning the block's minified spelling rather than the
+    label. `tests/test_i18n.py` holds the page and these files together, so reading the data is
+    both simpler and stronger.
+    """
+    import json
     from pathlib import Path
 
-    html = Path("corparius/webui.html").read_text(encoding="utf-8")
-    assert html.count('"col.proposedCeo"') == 3, "en, fr, and the one place that reads it"
-    assert '"col.proposedCeo":"Proposed, for the CEO"' in html
-    assert '"col.proposedCeo":"Proposées, pour le CEO"' in html
+    en = json.loads(Path("web/i18n/en.json").read_text(encoding="utf-8"))
+    fr = json.loads(Path("web/i18n/fr.json").read_text(encoding="utf-8"))
+    assert en["col.proposedCeo"] == "Proposed, for the CEO"
+    assert fr["col.proposedCeo"] == "Proposées, pour le CEO"
+    # And the page reads it, which is the other end: a label defined and never shown is the same
+    # defect as a missing one, from the operator's side.
+    assert '"col.proposedCeo"' in Path("corparius/webui.html").read_text(encoding="utf-8")
 
 
 # --- and the operator can correct it on the board ------------------------------

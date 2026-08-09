@@ -1,0 +1,201 @@
+"""The 525 strings, as data, and the collision class that shipped a wrong label.
+
+Stage 9's first risk-reduction step, and the plan is explicit about why it comes before the
+framework: the interface strings are **data, not code**, so they move verbatim and get a test,
+rather than being rewritten alongside a rebuild where a lost key would look like a styling bug.
+
+`web/i18n/en.json` and `fr.json` are the source of truth. The shipped page still carries a copy
+because it has no build step and keeps none, so the first test here is what stops the two
+disagreeing while both exist. When the single-file page goes, its copy goes with it and these
+files stay.
+
+**The bug this removes by construction.** A prefix collision on `doc.` printed *Diagnostics* on
+the Documents card, and nothing found it but a screenshot. Measured on the real table: `doc.` was
+Diagnostics (5 keys) and `docs.` was Documents (40) — two namespaces one letter apart, one a
+prefix of the other, meaning entirely different things. Anyone asked to change "the Documents
+title" would reach for `doc.title` about half the time, and a lookup that groups by prefix without
+the dot catches both.
+
+Renamed to `diag.`, and `co.` (the company editor, 36 keys) to `company.` because it was a prefix
+of both `col.` and `conn.`. 43 namespaces now, none a prefix of another — which is the assertion,
+so the confusion cannot come back.
+"""
+
+import json
+import pathlib
+import re
+
+import pytest
+
+I18N = pathlib.Path("web/i18n")
+PAGE = pathlib.Path("corparius/webui.html")
+LANGS = ("en", "fr")
+
+
+def _json(lang: str) -> dict:
+    return json.loads((I18N / f"{lang}.json").read_text(encoding="utf-8"))
+
+
+def _page_tables() -> dict:
+    """The `const I18N = {...}` block, parsed back out of the page.
+
+    The same reader the extraction used, kept here rather than in a helper module: this is the one
+    place that needs it, and a test that parses what it is checking is a test that cannot be fooled
+    by a rewrite that happens to keep the file the same length.
+    """
+    lines = PAGE.read_text(encoding="utf-8").splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("const I18N"))
+    depth = 0
+    for i in range(start, len(lines)):
+        depth += lines[i].count("{") - lines[i].count("}")
+        if depth == 0 and i > start:
+            end = i
+            break
+    blob = "\n".join(lines[start : end + 1]).replace("const I18N = ", "", 1).rstrip(";")
+    blob = re.sub(r"(?m)^(en|fr):", r'"\1":', blob)
+    return json.loads(blob)
+
+
+# --- the guard on the guard -----------------------------------------------------
+
+
+def test_there_are_strings_to_check():
+    """An empty read would make everything below vacuously true — the failure this project has
+    already had once, when a flat glob quietly scanned fewer files than it looked like."""
+    for lang in LANGS:
+        assert len(_json(lang)) >= 400, f"{lang}.json has {len(_json(lang))} keys"
+    assert set(_page_tables()) == set(LANGS)
+
+
+# --- one source of truth --------------------------------------------------------
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_page_carries_exactly_what_the_json_says(lang):
+    """Key for key **and value for value**. The page has no build step, so the copy in it is
+    written by hand or by a one-off script; this is the only thing that keeps the two from
+    drifting apart while both exist, and a drift here is a label that is right in one place and
+    wrong in the other."""
+    assert _page_tables()[lang] == _json(lang)
+
+
+def test_the_two_languages_have_the_same_keys():
+    """The plan's key-set equality test. A key present in one language and not the other falls
+    back silently to English, which reads as a translation nobody got round to rather than as the
+    bug it is."""
+    en, fr = _json("en"), _json("fr")
+    only_en = sorted(set(en) - set(fr))
+    only_fr = sorted(set(fr) - set(en))
+    assert not only_en and not only_fr, f"en only: {only_en}; fr only: {only_fr}"
+
+
+# --- the collision that shipped -------------------------------------------------
+
+
+def _namespaces(table: dict) -> set[str]:
+    return {k.split(".")[0] for k in table if "." in k}
+
+
+def test_no_namespace_is_a_prefix_of_another():
+    """The assertion that makes the `doc.`/`docs.` bug impossible rather than fixed.
+
+    *Diagnostics* appeared on the Documents card, and only a real screenshot found it. Two
+    namespaces one letter apart, meaning different things, with one a prefix of the other: a
+    person asked to change "the Documents title" reaches for `doc.title` half the time, and code
+    that groups by prefix without the dot matches both sets at once.
+
+    Measured before the rename: `co`/`col`, `co`/`conn`, `doc`/`docs`. None now.
+    """
+    spaces = sorted(_namespaces(_json("en")))
+    collisions = sorted(
+        f"{a}. is a prefix of {b}." for a in spaces for b in spaces if a != b and b.startswith(a)
+    )
+    assert not collisions, (
+        f"{collisions}. Two namespaces where one starts the other is how 'Diagnostics' ended up on "
+        "the Documents card. Rename one so neither begins the other."
+    )
+
+
+def test_the_two_languages_agree_about_namespaces():
+    """A namespace that exists in one language only is a card whose strings are half-translated,
+    and the fallback hides it."""
+    assert _namespaces(_json("en")) == _namespaces(_json("fr"))
+
+
+def test_diagnostics_and_documents_are_no_longer_neighbours():
+    """Named rather than implied, because the general rule above would still pass if someone
+    reintroduced `doc.` for Documents and renamed Diagnostics to something else — which would be
+    correct by the rule and confusing for the same reason."""
+    en = _json("en")
+    assert en["diag.title"] == "Diagnostics"
+    assert "doc.title" not in en, "`doc.` is the namespace that caused the bug; it stays retired"
+    assert en["docs.title"].startswith("What the company has")
+
+
+# --- every string the page asks for exists --------------------------------------
+
+
+def _referenced() -> set[str]:
+    """Keys the page names literally.
+
+    Only the literal ones, and that limit is the point: twelve lookups build their key at runtime
+    (`t("ib." + m.kind)`, `t("col." + key)`, `t("prov.pf." + p.state)`), so a scan cannot know what
+    they will ask for. This is why there is **no** "every key is used" ratchet here — it would
+    report 128 live strings as dead. A guard that over-reports gets ignored, and an ignored guard
+    is worse than none.
+    """
+    page = PAGE.read_text(encoding="utf-8")
+    keys = set(re.findall(r'data-i18n(?:-ph|-title|-aria)?="([^"]+)"', page))
+    keys |= set(re.findall(r'\bt\("([^"]+)"\)', page))
+    keys |= set(re.findall(r"\bt\('([^']+)'\)", page))
+    return {k for k in keys if not k.startswith("http")}
+
+
+def test_every_literal_key_the_page_asks_for_exists_in_both_languages():
+    """The direction that can be checked, and the one that shows as a raw key on screen: `t()`
+    falls back to the key itself, so a missing string renders as `docs.folder` to an operator."""
+    en, fr = _json("en"), _json("fr")
+    referenced = _referenced()
+    assert len(referenced) >= 300, f"the reference scan found only {len(referenced)}"
+    missing_en = sorted(referenced - set(en))
+    missing_fr = sorted(referenced - set(fr))
+    assert not missing_en, f"the page asks for these and English does not have them: {missing_en}"
+    assert not missing_fr, f"the page asks for these and French does not have them: {missing_fr}"
+
+
+def test_the_computed_prefixes_all_have_at_least_one_key():
+    """The part of "unused" that *can* be checked: a runtime lookup like `t("ib.fix." + m.fix)`
+    needs its namespace to exist at all. An empty prefix is a card that renders raw keys for every
+    row, which is the same visible failure as a missing string and just as silent in code."""
+    en = _json("en")
+    page = PAGE.read_text(encoding="utf-8")
+    prefixes = set(re.findall(r'\bt\("([a-z][a-z.]*\.)"\s*\+', page))
+    assert len(prefixes) >= 8, f"the computed-lookup scan found {sorted(prefixes)}"
+    empty = sorted(p for p in prefixes if not any(k.startswith(p) for k in en))
+    assert not empty, f"these prefixes are looked up at runtime and have no keys: {empty}"
+
+
+# --- what the data itself must not contain --------------------------------------
+
+
+def test_no_string_is_empty():
+    """An empty value is worse than a missing key: the fallback never fires, so the label is blank
+    on screen and the key looks present to every check that counts them."""
+    for lang in LANGS:
+        blank = sorted(k for k, v in _json(lang).items() if not str(v).strip())
+        assert not blank, f"{lang} has empty strings: {blank}"
+
+
+def test_the_untranslated_strings_are_the_ones_that_should_be():
+    """20 keys where French equals English, and each is a word that does not translate — `Mode`,
+    `Agent`, `console`, `CEO`, `tier.normal`, `CORP_UI_TOKEN`. Pinned as a count rather than
+    forbidden, because forbidding it would push someone to translate `Plugins` into something
+    nobody says, and leaving it unmeasured is how a genuinely forgotten string hides among them.
+    """
+    en, fr = _json("en"), _json("fr")
+    same = sorted(k for k in en if en[k] == fr[k])
+    assert len(same) == 20, (
+        f"{len(same)} keys are identical in both languages: {same}. If that is a word that does "
+        "not translate, raise the number here and say which; if it is a forgotten string, "
+        "translate it."
+    )

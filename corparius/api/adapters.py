@@ -38,7 +38,6 @@ from ..orchestrator import Runtime
 from ..providers import (
     claudecli,
     hardware,
-    ollama_setup,
 )
 from ..providers.llm import connected_providers
 from ..store import jobs as jobs_store
@@ -555,33 +554,6 @@ def golive_status(slug: str) -> dict:
             "published_url": published_url,
         },
     }
-
-
-def ollama_pull(ui: UiState, models: list) -> dict:
-    """Pull the named models (or every missing one) in the background. A pull is
-    gigabytes, so it runs in a thread and reports progress through /api/ollama,
-    the same shape as a run."""
-    models = [str(m).strip() for m in models if str(m).strip()] or ollama_setup.status()["missing"]
-    if not models:
-        return {"ok": True, "detail": "nothing to pull"}
-    with ui.lock:
-        if ui.pulls.get("running"):
-            return {"ok": False, "error": "a pull is already in progress"}
-        ui.pulls = {"running": True, "progress": "", "done": [], "failed": []}
-
-    def _worker() -> None:
-        for model in models:
-
-            def note(line):
-                ui.pulls["progress"] = line
-
-            res = ollama_setup.pull(model, on_line=note)
-            (ui.pulls["done"] if res["ok"] else ui.pulls["failed"]).append(model)
-        ui.pulls["running"] = False
-        ui.pulls["progress"] = "done"
-
-    threading.Thread(target=_worker, daemon=True, name="corparius-ollama-pull").start()
-    return {"ok": True, "pulling": models}
 
 
 def claude_setup(ui: UiState, all_tiers: bool = False) -> dict:

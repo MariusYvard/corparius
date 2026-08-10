@@ -119,14 +119,30 @@ class JobsMixin(Connected):
         return _as_dict(row) if row else None
 
     @_locked
-    def list_jobs(self, company: str = "", state: str = "", limit: int = 50) -> list[dict]:
+    def list_jobs(
+        self, company: str = "", state: str = "", limit: int = 50, kind: str = ""
+    ) -> list[dict]:
         """Newest first, because a client opening on the oldest job is showing the least useful
-        end of the list — the same reasoning as the `done` task column."""
+        end of the list — the same reasoning as the `done` task column.
+
+        Every filter is opt-in: an empty string means "do not filter on this", which is why the
+        machine-level jobs (`ollama_pull`, `preflight_sweep`) cannot be found by passing
+        `company=""` — that asks for *all* companies, not for the empty one. They are found by
+        `kind`, which is what actually distinguishes them, and `running_job` compares `company=?`
+        exactly when the live one is what is wanted.
+
+        `kind` was added when those two moved off `UiState`: filtering in Python over `limit=20`
+        would have hidden a pull behind twenty newer company runs, which is the kind of bound that
+        reads as "there is no pull" instead of "you did not look far enough".
+        """
         where: list[str] = []
         params: list[object] = []
         if company:
             where.append("company=?")
             params.append(company)
+        if kind:
+            where.append("kind=?")
+            params.append(kind)
         if state:
             where.append("state=?")
             params.append(state)

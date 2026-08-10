@@ -49,11 +49,11 @@ class UiState:
         self.env_file = env_file
         self.runs: dict[str, dict] = {}
         self.chats: dict[str, deque] = {}
-        self.pulls: dict = {"running": False}  # Ollama model pull, background
-        # A full catalogue sweep across every configured provider. Background
-        # for the same reason as a pull: it is hundreds of real calls and would
-        # time out any request that waited for it.
-        self.sweep: dict = {"running": False}
+        # `pulls` and `sweep` were here, and they are gone: both are rows in `jobs` now. They were
+        # the last two things in this object that a restart silently lost, and the last two a second
+        # client could not see. What is left is genuinely per-process — `runs` holds a
+        # `threading.Event` for this console's own stop button, and `chats` is a bounded deque
+        # nobody has asked to persist.
         self.lock = threading.Lock()
         self._store: Store | None = None
 

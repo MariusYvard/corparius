@@ -63,7 +63,7 @@ each card landed, and what is still only in the old page.
 | Overview | what needs you · the pulse · the run | Getting started · Go live · Sales site · Spend by agent · Payments · Recent activity |
 | Operations | the board · standing rules · memory · drafts · the action log | — (Backup moved to Settings, below) |
 | Documents | the drop zone · what is on file · reading one | — |
-| Providers | Claude subscription · runtime toggles · free tiers · routing tiers · Ollama status | the Ollama **pull** and the full preflight **sweep** — see below |
+| Providers | Claude subscription · runtime toggles · free tiers · routing tiers · Ollama status and pull · preflight and the full sweep | — |
 | CEO | — | the chat, and the CEO's own powers |
 | Settings | — | the 80-field registry · Backup, from the old Operations tab |
 | Plugins | — | the seven seams · Skills |
@@ -73,18 +73,30 @@ Recent activity and Spend by agent are the two Overview cards with a v1 resource
 and Sales site need `/api/golive` and `/api/site` versioned first. Naming that here rather than
 discovering it per tab.
 
-### Two operations waiting on durable jobs
+### The two long operations are durable jobs now
 
-The Ollama **pull** and the preflight **sweep** have no v1 spelling, and that is a decision rather than
-an omission. Both track progress in `UiState` — an in-process dict — so neither survives a restart of
-the console, which is precisely the state schema 19 built the `jobs` table to replace. A v1 route
-publishing a `pulling` flag would be publishing a field that lies the moment the console restarts, and
-a phone that started a sweep would have no way to find it again.
+The Ollama **pull** and the preflight **sweep** were the last two things in `UiState` that a restart
+silently lost, and the last two a second client could not see. They are `jobs` rows, like a run:
 
-They move to durable jobs first, and that has its own proof, the one the plan already names for runs:
-kill the server, restart it, and the sweep is still there — or reads `interrupted`, which is honest
-where a silent resume is a lie about what happened. `tests/test_v1_providers.py` fails if a v1 route
-for either appears before that work is done.
+* **the guard is the store** — "a sweep is already running" read this process's memory, so one left
+  behind by a crashed console was invisible to the next, which would cheerfully start a second:
+  hundreds of duplicate paid calls;
+* **stopping is a column**, not a `threading.Event`, so a phone can stop a sweep this console started;
+* **one a dead console left behind reports `interrupted`** — with the progress line it had reached,
+  because that is a column too. Nothing is resumed: restarting hundreds of paid calls unasked would be
+  indefensible, and "interrupted, start it again" is what an operator can act on.
+
+`GET /api/v1/machine` is the read, and it is the **only** poll on this tab — armed only while a job is
+running, because a poll against no work is a round trip whose best case is that nothing changed.
+
+The proof is the one the plan names for runs, run for real: write a `running` sweep row from the test
+process, start a console as a **subprocess**, and read back `interrupted`. It needs no provider and no
+network, which matters — a sweep is hundreds of paid generations, and a test that made one would be
+charging whoever ran it.
+
+The sweep asks before it spends. `{"estimate": true}` answers how many calls it would make **without
+making any**, and that number goes in front of the operator first: NVIDIA alone advertises 102 models,
+and "check everything" is their money and their rate limits.
 
 ### Every probe is a button
 

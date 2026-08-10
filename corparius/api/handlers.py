@@ -38,6 +38,7 @@ from ..app import mail as app_mail
 from ..app import memory as app_memory
 from ..app import meta as app_meta
 from ..app import overview as app_overview
+from ..app import setup as app_setup
 from ..app import skills as app_skills
 from ..app import tasks as app_tasks
 from ..config import cfg
@@ -640,6 +641,108 @@ def v1_claude_setup(ctx):
     return 200, {"ok": True, **result}
 
 
+def v1_machine(ctx):
+    """What the pull and the sweep are doing, read from the job rows.
+
+    Both survive a restart now, which is the whole point: a console killed mid-sweep leaves a `running`
+    row that the next process marks `interrupted` at startup, and a client is told that rather than
+    told nothing. Nothing is resumed — hundreds of paid calls should not restart themselves — and
+    "interrupted, start it again" is the honest answer.
+
+    Alongside them, what a sweep has already proved. Every verdict is written the moment it arrives, so
+    this is useful mid-sweep and after one that failed at the end.
+    """
+    from ..providers import preflight
+
+    store = ctx.store()
+    known = store.known_probes()
+    tally: dict[str, int] = {}
+    oldest = 0.0
+    for row in known:
+        tally[row["state"]] = tally.get(row["state"], 0) + 1
+        oldest = max(oldest, time.time() - float(row["ts"] or time.time()))
+    return 200, {
+        "ok": True,
+        **app_setup.view(store),
+        "known": len(known),
+        "tally": tally,
+        "usable_by_provider": {k: len(v) for k, v in preflight.known(store).items()},
+        # A verdict is a measurement and measurements age. Reported so nobody reads a six-month-old
+        # `blocked` as current fact.
+        "oldest_days": int(oldest / 86400),
+        "worth_rechecking": len(preflight.stale(store)),
+    }
+
+
+def v1_ollama_pull(ctx):
+    """Start pulling the models the tiers need, as a durable job.
+
+    Gigabytes and minutes, so it runs in a thread — but the *record* is a row, so a phone can watch a
+    pull this console started and a restart reports `interrupted` instead of forgetting.
+
+    The work is `app_setup.run_pull`, not a closure here: a terminal could run the same function in the
+    foreground, which is the thing `adapters.start_run` did not arrange and `cli/operate.cmd_run` had
+    to duplicate 25 lines to work around.
+    """
+    store = ctx.store()
+    try:
+        claim = app_setup.start_pull(store, list(ctx.body.get("models", [])))
+    except app_errors.Refused as exc:
+        return contracts.refuse(409, contracts.CONFLICT, str(exc))
+    threading.Thread(
+        target=app_setup.run_pull,
+        args=(store, claim["job"], claim["models"]),
+        daemon=True,
+        name="corparius-ollama-pull",
+    ).start()
+    return 200, {"ok": True, **claim}
+
+
+def v1_sweep_post(ctx):
+    """Start, price, or stop a sweep of every configured provider.
+
+    `{"estimate": true}` answers how many calls it would make **without making any**, and that is not a
+    convenience: NVIDIA alone advertises 102 models, and an operator pressing "check everything" is
+    spending their own money and their own rate limits. They get the number first.
+
+    `{"stop": true}` writes `cancel_requested`, a column rather than an event — which is what lets a
+    phone stop a sweep this console started, and the same mechanism the plan names for runs.
+    """
+    from ..providers import preflight
+
+    store = ctx.store()
+    if ctx.body.get("stop"):
+        return 200, {"ok": True, **app_setup.stop(store, app_setup.KIND_SWEEP)}
+    if ctx.body.get("estimate"):
+        return 200, {"ok": True, **preflight.estimate()}
+    try:
+        claim = app_setup.start_sweep(
+            store,
+            state.fresh_settings(),
+            limit=int(ctx.body.get("limit", 0) or 0),
+            timeout=int(ctx.body.get("timeout", 0) or 0),
+        )
+    except app_errors.Refused as exc:
+        return contracts.refuse(409, contracts.CONFLICT, str(exc))
+    threading.Thread(
+        target=app_setup.run_sweep,
+        args=(store, claim["job"], int(ctx.body.get("limit", 0) or 0)),
+        daemon=True,
+        name="corparius-preflight-sweep",
+    ).start()
+    return 200, {"ok": True, **claim}
+
+
+def v1_pull_stop(ctx):
+    """Stop after the current model.
+
+    Not mid-download: `ollama pull` has no resumable stop and killing one halfway leaves a partial blob
+    the daemon refuses to use. Between models is the honest granularity, and saying so beats a button
+    that looks immediate and is not.
+    """
+    return 200, {"ok": True, **app_setup.stop(ctx.store(), app_setup.KIND_PULL)}
+
+
 def v1_jobs(ctx):
     """Work this company has done or is doing, newest first.
 
@@ -702,10 +805,16 @@ def session(ctx):
 
 
 def ollama_get(ctx):
+    """The legacy spelling, and the pull's progress now comes from the job row.
+
+    It read `ctx.state.pulls`, so a console restarted mid-download reported no pull at all. The row
+    says `running` with its last line, or `interrupted` — which is the answer an operator needs, and
+    the one an in-process dict could never give.
+    """
     result = ollama_setup.status(lang=ctx.lang)
-    pulls = ctx.state.pulls
-    if pulls.get("running"):
-        result = {**result, "detail": pulls.get("progress") or "pulling...", "pulling": True}
+    pull = app_setup.view(ctx.store())["pull"]
+    if pull.get("state") == "running":
+        result = {**result, "detail": pull.get("progress") or "pulling...", "pulling": True}
     # The cached measurement only — this endpoint is polled while a pull runs.
     settings = state.fresh_settings()
     prof = hardware.profile(ctx.store(), max_age_days=settings.bench_max_age_days)
@@ -1417,94 +1526,86 @@ def preflight(ctx):
 
 
 def sweep_get(ctx):
-    """Progress of a running sweep, and what is known when none is running.
+    """The legacy spelling. Same rows underneath, flat shape on top.
 
-    A GET, polled by the page — so it reads state and calls nobody. The probing
-    happens in the worker thread that the POST started.
+    `sweep` used to be `ctx.state.sweep`, an in-process dict. It is a job row now, so this answers the
+    same question after a restart instead of reporting `{"running": false}` about work it has simply
+    forgotten.
     """
     from ..providers import preflight
 
-    known = ctx.state.store().known_probes()
+    store = ctx.state.store()
+    known = store.known_probes()
     tally: dict[str, int] = {}
     oldest = 0.0
     for row in known:
         tally[row["state"]] = tally.get(row["state"], 0) + 1
         oldest = max(oldest, time.time() - float(row["ts"] or time.time()))
+    seen = app_setup.view(store)
     return 200, {
         "ok": True,
-        "sweep": ctx.state.sweep,
+        # The shipped page reads `sweep.running`, `sweep.done`, `sweep.provider`. Mapped from the row
+        # rather than changing the page: this is the legacy shape, and that is what a version is.
+        "sweep": {
+            "running": seen["sweep"].get("state") == "running",
+            "done": (seen["sweep"].get("result") or {}).get("counts", {}),
+            "provider": seen["sweep"].get("progress", ""),
+            "state": seen["sweep"].get("state", ""),
+        },
         "known": len(known),
         "tally": tally,
-        "usable_by_provider": {k: len(v) for k, v in preflight.known(ctx.state.store()).items()},
-        # A verdict is a measurement and measurements age. Shown so nobody reads
-        # a six-month-old "blocked" as current fact.
+        "usable_by_provider": {k: len(v) for k, v in preflight.known(store).items()},
         "oldest_days": int(oldest / 86400),
-        "worth_rechecking": len(preflight.stale(ctx.state.store())),
+        "worth_rechecking": len(preflight.stale(store)),
     }
 
 
 def sweep_post(ctx):
-    """Start — or price, or stop — a sweep of every configured provider.
+    """The legacy spelling: start, price, or stop a sweep. One service underneath.
 
-    `{"estimate": true}` returns the number of calls it would make without
-    making any. That is deliberate: NVIDIA alone advertises 102 models, and an
-    operator pressing "check everything" is spending their own money and their
-    own rate limits. They get the number first.
+    The thread and the guard moved to `app_setup`, so this and `/api/v1/preflight/sweep` cannot come to
+    disagree about whether one is already running — which they could before, because the guard was this
+    process's own memory.
     """
     from ..providers import preflight
 
-    s = state.fresh_settings()
+    store = ctx.state.store()
     if ctx.body.get("stop"):
-        ctx.state.sweep["stop"] = True
-        return 200, {"ok": True, "stopping": True}
-    if s.llm_mock:
-        return 400, {"ok": False, "error": "mock mode: there is no provider to call"}
+        return 200, {"ok": True, **app_setup.stop(store, app_setup.KIND_SWEEP)}
     if ctx.body.get("estimate"):
         return 200, {"ok": True, **preflight.estimate()}
-    with ctx.state.lock:
-        if ctx.state.sweep.get("running"):
-            return 400, {"ok": False, "error": "a sweep is already running"}
-        ctx.state.sweep = {
-            "running": True,
-            "stop": False,
-            "done": 0,
-            "provider": "",
-            "model": "",
-            "counts": {},
-        }
-
-    limit = int(ctx.body.get("limit", 0) or 0)
-    timeout = int(ctx.body.get("timeout", preflight.TIMEOUT) or preflight.TIMEOUT)
-    store = ctx.state.store()
-
-    def _worker() -> None:
-        def note(provider, model, result, done):
-            sweep = ctx.state.sweep
-            sweep["provider"], sweep["model"], sweep["done"] = provider, model, done
-            sweep["counts"][result.state] = sweep["counts"].get(result.state, 0) + 1
-
-        try:
-            preflight.sweep(
-                store,
-                limit=limit,
-                timeout=timeout,
-                on_progress=note,
-                should_stop=lambda: bool(ctx.state.sweep.get("stop")),
-            )
-        except Exception:  # noqa: BLE001 - a background thread must not die silently
-            log.exception("sweep failed")
-        finally:
-            # Everything proved before the failure is already in the store: each
-            # verdict is written the moment it arrives, so an hour of real calls
-            # is never lost to whatever went wrong at the end.
-            ctx.state.sweep["running"] = False
-
-    threading.Thread(target=_worker, daemon=True, name="corparius-preflight-sweep").start()
-    return 200, {"ok": True, "started": True}
+    try:
+        claim = app_setup.start_sweep(
+            store,
+            state.fresh_settings(),
+            limit=int(ctx.body.get("limit", 0) or 0),
+            timeout=int(ctx.body.get("timeout", 0) or 0),
+        )
+    except app_errors.Refused as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    threading.Thread(
+        target=app_setup.run_sweep,
+        args=(store, claim["job"], int(ctx.body.get("limit", 0) or 0)),
+        daemon=True,
+        name="corparius-preflight-sweep",
+    ).start()
+    return 200, {"ok": True, "started": True, **claim}
 
 
 def ollama_pull(ctx):
-    return 200, adapters.ollama_pull(ctx.state, list(ctx.body.get("models", [])))
+    """The legacy spelling. `app_setup.start_pull` plus a thread, same as the v1 one."""
+    store = ctx.state.store()
+    try:
+        claim = app_setup.start_pull(store, list(ctx.body.get("models", [])))
+    except app_errors.Refused as exc:
+        return 200, {"ok": False, "error": str(exc)}
+    threading.Thread(
+        target=app_setup.run_pull,
+        args=(store, claim["job"], claim["models"]),
+        daemon=True,
+        name="corparius-ollama-pull",
+    ).start()
+    return 200, {"ok": True, "pulling": claim["models"], **claim}
 
 
 def company_post(ctx):

@@ -170,6 +170,7 @@ RANKS: dict[str, int] = {
     # a folder of renamed handlers: no `Ctx` parameter, and no transport error raised.
     "app/__init__": 5,
     "app/settings": 5,
+    "app/setup": 5,
     "app/errors": 5,
     "app/tasks": 5,
     "app/publish": 5,

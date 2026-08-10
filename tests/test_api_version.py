@@ -114,6 +114,11 @@ ALIASED = {
     ("POST", "preflight"): "preflight.run(",
     # The two whose legacy spelling differs only in the noun's position, and which are the same call.
     ("GET", "ollama"): "ollama_setup.status(",
+    # The durable pair. Both spellings claim through `app_setup.start_pull` / `start_sweep`, which is
+    # what puts the "already running" guard in the store instead of in this process's memory — the
+    # thing that let a sweep left behind by a crashed console be invisible to the next one.
+    ("POST", "ollama/pull"): "app_setup.start_pull(",
+    ("POST", "preflight/sweep"): "app_setup.start_sweep(",
 }
 
 # The third category, and it needed naming: an endpoint whose **v1 path is a different spelling**.
@@ -132,6 +137,11 @@ RENAMED = {
     # what they are, and `probe` says what the call costs — one real request on the operator's account.
     ("POST", "provider/models", "providers/models"): "adapters.provider_models(",
     ("POST", "test/provider", "providers/probe"): "provider_check.check(",
+    # `GET /api/preflight/sweep` answered "how is the sweep going, and what is proved". In v1 it is
+    # `GET /api/v1/machine`, which answers that for **both** long operations — the pull and the sweep —
+    # because they are one question an operator asks: what is this machine busy with. A rename rather
+    # than an alias, and the noun changed because the resource did.
+    ("GET", "preflight/sweep", "machine"): "app_setup.view(",
 }
 
 
@@ -227,6 +237,10 @@ SPLIT_NOUNS = {
     "preflight",
     "tiers/recommend",
     "claude/setup",
+    # The two long operations. `preflight/sweep` answers both a GET and a POST under each spelling;
+    # `ollama/pull` is a POST only.
+    "preflight/sweep",
+    "ollama/pull",
 }
 
 

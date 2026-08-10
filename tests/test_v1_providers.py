@@ -311,31 +311,3 @@ def test_nothing_was_written_when_claude_setup_refused(server, monkeypatch):
     after = _call(server, "GET", "/api/v1/providers")[1]
     assert after["llm_mock"] == before["llm_mock"]
     assert after["tiers"] == before["tiers"]
-
-
-# --- what is deliberately not here yet ------------------------------------------
-
-
-def test_the_pull_and_the_sweep_have_no_v1_spelling_yet():
-    """Stated as an assertion, not left to be noticed.
-
-    `adapters.ollama_pull` and `handlers.sweep_post` track progress in `UiState` — in-process dicts
-    that do not survive a restart, which is exactly the state schema 19 built the `jobs` table to
-    replace. A v1 route publishing a `pulling` flag would be publishing a field that lies the moment
-    the console is restarted, so they move to durable jobs *before* they get a v1 spelling.
-
-    This fails when one is added, which is the point: whoever adds it should have made it durable
-    first, and should delete this test saying so.
-    """
-    from corparius.api import routes
-
-    v1 = [r.path for r in routes.ALL_ROUTES if r.path.startswith("/api/v1/")]
-    assert not [p for p in v1 if "pull" in p or "sweep" in p], (
-        "a v1 route for the pull or the sweep appeared. Both track progress in UiState, so it does "
-        "not survive a restart — move it to a durable job (schema 19) and remove this test."
-    )
-    # And the in-process fields are still where they are, so the claim above stays true.
-    from corparius.api.state import UiState
-
-    assert "pulls" in UiState.__init__.__code__.co_names
-    assert "sweep" in UiState.__init__.__code__.co_names

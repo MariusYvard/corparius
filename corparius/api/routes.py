@@ -68,6 +68,18 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/v1/tiers/recommend", handlers.v1_tiers_recommend),
     Route("POST", "/api/v1/preflight", handlers.v1_preflight),
     Route("POST", "/api/v1/claude/setup", handlers.v1_claude_setup),
+    # The two long operations, now durable jobs. `machine` is the read a client polls while one runs —
+    # and after a restart it did not witness, it reports `interrupted` rather than nothing.
+    #
+    # **Named `machine`, not `setup`**, and the rename came from a test. `/api/v1/setup` is a GET whose
+    # path ends in a verb, and `test_mutating_routes_are_exactly_the_post_routes` flags exactly that —
+    # it forbids a non-public GET ending in `/delete`, `/stop`, `/pull` or `/setup`, because
+    # `POST /api/claude/setup` is why `/setup` reads as a write. The heuristic was right: a read named
+    # after an action defeats the one check that keeps writes behind POST.
+    Route("GET", "/api/v1/machine", handlers.v1_machine),
+    Route("POST", "/api/v1/ollama/pull", handlers.v1_ollama_pull),
+    Route("POST", "/api/v1/ollama/pull/stop", handlers.v1_pull_stop),
+    Route("POST", "/api/v1/preflight/sweep", handlers.v1_sweep_post),
     # The first v1 writes. Durable work: a client that loses the answer can ask again with the
     # same `Idempotency-Key` and will not start a second run.
     Route("POST", "/api/v1/runs", handlers.v1_runs_post, needs_slug=True),

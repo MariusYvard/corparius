@@ -21,13 +21,16 @@
    * cleared row lets `.env` show through and the key would come back. Measured, and the reason
    * `app_settings.CREDENTIALS` exists.
    *
-   * ## What this tab does not have yet
+   * ## The two long operations, and the only place this tab polls
    *
-   * **The Ollama pull and the full preflight sweep.** Both track progress in `UiState`, an in-process
-   * dict that does not survive a restart — the state schema 19 built the `jobs` table to replace.
-   * Publishing a `pulling` flag in v1 would be publishing a field that lies the moment the console is
-   * restarted, so they move to durable jobs before they get a v1 spelling. The shipped page keeps
-   * them until then, and `web/README.md` says so rather than leaving it to be discovered.
+   * The Ollama pull and the preflight sweep are **durable jobs** now, not `UiState` dicts — so a
+   * restart reports `interrupted` rather than forgetting, and a phone can watch one this console
+   * started. `GET /api/v1/machine` is the read, and it is polled **only while one is running**: a poll
+   * against no work is a round trip whose best case is nothing changed.
+   *
+   * The sweep asks before it spends. `{estimate: true}` answers how many calls it would make without
+   * making any, and that number goes in front of the operator first — NVIDIA alone advertises 102
+   * models, and "check everything" is their money and their rate limits.
    */
   import { get, post, Refused } from "./api.js";
   import { fill, translator } from "./i18n.js";
@@ -48,6 +51,12 @@
   let probed = $state({});
   let tiers = $state({});
   let report = $state(null);
+  let setup = $state(null);
+  let estimate = $state(null);
+
+  // The one interval on this tab, and it exists only while work does. `POLL_MS` matches the rest of
+  // the console; a pull is gigabytes and a sweep is minutes, so five seconds is not a busy loop.
+  const POLL_MS = 5000;
 
   async function load() {
     try {
@@ -68,9 +77,25 @@
     }
   }
 
-  // No interval. This tab is loaded, not polled.
+  async function loadSetup() {
+    try {
+      setup = await get("/api/v1/machine", { token });
+    } catch (e) {
+      failure = e instanceof Refused ? e : new Refused(0, { error: { message: String(e) } });
+    }
+  }
+
+  // Loaded, not polled — except while a job is live. `busyJob` is what turns the interval on, so a
+  // tab sitting on a finished pull makes no requests at all.
   $effect(() => {
     load();
+    loadSetup();
+  });
+
+  $effect(() => {
+    if (!busyJob) return;
+    const timer = setInterval(loadSetup, POLL_MS);
+    return () => clearInterval(timer);
   });
 
   async function save(key, values, toast = "") {
@@ -183,6 +208,59 @@
     }
   }
 
+  async function pull() {
+    busy = "pull";
+    said = "";
+    try {
+      await post("/api/v1/ollama/pull", { models: [] }, { token });
+      said = t("oll.starting");
+      await loadSetup();
+    } catch (e) {
+      failure = e;
+    } finally {
+      busy = "";
+    }
+  }
+
+  async function priceSweep() {
+    busy = "sweep";
+    try {
+      estimate = await post("/api/v1/preflight/sweep", { estimate: true }, { token });
+    } catch (e) {
+      failure = e;
+    } finally {
+      busy = "";
+    }
+  }
+
+  async function startSweep() {
+    busy = "sweep";
+    estimate = null;
+    try {
+      await post("/api/v1/preflight/sweep", {}, { token });
+      await loadSetup();
+    } catch (e) {
+      failure = e;
+    } finally {
+      busy = "";
+    }
+  }
+
+  async function stopJob(path) {
+    busy = "stop";
+    try {
+      await post(path, { stop: true }, { token });
+      await loadSetup();
+    } catch (e) {
+      failure = e;
+    } finally {
+      busy = "";
+    }
+  }
+
+  let pullJob = $derived(setup?.pull ?? {});
+  let sweepJob = $derived(setup?.sweep ?? {});
+  let busyJob = $derived(pullJob.state === "running" || sweepJob.state === "running");
   let connected = $derived((providers?.providers ?? []).filter((p) => p.configured));
   let mockOn = $derived(Boolean(providers?.llm_mock));
   let cloudOff = $derived(providers && !providers.cloud_enabled);
@@ -386,6 +464,52 @@
         {/if}
       </div>
     {/if}
+
+    <!-- The full sweep, and it asks before it spends. `estimate` is a real answer from the server
+         (`{estimate: true}` makes no calls), so the number in front of the operator is measured
+         rather than guessed. NVIDIA alone advertises 102 models. -->
+    <div class="actions">
+      {#if sweepJob.state === "running"}
+        <span class="chip warn">{t("badge.running")}</span>
+        <span class="small muted">{sweepJob.progress}</span>
+        <button class="quiet" disabled={busy === "stop"} onclick={() => stopJob("/api/v1/preflight/sweep")}>
+          {t("prov.sweepStop")}
+        </button>
+      {:else if estimate}
+        <p class="small">
+          {fill(t("prov.sweepConfirm"), {
+            n: estimate.total ?? 0,
+            p: Object.keys(estimate.providers ?? {}).length,
+          })}
+        </p>
+        <button disabled={busy === "sweep"} onclick={startSweep}>{t("prov.sweepAll")}</button>
+        <button class="link" onclick={() => (estimate = null)}>{t("task.cancel")}</button>
+      {:else}
+        <button class="quiet" disabled={busy === "sweep" || mockOn} onclick={priceSweep}>
+          {t("prov.sweepAll")}
+        </button>
+      {/if}
+    </div>
+
+    {#if setup}
+      <p class="small muted">
+        {fill(t("prov.sweepDone"), { n: setup.known ?? 0 })}
+        {#each Object.entries(setup.usable_by_provider ?? {}) as [name, count] (name)}
+          <span class="chip">{name} {count}</span>
+        {/each}
+      </p>
+      <!-- A verdict is a measurement and measurements age. Said out loud so nobody reads a
+           six-month-old `blocked` as current fact. -->
+      {#if setup.worth_rechecking}
+        <p class="small muted">{setup.worth_rechecking} · {setup.oldest_days}d</p>
+      {/if}
+      <!-- `interrupted` is a state a client really sees: a console killed mid-sweep leaves a row the
+           next process marks on startup. Nothing was resumed, and saying so beats both silence and a
+           silent restart of hundreds of paid calls. -->
+      {#if sweepJob.state && sweepJob.state !== "running"}
+        <p class="small muted"><span class="chip {sweepJob.state}">{sweepJob.state}</span> {sweepJob.progress}</p>
+      {/if}
+    {/if}
   </section>
 
   <section class="card">
@@ -403,6 +527,25 @@
       {#if !ollama.reachable}<p class="muted small">{t("oll.install")} <code>ollama.com</code></p>{/if}
       {#if ollama.missing?.length}
         <p class="muted small">{t("oll.missing")} {ollama.missing.join(", ")}</p>
+        <div class="actions">
+          {#if pullJob.state === "running"}
+            <span class="chip warn">{t("oll.pulling")}</span>
+            <button class="quiet" disabled={busy === "stop"} onclick={() => stopJob("/api/v1/ollama/pull/stop")}>
+              {t("run.stop")}
+            </button>
+          {:else}
+            <button disabled={busy === "pull"} onclick={pull}>{t("oll.pull")}</button>
+          {/if}
+        </div>
+      {/if}
+      {#if pullJob.state}
+        <!-- The progress line is the row's own column, so this is what a phone reads too — and what
+             survives the console being restarted mid-download. -->
+        <p class="small muted">
+          <span class="chip {pullJob.state}">{pullJob.state}</span>
+          {pullJob.progress || ""}
+          {#if pullJob.result?.done?.length}· {t("oll.done")}{/if}
+        </p>
       {/if}
       <!-- Reachable is not capable. The measurement decides whether local may carry a tier, and its
            absence is stated rather than assumed away. -->

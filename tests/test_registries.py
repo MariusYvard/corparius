@@ -62,7 +62,9 @@ ALL_SRC = "\n".join(SRC.values())
 # +2 at the Operations tab: `app/drafts.py` and `app/memory.py`, each written because the same
 # operation was implemented twice — and `app/memory.py` because the terminal only had two thirds of
 # it (`--pin`, `--forget`, no `--unpin`).
-MODULE_COUNT = 136
+# +1 for `app/setup.py`: the Ollama pull and the preflight sweep, moved off `UiState` and onto
+# durable jobs. The plan names `setup` in the rank-5 list; it had simply never been written.
+MODULE_COUNT = 137
 
 
 def test_every_source_file_is_scanned():

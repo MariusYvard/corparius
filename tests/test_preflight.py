@@ -549,19 +549,36 @@ def test_only_providers_with_a_key_are_swept(monkeypatch):
 
 
 def test_two_sweeps_at_once_are_refused(tmp_path, monkeypatch):
-    """Two threads probing the same rate-limited free tiers would turn every
-    answer into a 429 and prove nothing."""
+    """Two threads probing the same rate-limited free tiers would turn every answer into a 429 and
+    prove nothing.
+
+    **The guard is a row now, not `ui.sweep`.** This set `state.sweep = {"running": True}` and asserted
+    the refusal — which stopped meaning anything the moment the sweep became a durable job, because
+    that field no longer exists. Worse, it would have passed for the wrong reason had the field been
+    left in place: the console's memory is exactly what could not see a sweep another process left
+    behind, which is the whole reason for the move.
+
+    So the running job is created directly, and no worker thread is started: the refusal happens before
+    one would be. That also keeps the test hermetic — a real sweep is hundreds of paid calls.
+    """
     monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
     monkeypatch.setenv("CORP_HOME", str(tmp_path))
     monkeypatch.setenv("CORP_LLM_MOCK", "false")
-    from corparius.api import handlers, state
+    from corparius.api import handlers
+    from corparius.api import state as api_state
+    from corparius.app import setup as app_setup
 
-    state = state.UiState(state.fresh_settings(), tmp_path / ".env")
-    state.sweep = {"running": True}
-    ctx = types.SimpleNamespace(body={}, state=state, lang="en")
-    status, payload = handlers.sweep_post(ctx)
-    state.close()
-    assert status == 400 and "already running" in payload["error"]
+    live = api_state.UiState(api_state.fresh_settings(), tmp_path / ".env")
+    try:
+        live.store().start_job(app_setup.KIND_SWEEP, app_setup.MACHINE, progress="groq/llama")
+        ctx = types.SimpleNamespace(body={}, state=live, lang="en", store=live.store)
+        status, payload = handlers.sweep_post(ctx)
+        assert status == 400 and "already running" in payload["error"]
+        # And the v1 spelling refuses the same thing with a code a client can branch on.
+        status, payload = handlers.v1_sweep_post(ctx)
+        assert status == 409 and payload["error"]["code"] == "conflict"
+    finally:
+        live.close()
 
 
 def test_the_progress_endpoint_reads_state_and_calls_nobody(tmp_path, monkeypatch):

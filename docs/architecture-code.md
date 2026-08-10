@@ -928,6 +928,56 @@ serveur, le relancer, et le balayage est encore là — ou lit `interrupted`, ce
 reprise silencieuse est un mensonge sur ce qui s'est passé. `tests/test_v1_providers.py` échoue si une
 route v1 pour l'un des deux apparaît avant.
 
+### Le septième écart : une affirmation dans une docstring que le code ne tenait pas
+
+Trouvé en lisant deux autres harnais d'agents — `yc-software/qm` et
+`PrimeIntellect-ai/prime-agent` — pour voir ce qui s'y transposerait. Le classificateur d'injection de
+qm a fait regarder ici, et ce qu'on y a trouvé n'était pas l'absence d'un mécanisme : c'était une
+**affirmation fausse** à côté du mécanisme qui existe déjà.
+
+`apps.py` disait :
+
+> « An app is the only place in corparius where text from outside reaches a model, so it is the only
+> place that needs this. »
+
+Mesuré : **deux autres chemins**, et tous deux atterrissent dans le prompt **système**, pas dans un
+tour utilisateur. `agents._messages` construit le système en concaténant des blocs sur
+`spec.system_prompt`, ce qui est la position la plus privilégiée qui existe — sans clôture, une ligne
+au fond d'un PDF est indistinguable de ce que corparius a écrit lui-même.
+
+| bloc | d'où il vient | clôturé |
+| --- | --- | --- |
+| `knowledge` | un `SKILL.md` de l'entreprise, ou un pack importé | non — déclaré, avec la raison |
+| `learned` | des faits que les agents de l'entreprise ont écrits | non — déclaré |
+| `documents` | le dossier de l'opérateur | **oui, maintenant** |
+| `language_line` | corparius lui-même | sans objet |
+
+**Les documents ne sont pas les mots de l'opérateur.** Le dossier contient la page d'accueil d'un
+concurrent, le tarif d'un fournisseur, un deck que quelqu'un lui a envoyé. Le fait qu'il les ait
+déposés lui-même dit qu'il les a manipulés, pas qu'il les a écrits.
+
+**Le pack de compétences importé n'est délibérément *pas* clôturé.** Une compétence *est* de
+l'instruction procédurale par construction ; l'encadrer par « jamais des instructions » casserait ce à
+quoi elle sert. Ce qui la borne, c'est qu'importer est un acte de l'opérateur et que `skillimport`
+annonce en chiffres ce que le chargeur va couper. Le risque résiduel est nommé plutôt que masqué —
+`skillimport` copie le corps d'un `SKILL.md` tiers **verbatim**.
+
+Et le mécanisme est monté au rang 0 (`kernel.text.fence`) plutôt que copié, parce que **deux copies
+d'un contrôle de sécurité sont deux occasions qu'une seule des deux soit la soigneuse** — ce que le
+déplacement a immédiatement démontré : le premier brouillon du helper partagé prenait *un* marqueur et
+dérivait le fermant, en ne retirant que l'ouvrant. Une charge utile contenant le marqueur fermant
+aurait clôturé sa propre clôture et continué dehors, dans la voix de l'hôte. C'est exactement le trou
+que la fonction existe pour empêcher. Les deux marqueurs sont des paramètres et les deux sont retirés.
+
+`tests/test_untrusted_blocks.py` tient les deux bouts : chaque bloc qui entre dans le prompt système
+est nommé, chacun est soit clôturé soit **déclaré non clôturé avec sa raison**, et un bloc qui
+apparaît sans entrée échoue. Plus la preuve de non-vacuité : retirer la clôture fait échouer deux
+tests, dont celui qui vérifie qu'un fichier ne peut pas forger sa propre sortie.
+
+**C'est une atténuation, pas une garantie**, et le fichier le dit. Ce qui borne réellement un document,
+c'est la porte de permissions : un appel d'outil qu'un fichier a réussi à souffler passe toujours par
+`ask_above`, et `hitl_tools` ne peut être fait taire par rien de ce qu'un fichier raconte.
+
 ## Un vrai tour, sur la vraie configuration
 
 La liste de vérification du plan demande « un vrai tour sur la vraie entreprise ». Lancé sur une

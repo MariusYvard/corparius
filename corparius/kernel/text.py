@@ -64,3 +64,30 @@ def slugify_loose(slug: str) -> str:
     company created from now on gets a slug that survives its own name.
     """
     return _NOT_SLUG.sub("-", slug.strip().lower()).strip("-")
+
+
+# --- fencing text nobody here wrote ---------------------------------------------
+
+
+def fence(text: str, opening: str, closing: str) -> str:
+    """Wrap `text` between two markers, having removed **both** from it first.
+
+    **The stripping is the whole mechanism**, and it has to cover both ends. A fence anyone can
+    close marks nothing: leave a marker in the payload and whatever supplied it writes its own
+    closing line and continues outside, in the voice of the host.
+
+    The first version of this took one marker and derived the closing one from it — and stripped
+    only the opening. A payload containing the closing marker would have ended the fence early,
+    which is the precise hole the function exists to prevent. Both markers are parameters now, and
+    both are removed, because deriving one from the other is what made it easy to strip only one.
+
+    `apps.py` had this right for one surface. It is here because a second surface needs it, and a
+    second copy of a security mechanism is two chances for only one of them to be careful. Rank 0
+    and pure: three strings in, one out.
+
+    The caller chooses the markers and the sentence that explains them, because the two surfaces are
+    not making the same claim — a stranger's message to a public app is not a PDF the operator put
+    on file.
+    """
+    clean = text.replace(opening, "").replace(closing, "")
+    return "\n".join((opening, clean, closing))

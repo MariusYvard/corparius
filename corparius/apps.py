@@ -27,6 +27,7 @@ from pathlib import Path
 
 import yaml
 
+from .kernel import text as textkit
 from .kernel.records import Difficulty
 
 log = logging.getLogger("corparius.apps")
@@ -175,12 +176,16 @@ VISITOR_CLOSE = "<<<end-visitor-message>>>"
 def wrap_untrusted(text: str) -> str:
     """Fence a stranger's words so the model can see where they stop.
 
-    The delimiters are stripped out of the text first. Leaving them in would
-    let a visitor close the fence and write outside it, which is the whole
-    trick — a marker anyone can forge marks nothing.
+    `kernel.text.fence` is the mechanism now, and it moved because a second surface needed it:
+    `documents.context()` puts file contents in the **system prompt**, and a second copy of a
+    security control is two chances for only one of them to be careful.
+
+    The move also found a hole in this one. It stripped `VISITOR_OPEN` and `VISITOR_CLOSE` — both,
+    correctly — but the first draft of the shared helper took a single marker and derived the closing
+    one, stripping only the opener. `fence` takes both and removes both, because deriving one from
+    the other is exactly what made it easy to strip only one.
     """
-    clean = text.replace(VISITOR_OPEN, "").replace(VISITOR_CLOSE, "")
-    return f"{VISITOR_OPEN}\n{clean}\n{VISITOR_CLOSE}"
+    return textkit.fence(text, VISITOR_OPEN, VISITOR_CLOSE)
 
 
 def messages_for(app: App, user_input: str, company: dict | None = None) -> list[dict]:
@@ -190,11 +195,23 @@ def messages_for(app: App, user_input: str, company: dict | None = None) -> list
     business and one that answers about businesses in general — and it is
     already parsed, so quoting it costs nothing to maintain.
 
-    An app is the only place in corparius where text from outside reaches a
-    model, so it is the only place that needs this. It is a mitigation, not a
-    guarantee: prompting cannot be relied on to hold. What actually bounds an
-    app is that it has no tools — it returns text and nothing else — and that
-    its ceilings apply whatever it was told. See tests/test_prompt_injection.py.
+    **This claimed an app was "the only place in corparius where text from outside reaches a model",
+    and that was measurably false.** Two other paths put outside-sourced text into a prompt, and both
+    land in the *system* prompt rather than in a user turn:
+
+      * `documents.context()` — the operator's folder, which holds a competitor's landing page or a
+        supplier's price list as readily as their own notes. Fenced now; see `documents.UNTRUSTED`.
+      * an imported skill pack — `skillimport` copies a third-party `SKILL.md` **body verbatim** and
+        `skills.context_for` puts it in the system prompt. Deliberately **not** fenced: a skill is
+        procedural instruction by design, so framing it as "never instructions" would break what it
+        is for. What bounds it is that importing one is an operator act, and that the import command
+        reports in numbers how much the loader will cut.
+
+    It is a mitigation, not a guarantee: prompting cannot be relied on to hold. What actually bounds
+    an app is that it has no tools — it returns text and nothing else — and that its ceilings apply
+    whatever it was told. What bounds a document is the permission gate: a tool call a file talked an
+    agent into still meets `ask_above`, and `hitl_tools` cannot be silenced by anything a file says.
+    See tests/test_prompt_injection.py and tests/test_untrusted_blocks.py.
     """
     system = app.system
     if company:

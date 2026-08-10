@@ -1,10 +1,19 @@
 """One exchange with the CEO. Rank 5.
 
 The console had this and a terminal did not, and the barrier was one line:
-`state.chats.setdefault(slug, deque(...))`. The history is now a parameter the caller owns —
-the console passes its per-company deque, a terminal passes a list and gets a single turn.
-That is honest rather than a limitation dressed up: chat history that survives a process is
-schema 19's `chat_turns` table, not something this function can pretend to have.
+`state.chats.setdefault(slug, deque(...))`. Then the history was a parameter the caller owned —
+honest, and still a limit: the console's deque died with the process and a terminal got a single
+turn with no memory at all.
+
+**Schema 21 built the table both docstrings pointed at**, so the history is neither a parameter nor
+a deque now: it is read from and written to the store, and there is one conversation per company
+whoever is typing. That is the argument `cmd_run` makes for recording a foreground run in `jobs`,
+applied to a conversation — and it is what lets a phone read what the console said.
+
+`history=` survives as an **override**, for a caller that wants a one-shot with no memory and no
+trace. Nothing in the product passes it; `tests/test_ceo_chat.py` does, because "answer this once
+and remember nothing" is a real thing to be able to ask for and a silent inability to ask for it
+would be worse than a parameter.
 
 The reply and the action are two halves of one answer. `directives.apply` is what makes the
 sentence true, and if it changed something the change is appended — because the CEO answering
@@ -22,7 +31,15 @@ from . import directives
 
 
 def once(store, settings, slug: str, message: str, history=None, lang: str = "en") -> dict:
-    history = [] if history is None else history
+    # The store is the conversation. `history=` overrides it for a caller that wants a turn with no
+    # memory; `remember` follows it, because writing turns to a conversation this call refused to
+    # read from would leave a transcript with a hole in the middle.
+    remember = history is None
+    # **No copy on the override path.** `once` appends the two turns to the list it was given, and two
+    # tests pin that — a caller that keeps a list across calls is keeping a conversation, which is the
+    # whole reason the parameter existed before the table did. Copying it here silently broke that and
+    # they said so.
+    history = store.chat_history(slug) if remember else history
     st = store.status(slug)
     tick = int(store.load_state(slug).get("tick", 0))
     open_tasks = store.list_tasks(slug, "approved")[:5]
@@ -116,16 +133,20 @@ def once(store, settings, slug: str, message: str, history=None, lang: str = "en
             "label": i18n.pick(lang, spec_a["label_en"], spec_a["label_fr"]),
         }
     provider, _, model = result.source.partition(":")  # "mock:haiku" -> mock, haiku
+    turn = {
+        "role": "assistant",
+        "text": reply,
+        "model": model,
+        "provider": provider,
+        "unanswered": unanswered,
+    }
     history.append({"role": "user", "text": message})
-    history.append(
-        {
-            "role": "assistant",
-            "text": reply,
-            "model": model,
-            "provider": provider,
-            "unanswered": unanswered,
-        }
-    )
+    history.append(turn)
+    if remember:
+        # Both turns, and the operator's first: a transcript that kept only the answers would read
+        # like the CEO talking to itself.
+        store.add_chat_turn(slug, "user", message)
+        store.add_chat_turn(slug, "assistant", reply, model, provider, unanswered)
     return {
         "ok": True,
         "reply": reply,

@@ -53,6 +53,7 @@ from ..providers import (
 )
 from ..providers.integrations import stripe_check, stripe_payments
 from ..providers.llm import connected_providers
+from ..store import chat as chat_store
 from ..tools.spec import SPEC
 from . import adapters, contracts, state
 
@@ -743,6 +744,60 @@ def v1_pull_stop(ctx):
     return 200, {"ok": True, **app_setup.stop(ctx.store(), app_setup.KIND_PULL)}
 
 
+def v1_chat(ctx):
+    """The conversation this company is having with its CEO.
+
+    A read, and it answers after a restart — which is the whole of schema 21. It was
+    `UiState.chats`, a deque in the console's process, so a phone could not read what the console had
+    said and closing the console lost the exchanges in which the CEO paused a role or set a focus.
+    Those are the turns an operator most wants to look back at.
+
+    Bounded by rows, and the bound is the client's to choose within reason: `HISTORY_KEPT` is what a
+    *prompt* is built from, and a person scrolling back is a different question. The table keeps
+    everything — the same distinction documents already make between `MAX_CHARS` and reading a file.
+    """
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    limit = int(ctx.query.get("limit", chat_store.HISTORY_KEPT) or chat_store.HISTORY_KEPT)
+    return 200, {
+        "ok": True,
+        "history": ctx.store().chat_history(ctx.slug, limit=min(max(limit, 1), 200)),
+    }
+
+
+def v1_chat_post(ctx):
+    """Say something to the CEO, and get the reply plus whatever it actually did.
+
+    The reply and the action are two halves of one answer. `directives.apply` runs inside the service,
+    so a CEO that says "I will pause the campaigns" has paused them — or the sentence is corrected.
+    That shape exists because the empty promise was the failure it was written to end.
+
+    `proposal` is the other half: an intent the CEO will not execute itself. The operator confirms with
+    a button, and a client that ignored the field would hide a decision the CEO is waiting on.
+    """
+    message = str(ctx.body.get("message", "")).strip()
+    if not message:
+        return contracts.refuse(400, contracts.INVALID, "a message is required", field="message")
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    return 200, adapters.chat(ctx.state, ctx.slug, message, ctx.lang)
+
+
+def v1_chat_delete(ctx):
+    """Clear the conversation.
+
+    The operator's own transcript is theirs to clear, the same argument as forgetting a memory: one
+    that can only be removed by opening the database is one they do not own. Deleted rather than
+    archived — a skill is knowledge the curator may want back, a conversation is one they have ended.
+    """
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    return 200, {"ok": True, "forgotten": ctx.store().forget_chat(ctx.slug)}
+
+
 # --- settings -------------------------------------------------------------------
 
 
@@ -1313,7 +1368,14 @@ def theme_get(ctx):
 
 
 def chat_get(ctx):
-    return 200, {"ok": True, "history": list(ctx.state.chats.get(ctx.slug, []))}
+    """The legacy spelling. Reads `chat_turns` now, like the v1 one.
+
+    It read `ctx.state.chats`, and that field went with schema 21 — so this was an `AttributeError` on
+    the shipped page's first poll of the CEO tab. `tests/test_api_version.py` caught it by asking
+    whether both spellings of an endpoint reach one function, which is the second time that ratchet has
+    found a live break rather than a declaration needing an update.
+    """
+    return 200, {"ok": True, "history": ctx.state.store().chat_history(ctx.slug)}
 
 
 def companies_post(ctx):

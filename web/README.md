@@ -44,9 +44,14 @@ paint so nobody watches English flash past. Measured with both inlined: 91 132 b
 carries a generated copy and `tests/test_i18n.py` fails if the two disagree, key for key and value
 for value, so neither can drift while both exist.
 
-525 keys each, 43 namespaces, and **no namespace is a prefix of another** — that last one is an
+526 keys each, 43 namespaces, and **no namespace is a prefix of another** — that last one is an
 assertion, not a convention: `doc.` (Diagnostics) and `docs.` (Documents) once coexisted and printed
 *Diagnostics* on the Documents card, which only a screenshot found.
+
+The 526th is `nav.ceo`, added when that tab was rebuilt: the shipped page hardcodes the string "CEO"
+in its tab strip, so the one tab with no label key was the one nobody had needed to translate.
+`tests/test_v1_chat.py` now holds both ends of the tab list, so a tab without a label fails rather
+than rendering `nav.<id>` on screen.
 
 ## The tabs, one at a time
 
@@ -64,7 +69,7 @@ each card landed, and what is still only in the old page.
 | Operations | the board · standing rules · memory · drafts · the action log | — (Backup moved to Settings, below) |
 | Documents | the drop zone · what is on file · reading one | — |
 | Providers | Claude subscription · runtime toggles · free tiers · routing tiers · Ollama status and pull · preflight and the full sweep | — |
-| CEO | — | the chat, and the CEO's own powers |
+| CEO | the conversation · the CEO's proposals · forget | — |
 | Settings | the 80-field registry (generated) · Backup · theme and accent | — |
 | Plugins | — | the seven seams · Skills |
 
@@ -97,6 +102,28 @@ charging whoever ran it.
 The sweep asks before it spends. `{"estimate": true}` answers how many calls it would make **without
 making any**, and that number goes in front of the operator first: NVIDIA alone advertises 102 models,
 and "check everything" is their money and their rate limits.
+
+### The CEO tab needed a schema change first
+
+It could not have been built honestly before **schema 21**. The history was `UiState.chats`, a deque per
+company in the console's process, so closing the console lost every exchange — including the ones in
+which the CEO paused a role or set a focus, which are the turns an operator most wants back. A phone
+could read none of it, and `corparius ceo` was a stranger to the thread: it passed a fresh list and got
+one turn.
+
+Two docstrings had already promised the table and named it. `app/chat.py`: *"chat history that survives
+a process is schema 19's `chat_turns` table, not something this function can pretend to have."*
+`cli/operate.cmd_ceo` said the same. The plan named it beside `jobs`; it was the half of schema 19 never
+written. So the rule from the pull and the sweep applied — **do not publish a v1 field that lies after a
+restart** — and the table came first.
+
+`chat_turns` makes one conversation per company, whoever is typing. Ask in a terminal, read the answer
+in the browser. Proved across two real processes: a subprocess console says something, it is killed, and
+a second console is asked what was said.
+
+`UiState` now holds exactly one thing: `runs`, a `threading.Event` for this console's own stop button —
+a signal that means nothing outside the process that made it. `pulls`, `sweep` and `chats` were
+everything in that object a restart silently lost, and all three are rows.
 
 ### The settings form is generated, not written
 

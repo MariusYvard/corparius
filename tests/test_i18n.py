@@ -1,4 +1,4 @@
-"""The 525 strings, as data, and the collision class that shipped a wrong label.
+"""The 526 strings, as data, and the collision class that shipped a wrong label.
 
 Stage 9's first risk-reduction step, and the plan is explicit about why it comes before the
 framework: the interface strings are **data, not code**, so they move verbatim and get a test,
@@ -251,14 +251,14 @@ def test_no_string_is_empty():
 
 
 def test_the_untranslated_strings_are_the_ones_that_should_be():
-    """20 keys where French equals English, and each is a word that does not translate — `Mode`,
+    """21 keys where French equals English, and each is a word that does not translate — `Mode`,
     `Agent`, `console`, `CEO`, `tier.normal`, `CORP_UI_TOKEN`. Pinned as a count rather than
     forbidden, because forbidding it would push someone to translate `Plugins` into something
     nobody says, and leaving it unmeasured is how a genuinely forgotten string hides among them.
     """
     en, fr = _json("en"), _json("fr")
     same = sorted(k for k in en if en[k] == fr[k])
-    assert len(same) == 20, (
+    assert len(same) == 21, (
         f"{len(same)} keys are identical in both languages: {same}. If that is a word that does "
         "not translate, raise the number here and say which; if it is a forgotten string, "
         "translate it."

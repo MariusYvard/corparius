@@ -16,6 +16,7 @@
    *     you can authenticate, and it has no v1 spelling yet.
    */
   import { onMount } from "svelte";
+  import CEO from "./CEO.svelte";
   import Documents from "./Documents.svelte";
   import Operations from "./Operations.svelte";
   import Overview from "./Overview.svelte";
@@ -56,6 +57,7 @@
     { id: "operations", component: Operations },
     { id: "documents", component: Documents },
     { id: "providers", component: Providers },
+    { id: "ceo", component: CEO },
     { id: "settings", component: Settings },
   ];
   let tab = $state(localStorage.getItem("corparius-tab") || "overview");

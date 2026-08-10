@@ -131,6 +131,22 @@ CREATE TABLE IF NOT EXISTS clients (
     last_seen REAL,
     revoked INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS chat_turns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company TEXT NOT NULL,
+    role TEXT NOT NULL,
+    text TEXT NOT NULL,
+    -- Which model answered, kept per turn rather than per conversation: a chat can span a tier
+    -- change or a fallback, and "who said this" is the question an operator asks of one reply.
+    model TEXT NOT NULL DEFAULT '',
+    provider TEXT NOT NULL DEFAULT '',
+    -- The model was called and said nothing usable. Stored rather than derived from an empty text,
+    -- because the text is not empty: it is the sentence explaining the silence.
+    unanswered INTEGER NOT NULL DEFAULT 0,
+    ts REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chat_by_company ON chat_turns (company, id);
 """
 
 
@@ -138,7 +154,7 @@ CREATE TABLE IF NOT EXISTS clients (
 # an existing store must be brought forward through. The version is tracked in
 # the database itself via `PRAGMA user_version`, so an upgrade migrates in place
 # instead of relying on the operator to back up and recreate.
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 
 def _migration_1(db: sqlite3.Connection) -> None:
@@ -477,6 +493,28 @@ def _migration_20(db: sqlite3.Connection) -> None:
     )
 
 
+def _migration_21(db: sqlite3.Connection) -> None:
+    """The CEO conversation, which lived in the console's process.
+
+    Two docstrings promised this table before it existed — `app/chat.py` and `cli/operate.cmd_ceo`
+    both said, correctly, that history surviving a process is a store table and not something they
+    could pretend to have. The plan named it beside `jobs`; it was the half of schema 19 that never
+    got written.
+
+    **Nothing is migrated in.** `UiState.chats` is a live deque in whatever process is running now, so
+    there is nothing on disk to bring forward. A console that is up keeps its turns until it exits and
+    writes new ones here from this point; inventing rows for exchanges nobody recorded would be
+    claiming a transcript that does not exist.
+    """
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS chat_turns ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT NOT NULL, role TEXT NOT NULL,"
+        " text TEXT NOT NULL, model TEXT NOT NULL DEFAULT '', provider TEXT NOT NULL DEFAULT '',"
+        " unanswered INTEGER NOT NULL DEFAULT 0, ts REAL NOT NULL)"
+    )
+    db.execute("CREATE INDEX IF NOT EXISTS chat_by_company ON chat_turns (company, id)")
+
+
 MIGRATIONS = {
     1: _migration_1,
     2: _migration_2,
@@ -498,4 +536,5 @@ MIGRATIONS = {
     18: _migration_18,
     19: _migration_19,
     20: _migration_20,
+    21: _migration_21,
 }

@@ -124,6 +124,11 @@ ALIASED = {
     ("GET", "settings"): "adapters.settings_payload()",
     ("POST", "settings"): "adapters.set_settings(",
     ("POST", "backup"): "backup.make_backup(",
+    # The CEO tab. `adapters.chat` is a pass-through now — schema 21 took the deque it used to own —
+    # but both spellings still meet there, and the pair is declared in
+    # `tests/test_two_callers_agree.py` as (`chat`, `ceo`).
+    ("GET", "chat"): "chat_history(",
+    ("POST", "chat"): "adapters.chat(",
 }
 
 # The third category, and it needed naming: an endpoint whose **v1 path is a different spelling**.
@@ -248,6 +253,7 @@ SPLIT_NOUNS = {
     "ollama/pull",
     "settings",
     "backup",
+    "chat",
 }
 
 

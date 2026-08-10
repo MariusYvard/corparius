@@ -30,6 +30,7 @@ import threading
 from .actions import ActionsMixin
 from .approvals import ApprovalsMixin
 from .base import Connected, _locked, log
+from .chat import ChatMixin
 from .clients import ClientsMixin
 from .decisions import DecisionsMixin
 from .directives import DirectivesMixin
@@ -54,6 +55,7 @@ from .token_usage import TokenUsageMixin
 class Store(
     ActionsMixin,
     ApprovalsMixin,
+    ChatMixin,
     ClientsMixin,
     DecisionsMixin,
     DirectivesMixin,

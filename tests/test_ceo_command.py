@@ -49,23 +49,59 @@ def store(home):
 # --- the seam ------------------------------------------------------------------
 
 
-def test_the_history_is_the_callers_to_own(store, home):
-    """The one line that kept a terminal out. Passing it in is what makes the service
-    reachable — and passing nothing is a legitimate answer, not a degraded one.
+def test_passing_nothing_means_the_stored_conversation(store, home):
+    """What `history=None` means, and schema 21 inverted it.
 
-    The returned history holds *this* exchange and nothing before it. My first version of this
-    asserted it came back empty, which was wrong about the service rather than the other way
-    round: the console needs the turn to render, and a caller that keeps no history simply has
-    nothing carried over.
+    It used to mean "no memory": the caller kept a list or got a single turn. This test asserted
+    `len(again["history"]) == 2` — "nothing was kept between the two calls" — and that assertion was
+    the old contract, not a property worth preserving. `chat_turns` exists now, so passing nothing
+    means *the conversation this company is having*, and the second call sees the first.
+
+    Which is the point: one conversation per company whoever is typing, so `corparius ceo` and the
+    console are in the same thread and a phone can read what either said. The same argument `cmd_run`
+    makes for recording a foreground run in `jobs`.
     """
     out = app_chat.once(store, Settings(), "acme", "Bonjour", history=None)
     assert out["ok"] and out["reply"]
     assert [turn["role"] for turn in out["history"]] == ["user", "assistant"]
-    assert out["history"][0]["text"] == "Bonjour", "and it is this exchange, not another"
+    assert out["history"][0]["text"] == "Bonjour"
 
     again = app_chat.once(store, Settings(), "acme", "Autre chose", history=None)
-    assert len(again["history"]) == 2, "nothing was kept between the two calls"
-    assert again["history"][0]["text"] == "Autre chose"
+    assert [turn["text"] for turn in again["history"] if turn["role"] == "user"] == [
+        "Bonjour",
+        "Autre chose",
+    ], "the second call did not see the first: the conversation is not being kept"
+    assert len(store.chat_history("acme")) == 4, "both sides of both exchanges are on disk"
+
+
+def test_an_empty_list_is_the_one_shot_with_no_trace(store, home):
+    """The override, and it has to stay reachable.
+
+    "Answer this once and remember nothing" is a real thing to ask for — and a silent inability to
+    ask for it would be worse than a parameter. `history=[]` is falsy but not `None`, which is what
+    separates "no memory" from "not specified".
+    """
+    out = app_chat.once(store, Settings(), "acme", "Juste une fois", history=[])
+    assert out["ok"] and out["reply"]
+    assert store.chat_history("acme") == [], "a one-shot must leave no transcript"
+
+
+def test_the_stored_conversation_is_per_company(store, home):
+    """Two companies are two conversations. Sharing them would put one company's plan in another's
+    prompt, which is the tenancy mistake this project has no reason to make."""
+    app_chat.once(store, Settings(), "acme", "Pour acme", history=None)
+    assert [t["text"] for t in store.chat_history("acme") if t["role"] == "user"] == ["Pour acme"]
+    assert store.chat_history("autre") == []
+
+
+def test_forgetting_the_conversation_is_the_operators_to_do(store, home):
+    """Their own transcript, theirs to clear — the same argument as `forget` for a memory. Deleted
+    rather than archived: a skill is knowledge the curator may want back, a chat is a conversation
+    they have decided to end."""
+    app_chat.once(store, Settings(), "acme", "Bonjour", history=None)
+    assert store.forget_chat("acme") == 2
+    assert store.chat_history("acme") == []
+    assert store.forget_chat("acme") == 0, "clearing an empty conversation is not an error"
 
 
 def test_a_caller_that_keeps_history_gets_it_back(store, home):

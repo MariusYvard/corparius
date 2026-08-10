@@ -86,6 +86,7 @@ RANKS: dict[str, int] = {
     "store/schema": 2,
     "store/actions": 2,
     "store/approvals": 2,
+    "store/chat": 2,
     "store/decisions": 2,
     "store/directives": 2,
     "store/drafts": 2,

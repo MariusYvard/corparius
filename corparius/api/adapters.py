@@ -19,7 +19,6 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from collections import deque
 from pathlib import Path
 
 from .. import company as company_mod
@@ -260,21 +259,15 @@ def providers_payload() -> dict:
 
 
 def chat(ui: UiState, slug: str, message: str, lang: str = "en") -> dict:
-    """`app.chat.once`, holding the console's own conversation history.
+    """`app.chat.once`, and there is nothing left for this to hold.
 
-    The service takes the history as a parameter — that one line, `ui.chats`, was the whole
-    reason a terminal could not have this. What is left here is owning the deque, which is a
-    console concern: it lives in process memory and does not survive a restart, and pretending
-    otherwise is schema 19's job rather than this function's.
+    It owned `ui.chats`, a deque per company in this process — the last thing in `UiState` that a
+    restart lost. Schema 21 made the conversation a table, so the service reads and writes it and this
+    is a pass-through. Kept because `tests/test_two_callers_agree.py` declares the pair
+    (`chat`, `ceo`) and the ratchet is what stops the two surfaces drifting again; a function that
+    forwards is cheaper than a declaration that stops being checked.
     """
-    return app_chat.once(
-        ui.store(),
-        state.fresh_settings(),
-        slug,
-        message,
-        history=ui.chats.setdefault(slug, deque(maxlen=_CHAT_LIMIT)),
-        lang=lang,
-    )
+    return app_chat.once(ui.store(), state.fresh_settings(), slug, message, lang=lang)
 
 
 def run_view(ui: UiState, slug: str) -> dict:

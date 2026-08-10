@@ -20,10 +20,13 @@ def cmd_ceo(args) -> int:
     """Ask the CEO something, from a terminal.
 
     The console had this and a terminal did not, and the barrier was one line — the chat history
-    lived in `UiState.chats`, a dict in the console's process. The service takes the history as a
-    parameter now, so this passes a list and gets a single turn. That limit is stated rather than
-    hidden: conversation that survives a process is a store table, not something a one-shot
-    command can pretend to have.
+    lived in `UiState.chats`, a dict in the console's process. Then it was a parameter, and this
+    passed a list and got a single turn with no memory of anything.
+
+    **Schema 21 built the table this docstring used to point at.** Passing no history now means the
+    stored conversation, so `corparius ceo` and the console are in the *same* thread: ask here, read
+    the answer in the browser, and a phone sees both. The limit that was stated rather than hidden is
+    simply gone.
 
     The CEO's powers come with it. Asked to pause a role or to focus the company, it acts and
     then says what it changed — the same `directives.apply` the console calls, so the sentence

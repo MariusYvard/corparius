@@ -12,7 +12,6 @@ The store is the exception and deliberately not per-request; the measurement is 
 from __future__ import annotations
 
 import threading
-from collections import deque
 from pathlib import Path
 
 from .. import company as company_mod
@@ -48,12 +47,16 @@ class UiState:
         self.settings = settings
         self.env_file = env_file
         self.runs: dict[str, dict] = {}
-        self.chats: dict[str, deque] = {}
-        # `pulls` and `sweep` were here, and they are gone: both are rows in `jobs` now. They were
-        # the last two things in this object that a restart silently lost, and the last two a second
-        # client could not see. What is left is genuinely per-process — `runs` holds a
-        # `threading.Event` for this console's own stop button, and `chats` is a bounded deque
-        # nobody has asked to persist.
+        # `pulls`, `sweep` and `chats` were all here. All three are gone: two became `jobs` rows and
+        # the conversation became `chat_turns`. Between them they were everything in this object that
+        # a restart silently lost and everything a second client could not see — a phone could not
+        # read what the console had said, and closing the console lost the exchanges in which the CEO
+        # paused a role.
+        #
+        # `runs` is what is left, and it is genuinely per-process: a `threading.Event` for this
+        # console's own stop button, a signal that means nothing outside the process that made it.
+        # The durable half of stopping is `cancel_requested`, a column, which is what lets anybody
+        # else stop a run.
         self.lock = threading.Lock()
         self._store: Store | None = None
 

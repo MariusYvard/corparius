@@ -85,6 +85,11 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/v1/settings", handlers.v1_settings),
     Route("POST", "/api/v1/settings", handlers.v1_settings_post),
     Route("POST", "/api/v1/backup", handlers.v1_backup),
+    # The CEO tab. Schema 21 made the conversation a table, so the read answers after a restart and a
+    # phone can follow a thread the console started.
+    Route("GET", "/api/v1/chat", handlers.v1_chat, needs_slug=True),
+    Route("POST", "/api/v1/chat", handlers.v1_chat_post, needs_slug=True),
+    Route("POST", "/api/v1/chat/forget", handlers.v1_chat_delete, needs_slug=True),
     # The first v1 writes. Durable work: a client that loses the answer can ask again with the
     # same `Idempotency-Key` and will not start a second run.
     Route("POST", "/api/v1/runs", handlers.v1_runs_post, needs_slug=True),

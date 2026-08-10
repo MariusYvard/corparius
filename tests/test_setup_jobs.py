@@ -386,5 +386,8 @@ def test_uistate_no_longer_holds_either_of_them():
         "an in-process copy of the pull or the sweep came back. Both are `jobs` rows now: a field "
         "here would be a second source of truth that a restart silently loses."
     )
-    # What is left is genuinely per-process.
-    assert "runs" in names and "chats" in names
+    # And `chats` went the same way one commit later, for the same reason: schema 21's `chat_turns`.
+    # `runs` is what is left, and it is genuinely per-process — a `threading.Event` for this console's
+    # own stop button, which means nothing outside the process that made it.
+    assert "chats" not in names, "the conversation is `chat_turns` now, not a deque"
+    assert "runs" in names

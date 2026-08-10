@@ -90,6 +90,11 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/v1/chat", handlers.v1_chat, needs_slug=True),
     Route("POST", "/api/v1/chat", handlers.v1_chat_post, needs_slug=True),
     Route("POST", "/api/v1/chat/forget", handlers.v1_chat_delete, needs_slug=True),
+    # The plugins tab, which carries skills too: both are the operator extending what corparius can
+    # do, one through a seam and one through prose in a prompt.
+    Route("GET", "/api/v1/plugins", handlers.v1_plugins),
+    Route("POST", "/api/v1/plugins", handlers.v1_plugins_post),
+    Route("POST", "/api/v1/skills/scope", handlers.v1_skill_scope, needs_slug=True),
     # The first v1 writes. Durable work: a client that loses the answer can ask again with the
     # same `Idempotency-Key` and will not start a second run.
     Route("POST", "/api/v1/runs", handlers.v1_runs_post, needs_slug=True),

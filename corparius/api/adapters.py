@@ -150,6 +150,54 @@ def overview(ui: UiState, slug: str) -> tuple[int, dict]:
     )
 
 
+def plugins_payload(slug: str) -> dict:
+    """What both plugin endpoints answer with: the seams, and what this company knows in prose.
+
+    Collapsed here when the v1 spelling was added, and it fixed a latent `NameError` on the way.
+    `plugins_get` bound `loader` **inside** `if s.skills_enabled:` and then read it in a ternary —
+    `loader.always_on_chars() if s.skills_enabled else 0`. Safe only because the same condition guards
+    both, so the attribute is never evaluated when the name is unbound. A reader rearranging that
+    ternary, or adding a second use, gets an unbound local. One assignment, unconditional, instead.
+
+    `unscoped` is the field this payload exists for. A skill naming no tool rides on every prompt of
+    every agent — 3 815 characters a turn, measured on the owner's own company — and `always_on_chars`
+    is that bill for the whole set. A skill that declares `always:` is counted and not badged: it is a
+    deliberate choice, and a warning on a deliberate choice is one an operator learns to ignore.
+    """
+    from .. import plugins, skills
+
+    s = state.fresh_settings()
+    loader = skills.SkillLoader.for_company(slug, max_chars=s.skill_max_chars)
+    catalog = (
+        [
+            {
+                "name": sk.name,
+                "description": sk.description,
+                "scope": sk.scope,
+                "tools": sk.allowed_tools,
+                "unknown_tools": [t for t in sk.allowed_tools if t not in SPEC],
+                "chars": len(sk.instructions),
+                "unscoped": sk.unscoped,
+                "always": sk.always,
+                "truncated": len(sk.instructions) > s.skill_max_chars,
+                "path": str(sk.path),
+            }
+            for sk in loader.skills
+        ]
+        if s.skills_enabled
+        else []
+    )
+    return {
+        **plugins.status(),
+        "skills": catalog,
+        "skills_enabled": s.skills_enabled,
+        "skills_always_on_chars": loader.always_on_chars() if s.skills_enabled else 0,
+        # So the scoping picker offers real names instead of asking the operator to know them.
+        # Sorted, because it is a list a human reads.
+        "tool_names": sorted(SPEC),
+    }
+
+
 def drafts_payload(store, slug: str) -> dict:
     """What every draft endpoint answers with, in one place.
 

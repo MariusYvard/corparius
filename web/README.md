@@ -71,7 +71,7 @@ each card landed, and what is still only in the old page.
 | Providers | Claude subscription · runtime toggles · free tiers · routing tiers · Ollama status and pull · preflight and the full sweep | — |
 | CEO | the conversation · the CEO's proposals · forget | — |
 | Settings | the 80-field registry (generated) · Backup · theme and accent | — |
-| Plugins | — | the seven seams · Skills |
+| Plugins | the seven seams · the registry · Skills and their scope | — |
 
 Recent activity and Spend by agent are the two Overview cards with a v1 resource already behind them
 (`activity`, and `spend_by_agent` inside `summary`), so they are the cheapest to bring across. Go live
@@ -102,6 +102,29 @@ charging whoever ran it.
 The sweep asks before it spends. `{"estimate": true}` answers how many calls it would make **without
 making any**, and that number goes in front of the operator first: NVIDIA alone advertises 102 models,
 and "check everything" is their money and their rate limits.
+
+### Plugins carries Skills, and one number is why
+
+A skill naming no tool is **unscoped**, and an unscoped skill rides on every prompt of every agent —
+3 815 characters a turn, measured on the owner's own company. `corparius skills list` could report that
+cost from a terminal and offer nothing to do about it. The one write on this tab gives a skill a tool
+list, and `skills_always_on_chars` is the bill for the whole set, printed above the list rather than
+below it.
+
+A skill that declares `always:` is counted and **not** badged as a problem. It is a deliberate
+choice — a guardrail meant to be on every prompt — and a warning on a deliberate choice is one an
+operator learns to ignore.
+
+Two things no client offers, both asserted rather than merely omitted:
+
+* **installing an unverified plugin.** CLI-only, behind an explicit opt-in, because it runs unaudited
+  third-party code. A button here would read as ordinary and would not be.
+* **editing a skill.** It is a file the operator wrote. The panel shows the path and what the loader
+  will cut; `app_skills.scope` edits the `allowed-tools` line and nothing else.
+
+Collapsing the two spellings of the read onto `adapters.plugins_payload` also removed a latent
+unbound-local: `plugins_get` bound `loader` inside `if s.skills_enabled:` and then read it in a ternary
+guarded by the same flag — safe only because both used one condition.
 
 ### The CEO tab needed a schema change first
 

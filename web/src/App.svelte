@@ -19,6 +19,7 @@
   import CEO from "./CEO.svelte";
   import Documents from "./Documents.svelte";
   import Operations from "./Operations.svelte";
+  import Plugins from "./Plugins.svelte";
   import Overview from "./Overview.svelte";
   import Providers from "./Providers.svelte";
   import Settings from "./Settings.svelte";
@@ -59,6 +60,7 @@
     { id: "providers", component: Providers },
     { id: "ceo", component: CEO },
     { id: "settings", component: Settings },
+    { id: "plugins", component: Plugins },
   ];
   let tab = $state(localStorage.getItem("corparius-tab") || "overview");
   let shown = $derived(TABS.find((entry) => entry.id === tab) ?? TABS[0]);

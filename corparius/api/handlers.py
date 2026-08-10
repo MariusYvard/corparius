@@ -54,7 +54,6 @@ from ..providers import (
 from ..providers.integrations import stripe_check, stripe_payments
 from ..providers.llm import connected_providers
 from ..store import chat as chat_store
-from ..tools.spec import SPEC
 from . import adapters, contracts, state
 
 log = logging.getLogger("corparius.api.handlers")
@@ -744,6 +743,67 @@ def v1_pull_stop(ctx):
     return 200, {"ok": True, **app_setup.stop(ctx.store(), app_setup.KIND_PULL)}
 
 
+# --- plugins and skills ----------------------------------------------------------
+
+
+def v1_plugins(ctx):
+    """What is installed, what the registry offers, and what this company knows in prose.
+
+    Two things on one tab because they are the same act from an operator's side: extending what
+    corparius can do. A plugin adds a provider or a tool through one of seven declared seams; a skill
+    adds knowledge to a prompt. Neither is code corparius wrote.
+
+    `unscoped` is the number that matters and the reason this read exists. A skill naming no tool rides
+    on **every prompt of every agent** — measured at 3 815 characters a turn on the owner's own
+    company — and until the panel existed the console could report the cost and offer nothing to do
+    about it. `always_on_chars` is that bill, for the whole set.
+    """
+    company, refusal = adapters.for_company(ctx.slug) if ctx.slug else (None, None)
+    if refusal:
+        return refusal
+    return 200, {"ok": True, **adapters.plugins_payload(ctx.slug or "")}
+
+
+def v1_plugins_post(ctx):
+    """Enable, disable, remove, or install a **verified** plugin.
+
+    Installing an unverified one is deliberately unreachable from any client: that path is CLI-only,
+    behind an explicit opt-in, because it runs unaudited third-party code. A console button for it
+    would be a button that reads as ordinary and is not.
+
+    `restart_required` is always true and always reported. A seam is bound at import, so a plugin
+    enabled now changes nothing until the process restarts — and a panel that said "Done" without
+    saying that would leave an operator waiting for a provider that is not going to appear.
+    """
+    result = adapters.plugins_action(ctx.body)
+    if result.get("ok") is False:
+        return contracts.refuse(400, contracts.INVALID, str(result.get("error", "refused")))
+    return 200, result
+
+
+def v1_skill_scope(ctx):
+    """Give a skill a tool list, so it stops riding every prompt.
+
+    The one write this panel does, and the reason `app_skills.scope` exists: `corparius skills list`
+    reported the cost of an unscoped skill from a terminal while offering nothing to do about it.
+
+    A skill declaring `always:` is left alone by the badge but not by the bill — an always-on guardrail
+    is a deliberate choice, and a warning on a deliberate choice is a warning an operator learns to
+    ignore. It still counts in `always_on_chars`.
+    """
+    try:
+        out = app_skills.scope(
+            ctx.slug or "",
+            str(ctx.body.get("name", "")),
+            list(ctx.body.get("tools") or []),
+            state.fresh_settings(),
+        )
+    except app_errors.Refused as exc:
+        return contracts.refuse(400, contracts.INVALID, str(exc), field="tools")
+    log.info("skill %s scoped to %s", out["name"], ", ".join(out["tools"]))
+    return 200, {"ok": True, **out, **adapters.plugins_payload(ctx.slug or "")}
+
+
 def v1_chat(ctx):
     """The conversation this company is having with its CEO.
 
@@ -1302,45 +1362,13 @@ def update_apply(ctx):
 
 
 def plugins_get(ctx):
-    from .. import plugins, skills
+    """The legacy spelling. Same payload, from `adapters.plugins_payload`.
 
-    s = state.fresh_settings()
-    # Near enough to read-only. A skill is a file the operator wrote and the
-    # console will not become a second, worse text editor — but one edit earns
-    # its place: writing `allowed-tools` into a skill that has none. Unscoped, it
-    # rides on every prompt of every agent (3 815 characters, measured, on the
-    # owner's own company), and until now the console could only say so.
-    catalog: list[dict] = []
-    if s.skills_enabled:
-        loader = skills.SkillLoader.for_company(ctx.slug or "", max_chars=s.skill_max_chars)
-        catalog = [
-            {
-                "name": sk.name,
-                "description": sk.description,
-                "scope": sk.scope,
-                "tools": sk.allowed_tools,
-                "unknown_tools": [t for t in sk.allowed_tools if t not in SPEC],
-                "chars": len(sk.instructions),
-                "unscoped": sk.unscoped,
-                # Whether the author said so. An always-on guardrail is still
-                # reported — it is not free — but a warning badge on a choice
-                # somebody made deliberately is a warning they learn to ignore.
-                "always": sk.always,
-                "truncated": len(sk.instructions) > s.skill_max_chars,
-                "path": str(sk.path),
-            }
-            for sk in loader.skills
-        ]
-    return 200, {
-        "ok": True,
-        **plugins.status(),
-        "skills": catalog,
-        "skills_enabled": s.skills_enabled,
-        "skills_always_on_chars": loader.always_on_chars() if s.skills_enabled else 0,
-        # So the scoping picker offers real names instead of asking the operator
-        # to know them. Sorted, because it is a list a human reads.
-        "tool_names": sorted(SPEC),
-    }
+    The body moved when the v1 spelling was added, and moving it fixed a latent `NameError`: `loader`
+    was bound inside `if s.skills_enabled:` and then read in a ternary guarded by the same condition —
+    safe today, unbound the moment anyone rearranges it.
+    """
+    return 200, {"ok": True, **adapters.plugins_payload(ctx.slug or "")}
 
 
 def skill_scope(ctx):

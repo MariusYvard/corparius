@@ -129,6 +129,11 @@ ALIASED = {
     # `tests/test_two_callers_agree.py` as (`chat`, `ceo`).
     ("GET", "chat"): "chat_history(",
     ("POST", "chat"): "adapters.chat(",
+    # The plugins tab. `plugins_payload` is the read both spellings answer with — collapsed when the
+    # v1 one was added, which is also what removed a latent unbound-local in the legacy handler.
+    ("GET", "plugins"): "adapters.plugins_payload(",
+    ("POST", "plugins"): "adapters.plugins_action(",
+    ("POST", "skills/scope"): "app_skills.scope(",
 }
 
 # The third category, and it needed naming: an endpoint whose **v1 path is a different spelling**.
@@ -254,6 +259,8 @@ SPLIT_NOUNS = {
     "settings",
     "backup",
     "chat",
+    "plugins",
+    "skills/scope",
 }
 
 

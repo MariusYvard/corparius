@@ -240,10 +240,11 @@ def test_every_tab_has_a_nav_label():
     missing = [i for i in ids if f"nav.{i}" not in en]
     assert not missing, f"tabs with no label: {missing}"
 
-    # `plugins` is the one tab still only in the shipped page. Declared, so finishing it means
-    # deleting a line here rather than wondering why the count does not match.
+    # Every `nav.` key now belongs to a rebuilt tab — `plugins` was the last one declared here as
+    # "not yet", and deleting that line is what finishing it looked like. The set is exact in both
+    # directions: a tab with no label fails above, and a label with no tab fails here.
     keys = {k.removeprefix("nav.") for k in en if k.startswith("nav.")}
-    assert keys - set(ids) == {"plugins"}, (
-        f"nav keys belonging to no rebuilt tab: {sorted(keys - set(ids))}. Add the tab, or add it "
-        "here as one not rebuilt yet."
+    assert keys == set(ids), (
+        f"labels with no tab: {sorted(keys - set(ids))}; tabs with no label: {sorted(set(ids) - keys)}"
     )
+    assert len(ids) == 7, f"the shipped page has seven tabs; this console renders {len(ids)}"

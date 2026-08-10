@@ -743,6 +743,77 @@ def v1_pull_stop(ctx):
     return 200, {"ok": True, **app_setup.stop(ctx.store(), app_setup.KIND_PULL)}
 
 
+# --- settings -------------------------------------------------------------------
+
+
+def v1_settings(ctx):
+    """The whole field registry, described well enough for a client to render it.
+
+    **The form is generated from this, never written out.** 80 fields across eight groups, each
+    carrying its type, its group, its default, its bilingual label and help, and three facts a client
+    cannot work out for itself:
+
+      * `value` is `None` for a secret and `configured` says whether there is one. A payload that
+        echoed a credential would put it in every client's cache and every proxy log.
+      * `source` names the layer that answered — `env`, `dotenv`, `store` or `default` — and
+        `editable` is `source != "env"`. The process environment outranks everything the console can
+        write, so a field it owns is shown and disabled rather than offered and silently ignored. That
+        is the same lesson the providers tab learned as `shadowed`, resolved per field instead.
+      * `restart_required` for a bootstrap key: it lands in `.env` because it has to be readable
+        before the store can be opened, so it applies on the next start and saying so is the
+        difference between a setting that looks broken and one that is waiting.
+
+    A hand-written form would be a second copy of the registry, and `tests/test_registries.py` exists
+    because this project has already paid for that twice.
+    """
+    return 200, adapters.settings_payload()
+
+
+def v1_settings_post(ctx):
+    """Write settings, or clear them.
+
+    `unset` is separate from an empty value because they mean different things here: clearing a
+    registry field lets the layer below show through again, and that is what an operator asking for
+    the default wants. (A provider credential is the opposite — `app_settings.CREDENTIALS` keeps a
+    blank one stored, because a cleared row would let `.env` resurrect a key they just revoked.)
+
+    Every refusal is a sentence per field, and `detail.errors` carries them apart rather than joined,
+    so a client can put each one next to the input that caused it instead of showing one banner.
+    """
+    result = adapters.set_settings(
+        ctx.state, dict(ctx.body.get("values", {})), list(ctx.body.get("unset", []))
+    )
+    if result.get("ok") is False:
+        return contracts.refuse(
+            400,
+            contracts.INVALID,
+            str(result.get("error", "some values were refused")),
+            errors=[e.strip() for e in str(result.get("error", "")).split(";") if e.strip()],
+        )
+    return 200, {"ok": True, **result}
+
+
+def v1_backup(ctx):
+    """Zip the store and every company config.
+
+    On the settings tab rather than beside the audit log, which is where the shipped page put it: it
+    is a maintenance action, and "by layer, not by page" is what keeps a tab from being a reason for
+    unrelated things to live together.
+
+    The warning travels with the answer in both languages, and it is not boilerplate: no API key
+    leaves in plaintext — secrets are encrypted or blanked and `REDACTED.txt` names what to re-enter —
+    but the archive still holds the operator's companies and their journal. A client that offered this
+    without saying so would be offering a file the operator does not know the contents of.
+    """
+    path = backup.make_backup(state.fresh_settings().data_path)
+    return 200, {
+        "ok": True,
+        "name": path.name,
+        "size": path.stat().st_size,
+        "warning": {"en": backup.WARNING_EN, "fr": backup.WARNING_FR},
+    }
+
+
 def v1_jobs(ctx):
     """Work this company has done or is doing, newest first.
 

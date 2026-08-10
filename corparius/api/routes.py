@@ -80,6 +80,11 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/v1/ollama/pull", handlers.v1_ollama_pull),
     Route("POST", "/api/v1/ollama/pull/stop", handlers.v1_pull_stop),
     Route("POST", "/api/v1/preflight/sweep", handlers.v1_sweep_post),
+    # The settings tab. The read is the whole field registry described for rendering — a client
+    # generates the form from it rather than carrying a second copy of 80 fields.
+    Route("GET", "/api/v1/settings", handlers.v1_settings),
+    Route("POST", "/api/v1/settings", handlers.v1_settings_post),
+    Route("POST", "/api/v1/backup", handlers.v1_backup),
     # The first v1 writes. Durable work: a client that loses the answer can ask again with the
     # same `Idempotency-Key` and will not start a second run.
     Route("POST", "/api/v1/runs", handlers.v1_runs_post, needs_slug=True),

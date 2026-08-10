@@ -322,7 +322,7 @@
  "ceo.s3": "Quelle priorité aujourd'hui ?",
  "ceo.s4": "Résume la journée.",
  "settings.title": "Réglages de la console",
- "settings.desc": "Stockés dans ce navigateur uniquement ; rien ne change côté serveur.",
+ "settings.desc": "La langue est retenue dans ce navigateur. Le thème est enregistré sur ce corparius : il vous suit dans n'importe quel navigateur.",
  "settings.language": "Langue de l'interface",
  "settings.theme": "Thème",
  "settings.dark": "Sombre",

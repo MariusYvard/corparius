@@ -65,7 +65,7 @@ each card landed, and what is still only in the old page.
 | Documents | the drop zone · what is on file · reading one | — |
 | Providers | Claude subscription · runtime toggles · free tiers · routing tiers · Ollama status and pull · preflight and the full sweep | — |
 | CEO | — | the chat, and the CEO's own powers |
-| Settings | — | the 80-field registry · Backup, from the old Operations tab |
+| Settings | the 80-field registry (generated) · Backup · theme and accent | — |
 | Plugins | — | the seven seams · Skills |
 
 Recent activity and Spend by agent are the two Overview cards with a v1 resource already behind them
@@ -97,6 +97,34 @@ charging whoever ran it.
 The sweep asks before it spends. `{"estimate": true}` answers how many calls it would make **without
 making any**, and that number goes in front of the operator first: NVIDIA alone advertises 102 models,
 and "check everything" is their money and their rate limits.
+
+### The settings form is generated, not written
+
+80 fields across eight groups, and `Settings.svelte` names not one of them. `GET /api/v1/settings`
+describes each — type, group, default, bilingual label and help — and the component renders what it is
+given. A hand-written form would be a second copy of the registry, and this project has already paid
+for that twice: a field the console offered that nothing read, and a value the code read that the
+console could not set.
+
+Three facts the payload carries because a client cannot derive them:
+
+| field | why it cannot be inferred |
+| --- | --- |
+| `value: null` for a secret, plus `configured` | a payload echoing a credential puts it in every cache and proxy log |
+| `editable` = `source !== "env"` | the process environment outranks the console, so the field is shown **disabled with the reason** rather than offered and silently ignored |
+| `restart_required` | a bootstrap key lands in `.env` because it must be readable before the store opens, so it applies next start |
+
+Clearing is not blanking. An empty registry field goes in `unset`, which deletes the row so the layer
+below shows through — what asking for the default means. A provider credential is the opposite, and
+lives on the Providers tab for that reason: a blank one stays stored, because clearing the row would
+let `.env` resurrect a key just revoked.
+
+**And the theme is stored on the server**, not in the browser. `settings.desc` claimed
+"Stored in this browser only; they change nothing on the server", which was false: `ui_theme.json`
+lives under the data path and its own docstring says that is what makes the theme follow the operator
+across browsers. Corrected in both languages. The rebuilt console also never wrote `data-theme`, so a
+light-mode operator got dark whatever they chose — `tokens.css` treats `:root` as dark and keys light
+off the attribute.
 
 ### Every probe is a button
 

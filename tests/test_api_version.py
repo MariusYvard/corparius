@@ -119,6 +119,11 @@ ALIASED = {
     # thing that let a sweep left behind by a crashed console be invisible to the next one.
     ("POST", "ollama/pull"): "app_setup.start_pull(",
     ("POST", "preflight/sweep"): "app_setup.start_sweep(",
+    # The settings tab. `set_settings` is the write both spellings reach, and it goes through
+    # `app_settings.validate` — the function the sixth divergence was about.
+    ("GET", "settings"): "adapters.settings_payload()",
+    ("POST", "settings"): "adapters.set_settings(",
+    ("POST", "backup"): "backup.make_backup(",
 }
 
 # The third category, and it needed naming: an endpoint whose **v1 path is a different spelling**.
@@ -241,6 +246,8 @@ SPLIT_NOUNS = {
     # `ollama/pull` is a POST only.
     "preflight/sweep",
     "ollama/pull",
+    "settings",
+    "backup",
 }
 
 

@@ -27,6 +27,13 @@
 
   let summary = $state(null);
   let jobs = $state([]);
+  let actions = $state([]);
+  // The three that are loaded once rather than polled. `payments` most of all: with a Stripe key set
+  // it lists charges over HTTPS, on the operator's own account and rate limit. The shipped page has
+  // this right — `loadPayments()` is in its boot sequence and its interval calls `refresh()` alone.
+  let payments = $state(null);
+  let golive = $state(null);
+  let site = $state(null);
   let failure = $state(null);
   let busy = $state("");
 
@@ -34,24 +41,90 @@
   // payload is 17x smaller, with an ETag making an unchanged one free on the wire.
   const POLL_MS = 5000;
 
-  async function refresh() {
+  async function refresh({ first = false } = {}) {
     try {
-      // Both in flight at once: they are separate resources and neither waits on the other.
-      const [s, j] = await Promise.all([
+      // In flight together: separate resources, and none waits on another.
+      //
+      // `activity` joins the poll **only while a run is going**, plus once on arrival. A log nobody
+      // is writing to is a request whose best case is a 304, and the same cadence Operations uses.
+      const live = first || summary?.running;
+      const wanted = [
         get(`/api/v1/summary?company=${encodeURIComponent(company)}`, { token }),
         get(`/api/v1/jobs?company=${encodeURIComponent(company)}`, { token }),
-      ]);
+      ];
+      if (live) wanted.push(get(`/api/v1/activity?company=${encodeURIComponent(company)}`, { token }));
+      const [s, j, a] = await Promise.all(wanted);
       summary = s;
       jobs = j.jobs ?? [];
+      if (a) actions = a.recent_actions ?? [];
       failure = null;
     } catch (e) {
       failure = e instanceof Refused ? e : new Refused(0, { error: { message: String(e) } });
     }
   }
 
+  /** Loaded on arrival and after a write that changes them. Never on the interval. */
+  async function loadOnce() {
+    const slug = encodeURIComponent(company);
+    for (const [key, path] of [
+      ["golive", `/api/v1/golive?company=${slug}`],
+      ["site", `/api/v1/site?company=${slug}`],
+      ["payments", "/api/v1/payments"],
+    ]) {
+      try {
+        const got = await get(path, { token });
+        if (key === "golive") golive = got;
+        else if (key === "site") site = got;
+        else payments = got;
+      } catch (e) {
+        // One card failing must not take the other two with it. Stripe being unreachable is a normal
+        // Tuesday and has its own sentence; a shared banner would blame the console for it.
+        if (key === "payments") payments = { error: String(e.message ?? e) };
+        else failure = e;
+      }
+    }
+  }
+
+  async function buildSite() {
+    busy = "site";
+    try {
+      await post("/api/v1/site", { company, headline: "" }, { token });
+      await loadOnce();
+    } catch (e) {
+      failure = e;
+    } finally {
+      busy = "";
+    }
+  }
+
+  async function publish() {
+    busy = "publish";
+    try {
+      const done = await post("/api/v1/deploy", { company }, { token });
+      // Named, because "published" without saying where is a claim an operator cannot check — and
+      // because a provider list that all failed is a different answer from nothing being configured.
+      // `published`, `provider`, `skipped`, `errors` — there is no `url`. Every provider failing is a
+      // different answer from none being configured, and both are different from success, so the
+      // three are said apart.
+      said = done.provider
+        ? `${t("site.published")} ${done.provider}`
+        : done.errors?.length
+          ? `${t("site.publishFailed")} ${done.errors.join("; ")}`
+          : t("site.publishNoProvider");
+      await loadOnce();
+    } catch (e) {
+      failure = e;
+    } finally {
+      busy = "";
+    }
+  }
+
+  let said = $state("");
+
   $effect(() => {
-    refresh();
-    const timer = setInterval(refresh, POLL_MS);
+    refresh({ first: true });
+    loadOnce();
+    const timer = setInterval(() => refresh(), POLL_MS);
     return () => clearInterval(timer);
   });
 
@@ -115,6 +188,11 @@
     }
   }
 
+  let spend = $derived(summary?.spend_by_agent ?? []);
+  // "Not reported" and "free" are different facts. A provider that says nothing about money must
+  // never read as costing nothing, which is why `cost_reported` is a separate boolean and not a
+  // sum-is-zero check.
+  let money = $derived(spend.reduce((total, row) => total + (row.cost ?? 0), 0));
   let needsYou = $derived((summary?.approvals?.length ?? 0) + (summary?.inbox?.length ?? 0));
   let lastRun = $derived(summary?.last_run ?? null);
 </script>
@@ -247,6 +325,144 @@
       </ul>
     {/if}
   </section>
+
+  <section class="card">
+    <h2>{t("live.title")}</h2>
+    <p class="desc">{t("live.desc")}</p>
+    {#if golive}
+      <dl class="pulse">
+        <dt>{t("live.payment")}</dt>
+        <dd>{t(golive.payment.wired ? "live.paidOk" : "live.paidNo")}</dd>
+        <dt>{t("live.mail")}</dt>
+        <dd>{t(golive.mail.wired ? "live.mailOk" : "live.mailNo")}</dd>
+        <dt>{t("live.hosting")}</dt>
+        <dd>
+          <!-- Three states, not two: not hosted, a token set but nothing published yet, and live at a
+               URL. Collapsing the middle one would tell an operator who has done half the work that
+               they have done none of it. -->
+          {#if golive.hosting.published_url}
+            {t("live.hostLive")}
+            <a href={golive.hosting.published_url} target="_blank" rel="noreferrer noopener">
+              {golive.hosting.published_url}
+            </a>
+          {:else if golive.hosting.token_set}
+            {t("live.hostReady")}
+          {:else}
+            {t("live.hostNo")}
+          {/if}
+        </dd>
+      </dl>
+    {/if}
+  </section>
+
+  <section class="card">
+    <h2>{t("site.title")}</h2>
+    <p class="desc">{t("site.desc")}</p>
+    {#if site}
+      {#if site.built}
+        <p class="small muted">
+          {new Date(site.mtime * 1000).toLocaleString(lang)}
+          <!-- Which site this is. The console once previewed the generated path while the terminal
+               published the owned one, and both reported success — the second live divergence this
+               restructuring found. -->
+          {#if site.owned}· <code>{site.pages.length} {t("site.title")}</code>{/if}
+        </p>
+      {:else}
+        <p class="muted">{t("site.none")}</p>
+      {/if}
+      <div class="actions">
+        <button disabled={busy === "site"} onclick={buildSite}>
+          {t(site.built ? "site.regenerate" : "site.generate")}
+        </button>
+        {#if site.built}
+          <button class="quiet" disabled={busy === "publish"} onclick={publish}>
+            {busy === "publish" ? t("site.publishing") : t("site.publish")}
+          </button>
+        {/if}
+      </div>
+      {#if said}<p class="small muted">{said}</p>{/if}
+    {/if}
+  </section>
+
+  <section class="card">
+    <h2>{t("pay.title")}</h2>
+    <p class="desc">{t("pay.desc")}</p>
+    {#if payments?.error}
+      <p class="small muted">{t("pay.error")} {payments.error}</p>
+    {:else if payments}
+      <!-- `source` is "stripe", "mock" or "error" — never "live", which was my invention and would
+           have labelled real charges as samples. Sample data reading as sales is the worst kind of
+           wrong on the one card about money, so the mock says so and an error says which. -->
+      {#if payments.source === "mock"}<p class="small muted">{t("pay.mock")}</p>{/if}
+      {#if payments.source === "error"}<p class="small muted">{t("pay.error")} {payments.error}</p>{/if}
+      {#if payments.payments.length === 0}
+        <p class="muted">{t("pay.none")}</p>
+      {:else}
+        <dl class="pulse">
+          <dt>{t("pay.total")}</dt><dd>{payments.total_paid.toFixed(2)}</dd>
+        </dl>
+        <ul class="feed">
+          {#each payments.payments.slice(0, 6) as charge, i (charge.ts + ":" + i)}
+            <li>
+              <strong>{charge.amount.toFixed(2)} {charge.currency}</strong>
+              <span class="muted">{charge.description}</span>
+              {#if !charge.paid}<span class="state bad">{t("badge.fail")}</span>{/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    {/if}
+  </section>
+
+  <section class="card">
+    <h2>{t("spend.title")}</h2>
+    <p class="desc">{t("spend.desc")}</p>
+    {#if spend.length === 0}
+      <p class="muted">{t("spend.empty")}</p>
+    {:else}
+      <dl class="pulse">
+        {#each spend as row (row.agent)}
+          <dt>{row.agent}</dt>
+          <dd>
+            {row.t.toLocaleString(lang)} <span class="muted">{t("progress.tokens")}</span>
+            {#if row.cost}· {row.cost.toFixed(4)}{/if}
+          </dd>
+        {/each}
+      </dl>
+      <!-- A total of 0.00 and "nobody reported a cost" are different facts, and `cost_reported` is
+           what separates them. Telling an operator on a paid key that they spent nothing would be the
+           worst kind of wrong: quietly plausible. -->
+      {#if summary.cost_reported}
+        <p class="small muted">{money.toFixed(4)}</p>
+      {:else}
+        <p class="small muted">{t("spend.noCost")}</p>
+      {/if}
+    {/if}
+  </section>
+
+  <section class="card">
+    <h2>{t("activity.title")}</h2>
+    <p class="desc">{t("activity.desc")}</p>
+    {#if actions.length === 0}
+      <p class="muted">{t("activity.empty")}</p>
+    {:else}
+      <ul class="feed">
+        {#each actions.slice(0, 8) as action, i (action.ts + ":" + i)}
+          <li>
+            <span class="state {action.ok ? 'ok' : 'bad'}">{t(action.ok ? "badge.ok" : "badge.fail")}</span>
+            <strong>{action.tool}</strong>
+            <span class="muted">{action.agent}</span>
+            <!-- Which provider answered, and whether the chain fell back. Schema 18 exists because
+                 this was produced and thrown away: an operator read "Nothing usable drafted" as a
+                 broken site generator while two providers were answering 429, after 365 026 tokens. -->
+            {#if action.source}<span class="muted small">{action.source}</span>{/if}
+            {#if action.fell_back}<span class="count">{t("tier.chain")}</span>{/if}
+          </li>
+        {/each}
+      </ul>
+      <p class="muted small">{t("activity.openLog")}</p>
+    {/if}
+  </section>
 {/if}
 
 <style>
@@ -304,7 +520,8 @@
   .pulse { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1.4rem; margin: 0; }
   dt { color: var(--muted); }
   dd { margin: 0; font-variant-numeric: tabular-nums; }
-  .jobs { list-style: none; padding: 0; margin: 0.8rem 0 0; display: grid; gap: 0.3rem; font-size: 0.88rem; }
+  .jobs, .feed { list-style: none; padding: 0; margin: 0.8rem 0 0; display: grid; gap: 0.3rem; font-size: 0.88rem; }
+  .feed li { display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }
   .state { font-variant-numeric: tabular-nums; color: var(--muted); }
   .state.running { color: var(--ok); }
   .state.interrupted, .state.failed { color: var(--danger); }

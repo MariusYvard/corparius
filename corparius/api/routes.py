@@ -95,6 +95,14 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/v1/plugins", handlers.v1_plugins),
     Route("POST", "/api/v1/plugins", handlers.v1_plugins_post),
     Route("POST", "/api/v1/skills/scope", handlers.v1_skill_scope, needs_slug=True),
+    # Going live. `payments` is the one v1 read that must not be polled: with a Stripe key set it lists
+    # charges over HTTPS, on the operator's own account. `golive` and `site` are filesystem and config
+    # only, so they may sit beside a polled resource.
+    Route("GET", "/api/v1/payments", handlers.v1_payments),
+    Route("GET", "/api/v1/golive", handlers.v1_golive, needs_slug=True),
+    Route("GET", "/api/v1/site", handlers.v1_site, needs_slug=True),
+    Route("POST", "/api/v1/site", handlers.v1_site_post, needs_slug=True),
+    Route("POST", "/api/v1/deploy", handlers.v1_deploy, needs_slug=True),
     # The first v1 writes. Durable work: a client that loses the answer can ask again with the
     # same `Idempotency-Key` and will not start a second run.
     Route("POST", "/api/v1/runs", handlers.v1_runs_post, needs_slug=True),

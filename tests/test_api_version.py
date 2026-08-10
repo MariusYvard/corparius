@@ -134,6 +134,14 @@ ALIASED = {
     ("GET", "plugins"): "adapters.plugins_payload(",
     ("POST", "plugins"): "adapters.plugins_action(",
     ("POST", "skills/scope"): "app_skills.scope(",
+    # Going live. `deploy` is the pair the **second** live divergence was about: the console honoured
+    # `paths.owned_site(slug)` and `cmd_deploy` always built the generated path, so on the owner's own
+    # company they published different directories and both reported success.
+    ("GET", "payments"): "stripe_payments()",
+    ("GET", "golive"): "adapters.golive_status(",
+    ("GET", "site"): "paths.owned_site(",
+    ("POST", "site"): "sitegen.build_site(",
+    ("POST", "deploy"): "adapters.deploy(",
 }
 
 # The third category, and it needed naming: an endpoint whose **v1 path is a different spelling**.
@@ -261,6 +269,10 @@ SPLIT_NOUNS = {
     "chat",
     "plugins",
     "skills/scope",
+    "payments",
+    "golive",
+    "site",
+    "deploy",
 }
 
 

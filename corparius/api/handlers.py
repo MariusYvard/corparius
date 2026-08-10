@@ -743,6 +743,89 @@ def v1_pull_stop(ctx):
     return 200, {"ok": True, **app_setup.stop(ctx.store(), app_setup.KIND_PULL)}
 
 
+# --- going live: payments, hosting, the site --------------------------------------
+
+
+def v1_payments(ctx):
+    """Money actually received.
+
+    **Not for a poll**, and this is the one v1 read where that has to be said rather than derived from
+    the payload: with `STRIPE_API_KEY` set it lists charges over HTTPS, on the operator's own account
+    and rate limit. The shipped page has this right already — `loadPayments()` is in its boot sequence
+    and its five-second interval calls `refresh()` alone — and a v1 client must do the same.
+
+    Without a key it answers a deterministic mock, so a console always has something honest to show
+    rather than an empty card that could mean either "no sales" or "not configured".
+    """
+    return 200, {"ok": True, **stripe_payments()}
+
+
+def v1_golive(ctx):
+    """The three things between a company that simulates and one that can take money.
+
+    A checkout link, a mail account, a public address — as booleans plus the live URL, so one card can
+    walk an operator from nothing to selling. Filesystem and config only: `payment` reads the company's
+    own offer or the bootstrap link, `mail` reads two settings, and `hosting` reads a `.published`
+    marker. Nothing here opens a socket, which is why it *can* sit next to a polled resource.
+    """
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    return 200, adapters.golive_status(ctx.slug)
+
+
+def v1_site(ctx):
+    """Whether the sales site is built, and **which** site the client is about to show.
+
+    `owned` is the field that matters. A company under version control has its own site folder, and
+    the console once previewed the generated path while `cmd_deploy` published the owned one — the
+    second live divergence this restructuring found. Reporting which of the two is on screen is what
+    stops a preview being silently a different page from the one that goes out.
+    """
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    owned = paths.owned_site(ctx.slug)
+    site = (
+        (owned / "index.html")
+        if owned
+        else paths.site_index(state.fresh_settings().data_path, ctx.slug)
+    )
+    return 200, {
+        "ok": True,
+        "built": site.is_file(),
+        "mtime": site.stat().st_mtime if site.is_file() else None,
+        "owned": owned is not None,
+        "pages": sorted(p.name for p in owned.glob("*.html")) if owned else [],
+    }
+
+
+def v1_site_post(ctx):
+    """Build the sales site from the company config.
+
+    `headline` is optional and empty means *let the agent write one*: passing the empty string through
+    as a headline would replace a written line with nothing, which is the difference between "I have no
+    preference" and "say nothing here".
+    """
+    company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    out_dir = paths.site_dir(state.fresh_settings().data_path, ctx.slug)
+    headline = str(ctx.body.get("headline", "")).strip()
+    sitegen.build_site(company, str(out_dir), headline=headline or None, store=ctx.store())
+    return 200, {"ok": True, "built": True}
+
+
+def v1_deploy(ctx):
+    """Publish it, through whichever provider is configured.
+
+    `app_publish.publish` is the service, and it is the one the *second* live divergence was about: the
+    console honoured `paths.owned_site(slug)` and `cmd_deploy` always built the generated path, so on
+    the owner's own company the two published different directories and both reported success.
+    """
+    return adapters.deploy(ctx.state, ctx.slug)
+
+
 # --- plugins and skills ----------------------------------------------------------
 
 

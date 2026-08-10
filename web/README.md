@@ -65,7 +65,7 @@ each card landed, and what is still only in the old page.
 
 | Tab | Rebuilt | Still only in `webui.html` |
 | --- | --- | --- |
-| Overview | what needs you · the pulse · the run | Getting started · Go live · Sales site · Spend by agent · Payments · Recent activity |
+| Overview | what needs you · the pulse · the run · Go live · Sales site · Payments · Spend by agent · Recent activity | Getting started |
 | Operations | the board · standing rules · memory · drafts · the action log | — (Backup moved to Settings, below) |
 | Documents | the drop zone · what is on file · reading one | — |
 | Providers | Claude subscription · runtime toggles · free tiers · routing tiers · Ollama status and pull · preflight and the full sweep | — |
@@ -73,10 +73,25 @@ each card landed, and what is still only in the old page.
 | Settings | the 80-field registry (generated) · Backup · theme and accent | — |
 | Plugins | the seven seams · the registry · Skills and their scope | — |
 
-Recent activity and Spend by agent are the two Overview cards with a v1 resource already behind them
-(`activity`, and `spend_by_agent` inside `summary`), so they are the cheapest to bring across. Go live
-and Sales site need `/api/golive` and `/api/site` versioned first. Naming that here rather than
-discovering it per tab.
+**Getting started** is the one card left, and it is the one with no resource behind it: the `ob.*`
+onboarding logic decides what to show next from the state of the whole install, and that judgement lives
+in the shipped page's JavaScript rather than in a payload. It needs a service before it needs a card.
+
+The Overview cadence, now that it has eight cards:
+
+| Resource | When |
+| --- | --- |
+| `summary`, `jobs` | every poll — they change on every tick |
+| `activity` | once on arrival, then only while a run is going |
+| `golive`, `site` | once on arrival, and after a build or a publish |
+| `payments` | **once on arrival, never on the interval** |
+
+That last row is a rule, not a preference. With `STRIPE_API_KEY` set, `/api/v1/payments` lists charges
+over HTTPS on the operator's own account — and `/api/providers` opening a socket per refresh is why
+"never a network probe from a polled endpoint" is written down at all. The shipped page has it right
+already (`loadPayments()` is in its boot sequence; its interval calls `refresh()` alone), and
+`test_the_payments_read_is_never_on_the_interval` holds the rebuilt one to the same thing by reading the
+component — because "we know not to" is not a mechanism.
 
 ### The two long operations are durable jobs now
 

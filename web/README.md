@@ -56,16 +56,35 @@ would say less about whether the direction is right than one page an operator ca
 | Tab | State |
 | --- | --- |
 | Overview | done — what needs you, the pulse, the run |
-| Operations | to do |
+| Operations | done — the board, the rules, the memory, the drafts, the log |
 | Documents | to do |
 | Providers | to do |
 | CEO | to do |
-| Settings | to do |
+| Settings | to do — and it gains Backup, which the old page rendered under Operations |
 
 **Overview reads three v1 resources and writes to three more.** `summary` (2 859 bytes, polled),
 `jobs` (the durable run), and `companies`; it posts to `approvals`, `inbox` and `runs`. Every one of
 those writes moved to v1 *because this tab needed it* — the plan's "reads first, writes when a v1
 client has a decision to make", and a v1 client now does.
+
+**Operations reads five and writes to four**, and the cadence differs per resource because that is
+the whole point of having split them:
+
+| Resource | When |
+| --- | --- |
+| `summary`, `tasks` | every poll — they change on every tick |
+| `activity` | only while a run is going. A log nobody writes to is a request for 304s |
+| `memory`, `drafts` | on mount, and after a write that touches them |
+
+An unchanged v1 GET answers 304 with no body, so a poller that keeps its validator re-downloads
+nothing — but a 304 is still a round trip, and not asking is cheaper than asking cheaply.
+
+Two things the old page put on this tab and this does not. **Backup** goes to Settings: it is a
+maintenance action that happened to be rendered next to the audit log, and "by layer, not by page" is
+the rule that keeps a tab from being a reason for unrelated things to live together. **The approval
+queue** leads Overview, because the human gate is the subject of this product and should not have to
+be looked for — what lives here is the full panel: what the tool does, why this one stopped, what the
+agent wrote, what yes and no each mean.
 
 ## The tokens
 

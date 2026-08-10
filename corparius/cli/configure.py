@@ -68,13 +68,33 @@ def cmd_set(args) -> None:
 
 
 def cmd_memory(args) -> None:
+    from ..app import memory as app_memory
+
     cfg = support.load_company(args.company)
     store = open_store()
-    if args.forget:
-        print("forgotten" if store.forget(args.forget) else "no such memory")
-        return
-    if args.pin:
-        print("pinned" if store.pin_memory(args.pin, True) else "no such memory")
+    # One service for all three, and `--unpin` is new because of it. The console could unpin and
+    # this could not, so a fact pinned by mistake from a terminal had to be undone from the browser
+    # — the same shape as the approvals divergence, found the same way: by writing the service and
+    # reading what each caller actually offered.
+    said = {"pin": "pinned", "unpin": "unpinned", "forget": "forgotten"}
+    # `getattr` with a default rather than a bare one: argparse guarantees all three attributes on a
+    # real invocation, and the flags being registered is asserted separately
+    # (`test_every_memory_action_has_a_flag`) rather than by crashing here. Which matters because the
+    # thing a default could hide — an action in the vocabulary with no flag to reach it — is exactly
+    # what that test names, and a `AttributeError` in one branch would not have caught it either.
+    asked = next(
+        (
+            (action, getattr(args, action, 0))
+            for action in app_memory.ACTIONS
+            if getattr(args, action, 0)
+        ),
+        None,
+    )
+    if asked:
+        action, ident = asked
+        print(
+            said[action] if app_memory.decide(store, ident, action)["found"] else "no such memory"
+        )
         return
     rows = store.list_memory(cfg["slug"])
     print(f"== memory: {cfg.get('name')} ==")
@@ -112,6 +132,7 @@ def register(sub) -> None:
 
     sp = support.with_company(sub.add_parser("memory"))
     sp.add_argument("--pin", type=int, default=0, help="memory id to pin")
+    sp.add_argument("--unpin", type=int, default=0, help="memory id to unpin")
     sp.add_argument("--forget", type=int, default=0, help="memory id to delete")
     sp.set_defaults(fn=cmd_memory)
 

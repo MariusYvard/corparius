@@ -77,6 +77,20 @@ def _by_version():
 ALIASED = {
     ("POST", "approvals"): "app_approvals.decide",
     ("POST", "inbox"): "app_inbox.answer",
+    ("POST", "tasks"): "app_tasks.edit",
+    ("POST", "memory"): "app_memory.decide",
+    ("POST", "drafts"): "app_drafts.set_state",
+    # The read too, because both spellings answer the same four keys and the count that gates the
+    # agent is one of them: `queued` is `draft` **and** `queued` together, so two spellings of that
+    # sum are two chances for one to become just one state. Written out twice, identically, until the
+    # v1 pair was added; `adapters.drafts_payload` is the one copy now.
+    ("GET", "drafts"): "adapters.drafts_payload(",
+    # Not an `app_*` service, and audited rather than assumed. Revoking a standing rule is one store
+    # call with nothing that belongs beside it: nothing is parked on a rule — revoking means the tool
+    # asks again next time — so the two-calls-one-caller-forgets shape that produced the approvals
+    # divergence cannot arise. A service here would be pure indirection, so the invariant is the
+    # weaker true one: both spellings reach `drop_rule`.
+    ("POST", "rules"): "drop_rule(",
     # Not an `app_*` service, and the invariant is "one function underneath" rather than "a rank-5
     # one": listing the companies is `company.list_slugs()` behind a one-line reader, and both
     # handlers reach it. The v1 payload omits `templates`, which belongs to the creation wizard.
@@ -130,7 +144,7 @@ def test_every_endpoint_offered_twice_goes_through_one_service():
 # `companies` is here for the opposite reason: the v1 read exists and the legacy one carries
 # `templates` as well, which belongs to the creation wizard and not to a list of companies. It
 # becomes its own v1 resource when that wizard is rebuilt.
-SPLIT_NOUNS = {"tasks", "memory", "approvals", "inbox", "companies"}
+SPLIT_NOUNS = {"tasks", "memory", "approvals", "inbox", "companies", "drafts", "rules"}
 
 
 def test_the_nouns_split_across_versions_are_declared():

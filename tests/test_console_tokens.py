@@ -115,9 +115,49 @@ def test_every_component_label_is_a_key_that_exists(path):
     import json
 
     en = json.loads(pathlib.Path("web/i18n/en.json").read_text(encoding="utf-8"))
-    used = set(re.findall(r't\("([a-z][a-zA-Z.]*)"\)', path.read_text(encoding="utf-8")))
-    missing = sorted(k for k in used if k not in en)
+    missing = sorted(k for k in _keys_asked_for(path.read_text(encoding="utf-8")) if k not in en)
     assert not missing, f"{path.name} asks for keys that do not exist: {missing}"
+
+
+def _keys_asked_for(source: str) -> set[str]:
+    r"""Every literal key inside a `t(...)` call, ternaries included.
+
+    This was `t\("([a-z][a-zA-Z.]*)"\)` — a key followed immediately by the closing paren — and it
+    was blind to the form the second tab uses eight times:
+
+        t(fact.pinned ? "mem.unpin" : "mem.pin")
+
+    Neither key is followed by `)`, so neither was checked, and the guard reported a clean file while
+    checking a fraction of it. The same silent narrowing as the flat `glob` and the stale mypy
+    override: a scanner that under-reports **passes**, which is the worst way round.
+
+    So: the arguments of every `t(` that contains no nested call, then every string literal in them.
+    Concatenations like `t("ib." + item.kind)` contribute their literal prefix, which is not a key —
+    the namespace check below is what covers those, and a prefix ending in `.` is skipped here.
+
+    Every other string literal inside a `t(` **is** treated as a key, and that is deliberate rather
+    than a limitation. It first reported `approved` from
+    `t(decision === "approved" ? "toast.approved" : "toast.rejected")` — a comparison operand, not a
+    key. The rule it enforces is that a `t()` call contains keys and nothing else, which is worth
+    having: the alternative is a scanner that has to understand JavaScript to decide what a string is
+    doing, and the call site reads better with the comparison lifted out.
+    """
+    keys = set()
+    for arguments in re.findall(r"\bt\(([^()]*)\)", source):
+        for literal in re.findall(r'"([a-zA-Z][a-zA-Z0-9.]*)"', arguments):
+            if not literal.endswith("."):
+                keys.add(literal)
+    return keys
+
+
+def test_the_scanner_sees_a_key_in_a_ternary():
+    """The guard on the guard, and it exists because the first version of the scanner did not.
+
+    Non-vacuity for a source scanner cannot be shown by reintroducing a defect in the product — the
+    defect is *in the scanner*. So it is stated directly: these three forms all reach the table.
+    """
+    found = _keys_asked_for('t(x ? "a.one" : "a.two") t("b.three") t("c." + y) t(z)')
+    assert found == {"a.one", "a.two", "b.three"}, found
 
 
 def test_the_computed_prefixes_the_components_use_have_keys():

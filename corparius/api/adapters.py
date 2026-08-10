@@ -31,7 +31,6 @@ from ..app import overview as app_overview
 from ..app import publish as app_publish
 from ..app import runs as app_runs
 from ..app import settings as app_settings
-from ..app import tasks as app_tasks
 from ..config import cfg, settings_spec
 from ..config.provider_table import OPENAI_COMPAT_PROVIDERS
 from ..kernel import dotenv, i18n, paths
@@ -151,6 +150,27 @@ def overview(ui: UiState, slug: str) -> tuple[int, dict]:
         company=company,
         run=run_view(ui, slug),
     )
+
+
+def drafts_payload(store, slug: str) -> dict:
+    """What every draft endpoint answers with, in one place.
+
+    It was written out twice, identically, in `drafts_get` and `drafts_post` — the render-payload
+    duplication the stage 6 notes list among the remaining cosmetic divergences. Collapsed while the
+    v1 pair was added, and here rather than in `handlers.py` because this is what `adapters.py` is:
+    the console half of a use case. `handlers.py` holds both ends of a count — every function of it
+    is in the route table — so a helper living there would have had to weaken that guard to exist.
+
+    `queued` is the reason one copy matters: it is `draft` **and** `queued` together, which is what
+    actually gates the agent, so two spellings of that sum are two chances for one to become just
+    one state.
+    """
+    return {
+        "drafts": store.list_drafts(slug, limit=100),
+        "queued": store.count_unpublished(slug),
+        "published": store.count_drafts(slug, "published"),
+        "cap": cfg.get_int("CORP_SOCIAL_QUEUE_MAX", 5),
+    }
 
 
 def providers_payload() -> dict:
@@ -452,29 +472,6 @@ def set_env(ui: UiState, values: dict) -> dict:
         clean[key] = str(value).strip()
     meta = persist(ui, clean)
     return {**providers_payload(), **meta}
-
-
-def edit_task(store, body: dict) -> tuple[int, dict]:
-    """`app.tasks.edit`, with its refusal turned into a status code.
-
-    The service takes one keyword per field instead of this body dict, which is what let the
-    command line reach it — a dict shaped like a request body *is* a request. What is left here
-    is unpacking and the status code, which is the only part that is about HTTP.
-    """
-    try:
-        changed = app_tasks.edit(
-            store,
-            body.get("id"),
-            title=body.get("title"),
-            priority=body.get("priority"),
-            target=body.get("target"),
-            tool=body.get("tool"),
-            decision=body.get("decision"),
-            note=str(body.get("note", "via console")),
-        )
-    except app_errors.Refused as exc:
-        return 400, {"ok": False, "error": str(exc)}
-    return 200, {"ok": True, **changed}
 
 
 def deploy(ui: UiState, slug: str) -> tuple[int, dict]:

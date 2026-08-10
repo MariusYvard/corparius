@@ -31,12 +31,15 @@ from .. import (
 )
 from .. import company as company_mod
 from ..app import approvals as app_approvals
+from ..app import drafts as app_drafts
 from ..app import errors as app_errors
 from ..app import inbox as app_inbox
 from ..app import mail as app_mail
+from ..app import memory as app_memory
 from ..app import meta as app_meta
 from ..app import overview as app_overview
 from ..app import skills as app_skills
+from ..app import tasks as app_tasks
 from ..config import cfg
 from ..config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from ..doctor import run_checks
@@ -218,6 +221,110 @@ def v1_inbox_post(ctx):
     return 200, {"ok": True, **done}
 
 
+def v1_tasks_post(ctx):
+    """Edit one task, decide one proposal, or both at once.
+
+    Straight into `app_tasks.edit`, which is the service the console and `corparius task` share —
+    and the pair that found the first live divergence of this restructuring: the console validated
+    the agent and the tool and called `executable_fields` on approval, and `cmd_task` called
+    `store.update_task` directly with none of it. Approving from a terminal left the task with no
+    tool, so it closed "done (no tool mapped)" having done nothing and the agent proposed it again.
+    Measured on one company: 24 tasks for a role, 22 of them like that.
+
+    `Refused` is a sentence for a person and `invalid` is the word a client switches on. The field
+    is not named here because the service refuses across six of them and knowing which is its
+    business — `detail.message` carries the sentence and that is honest, where guessing `field`
+    would be a machine-readable lie.
+    """
+    try:
+        changed = app_tasks.edit(
+            ctx.store(),
+            ctx.body.get("id"),
+            title=ctx.body.get("title"),
+            priority=ctx.body.get("priority"),
+            target=ctx.body.get("target"),
+            tool=ctx.body.get("tool"),
+            decision=ctx.body.get("decision"),
+            note=str(ctx.body.get("note", "via console")),
+        )
+    except app_errors.Refused as exc:
+        return contracts.refuse(400, contracts.INVALID, str(exc))
+    return 200, {"ok": True, **changed}
+
+
+def v1_rules_post(ctx):
+    """Revoke a standing rule.
+
+    Granting one goes through the approval it came from — `POST /api/v1/approvals` with a
+    `remember` scope — because a rule that appeared without an approval behind it would have no
+    audit trail. Revoking has to stand alone, or a rule granted by mistake could only be undone by
+    opening the database.
+
+    One store call, and deliberately **not** a service: `corparius rules --revoke` makes the same
+    call and there is no second thing that belongs with it. Nothing is parked on a standing rule —
+    revoking means the tool asks again next time — so the shape that produced the approvals
+    divergence (two calls, one caller forgetting the second) cannot arise here. Stated rather than
+    left implicit, so the next reader knows it was checked and not overlooked.
+    """
+    tool = str(ctx.body.get("tool", "")).strip()
+    if not tool:
+        return contracts.refuse(400, contracts.INVALID, "a tool name is required", field="tool")
+    if not ctx.store().drop_rule(ctx.slug, tool):
+        return contracts.refuse(
+            404, contracts.NOT_FOUND, "no standing rule for that tool", tool=tool
+        )
+    return 200, {"ok": True, "tool": tool, "rules": ctx.store().list_rules(ctx.slug)}
+
+
+def v1_memory_post(ctx):
+    """Pin one fact, unpin it, or forget it.
+
+    The operator owns their company's memory the way they own its secrets: a wrong thing an agent
+    wrote down has to be removable without opening the database. Pinning is the other half —
+    `curator` archives a fact that has gone 90 days unused, and a pin is how an operator says this
+    one stays regardless.
+    """
+    try:
+        done = app_memory.decide(ctx.store(), ctx.body.get("id"), str(ctx.body.get("action", "")))
+    except app_errors.Refused as exc:
+        field = "id" if "id" in str(exc) else "action"
+        return contracts.refuse(400, contracts.INVALID, str(exc), field=field)
+    if not done["found"]:
+        return contracts.refuse(404, contracts.NOT_FOUND, "no such memory", id=done["id"])
+    return 200, {"ok": True, **done}
+
+
+def v1_drafts(ctx):
+    """What the agents wrote and nothing has published.
+
+    They used to be written and thrown away — the social agent was the largest line in one
+    company's spend and left nothing behind. Keeping them was half the fix; a client that can read
+    them is the other half.
+    """
+    return 200, {"ok": True, **adapters.drafts_payload(ctx.store(), ctx.slug)}
+
+
+def v1_drafts_post(ctx):
+    """Mark one published or discarded.
+
+    `published` is the operator's word for "this went out", not a claim that corparius sent it —
+    nothing here publishes to a social channel, and saying otherwise in an API a phone will read is
+    exactly the kind of promise this project refuses. What it does is stop the post counting
+    against the queue, which is what lets the agent resume.
+    """
+    store = ctx.store()
+    try:
+        done = app_drafts.set_state(store, ctx.body.get("id"), str(ctx.body.get("state", "")))
+    except app_errors.Refused as exc:
+        field = "id" if "id" in str(exc) else "state"
+        return contracts.refuse(
+            400, contracts.INVALID, str(exc), field=field, allowed=list(app_drafts.STATES)
+        )
+    if not done["found"]:
+        return contracts.refuse(404, contracts.NOT_FOUND, "no such draft", id=done["id"])
+    return 200, {"ok": True, **adapters.drafts_payload(store, ctx.slug)}
+
+
 def v1_jobs(ctx):
     """Work this company has done or is doing, newest first.
 
@@ -317,15 +424,7 @@ def drafts_get(ctx):
     line in one company's spend and left nothing behind. Keeping them was half
     the fix; this is the half that lets someone read them.
     """
-    store = ctx.store()
-    return 200, {
-        "ok": True,
-        "drafts": store.list_drafts(ctx.slug, limit=100),
-        # What actually gates the agent: `draft` and `queued` together.
-        "queued": store.count_unpublished(ctx.slug),
-        "published": store.count_drafts(ctx.slug, "published"),
-        "cap": cfg.get_int("CORP_SOCIAL_QUEUE_MAX", 5),
-    }
+    return 200, {"ok": True, **adapters.drafts_payload(ctx.store(), ctx.slug)}
 
 
 def drafts_post(ctx):
@@ -334,25 +433,19 @@ def drafts_post(ctx):
     `published` is the operator's word for "this went out", not a claim that
     corparius sent it — nothing here publishes to a social channel. It stops the
     post counting against the queue, which is what lets the agent resume.
+
+    The flat `error` string is the legacy shape and stays: the shipped page reads `data.error` as a
+    string, so an object here renders "[object Object]" on the failures an operator most needs to
+    read. Same service underneath as the v1 spelling, different refusal — which is what a version is.
     """
-    try:
-        draft_id = int(ctx.body.get("id"))  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return 400, {"ok": False, "error": "a draft id is required"}
-    state = str(ctx.body.get("state", "")).strip()
-    if state not in ("published", "discarded", "queued"):
-        return 400, {"ok": False, "error": "state must be published, discarded or queued"}
     store = ctx.store()
-    if not store.set_draft_state(draft_id, state):
+    try:
+        done = app_drafts.set_state(store, ctx.body.get("id"), str(ctx.body.get("state", "")))
+    except app_errors.Refused as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    if not done["found"]:
         return 404, {"ok": False, "error": "no such draft"}
-    return 200, {
-        "ok": True,
-        "drafts": store.list_drafts(ctx.slug, limit=100),
-        # What actually gates the agent: `draft` and `queued` together.
-        "queued": store.count_unpublished(ctx.slug),
-        "published": store.count_drafts(ctx.slug, "published"),
-        "cap": cfg.get_int("CORP_SOCIAL_QUEUE_MAX", 5),
-    }
+    return 200, {"ok": True, **adapters.drafts_payload(store, ctx.slug)}
 
 
 def documents_get(ctx):
@@ -789,17 +882,13 @@ def memory_post(ctx):
     way they own its secrets: a wrong thing an agent wrote down must be
     removable without opening the database."""
     try:
-        memory_id = int(ctx.body.get("id", 0))
-    except (TypeError, ValueError):
-        return 400, {"ok": False, "error": "id must be a number"}
-    action = str(ctx.body.get("action", "")).strip()
-    if action == "forget":
-        done = ctx.store().forget(memory_id)
-    elif action in ("pin", "unpin"):
-        done = ctx.store().pin_memory(memory_id, action == "pin")
-    else:
-        return 400, {"ok": False, "error": "action must be pin, unpin or forget"}
-    return (200 if done else 404), {"ok": done, "error": None if done else "no such memory"}
+        done = app_memory.decide(ctx.store(), ctx.body.get("id"), str(ctx.body.get("action", "")))
+    except app_errors.Refused as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    return (200 if done["found"] else 404), {
+        "ok": done["found"],
+        "error": None if done["found"] else "no such memory",
+    }
 
 
 def rules_post(ctx):
@@ -817,7 +906,27 @@ def rules_post(ctx):
 
 
 def tasks_post(ctx):
-    return adapters.edit_task(ctx.store(), ctx.body)
+    """Edit one task, or decide one proposal. The legacy spelling.
+
+    `app_tasks.edit` directly rather than through an adapter, so the two spellings of this endpoint
+    demonstrably meet at one function — `tests/test_api_version.py` reads both bodies for it. What
+    the adapter held was a `try/except` turning `Refused` into a status code, which is the one part
+    of this that *is* about HTTP and belongs in a handler.
+    """
+    try:
+        changed = app_tasks.edit(
+            ctx.store(),
+            ctx.body.get("id"),
+            title=ctx.body.get("title"),
+            priority=ctx.body.get("priority"),
+            target=ctx.body.get("target"),
+            tool=ctx.body.get("tool"),
+            decision=ctx.body.get("decision"),
+            note=str(ctx.body.get("note", "via console")),
+        )
+    except app_errors.Refused as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    return 200, {"ok": True, **changed}
 
 
 def site_post(ctx):

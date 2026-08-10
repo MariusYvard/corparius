@@ -49,7 +49,15 @@ CONSOLE = (Path("corparius/api/adapters.py"), Path("corparius/api/handlers.py"))
 # (console service, CLI command) -> the app service both must reach.
 # Adding a row here is how a pair becomes enforced; the assertion is that both sides reach it.
 SHARED = {
-    ("edit_task", "task"): "app_tasks.edit",
+    # `tasks_post`, not `edit_task`: the adapter that stood between the handler and the service is
+    # gone. It held a `try/except` mapping `Refused` onto 400, which is the one part of that
+    # operation that *is* about HTTP — and with two spellings of the endpoint now, an adapter in the
+    # middle meant `tests/test_api_version.py` could not read both bodies and see them meet.
+    ("tasks_post", "task"): "app_tasks.edit",
+    # Pin, unpin, forget. Declared when the service was written, and writing it is what surfaced
+    # that `corparius memory` had only two of the three: a fact pinned by mistake from a terminal
+    # could be unpinned only from the console. `--unpin` exists now.
+    ("memory_post", "memory"): "app_memory.decide",
     ("deploy", "deploy"): "app_publish.publish",
     ("set_settings", "set"): "app_settings.persist",
     ("create_company", "new"): "app_companies.create",

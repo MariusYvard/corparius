@@ -16,6 +16,7 @@
    *     you can authenticate, and it has no v1 spelling yet.
    */
   import { onMount } from "svelte";
+  import Operations from "./Operations.svelte";
   import Overview from "./Overview.svelte";
   import { get, Refused } from "./api.js";
   import { LANGUAGES, load, translator } from "./i18n.js";
@@ -41,6 +42,23 @@
   // The contract this build was written against. A core that answers a different number is not
   // one this console can talk to, and saying so beats failing one request at a time.
   const SPEAKS = 1;
+
+  // The tabs that exist, in the order they are rebuilt. One per commit, so each can be looked at in
+  // a browser as it lands — a styled empty frame would say less about whether the direction is right
+  // than one page an operator can read. The remaining `nav.*` keys are in the table already and get
+  // their entry when their component does; listing a name with nothing behind it would be a tab that
+  // opens onto nothing, which is the same lie as a button that does nothing.
+  const TABS = [
+    { id: "overview", component: Overview },
+    { id: "operations", component: Operations },
+  ];
+  let tab = $state(localStorage.getItem("corparius-tab") || "overview");
+  let shown = $derived(TABS.find((entry) => entry.id === tab) ?? TABS[0]);
+
+  function pickTab(id) {
+    tab = id;
+    localStorage.setItem("corparius-tab", id);
+  }
 
   async function choose(next) {
     await load(next);
@@ -131,7 +149,29 @@
   {:else if !company}
     <p class="muted">{t("wiz.title")}</p>
   {:else}
-    <Overview {lang} {company} {token} />
+    <!-- `role="tablist"` on a `div`, not on the `<nav>` it started as: `nav` already carries an
+         implicit `navigation` role and Svelte's a11y pass says so. Full pattern rather than half of
+         it — `aria-controls` and a `tabpanel` — because tabs a screen reader cannot follow are
+         decoration, and the shipped page had this right. -->
+    <div class="tabs" role="tablist" aria-label={t("brand.console")}>
+      {#each TABS as entry (entry.id)}
+        <button
+          role="tab"
+          class="tab"
+          id={`tab-${entry.id}`}
+          aria-controls={`panel-${entry.id}`}
+          aria-selected={tab === entry.id}
+          onclick={() => pickTab(entry.id)}>{t("nav." + entry.id)}</button>
+      {/each}
+    </div>
+    <!-- Keyed on the tab id so switching tabs remounts rather than reusing state. Two tabs poll
+         different resources on different cadences; a reused component would keep the other one's
+         interval running against the wrong endpoints. -->
+    {#key shown.id}
+      <div role="tabpanel" id={`panel-${shown.id}`} aria-labelledby={`tab-${shown.id}`}>
+        <shown.component {lang} {company} {token} />
+      </div>
+    {/key}
   {/if}
 </main>
 
@@ -182,6 +222,16 @@
   }
   button.lang { background: none; color: var(--muted); border-color: var(--border); padding: 0.2rem 0.5rem; }
   button.lang[aria-pressed="true"] { color: var(--text); border-color: var(--border-ui); }
+  .tabs { display: flex; gap: 0.3rem; margin: 0 0 1.1rem; border-bottom: 1px solid var(--border); }
+  button.tab {
+    background: none;
+    color: var(--muted);
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 0.45rem 0.7rem;
+  }
+  button.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
   button:focus-visible, select:focus-visible, input:focus-visible {
     outline: 2px solid var(--select);
     outline-offset: 2px;

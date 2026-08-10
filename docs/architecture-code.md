@@ -737,6 +737,55 @@ un test — `test_every_declared_strictness_target_still_exists` résout chaque 
 et non une résolution de mieux lire les notes. Remis en place, les deux jambes mypy passent toujours :
 le module était bien annoté, la garantie était simplement éteinte.
 
+### Le deuxième onglet, et le cinquième écart
+
+`Operations` porte le tableau, les règles permanentes, la mémoire, les brouillons et le journal.
+Quatre écritures de plus en v1, et **trois d'entre elles ont gagné un service en même temps**, parce
+que l'endroit où l'on écrit le second appelant est l'endroit où l'on voit que le premier n'était pas
+complet. Mesuré sur `corparius memory` :
+
+| | `--pin` | `--unpin` | `--forget` |
+| --- | --- | --- | --- |
+| gestionnaire console | oui | oui | oui |
+| `corparius memory` | oui | **non** | oui |
+
+Un fait épinglé par erreur depuis un terminal ne pouvait être désépinglé que depuis le navigateur.
+Plus petit que l'écart des approbations — personne n'est bloqué — mais c'est la même forme, et la
+forme est ce à quoi sert le service : un seul endroit qui connaît le vocabulaire, pour qu'une surface
+ne puisse pas en implémenter les deux tiers.
+
+Et la garde qui le tient n'est pas le test de comportement. `test_the_terminal_can_now_unpin`
+**passe** quand on retire `--unpin` du parseur, parce qu'il construit son `Namespace` à la main :
+c'est `test_every_memory_action_has_a_flag` qui échoue, en comparant `app_memory.ACTIONS` aux options
+qu'argparse offre réellement. Les deux bouts du fil, encore — la même forme que `write_skill`
+atteignable et jamais atteint.
+
+`rules` **n'a pas** de service, et c'est audité et non oublié : révoquer une règle permanente est un
+seul appel au store, et rien n'attend à côté. Rien n'est garé sur une règle — révoquer veut dire que
+l'outil redemande au prochain tour — donc la forme « deux appels, un appelant en oublie un » ne peut
+pas naître ici. Un service serait de l'indirection pure, et l'invariant déclaré est le vrai, plus
+faible : les deux orthographes atteignent `drop_rule`.
+
+**Un adaptateur a disparu au passage.** `adapters.edit_task` ne portait qu'un `try/except` traduisant
+`Refused` en 400 — la seule partie de cette opération qui *soit* du HTTP — et avec deux orthographes
+du point d'entrée, un adaptateur au milieu empêchait `tests/test_api_version.py` de lire les deux
+corps et de les voir se rejoindre. La garantie passait de « affirmée » à « supposée » pour une
+indirection. Les deux gestionnaires appellent `app_tasks.edit` directement.
+
+### Une garde d'i18n qui ne voyait qu'une partie de ce qu'elle scannait
+
+`test_every_component_label_is_a_key_that_exists` cherchait `t\("clé"\)` — une clé suivie
+immédiatement de la parenthèse fermante. Le deuxième onglet utilise huit fois la forme
+`t(fact.pinned ? "mem.unpin" : "mem.pin")` : aucune des deux clés n'est suivie de `)`, donc **aucune
+des deux n'était vérifiée**, et la garde annonçait un fichier propre en en contrôlant une fraction.
+
+Troisième instance de la même classe que le `glob` plat et l'entrée mypy périmée : *un scanner qui
+sous-rapporte passe.* Élargi aux littéraux de tout appel `t(` sans appel imbriqué — et il a
+immédiatement signalé `approved`, qui venait de
+`t(decision === "approved" ? "toast.approved" : "toast.rejected")`, un opérande de comparaison et non
+une clé. La règle qu'il impose est donc qu'un appel `t()` ne contient que des clés, ce qui est bon à
+prendre : l'alternative est un scanner qui devrait comprendre JavaScript.
+
 ## Un vrai tour, sur la vraie configuration
 
 La liste de vérification du plan demande « un vrai tour sur la vraie entreprise ». Lancé sur une

@@ -29,10 +29,18 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/v1/activity", handlers.v1_activity, needs_slug=True),
     Route("GET", "/api/v1/companies", handlers.v1_companies),
     Route("GET", "/api/v1/jobs", handlers.v1_jobs, needs_slug=True),
+    Route("GET", "/api/v1/drafts", handlers.v1_drafts, needs_slug=True),
     # The writes the overview tab needs. Reads moved to v1 first because that is where the cost was;
     # these move now because a v1 client has decisions to make.
     Route("POST", "/api/v1/approvals", handlers.v1_approvals_post),
     Route("POST", "/api/v1/inbox", handlers.v1_inbox_post, needs_slug=True),
+    # And the writes the operations tab needs: the board, the standing rules, the memory, the
+    # drafts. Each one is a decision an operator makes about work that already exists, which is
+    # what separates this tab from the overview's two buttons.
+    Route("POST", "/api/v1/tasks", handlers.v1_tasks_post),
+    Route("POST", "/api/v1/rules", handlers.v1_rules_post, needs_slug=True),
+    Route("POST", "/api/v1/memory", handlers.v1_memory_post),
+    Route("POST", "/api/v1/drafts", handlers.v1_drafts_post, needs_slug=True),
     # The first v1 writes. Durable work: a client that loses the answer can ask again with the
     # same `Idempotency-Key` and will not start a second run.
     Route("POST", "/api/v1/runs", handlers.v1_runs_post, needs_slug=True),

@@ -52,14 +52,39 @@ def store(tmp_path):
     s.close()
 
 
+def edit_task(store, body: dict) -> tuple[int, dict]:
+    """The console's edit, through the endpoint a request actually reaches.
+
+    This called `adapters.edit_task` until the endpoint got a v1 twin and the adapter went — it held
+    a `try/except` mapping `Refused` onto 400, and with two spellings to keep honest,
+    `tests/test_api_version.py` needs both handler bodies to contain the service call rather than
+    delegating to a shared middle that no assertion reads.
+
+    So these tests now go through `handlers.tasks_post`, which is strictly more of the real path: the
+    same `(status, body)` they always asserted, produced by the function the route table names.
+    """
+    import types
+
+    from corparius.api import handlers
+    from corparius.api.contracts import Ctx
+
+    ctx = Ctx(
+        state=types.SimpleNamespace(store=lambda: store),  # type: ignore[arg-type]
+        path="/api/tasks",
+        query={},
+        body=body,
+        slug=str(body.get("company", "c")),
+        lang="en",
+    )
+    return handlers.tasks_post(ctx)
+
+
 # --- 1. the tool, at both ends of the wire -----------------------------------
 
 
 def test_the_registry_is_reached_when_the_console_approves(store):
     """The end that was missing. An operator pressing Approve has to leave the
     task in the same state the CEO would have left it in."""
-    from corparius.api.adapters import edit_task
-
     task_id = store.add_task("c", "Remove the unverified badge", "design", status="proposed")
     code, body = edit_task(store, {"id": task_id, "decision": "approved"})
     assert code == 200, body
@@ -79,8 +104,6 @@ def test_the_registry_is_reached_when_the_ceo_approves(store):
 def test_both_ends_leave_a_task_in_the_same_state(store):
     """Stated as the property rather than as two examples, because the next
     approval path added should have to satisfy it too."""
-    from corparius.api.adapters import edit_task
-
     by_console = store.add_task("c", "A", "support", status="proposed")
     by_ceo = store.add_task("c", "B", "support", status="proposed")
     edit_task(store, {"id": by_console, "decision": "approved"})
@@ -89,8 +112,6 @@ def test_both_ends_leave_a_task_in_the_same_state(store):
 
 
 def test_a_tool_the_operator_chose_is_not_overwritten(store):
-    from corparius.api.adapters import edit_task
-
     task_id = store.add_task("c", "A", "support", status="proposed")
     edit_task(store, {"id": task_id, "decision": "approved", "tool": "write_site_content"})
     assert store.get_task(task_id)["tool"] == "write_site_content"
@@ -371,8 +392,6 @@ def test_changing_the_agent_in_the_editor_re_offers_its_tools():
 
 def test_the_api_accepts_what_the_editor_now_sends(store):
     """The other end of the wire, exercised rather than read."""
-    from corparius.api.adapters import edit_task
-
     task_id = store.add_task("c", "Remove the badge", "support", status="approved")
     code, body = edit_task(store, {"id": task_id, "target": "design", "tool": "write_site_content"})
     assert code == 200, body
@@ -383,8 +402,6 @@ def test_the_api_accepts_what_the_editor_now_sends(store):
 def test_an_unknown_tool_is_refused_rather_than_stored(store):
     """A task scoped to a tool nobody has never applies, silently — worse than the
     untooled task it was meant to fix."""
-    from corparius.api.adapters import edit_task
-
     task_id = store.add_task("c", "x", "support", status="approved")
     code, body = edit_task(store, {"id": task_id, "tool": "no_such_tool"})
     assert code == 400 and "unknown tool" in body["error"]

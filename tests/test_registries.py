@@ -59,7 +59,10 @@ ALL_SRC = "\n".join(SRC.values())
 # + kernel/ (10: __init__, crypto, dotenv, httpkit, i18n, paths, proc, records, text,
 # vectors) + config/ (8: __init__, cfg, permissions, provider_table, secretbox, settings,
 # settings_spec, store_layer — all but two moved in from the flat package).
-MODULE_COUNT = 134
+# +2 at the Operations tab: `app/drafts.py` and `app/memory.py`, each written because the same
+# operation was implemented twice — and `app/memory.py` because the terminal only had two thirds of
+# it (`--pin`, `--forget`, no `--unpin`).
+MODULE_COUNT = 136
 
 
 def test_every_source_file_is_scanned():

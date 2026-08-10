@@ -156,14 +156,21 @@ def test_the_service_carries_no_status_code(store):
     assert not http_codes, f"these read as status codes: {sorted(http_codes)}"
 
 
-def test_the_console_adapter_only_unpacks_and_translates():
-    """`adapters.edit_task` should be unpacking a body and mapping one exception. If it grows
-    logic again, the two callers start to differ again — which is the whole history here."""
+@pytest.mark.parametrize("handler", ["tasks_post", "v1_tasks_post"])
+def test_the_console_handler_only_unpacks_and_translates(handler):
+    """Both spellings should be unpacking a body and mapping one exception. If either grows logic,
+    the callers start to differ again — which is the whole history here.
+
+    This read `adapters.edit_task` until the endpoint got a v1 twin. The adapter went, and the hop
+    it saved is real: `tests/test_api_version.py` requires both handler bodies to contain the same
+    service call, and a handler that delegates to an adapter that calls the service does not satisfy
+    that by reading — it satisfies it by trust. One less indirection, one more thing asserted.
+    """
     import inspect
 
-    from corparius.api import adapters
+    from corparius.api import handlers
 
-    source = inspect.getsource(adapters.edit_task)
+    source = inspect.getsource(getattr(handlers, handler))
     assert "app_tasks.edit(" in source
     assert "Refused" in source and "400" in source
     # No validation left behind: those words belong to the service now.

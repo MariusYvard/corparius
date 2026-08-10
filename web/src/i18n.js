@@ -64,3 +64,20 @@ export async function load(lang) {
 export function translator(lang) {
   return (key) => TABLES[lang]?.[key] ?? TABLES.en[key] ?? key;
 }
+
+/**
+ * Substitute the named holes in a string: `fill(t("col.more"), {n: 12})`.
+ *
+ * The tables already contain `{n}` in three places — `col.more`, `col.rest`, `dft.queued` — so this
+ * is not a feature being added, it is the half of them that was missing here. Named rather than
+ * positional because the French of one of them puts the number in a different place, which is
+ * exactly what a positional `%s` cannot survive.
+ *
+ * An absent value leaves the placeholder standing. A visible `{n}` is a bug someone reports; a
+ * silent `undefined` in a sentence is one they read past.
+ */
+export function fill(text, values) {
+  return String(text).replace(/\{(\w+)\}/g, (whole, name) =>
+    name in values ? String(values[name]) : whole,
+  );
+}

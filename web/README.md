@@ -63,7 +63,7 @@ each card landed, and what is still only in the old page.
 | Overview | what needs you · the pulse · the run | Getting started · Go live · Sales site · Spend by agent · Payments · Recent activity |
 | Operations | the board · standing rules · memory · drafts · the action log | — (Backup moved to Settings, below) |
 | Documents | the drop zone · what is on file · reading one | — |
-| Providers | — | Claude subscription · Ollama · runtime · free tiers · routing tiers · Anthropic |
+| Providers | Claude subscription · runtime toggles · free tiers · routing tiers · Ollama status | the Ollama **pull** and the full preflight **sweep** — see below |
 | CEO | — | the chat, and the CEO's own powers |
 | Settings | — | the 80-field registry · Backup, from the old Operations tab |
 | Plugins | — | the seven seams · Skills |
@@ -72,6 +72,34 @@ Recent activity and Spend by agent are the two Overview cards with a v1 resource
 (`activity`, and `spend_by_agent` inside `summary`), so they are the cheapest to bring across. Go live
 and Sales site need `/api/golive` and `/api/site` versioned first. Naming that here rather than
 discovering it per tab.
+
+### Two operations waiting on durable jobs
+
+The Ollama **pull** and the preflight **sweep** have no v1 spelling, and that is a decision rather than
+an omission. Both track progress in `UiState` — an in-process dict — so neither survives a restart of
+the console, which is precisely the state schema 19 built the `jobs` table to replace. A v1 route
+publishing a `pulling` flag would be publishing a field that lies the moment the console restarts, and
+a phone that started a sweep would have no way to find it again.
+
+They move to durable jobs first, and that has its own proof, the one the plan already names for runs:
+kill the server, restart it, and the sweep is still there — or reads `interrupted`, which is honest
+where a silent resume is a lie about what happened. `tests/test_v1_providers.py` fails if a v1 route
+for either appears before that work is done.
+
+### Every probe is a button
+
+Nothing on the Providers tab opens a socket until an operator presses something. The rule was written
+after `/api/providers` opened one on every refresh, and it is why the read reports `claude_installed`
+from the filesystem and omits the Claude tier plan entirely — building that plan needs to know whether
+Ollama answers, which on a machine without it costs a connect timeout per poll.
+
+`test_the_reads_open_no_socket` holds it, by patching `socket.socket.connect` to raise. It calls the
+services directly rather than over HTTP, because the first version went through the test client and
+caught **the request itself** — a request *is* a socket, so it was measuring the trip.
+
+One thing measured while writing this tab, worth knowing: `connected_providers()` answers `["ovh"]` on
+a machine with **no credentials at all**. OVH AI Endpoints is key-optional and carries a default base
+URL, so "use recommended routing" works on a fresh install before the operator has pasted anything.
 
 **Overview reads three v1 resources and writes to three more.** `summary` (2 859 bytes, polled),
 `jobs` (the durable run), and `companies`; it posts to `approvals`, `inbox` and `runs`. Every one of

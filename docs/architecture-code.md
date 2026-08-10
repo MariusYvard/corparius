@@ -880,6 +880,54 @@ Et un invariant que la donnée satisfaisait par hasard est maintenant affirmé :
 refusée par une liste et acceptée par l'autre. `CORP_UI_ALLOWED_HOSTS`, qui décide quels en-têtes
 `Host` le serveur accepte, est vérifié absent des trois ensembles.
 
+### Le quatrième onglet : chaque sonde est un bouton
+
+`Providers` est l'onglet où la règle « jamais de sonde réseau depuis un point sondé » organise tout le
+reste. Les lectures sont des vérifications de système de fichiers et des réglages stockés ; **rien
+n'ouvre de socket avant qu'un opérateur appuie sur quelque chose.** C'est pour cela que la lecture
+répond `claude_installed` depuis le disque et **omet délibérément le plan de tiers Claude** : le
+construire demande de savoir si Ollama répond, ce qui sur une machine sans lui coûte un délai de
+connexion par sondage — et sur un runner où le port est filtré plutôt que refusé, assez longtemps pour
+faire échouer la suite.
+
+Donc `probe`, `models`, `preflight` et `claude/setup` sont des POST. `test_the_reads_open_no_socket`
+en fait une propriété et non une intention, en remplaçant `socket.socket.connect` par une exception —
+et il appelle les services **directement** plutôt que par HTTP, parce que la première version passait
+par le client de test et attrapait **la requête elle-même** : une requête *est* une socket, donc elle
+mesurait le trajet.
+
+Trois choses mesurées en écrivant cet onglet, et les trois ont corrigé une hypothèse que le test
+portait déjà :
+
+1. **`connected_providers()` répond `["ovh"]` sur une machine sans aucune clé.** OVH AI Endpoints est
+   `key_optional` et porte une URL de base par défaut, donc « utiliser le routage recommandé » marche
+   sur une installation neuve avant que l'opérateur ait collé quoi que ce soit. Le test affirmait un
+   409 et a échoué — ce qui valait mieux que de passer.
+2. **`os.environ` gagne, et le contrat est de le dire.** Écrire `CORP_LLM_MOCK=false` depuis la console
+   ne peut rien contre un `CORP_LLM_MOCK=true` dans l'environnement du processus. C'est le bon
+   classement — l'environnement appartient à qui a lancé le processus — et `persist` renvoie `shadowed`
+   exactement pour ça : « enregistré, mais votre environnement l'écrase » plutôt qu'un interrupteur qui
+   revient tout seul.
+3. **Un test qui touchait vraiment `api.groq.com`.** Il est remonté en `ResourceWarning` sur une socket
+   non fermée, que `filterwarnings = ["error"]` a transformé en échec **sur autre chose**. L'échec est
+   injecté maintenant. Au passage : 20 appels `requests.get` nus dans le paquet contre un seul
+   `with` — `requests.get` ferme bien sa session, donc ce n'est pas une fuite, mais l'idiome mérite un
+   regard un jour.
+
+### Deux opérations qui attendent les travaux durables
+
+Le **pull** Ollama et le **balayage** preflight n'ont pas d'orthographe v1, et c'est une décision. Tous
+deux suivent leur progression dans `UiState` — un dictionnaire en mémoire de processus — donc aucun ne
+survit à un redémarrage de la console, ce qui est précisément l'état que le schéma 19 a construit la
+table `jobs` pour remplacer. Une route v1 publiant un drapeau `pulling` publierait un champ qui mentira
+à la seconde où la console redémarre, et un téléphone qui aurait lancé un balayage n'aurait aucun moyen
+de le retrouver.
+
+Ils passent en travaux durables d'abord, avec la preuve que le plan nomme déjà pour les tours : tuer le
+serveur, le relancer, et le balayage est encore là — ou lit `interrupted`, ce qui est honnête là où une
+reprise silencieuse est un mensonge sur ce qui s'est passé. `tests/test_v1_providers.py` échoue si une
+route v1 pour l'un des deux apparaît avant.
+
 ## Un vrai tour, sur la vraie configuration
 
 La liste de vérification du plan demande « un vrai tour sur la vraie entreprise ». Lancé sur une

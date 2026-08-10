@@ -174,9 +174,13 @@
     <p class="line">{t("docs.dropHere")}</p>
     <p class="pick">
       <span class="muted">{t("docs.dropOr")}</span>
-      <!-- A label bound to a hidden input, not a button calling `.click()`: the label *is* the
-           accessible control, and it works from the keyboard without any script. -->
-      <label class="filebtn" for="doc-file">{t("docs.dropPick")}</label>
+      <!-- A label bound to a clipped input, not a button calling `.click()`: the label *is* the
+           accessible control and works from the keyboard without any script.
+
+           The input comes **first** in the DOM so `input:focus-visible + .filebtn` can draw the focus
+           ring on the label. It read the other way round at first, and Svelte's CSS pass said the
+           selector was unused — a focus ring nobody could see, which is the whole point of having
+           one. Order is invisible here because the input is clipped, not hidden. -->
       <input
         id="doc-file"
         type="file"
@@ -184,6 +188,7 @@
         accept={(inventory?.accepts ?? []).join(",")}
         onchange={(e) => e.currentTarget.files && send(e.currentTarget.files)}
       />
+      <label class="filebtn" for="doc-file">{t("docs.dropPick")}</label>
     </p>
     {#if inventory}
       <!-- The limits from the one place that decides them. A second copy in this file would be a

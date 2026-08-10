@@ -19,6 +19,7 @@
   import Documents from "./Documents.svelte";
   import Operations from "./Operations.svelte";
   import Overview from "./Overview.svelte";
+  import Providers from "./Providers.svelte";
   import { get, Refused } from "./api.js";
   import { LANGUAGES, load, translator } from "./i18n.js";
 
@@ -53,6 +54,7 @@
     { id: "overview", component: Overview },
     { id: "operations", component: Operations },
     { id: "documents", component: Documents },
+    { id: "providers", component: Providers },
   ];
   let tab = $state(localStorage.getItem("corparius-tab") || "overview");
   let shown = $derived(TABS.find((entry) => entry.id === tab) ?? TABS[0]);

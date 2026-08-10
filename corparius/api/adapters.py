@@ -173,6 +173,37 @@ def drafts_payload(store, slug: str) -> dict:
     }
 
 
+def provider_models(store, name: str) -> dict:
+    """What a provider advertises, with what a preflight actually proved marked.
+
+    Measured on NVIDIA with a real key: **10 of 18 catalogue entries answered 404.** Offering the
+    catalogue alone is offering a coin flip; offering it with the proven ones marked is offering what
+    is known. A model that answered and is no longer advertised stays in the list, because dropping it
+    would hide the one fact here that was measured rather than claimed.
+
+    A network failure comes back as `ok: False` **with the proven list**, never as an exception: the
+    request was fine, the provider did not answer, and a client holding the proven models can still
+    fill a tier. Here rather than in a handler because both spellings of this endpoint need it, and
+    `handlers.py` holds both ends of a count — every function of it is in the route table.
+    """
+    from ..providers import preflight
+    from ..providers.llm import list_models
+
+    proved = {r["model"]: r["state"] for r in store.known_probes(name)}
+    try:
+        models = list_models(name)
+    except Exception as exc:  # network/HTTP/parse: report, never a 500
+        log.info("model list for %s failed: %s", name, exc)
+        return {
+            "ok": False,
+            "models": sorted(proved),
+            "proved": proved,
+            "error": "could not list models; showing what a preflight proved",
+        }
+    every = sorted(set(models) | {m for m, s in proved.items() if s == preflight.USABLE})
+    return {"ok": True, "models": every, "proved": proved}
+
+
 def providers_payload() -> dict:
     s = state.fresh_settings()
     providers = []

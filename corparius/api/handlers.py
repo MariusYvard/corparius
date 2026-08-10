@@ -443,6 +443,203 @@ def v1_documents_delete(ctx):
     }
 
 
+# --- providers ------------------------------------------------------------------
+#
+# **No probe is reachable from a read here.** That rule was written after `/api/providers` opened a
+# socket on every refresh, and it is why `providers_payload` answers `claude_installed` from the
+# filesystem and omits the Claude tier plan entirely: building the plan needs to know whether Ollama
+# answers, and on a machine without it that is a connect timeout per poll — on a runner where the port
+# is filtered rather than refused, long enough to fail the suite.
+#
+# So every probe is its own POST: `/probe` for one provider, `/models` for a catalogue, `/preflight`
+# for a bounded pass over every configured tier. A client decides when to spend the operator's
+# account, and the verb says so.
+
+
+def v1_providers(ctx):
+    """Which providers exist, which are configured, and where each tier points.
+
+    Filesystem checks and stored settings only. A key is reported as `key_set`, never returned — the
+    credentials are stored write-only, and a payload that echoed them back would put them in every
+    client's cache and every proxy log.
+    """
+    return 200, adapters.providers_payload()
+
+
+def v1_providers_post(ctx):
+    """Save keys, tier targets and the three toggles this panel owns.
+
+    Through `adapters.set_env`, which since the sixth divergence goes through
+    `app_settings.validate` — so `CORP_SESSION_TOKEN_BUDGET="not-a-number"` is refused here exactly as
+    it is on `/api/v1/settings`, where it used to be stored verbatim and leave `cfg.get_int` answering
+    the caller's fallback.
+
+    The refusal is a list of sentences joined by the service, so `detail.errors` carries them apart
+    rather than as one string a client would have to split on "; ".
+    """
+    result = adapters.set_env(ctx.state, dict(ctx.body.get("values", {})))
+    if result.get("ok") is False:
+        return contracts.refuse(
+            400,
+            contracts.INVALID,
+            str(result.get("error", "some values were refused")),
+            errors=[e.strip() for e in str(result.get("error", "")).split(";") if e.strip()],
+        )
+    return 200, {"ok": True, **result}
+
+
+def v1_provider_models(ctx):
+    """What a provider advertises, with what a preflight actually proved marked.
+
+    One call into `adapters.provider_models`, which is where the measurement lives: 10 of 18 NVIDIA
+    catalogue entries answered 404 with a real key, so the proven set is the part worth trusting.
+
+    `ok: false` here is a provider that did not answer, not a request that was wrong — so it is a 200
+    with the proven list, the same distinction as a refused document.
+    """
+    name = str(ctx.body.get("name", ""))
+    if name not in OPENAI_COMPAT_PROVIDERS:
+        return contracts.refuse(404, contracts.NOT_FOUND, f"no provider called {name!r}", name=name)
+    return 200, adapters.provider_models(ctx.store(), name)
+
+
+def v1_provider_probe(ctx):
+    """One real call to one provider, because the operator asked.
+
+    A POST for the reason every probe here is a POST: it spends a request on their account. The result
+    is a report, not a status code — "your key is rejected" is a successful probe.
+    """
+    name = str(ctx.body.get("name", ""))
+    if name not in OPENAI_COMPAT_PROVIDERS:
+        return contracts.refuse(404, contracts.NOT_FOUND, f"no provider called {name!r}", name=name)
+    return 200, {"ok": True, "result": provider_check.check(name, lang=ctx.lang)}
+
+
+def v1_tiers_recommend(ctx):
+    """Fill every tier from the providers actually connected, and turn mock off.
+
+    The trap this exists to close: the defaults leave tiers pointing at providers nobody configured,
+    so a single pasted key gives a company that half works. This writes a coherent routing over what
+    is connected — and never a tier a preflight has shown that key cannot call, which is what `proven`
+    is for.
+
+    `rank` and `recommended_routing` are `domain/` policy over measurements, taking candidates,
+    catalogue and scores as parameters and doing no I/O. That is stage 5's one real inversion, and it
+    is why this handler can be a call rather than a calculation.
+    """
+    from ..providers import modelinfo, preflight
+    from ..providers.routing import recommended_routing
+
+    local_trivial, _why = hardware.recommended_local(ctx.store(), state.fresh_settings())
+    routing = recommended_routing(
+        connected_providers(),
+        local_trivial,
+        hard=claudecli.HARD_TIER if claudecli.already_on() else "",
+        fallback_tail=claudecli.FALLBACK_LADDER if claudecli.already_on() else (),
+        proven=preflight.proven_map(ctx.store()),
+        catalogue=modelinfo.cached(ctx.store()),
+        scores=modelinfo.operator_scores(),
+    )
+    if routing is None:
+        return contracts.refuse(
+            409,
+            contracts.CONFLICT,
+            "connect a free provider first (Groq or Cerebras are the quickest)",
+        )
+    result = adapters.set_env(
+        ctx.state, {"CORP_LLM_MOCK": "false", "CORP_CLOUD_ENABLED": "true", **routing}
+    )
+    if result.get("ok") is False:
+        return contracts.refuse(400, contracts.INVALID, str(result.get("error", "refused")))
+    return 200, {"ok": True, **result, "routing": routing}
+
+
+def v1_preflight(ctx):
+    """Call every configured model once, for eight tokens, and remember what answered.
+
+    A POST, never a GET on a polled path: each probe is a real generation on the operator's own
+    account. The doctor reads what this leaves behind and never measures — the same split as the
+    hardware bench.
+
+    `skipped` is named rather than dropped, because a preflight that covers three of six tiers and
+    reports success is worse than one that admits its reach.
+    """
+    from ..providers import preflight
+
+    s = state.fresh_settings()
+    if s.llm_mock:
+        return contracts.refuse(
+            409, contracts.CONFLICT, "mock mode is on, so there is no provider to call"
+        )
+    report = preflight.run(s, timeout=int(ctx.body.get("timeout", preflight.TIMEOUT)))
+    preflight.save(ctx.store(), report)
+    return 200, {
+        "ok": True,
+        **report.as_dict(),
+        "skipped": [{"tier": t, "model": m} for t, m in preflight.skipped(s)],
+    }
+
+
+def v1_ollama(ctx):
+    """What is installed locally, what is missing, and what this machine can carry.
+
+    The cached measurement only — `hardware.profile` reads what a bench left behind and never runs
+    one, so this stays cheap enough for a client to ask on arrival.
+
+    **The pull is deliberately not here.** `adapters.ollama_pull` tracks progress in
+    `UiState.pulls`, an in-process dict that does not survive a restart — which is the state schema 19
+    built the `jobs` table to replace. Publishing a `pulling` flag in v1 would be publishing a field
+    that lies the moment the console is restarted, so the pull moves to a durable job before it gets a
+    v1 spelling. The legacy route still serves the shipped page.
+    """
+    result = ollama_setup.status(lang=ctx.lang)
+    settings = state.fresh_settings()
+    profile = hardware.profile(ctx.store(), max_age_days=settings.bench_max_age_days)
+    choice, why = hardware.recommended_local(ctx.store(), settings, result.get("installed"))
+    return 200, {
+        "ok": True,
+        **result,
+        "machine": profile,
+        "local_model": choice,
+        "local_reason": why,
+    }
+
+
+def v1_claude(ctx):
+    """Whether the Claude CLI is here and already authenticated. Filesystem only.
+
+    `desktop_installed` exists so the card can say "that is the chat app, not the CLI" — the single
+    most common confusion in this setup — without costing a probe.
+    """
+    return 200, {
+        "ok": True,
+        "installed": claudecli.installed(),
+        "desktop": claudecli.desktop_installed(),
+        "ready": claudecli.already_on(),
+        "install_cmd": claudecli.INSTALL_CMD,
+        "hard_tier": claudecli.HARD_TIER,
+    }
+
+
+def v1_claude_setup(ctx):
+    """One press: prove the CLI answers, then point the tiers at it.
+
+    The proof comes first and the settings are only written if it passes — never switch a company to a
+    provider that will not answer. Free providers, when connected, keep the trivial and normal tiers:
+    a subscription is metered in usage windows, and a social post every two hours is not what those
+    windows are for.
+    """
+    result = adapters.claude_setup(ctx.state, all_tiers=bool(ctx.body.get("all_tiers")))
+    if result.get("ok") is False:
+        return contracts.refuse(
+            409,
+            contracts.CONFLICT,
+            str(result.get("error", "the Claude CLI did not answer")),
+            check=result.get("check", {}),
+        )
+    return 200, {"ok": True, **result}
+
+
 def v1_jobs(ctx):
     """Work this company has done or is doing, newest first.
 
@@ -1128,34 +1325,17 @@ def tiers_recommend(ctx):
 
 
 def provider_models(ctx):
-    # The models a provider advertises, so a tier can be filled from a list rather
-    # than a remembered string. A network failure is reported, never a 500.
-    from ..providers import preflight
-    from ..providers.llm import list_models
+    """The legacy spelling, `/api/provider/models`. Same call, flat refusal shape.
 
+    The body moved to `adapters.provider_models` when the v1 spelling was added: the two paths differ
+    in the noun's position (`/api/provider/models` against `/api/v1/providers/models`), which is a
+    rename rather than an alias — and `tests/test_api_version.py`'s `RENAMED` map requires both to
+    reach one function, or the rename shipped a second implementation under a tidier name.
+    """
     name = str(ctx.body.get("name", ""))
     if name not in OPENAI_COMPAT_PROVIDERS:
         return 404, {"ok": False, "error": f"unknown provider '{name}'"}
-    # What a previous preflight actually proved, alongside the advertised list.
-    # Measured on NVIDIA with a real key: 10 of 18 catalogue entries answered
-    # 404. Offering the catalogue alone is offering a coin flip; offering it
-    # with the proven ones marked is offering what is known.
-    proved = {r["model"]: r["state"] for r in ctx.state.store().known_probes(name)}
-    try:
-        models = list_models(name)
-    except Exception as exc:  # network/HTTP/parse: report, do not crash the handler
-        log.info("model list for %s failed: %s", name, exc)
-        return 200, {
-            "ok": False,
-            "models": sorted(proved),
-            "proved": proved,
-            "error": "could not list models; showing what a preflight proved",
-        }
-    # A model that answered but is no longer advertised is still callable, and
-    # dropping it would hide the one fact here that was measured rather than
-    # claimed.
-    every = sorted(set(models) | {m for m, s in proved.items() if s == preflight.USABLE})
-    return 200, {"ok": True, "models": every, "proved": proved}
+    return 200, adapters.provider_models(ctx.state.store(), name)
 
 
 def settings_post(ctx):

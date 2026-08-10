@@ -102,6 +102,18 @@ ALIASED = {
     # one": listing the companies is `company.list_slugs()` behind a one-line reader, and both
     # handlers reach it. The v1 payload omits `templates`, which belongs to the creation wizard.
     ("GET", "companies"): "state.companies()",
+    # The providers tab. `adapters.providers_payload` is the console's half of the read and both
+    # spellings answer with it; `adapters.set_env` is the write, and it is the function that carried
+    # the sixth divergence — its own `key in WRITABLE` check instead of `app_settings.validate`, so a
+    # registry field written through it was stored with no coercion at all. One function underneath is
+    # what makes that fix cover both spellings rather than one.
+    ("GET", "providers"): "adapters.providers_payload()",
+    ("POST", "providers"): "adapters.set_env(",
+    ("POST", "tiers/recommend"): "recommended_routing(",
+    ("POST", "claude/setup"): "adapters.claude_setup(",
+    ("POST", "preflight"): "preflight.run(",
+    # The two whose legacy spelling differs only in the noun's position, and which are the same call.
+    ("GET", "ollama"): "ollama_setup.status(",
 }
 
 # The third category, and it needed naming: an endpoint whose **v1 path is a different spelling**.
@@ -115,6 +127,11 @@ ALIASED = {
 # (method, legacy suffix, v1 suffix) -> the function both handlers must reach.
 RENAMED = {
     ("GET", "document/text", "documents/text"): "documents.full_text(",
+    # The providers tab moved two nouns into their collection. `/api/provider/models` and
+    # `/api/test/provider` were shaped by the page's own JavaScript; a sub-resource of `providers` is
+    # what they are, and `probe` says what the call costs — one real request on the operator's account.
+    ("POST", "provider/models", "providers/models"): "adapters.provider_models(",
+    ("POST", "test/provider", "providers/probe"): "provider_check.check(",
 }
 
 
@@ -202,6 +219,14 @@ SPLIT_NOUNS = {
     # they never appear in the intersection this set describes. `RENAMED` above is what holds them,
     # and it exists because without it the guard reported both halves as unpaired and asserted
     # nothing about either.
+    #
+    # The providers tab. `providers` is split on the method rather than half-migrated — both spellings
+    # answer GET and POST — and the other four are single operations offered twice.
+    "providers",
+    "ollama",
+    "preflight",
+    "tiers/recommend",
+    "claude/setup",
 }
 
 

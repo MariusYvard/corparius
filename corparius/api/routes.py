@@ -56,6 +56,18 @@ ROUTES: tuple[Route, ...] = (
         needs_slug=True,
         max_body=documents.MAX_UPLOAD * 4 // 3 + (1 << 16),
     ),
+    # The providers tab. The reads are filesystem checks and stored settings; **every probe is its
+    # own POST**, because each one spends a request on the operator's account and the verb should say
+    # so. That rule was written after `/api/providers` opened a socket on every refresh.
+    Route("GET", "/api/v1/providers", handlers.v1_providers),
+    Route("GET", "/api/v1/ollama", handlers.v1_ollama),
+    Route("GET", "/api/v1/claude", handlers.v1_claude),
+    Route("POST", "/api/v1/providers", handlers.v1_providers_post),
+    Route("POST", "/api/v1/providers/models", handlers.v1_provider_models),
+    Route("POST", "/api/v1/providers/probe", handlers.v1_provider_probe),
+    Route("POST", "/api/v1/tiers/recommend", handlers.v1_tiers_recommend),
+    Route("POST", "/api/v1/preflight", handlers.v1_preflight),
+    Route("POST", "/api/v1/claude/setup", handlers.v1_claude_setup),
     # The first v1 writes. Durable work: a client that loses the answer can ask again with the
     # same `Idempotency-Key` and will not start a second run.
     Route("POST", "/api/v1/runs", handlers.v1_runs_post, needs_slug=True),

@@ -842,6 +842,44 @@ l'ancien front cesserait de couvrir le nouveau un fichier à la fois. C'est la m
 plat, l'entrée mypy périmée et le scanner de clés : *une garde qui sous-rapporte passe.* Quatrième
 instance comptée dans ce chantier.
 
+### Le sixième écart : deux chemins d'écriture de réglages, un seul qui validait
+
+Trouvé en préparant l'onglet `Providers`, par la méthode habituelle — lire deux surfaces qui
+prétendent faire le même travail. `POST /api/settings` passait par `app_settings.validate` : coercition
+contre le registre de champs, refus motivé, effacement sur valeur vide. `POST /api/providers` avait sa
+propre vérification, `key in settings_spec.WRITABLE` puis `str(value).strip()`, et rien d'autre.
+
+Mesuré sur un vrai store :
+
+| | clé inconnue | `"not-a-number"` pour un champ entier | valeur vide |
+| --- | --- | --- | --- |
+| `POST /api/settings` | refusée | **refusée, avec la raison** | **efface** le réglage |
+| `POST /api/providers` | refusée | **stockée telle quelle** | stockée en `""` |
+
+Et la conséquence : avec `CORP_SESSION_TOKEN_BUDGET` valant `"not-a-number"`, `cfg.get_int` répond
+**le défaut de l'appelant**. Un budget de session qui devient silencieusement ce que le lecteur avait
+deviné. N'importe quel client atteignait le chemin non validé, et toute la prémisse de l'étape 8 est
+qu'un second client gèle ces routes : c'était un trou dans le contrat, pas une bizarrerie d'une page.
+
+**Mais la colonne « valeur vide » n'est pas une dérive, et c'est la moitié intéressante.** Mesuré
+aussi : une chaîne vide stockée **masque `.env`**. Avec `GROQ_API_KEY=from-dot-env` dans le fichier et
+`""` dans la table, `cfg.get` lit `""` ; on supprime la ligne et le fichier réapparaît. Effacer sur
+vide ferait donc **ressusciter une clé que l'opérateur vient de révoquer** — l'inverse de ce qu'il
+demande. Un champ du registre est exactement l'opposé : il a un défaut, donc vide veut dire « reviens
+au défaut ».
+
+Deux règles, parce que les deux classes de clés diffèrent réellement — et les deux vivent maintenant
+dans **une** fonction au lieu d'une par route. `app_settings.CREDENTIALS` est **dérivé**
+(`WRITABLE - BY_KEY`, 28 des 108), pas listé à la main : une seconde liste tenue à la main pourrirait
+dans la mauvaise direction, une nouvelle clé de fournisseur oubliée serait coercée contre un champ qui
+n'existe pas et refusée comme inconnue.
+
+Et un invariant que la donnée satisfaisait par hasard est maintenant affirmé : `BY_KEY ⊆ WRITABLE`.
+`validate` accepte n'importe quel champ du registre, tandis que les tests de sécurité vérifient ce qui
+*n'est pas* écrivable contre `WRITABLE` — deux vocabulaires qui doivent coïncider, sinon une clé serait
+refusée par une liste et acceptée par l'autre. `CORP_UI_ALLOWED_HOSTS`, qui décide quels en-têtes
+`Host` le serveur accepte, est vérifié absent des trois ensembles.
+
 ## Un vrai tour, sur la vraie configuration
 
 La liste de vérification du plan demande « un vrai tour sur la vraie entreprise ». Lancé sur une

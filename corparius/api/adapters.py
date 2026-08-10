@@ -464,13 +464,21 @@ def persist(ui: UiState, values: dict[str, str], unset: list[str] | None = None)
 
 
 def set_env(ui: UiState, values: dict) -> dict:
-    """The providers panel: toggles, routing tiers and provider keys."""
-    clean: dict[str, str] = {}
-    for key, value in values.items():
-        if key not in ALLOWED_VARS:
-            return {"ok": False, "error": f"variable '{key}' is not settable"}
-        clean[key] = str(value).strip()
-    meta = persist(ui, clean)
+    """The providers panel: toggles, routing tiers and provider keys.
+
+    Through `app_settings.validate` now, which is the sixth live divergence closed. This had its own
+    check — `key in ALLOWED_VARS`, then `str(value).strip()` — so a registry field written here was
+    stored with **no coercion at all**: measured, `CORP_SESSION_TOKEN_BUDGET="not-a-number"` landed
+    verbatim and `cfg.get_int` then answered the caller's fallback. The same body on `/api/settings`
+    was refused with the reason. Any client could reach the unvalidated one.
+
+    `credentials=` keeps the part that was not drift: those 28 keys have no field to coerce against,
+    and a blank one is stored rather than cleared because an empty string masks `.env`.
+    """
+    clean, drop, errors = app_settings.validate(values, credentials=app_settings.CREDENTIALS)
+    if errors:
+        return {"ok": False, "error": "; ".join(errors)}
+    meta = persist(ui, clean, drop)
     return {**providers_payload(), **meta}
 
 

@@ -26,6 +26,22 @@ from ..kernel import dotenv
 
 SECRET_VARS = settings_spec.SECRETS
 
+# The writable keys that have **no registry field**: 28 of the 108, measured — the provider
+# credentials (`GROQ_API_KEY`, `OPENAI_API_KEY`, …), the four tier model names, the two base URLs and
+# the three toggles the providers panel owns (`CORP_LLM_MOCK`, `CORP_CLOUD_ENABLED`,
+# `CORP_CLAUDE_CODE`). They are free text: there is no type to coerce them to and no default to fall
+# back to.
+#
+# **And a blank one is kept rather than cleared, which is the load-bearing half.** Measured on a real
+# store: a stored empty string *masks* `.env` — with `GROQ_API_KEY=from-dot-env` in the file and `""`
+# in the settings table, `cfg.get` reads `""`; delete the row and it reads `from-dot-env` again. So
+# clearing the row when an operator empties the field would resurrect the key they just revoked.
+#
+# A registry field is the exact opposite: empty means clear, so the layer below shows through. Two
+# rules because the two classes of key genuinely differ, written down here because the difference
+# looks like an inconsistency until you have measured the masking.
+CREDENTIALS = frozenset(settings_spec.WRITABLE) - frozenset(settings_spec.BY_KEY)
+
 
 def persist(
     store,
@@ -83,7 +99,10 @@ def persist(
 
 
 def validate(
-    values: dict, unset: list[str] | None = None
+    values: dict,
+    unset: list[str] | None = None,
+    *,
+    credentials: frozenset[str] = frozenset(),
 ) -> tuple[dict[str, str], list[str], list[str]]:
     """(accepted, to clear, refusals) against the field registry.
 
@@ -91,13 +110,38 @@ def validate(
     for the same reasons. A registry only one caller consults is a registry that drifts — this
     project has the receipts, and `tests/test_registries.py` exists because of them.
 
-    An empty value **clears** the setting rather than storing an empty string, so the layer
+    An empty value **clears** a registry field rather than storing an empty string, so the layer
     below shows through again. That distinction is why this returns three lists and not two.
+
+    ## The sixth live divergence, and why `credentials` is a parameter
+
+    There were **two** settings write paths, and only one of them coerced. `POST /api/settings`
+    came through here; `POST /api/providers` had its own check — `key in settings_spec.WRITABLE`
+    and `str(value).strip()` — and nothing else. Measured on a real store:
+
+        POST /api/providers {"values": {"CORP_SESSION_TOKEN_BUDGET": "not-a-number"}}
+        -> stored verbatim, and cfg.get_int() then answers the caller's fallback (-1)
+
+    The same body through `/api/settings` is refused with
+    `expected a whole number, got 'not-a-number'`. Any client could reach the unvalidated path,
+    and stage 8's whole premise is that a second client freezes these routes — so this was a hole
+    in the contract, not a quirk of one page.
+
+    `credentials` is what closes it **without** flattening the difference that is real: those keys
+    have no registry field to coerce against, and a blank one is *kept*, because a stored empty
+    string masks `.env` (see `CREDENTIALS` above). Pass the set and they are accepted as text;
+    everything else is coerced, whichever route asked.
     """
     clean: dict[str, str] = {}
-    drop: list[str] = [k for k in (unset or []) if k in settings_spec.BY_KEY]
+    known = set(settings_spec.BY_KEY) | set(credentials)
+    drop: list[str] = [k for k in (unset or []) if k in known]
     errors: list[str] = []
     for key, raw in values.items():
+        if key in credentials and key not in settings_spec.BY_KEY:
+            # Free text, and blank is a value. Stripped, because a pasted credential arrives with
+            # whitespace far more often than it means to carry any.
+            clean[key] = str(raw).strip()
+            continue
         spec = settings_spec.BY_KEY.get(key)
         if spec is None:
             errors.append(f"unknown setting '{key}'")

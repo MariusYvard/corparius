@@ -14,7 +14,7 @@ import threading
 
 from . import sitegen
 from .app import companies as app_companies
-from .config.settings import settings
+from .config.settings import Settings
 from .kernel import paths
 from .providers import deploy as deploy_mod
 from .store import Store
@@ -30,11 +30,24 @@ _store_lock = threading.Lock()
 
 
 def _store() -> Store:
+    """`Settings()` at first use, not a snapshot taken at import.
+
+    This read the module-level `settings` singleton, captured when `mcp_server` was imported — so
+    the data path was whatever the environment said at *import* time. In a real host the two agree,
+    because that is microseconds earlier; in a test they do not, and a test exercising an MCP tool
+    silently opened the developer's own store. That is the fourth module to learn this, after
+    `backup.py`, `app.support.open_store` and the eight CLI groups, and it was found by an assertion
+    that failed because the approval it had just written was in a different database.
+
+    The singleton stays and is right: `FastMCP.run()` is one long-lived process, and per-call stores
+    leaked a handle each — an MCP host polling status a few hundred times re-ran the schema that many
+    times and, on Windows, held the file against backup.
+    """
     global _store_singleton
     if _store_singleton is None:
         with _store_lock:
             if _store_singleton is None:
-                _store_singleton = Store(settings.data_path)
+                _store_singleton = Store(Settings().data_path)
     return _store_singleton
 
 
@@ -54,7 +67,7 @@ def run_company(company: str, ticks: int = 6) -> dict:
     from .orchestrator import Runtime
 
     cfg, store = _open(company)
-    return Runtime(settings, store).run(cfg, ticks=ticks, loop=False)
+    return Runtime(Settings(), store).run(cfg, ticks=ticks, loop=False)
 
 
 def company_status(company: str) -> dict:
@@ -91,14 +104,26 @@ def list_pending_approvals(company: str) -> list:
     return store.list_approvals(cfg["slug"], "pending")
 
 
-def decide_approval(company: str, approval_id: str, approve: bool = True, note: str = "") -> dict:
-    _, store = _open(company)
+def decide_approval(
+    company: str, approval_id: str, approve: bool = True, note: str = "", remember: str = ""
+) -> dict:
+    """Decide one approval, through the same service the console and the CLI use.
+
+    This set the status and stopped there: it granted no standing rule and released none of the work
+    parked on the approval, so a host driving corparius left tasks `waiting` that a terminal would
+    have unblocked. Three surfaces, three behaviours — see `app/approvals.py`.
+
+    `remember` is new here and is a scope (`run` or `always`), so a host can offer "and stop asking"
+    without reimplementing the gate that refuses it for a tool the company names in `hitl_tools`.
+    """
+    from .app import approvals as app_approvals
+
+    cfg, store = _open(company)
     status = "approved" if approve else "rejected"
-    return {
-        "approval": approval_id,
-        "status": status,
-        "found": store.set_approval_status(approval_id, status, note),
-    }
+    done = app_approvals.decide(
+        store, Settings(), approval_id, status, note=note, remember=remember, company=cfg
+    )
+    return {"approval": approval_id, "status": status, **done}
 
 
 def list_inbox(company: str) -> list:
@@ -110,21 +135,21 @@ def list_inbox(company: str) -> list:
 
 
 def answer_inbox(company: str, item_id: str, answer: str = "") -> dict:
+    from .app import inbox as app_inbox
+
     cfg, store = _open(company)
-    done = store.resolve_inbox(item_id, answer)
-    freed = store.release_waiting_tasks(cfg["slug"]) if done else {"released": 0}
-    return {"item": item_id, "answered": done, "released": freed["released"]}
+    return {"item": item_id, **app_inbox.answer(store, item_id, answer, cfg["slug"])}
 
 
 def build_site(company: str) -> dict:
     cfg, store = _open(company)
-    out = str(paths.site_dir(settings.data_path, cfg["slug"]))
+    out = str(paths.site_dir(Settings().data_path, cfg["slug"]))
     return {"path": sitegen.build_site(cfg, out, store=store)}
 
 
 def publish_site(company: str) -> dict:
     cfg, store = _open(company)
-    out = str(paths.site_dir(settings.data_path, cfg["slug"]))
+    out = str(paths.site_dir(Settings().data_path, cfg["slug"]))
     if not os.path.exists(os.path.join(out, "index.html")):
         sitegen.build_site(cfg, out, store=store)
     return {"result": deploy_mod.deploy_site(out)}

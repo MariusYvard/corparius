@@ -30,12 +30,14 @@ from .. import (
     sitegen,
 )
 from .. import company as company_mod
+from ..app import approvals as app_approvals
 from ..app import errors as app_errors
+from ..app import inbox as app_inbox
 from ..app import mail as app_mail
 from ..app import meta as app_meta
 from ..app import overview as app_overview
 from ..app import skills as app_skills
-from ..config import cfg, permissions
+from ..config import cfg
 from ..config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from ..doctor import run_checks
 from ..kernel import paths
@@ -152,6 +154,68 @@ def v1_activity(ctx):
     if refusal:
         return refusal
     return 200, {"ok": True, **app_overview.activity(ctx.store(), ctx.slug)}
+
+
+def v1_companies(ctx):
+    """Which companies exist here. The first thing a client asks after `meta`.
+
+    Public like `meta` is not: a slug is a name the operator chose and it is theirs. Not slug-scoped
+    either, obviously — it is the resource you read *to learn* the slugs.
+    """
+    return 200, {"ok": True, "companies": state.companies()}
+
+
+def v1_approvals_post(ctx):
+    """Decide an approval, and finish the job.
+
+    One call into `app_approvals.decide`, which is the service the console, the terminal and an MCP
+    host now share — and the reason it exists is that all three used to do something different, the
+    console being the one that never released the work parked on the approval.
+
+    `remember` is a scope (`run` or `always`) rather than a boolean, and a refusal to grant it is
+    reported in `gated`: a client that offered "and stop asking" has to be able to say the answer
+    was no, because the company names that tool in `hitl_tools` and a standing rule would overrule
+    the file the operator wrote it in.
+    """
+    approval_id = str(ctx.body.get("id", "")).strip()
+    if not approval_id:
+        return contracts.refuse(400, contracts.INVALID, "an approval id is required", field="id")
+    store = ctx.store()
+    owner = str((store.get_approval(approval_id) or {}).get("company", ""))
+    try:
+        done = app_approvals.decide(
+            store,
+            state.fresh_settings(),
+            approval_id,
+            str(ctx.body.get("decision", "")),
+            note=str(ctx.body.get("note", "")),
+            remember=str(ctx.body.get("remember", "")),
+            company=state.load_company(owner),
+        )
+    except app_errors.Refused as exc:
+        return contracts.refuse(400, contracts.INVALID, str(exc), field="decision")
+    if not done["found"]:
+        return contracts.refuse(404, contracts.NOT_FOUND, "no such approval", id=approval_id)
+    return 200, {"ok": True, **done}
+
+
+def v1_inbox_post(ctx):
+    """Answer a question, or dismiss a notice.
+
+    First responder wins, and the refusal is `conflict` rather than `not_found`: a second answer to a
+    decided item is not a missing item, it is one somebody else has already dealt with — and the
+    waiting work has moved on. A client told `conflict` refreshes; one told `not_found` would think
+    its list was stale in a different way.
+    """
+    item = str(ctx.body.get("id", "")).strip()
+    if not item:
+        return contracts.refuse(400, contracts.INVALID, "an inbox id is required", field="id")
+    done = app_inbox.answer(ctx.store(), item, str(ctx.body.get("answer", "")), ctx.slug)
+    if not done["answered"]:
+        return contracts.refuse(
+            409, contracts.CONFLICT, "already answered, or no such item", id=item
+        )
+    return 200, {"ok": True, **done}
 
 
 def v1_jobs(ctx):
@@ -669,35 +733,39 @@ def companies_post(ctx):
 
 
 def approvals_post(ctx):
-    decision = ctx.body.get("decision")
-    if decision not in ("approved", "rejected"):
-        return 400, {"ok": False, "error": "decision must be approved or rejected"}
+    """One call into `app_approvals.decide`, which is the whole point of this rewrite.
+
+    This handler used to carry twenty lines that two other surfaces also carried, and the three had
+    drifted: it granted the standing rule and **never released the work parked on the approval**.
+    An operator approved, the board still read "Held, waiting on you", and nothing moved until a run
+    ticked — which they might not start because the board looked stuck.
+
+    The payload keeps its keys so the shipped page is unchanged, and gains the two the service can
+    now answer: how much was unblocked, and whether "stop asking" was refused because the company
+    gates that tool by name.
+    """
     store = ctx.store()
     approval_id = str(ctx.body.get("id"))
-    # Read before writing: the approval carries the company, and this endpoint
-    # is deliberately not slug-scoped so an approval can be decided from
-    # anywhere it is visible.
-    approval = store.get_approval(approval_id)
-    done = store.set_approval_status(
-        approval_id, decision, str(ctx.body.get("note", "via console"))
-    )
-    # "Approve, and stop asking" is granted here rather than through its own
-    # endpoint, because it is one operator gesture and must not half-apply.
-    remembered = ""
-    scope = str(ctx.body.get("remember", "")).strip()
-    if done and decision == "approved" and scope in ("run", "always") and approval:
-        slug = approval["company"]
-        tool = SPEC.get(approval["tool"])
-        engine = permissions.PermissionEngine.from_settings(
-            state.fresh_settings(), state.load_company(slug) or {}, store
+    try:
+        done = app_approvals.decide(
+            store,
+            state.fresh_settings(),
+            approval_id,
+            str(ctx.body.get("decision", "")),
+            note=str(ctx.body.get("note", "via console")),
+            remember=str(ctx.body.get("remember", "")),
+            company=state.load_company(
+                str((store.get_approval(approval_id) or {}).get("company", ""))
+            ),
         )
-        if tool and engine.evaluate(tool, slug).rule != "hitl":
-            store.add_rule(slug, approval["tool"], scope, "granted from the console")
-            remembered = scope
-    return (200 if done else 404), {
-        "ok": done,
-        "remembered": remembered,
-        "error": None if done else "approval not found",
+    except app_errors.Refused as exc:
+        return 400, {"ok": False, "error": str(exc)}
+    return (200 if done["found"] else 404), {
+        "ok": done["found"],
+        "remembered": done["remembered"],
+        "gated": done["gated"],
+        "released": done["released"],
+        "error": None if done["found"] else "approval not found",
     }
 
 
@@ -708,13 +776,11 @@ def inbox_post(ctx):
     item = str(ctx.body.get("id", "")).strip()
     if not item:
         return 400, {"ok": False, "error": "id is required"}
-    store = ctx.store()
-    done = store.resolve_inbox(item, str(ctx.body.get("answer", "")))
-    freed = store.release_waiting_tasks(ctx.slug) if done and ctx.slug else {"released": 0}
-    return (200 if done else 409), {
-        "ok": done,
-        "released": freed["released"],
-        "error": None if done else "already answered, or no such item",
+    done = app_inbox.answer(ctx.store(), item, str(ctx.body.get("answer", "")), ctx.slug)
+    return (200 if done["answered"] else 409), {
+        "ok": done["answered"],
+        "released": done["released"],
+        "error": None if done["answered"] else "already answered, or no such item",
     }
 
 

@@ -1,3 +1,6 @@
+// The measured oklch ramps, ported verbatim from the shipped page. Imported here so they are
+// in the bundle rather than a second request, and so every component can only use tokens.
+import "./tokens.css";
 import { mount } from "svelte";
 import App from "./App.svelte";
 import { load, pick } from "./i18n.js";

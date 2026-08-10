@@ -77,8 +77,9 @@ composer, voir l'[ADR 0006](adr/0006-sept-coutures-de-greffons.md)).
 | Modules à plat | 53 | **26** |
 | Choses que la console sait faire et la CLI non | 11 | **3**, toutes cosmétiques |
 | Commandes CLI | 27 | **33** |
-| Routes sous contrat versionné | 0 | **8** sur 62 |
+| Routes sous contrat versionné | 0 | **13** sur 67 |
 | Registres avec les deux bouts tenus | 1 | **4** (outils, routes, commandes, codes d'erreur) |
+| Divergences entre appelants trouvées | — | **4**, toutes fermées par un service partagé |
 | Chaînes d'interface | 516 dans le HTML | **525 en JSON**, deux langues, jeux de clés égaux |
 | Collisions de préfixe i18n | 3 | **0**, et c'est une assertion |
 | Instructions non testées de la CLI | 216 | **65** |
@@ -685,6 +686,56 @@ chaîne ; ils lisent les données maintenant. Et `subprocess` a besoin de `encod
 explicite : `text=True` décode avec la page de code locale, cp1252 sur Windows, qui ne peut pas
 lire le français — l'échec n'est pas une exception dans le test, c'est un thread lecteur qui meurt
 dans `subprocess` et `stdout` qui arrive à `None`.
+
+## L'étape 9, troisième moitié : le premier onglet, et le quatrième écart
+
+L'onglet Vue d'ensemble est reconstruit avant le shell et les tokens, délibérément : un cadre vide
+mais stylé dit moins sur la justesse de la direction qu'une page qu'un opérateur peut lire.
+
+Il lit `summary` (**2 859 octets**, contre les 48 530 que l'ancienne page allait chercher toutes les
+cinq secondes) et `jobs`, et il écrit vers `approvals`, `inbox` et `runs`. Ces trois écritures sont
+passées en v1 **parce que cet onglet en avait besoin**, ce qui est la règle du plan — les lectures
+d'abord, parce que c'est là qu'était le coût ; les écritures quand un client v1 a une décision à
+prendre. Il y en a un maintenant.
+
+### Le quatrième écart, et c'est celui qui coûtait le plus cher
+
+En descendant `POST /approvals` dans `app/approvals.py`, la comparaison des trois surfaces a donné
+ceci — mesuré, pas supposé :
+
+| | poser le statut | accorder la règle permanente | libérer les tâches en attente |
+| --- | --- | --- | --- |
+| gestionnaire console | oui | oui | **non** |
+| `corparius approve` | oui | oui (toujours seulement) | oui |
+| `decide_approval` (MCP) | oui | **non** | **non** |
+
+Cinq appelants atteignent `release_waiting_tasks` dans le paquet, et **le chemin d'approbation de la
+console n'en était pas un**. Conséquence pour l'opérateur : il approuve depuis la console, le tableau
+continue d'afficher « Retenu, on vous attend », et rien ne bouge avant qu'un tour tique.
+
+C'est le quatrième écart vivant trouvé par la même méthode — lire deux surfaces qui prétendent faire
+le même travail et comparer ce que chacune sait. `tests/test_two_callers_agree.py` et
+`tests/test_api_version.py` tiennent maintenant les deux orthographes de chaque point d'entrée sur
+**un** `app_*`, ce qui est ce qui rend vraie la phrase « l'ancien chemin est un alias ».
+
+Trois faits reviennent au lieu d'un, parce que trois choses valent d'être dites à un opérateur :
+`remembered` (une règle a été accordée), `gated` (elle ne l'a **pas** été, parce que son propre
+fichier d'entreprise nomme cet outil dans `hitl_tools`) et `released`. Le `gated` n'est pas du
+confort : sans lui, « Approuver, ne plus demander » refuse silencieusement sa seconde moitié, et un
+bouton qui ne fait rien sans le dire est pire que pas de bouton.
+
+### Un cliquet de rigueur qui ne s'appliquait à rien depuis l'étape 2
+
+`[[tool.mypy.overrides]]` nommait `corparius.settings_spec` avec `disallow_untyped_defs`. Le module
+est `corparius/config/settings_spec.py` depuis l'étape 2 : **sept étapes d'un cliquet appliqué à
+aucun fichier.** mypy le dit — `unused section(s)` — mais le dit en note, parmi trois autres, sur un
+lancement dont la dernière ligne est `Success`.
+
+C'est exactement le défaut n° 1 du plan (le `glob` plat) dans un autre fichier : **une garde qui
+cesse de s'appliquer sans échouer.** Cette classe a maintenant mordu deux fois ici, donc elle reçoit
+un test — `test_every_declared_strictness_target_still_exists` résout chaque motif contre l'arbre —
+et non une résolution de mieux lire les notes. Remis en place, les deux jambes mypy passent toujours :
+le module était bien annoté, la garantie était simplement éteinte.
 
 ## Un vrai tour, sur la vraie configuration
 

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from ..app.support import open_store
 from ..config.settings import Settings
-from ..tools.spec import SPEC
 from . import support
 
 
@@ -79,40 +78,54 @@ def cmd_approvals(args) -> None:
 
 
 def cmd_decide(args, status: str) -> None:
+    """Decide one approval, through the service the console and the MCP host also use.
+
+    The twenty lines this used to hold were a second copy of the console's, and a third lived in the
+    MCP server; all three did something different. The words below are still this caller's own — a
+    terminal reports, a console renders — but what *happens* is one function now, and
+    `tests/test_two_callers_agree.py` holds it.
+    """
+    from ..app import approvals as app_approvals
+    from ..app import errors as app_errors
+
     cfg = support.load_company(args.company)  # validates --company, exits with a message if wrong
     store = open_store()
-    approval = store.get_approval(args.id)
-    ok = store.set_approval_status(args.id, status, args.note or "")
-    if not ok:
+    try:
+        done = app_approvals.decide(
+            store,
+            Settings(),
+            args.id,
+            status,
+            note=args.note or "",
+            # `--always` is the only scope a terminal offers, and it is the one an operator means
+            # when they say "stop asking me about this".
+            remember="always" if getattr(args, "always", False) else "",
+            company=cfg,
+        )
+    except app_errors.Refused as exc:
+        print(exc)
+        return
+    if not done["found"]:
         print("approval id not found")
         return
     print(f"{args.id} -> {status}")
-    # Granted here rather than by a separate command: "yes, and stop asking" is
-    # one decision, and splitting it in two invites the half that never runs.
-    if getattr(args, "always", False) and status == "approved" and approval:
-        from ..config.permissions import PermissionEngine
-
-        slug = approval["company"]
-        tool = SPEC.get(approval["tool"])
-        engine = PermissionEngine.from_settings(Settings(), cfg, store)
-        if tool is None or engine.evaluate(tool, slug).rule == "hitl":
-            print(f"{approval['tool']} is gated by name; it keeps asking")
-        else:
-            store.add_rule(slug, approval["tool"], "always", "granted via CLI")
-            print(f"standing rule added: {approval['tool']} no longer asks for {slug}")
-    # Whatever decided it, a task parked on this approval can move again.
-    freed = store.release_waiting_tasks(cfg["slug"])
-    if freed["released"] or freed["refused"]:
-        print(f"unblocked {freed['released']} task(s), refused {freed['refused']}")
+    if done["remembered"]:
+        print(f"standing rule added: it no longer asks for {done['company']}")
+    elif done["gated"]:
+        print(f"{done['gated']} is gated by name; it keeps asking")
+    if done["released"] or done["refused"]:
+        print(f"unblocked {done['released']} task(s), refused {done['refused']}")
 
 
 def cmd_inbox(args) -> None:
     cfg = support.load_company(args.company)
     store = open_store()
     if args.answer_to:
-        if store.resolve_inbox(args.answer_to, args.answer):
-            freed = store.release_waiting_tasks(cfg["slug"])
-            print(f"answered {args.answer_to}; unblocked {freed['released']} task(s)")
+        from ..app import inbox as app_inbox
+
+        done = app_inbox.answer(store, args.answer_to, args.answer, cfg["slug"])
+        if done["answered"]:
+            print(f"answered {args.answer_to}; unblocked {done['released']} task(s)")
         else:
             print("already answered, or no such item")
         return

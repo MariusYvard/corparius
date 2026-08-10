@@ -47,3 +47,29 @@ for value, so neither can drift while both exist.
 525 keys each, 43 namespaces, and **no namespace is a prefix of another** — that last one is an
 assertion, not a convention: `doc.` (Diagnostics) and `docs.` (Documents) once coexisted and printed
 *Diagnostics* on the Documents card, which only a screenshot found.
+
+## The tabs, one at a time
+
+Rebuilt one tab per commit, so each can be looked at in a browser as it lands. A styled empty frame
+would say less about whether the direction is right than one page an operator can read.
+
+| Tab | State |
+| --- | --- |
+| Overview | done — what needs you, the pulse, the run |
+| Operations | to do |
+| Documents | to do |
+| Providers | to do |
+| CEO | to do |
+| Settings | to do |
+
+**Overview reads three v1 resources and writes to three more.** `summary` (2 859 bytes, polled),
+`jobs` (the durable run), and `companies`; it posts to `approvals`, `inbox` and `runs`. Every one of
+those writes moved to v1 *because this tab needed it* — the plan's "reads first, writes when a v1
+client has a decision to make", and a v1 client now does.
+
+## The tokens
+
+`web/src/tokens.css` is the page's `:root` blocks **ported verbatim** — 25 dark, 23 light, 4 motion
+durations. Data, not code: these ramps were measured, and one of them exists because a dark pricing
+band shipped at 1.16:1. `tests/test_console_tokens.py` fails if a value drifts from the page, in
+either theme, and if any component writes a colour instead of a token.

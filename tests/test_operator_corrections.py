@@ -126,6 +126,77 @@ def test_deciding_an_approval_releases_the_tasks_parked_on_it(company, capsys):
     assert store.list_tasks("t")[0]["status"] != "waiting"
 
 
+# --- the divergence three surfaces had ------------------------------------------
+
+
+def test_every_surface_that_decides_an_approval_releases_the_work_parked_on_it(company, capsys):
+    """The fourth live divergence this restructuring found, and the widest.
+
+    Measured before the fix — three surfaces, three behaviours:
+
+    ```text
+                            set status   grant the rule   release parked tasks
+    console handler             yes           yes                NO
+    corparius approve           yes           yes (always)       yes
+    MCP decide_approval         yes           NO                 NO
+    ```
+
+    The console is the primary surface and it was the one leaving work parked. An operator approves,
+    the board still reads "Held, waiting on you", and nothing moves until a run ticks — which they
+    may not start *because* the board looks stuck.
+
+    `tests/test_two_callers_agree.py` could not catch it: it asks whether both callers reach the same
+    service, and there was no service, just three copies of twenty lines. This asserts the outcome
+    from each surface instead, which is the thing an operator experiences.
+    """
+    from corparius.app import approvals as app_approvals
+    from corparius.cli import backlog as cli_backlog
+    from corparius.config.settings import Settings
+
+    def _parked(store, approval_id):
+        task = store.add_task("t", "work held by an approval", "social")
+        store.park_task(task, approval_id, "approval")
+        return task
+
+    store = _store(company)
+
+    # 1. The terminal, which always did the right thing.
+    _an_approval(store, "draft_social_post")
+    task = _parked(store, "ap1")
+    cli_backlog.cmd_decide(_args(company, id="ap1", note="", always=False), "approved")
+    assert store.get_task(task)["status"] != "waiting", "the terminal used to be the only one"
+
+    # 2. The console, which did not. Asserted through the service the handler is now one call into;
+    # `tests/test_webui.py` holds the same thing over HTTP, which is where the handler itself runs.
+    store.add_approval(
+        ApprovalRequest(
+            id="ap2", company="t", agent="finance", tool="draft_social_post", parameters={"x": 1}
+        )
+    )
+    task = _parked(store, "ap2")
+    done = app_approvals.decide(store, Settings(), "ap2", "approved", note="via console")
+    assert done["released"] >= 1, "deciding from the console has to unblock what waited on it"
+    assert store.get_task(task)["status"] != "waiting"
+
+    # 3. The MCP host, which granted no rule and released nothing.
+    store.add_approval(
+        ApprovalRequest(
+            id="ap3", company="t", agent="finance", tool="draft_social_post", parameters={"x": 1}
+        )
+    )
+    task = _parked(store, "ap3")
+    from corparius import mcp_server
+
+    # The path, not the slug: `app_companies.load` resolves either, and this fixture writes a bare
+    # company.yaml rather than a companies/ directory.
+    out = mcp_server.decide_approval(company, "ap3", approve=True, remember="always")
+    assert out["found"] and out["released"] >= 1
+    assert store.get_task(task)["status"] != "waiting"
+    assert [r["tool"] for r in store.list_rules("t")] == ["draft_social_post"], (
+        "a host asking to stop being asked has to be able to"
+    )
+
+
 # --- standing rules, seen and revoked -------------------------------------------
 
 

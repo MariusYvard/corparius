@@ -141,8 +141,13 @@ no_implicit_optional = true
 # `corparius.kernel.*` is a wildcard, not a list, and deliberately: rank 0 is where
 # strictness costs the least — pure functions, stdlib only — and a new kernel module
 # should be born annotated rather than added here later. See docs/architecture-code.md.
+#
+# The second entry read `corparius.settings_spec` from stage 0 until stage 9, and the module has been
+# `corparius/config/settings_spec.py` since stage 2 — seven stages of a strictness ratchet applying to
+# no file. mypy says so (`unused section(s)`) as a note on a run whose last line is `Success`, which
+# is how it went unread. `tests/test_layers.py` now resolves every pattern here against the tree.
 [[tool.mypy.overrides]]
-module = ["corparius.kernel.*", "corparius.settings_spec"]
+module = ["corparius.kernel.*", "corparius.config.settings_spec"]
 disallow_untyped_defs = true
 
 [tool.coverage.run]

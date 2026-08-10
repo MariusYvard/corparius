@@ -13,6 +13,8 @@ can refuse a core too old for it, rather than failing one request at a time; cap
 hides a button instead of discovering a 404.
 """
 
+import pathlib
+
 import pytest
 
 from corparius.api import routes
@@ -63,26 +65,72 @@ def _by_version():
     return v1, legacy
 
 
-def test_no_endpoint_is_both_versioned_and_not():
-    """`GET /api/v1/meta` and `GET /api/meta` would be two routes an operator would reasonably
-    expect to be the same, and nothing would say which won.
+# The endpoints offered under **both** spellings, and what each pair must satisfy. An operation a
+# client can reach two ways is what "the legacy paths stay for a version" means — but only if both
+# ways do the same thing, so each entry names the service both handlers must reach.
+#
+# The first version of this guard forbade the overlap outright, and it was right to fail when these
+# appeared: two handlers for one operation is exactly how the console and the terminal came to
+# disagree about deciding an approval. The answer is not to allow the overlap, it is to require
+# **one service underneath it** — which is `tests/test_two_callers_agree.py`'s idea applied to the
+# two versions of one API.
+ALIASED = {
+    ("POST", "approvals"): "app_approvals.decide",
+    ("POST", "inbox"): "app_inbox.answer",
+    # Not an `app_*` service, and the invariant is "one function underneath" rather than "a rank-5
+    # one": listing the companies is `company.list_slugs()` behind a one-line reader, and both
+    # handlers reach it. The v1 payload omits `templates`, which belongs to the creation wizard.
+    ("GET", "companies"): "state.companies()",
+}
 
-    On `(method, suffix)` rather than the suffix alone, and the distinction is real: `tasks` and
-    `memory` now have a v1 **GET** and a legacy **POST**, which are different operations on the
-    same noun and HTTP says so. The suffix-only version of this failed on exactly that; relaxing
-    it to pass would have been wrong on its own, so the pairs it used to catch are declared below
-    where a reader sees them.
+
+def test_every_endpoint_offered_twice_goes_through_one_service():
+    """The property that makes an alias an alias rather than a second implementation.
+
+    `POST /api/approvals` and `POST /api/v1/approvals` differ in the shape of a refusal — flat
+    sentence against envelope — and that is what versioning *is*. They must not differ in what
+    happens, and the only way to be sure of that is for both to be one call into the same `app_*`
+    function.
     """
+    import ast
+
     v1, legacy = _by_version()
     both = sorted(v1 & legacy)
-    assert not both, f"these answer the same method under both spellings: {both}"
+    undeclared = [pair for pair in both if pair not in ALIASED]
+    assert not undeclared, (
+        f"these answer the same method under both spellings and are not declared: {undeclared}. "
+        "Either the legacy one goes, or say which service both reach."
+    )
+    missing = sorted(pair for pair in ALIASED if pair not in both)
+    assert not missing, f"declared as aliased and no longer offered twice: {missing}"
+
+    # Both handlers, and both must call the named service. Read from the source, because the
+    # question is whether the *code paths* meet — not whether the payloads happen to match today.
+    source = ast.parse(pathlib.Path("corparius/api/handlers.py").read_text(encoding="utf-8"))
+    bodies = {n.name: ast.unparse(n) for n in source.body if isinstance(n, ast.FunctionDef)}
+    for (method, suffix), service in sorted(ALIASED.items()):
+        names = [
+            r.handler.__name__
+            for r in routes.ALL_ROUTES
+            if r.method == method and r.path.removeprefix(V1).removeprefix("/api/") == suffix
+        ]
+        assert len(names) == 2, f"{method} {suffix}: expected two handlers, found {names}"
+        for handler in names:
+            assert service in bodies[handler], (
+                f"{handler} does not call {service}, so the two spellings of {method} {suffix} "
+                "are two implementations rather than one operation offered twice"
+            )
 
 
 # The reads that moved to v1 ahead of their writes. Declared, because it is the one place a client
 # meets the migration: it polls `GET /api/v1/tasks` and still posts a decision to
 # `POST /api/tasks`. Reads moved first because that is where the cost was — `/api/overview` was
 # 48 530 bytes every five seconds — and the writes move when a v1 client needs to make one.
-SPLIT_NOUNS = {"tasks", "memory"}
+#
+# `companies` is here for the opposite reason: the v1 read exists and the legacy one carries
+# `templates` as well, which belongs to the creation wizard and not to a list of companies. It
+# becomes its own v1 resource when that wizard is rebuilt.
+SPLIT_NOUNS = {"tasks", "memory", "approvals", "inbox", "companies"}
 
 
 def test_the_nouns_split_across_versions_are_declared():

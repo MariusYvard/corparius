@@ -181,6 +181,8 @@ RANKS: dict[str, int] = {
     "app/overview": 5,
     "app/support": 5,
     "app/runs": 5,
+    "app/approvals": 5,
+    "app/inbox": 5,
     "app/meta": 5,
     "doctor": 5,
     "backup": 5,
@@ -551,6 +553,42 @@ def test_the_ratchet_only_ever_tightens():
     assert len(KNOWN_RANK_VIOLATIONS) <= 2, "upward imports should only ever decrease"
     assert len(KNOWN_IMPURE) <= 3, "domain impurities should only ever decrease"
     assert len(KNOWN_CYCLES) == 0, "cycles should only ever decrease"
+
+
+def test_every_declared_strictness_target_still_exists():
+    """The `disallow_untyped_defs` list names modules, and a moved module leaves it pointing at
+    nothing — the guarantee switches itself off and both mypy legs go on passing.
+
+    Measured: `corparius.settings_spec` sat in that list from stage 0 until stage 9, and the module
+    had been `corparius/config/settings_spec.py` since stage 2. Seven stages of a strictness ratchet
+    applying to no file. mypy *does* say so — `unused section(s)` — but it says it as a note among
+    three others on a run whose last line is `Success`, which is exactly how a reader misses it.
+
+    This is the same defect as the flat `glob` the plan opens with, in a different file: **a guard
+    that stops applying without failing.** That class has now bitten this project twice, so it gets
+    a test rather than a resolution to read notes more carefully.
+    """
+    import tomllib
+
+    config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    patterns = [
+        pattern
+        for override in config["tool"]["mypy"].get("overrides", [])
+        for pattern in (
+            override["module"] if isinstance(override["module"], list) else [override["module"]]
+        )
+    ]
+    assert patterns, "the strictness ratchet cannot be checked if it was never read"
+    for pattern in patterns:
+        if not pattern.startswith("corparius"):
+            continue  # third-party stubs; their absence is not ours to assert
+        stem = pattern.removeprefix("corparius").removesuffix(".*").removesuffix("*")
+        target = ROOT / stem.strip(".").replace(".", "/")
+        assert target.with_suffix(".py").is_file() or target.is_dir(), (
+            f"{pattern} in [[tool.mypy.overrides]] resolves to nothing. Point it at where the "
+            "module went, or strike it off — a ratchet on no file is worse than no ratchet, "
+            "because the passing run reads the same."
+        )
 
 
 def _ratchet(observed: set, known: frozenset, what: str) -> None:

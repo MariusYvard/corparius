@@ -58,6 +58,12 @@ SHARED = {
     ("delete_company", "delete"): "app_companies.delete",
     ("skill_scope", "skills"): "app_skills.scope",
     ("overview", "status"): "app_overview.build",
+    # The fourth live divergence, and the widest: three surfaces implemented "decide an approval"
+    # and all three did something different. The console granted the standing rule and **never
+    # released the work parked on the approval**; the MCP host did neither. This ratchet could not
+    # catch it, because it asks whether both callers reach the same *service* and there was none —
+    # three copies of twenty lines, which is the state it exists to end. Declared now.
+    ("approvals_post", "approve"): "app_approvals.decide",
 }
 
 # Pairs that look like a pair and are not, with the reason. Audited by reading both sides.

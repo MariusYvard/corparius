@@ -30,11 +30,30 @@ def _reset_store_singleton(tmp_path, monkeypatch):
     mcp_server._store_singleton = None
 
 
+def _hermetic(monkeypatch, tmp_path):
+    """Point the MCP server at a private store, through the **environment**.
+
+    These tests patched attributes on `mcp_server.settings` — the module-level snapshot taken at
+    import. That snapshot is gone: it made the data path whatever the environment said when the
+    module loaded, so an MCP tool exercised from a test silently opened the developer's own store.
+    Found by an assertion that failed because the approval it had just written was in a different
+    database, and it is the fourth module to learn this after `backup.py`, `app.support.open_store`
+    and the eight CLI groups.
+
+    `_store_singleton` is cleared by the fixture either side, so each test resolves the path afresh.
+    """
+    from corparius.config import cfg
+
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path))
+    monkeypatch.setenv("CORP_LLM_MOCK", "true")
+    cfg.invalidate()
+    mcp_server._store_singleton = None
+
+
 def test_tool_calls_reuse_one_connection(tmp_path, monkeypatch):
     """The fix for the per-call Store leak: every tool call shares one Store
     instead of opening (and never closing) a new sqlite connection each time."""
-    monkeypatch.setattr(mcp_server.settings, "data_path", str(tmp_path))
-    monkeypatch.setattr(mcp_server.settings, "llm_mock", True)
+    _hermetic(monkeypatch, tmp_path)
     Store(str(tmp_path)).save_state("example", {"tick": 0})
     mcp_server.company_status("example")
     first = mcp_server._store_singleton
@@ -44,8 +63,7 @@ def test_tool_calls_reuse_one_connection(tmp_path, monkeypatch):
 
 
 def test_run_and_status(tmp_path, monkeypatch):
-    monkeypatch.setattr(mcp_server.settings, "data_path", str(tmp_path))
-    monkeypatch.setattr(mcp_server.settings, "llm_mock", True)
+    _hermetic(monkeypatch, tmp_path)
     Store(str(tmp_path)).save_state("example", {"tick": 0})
     res = mcp_server.run_company("example", ticks=1)
     assert res["ticks_run"] == 1
@@ -54,7 +72,7 @@ def test_run_and_status(tmp_path, monkeypatch):
 
 
 def test_decide_task_modifies_and_approves(tmp_path, monkeypatch):
-    monkeypatch.setattr(mcp_server.settings, "data_path", str(tmp_path))
+    _hermetic(monkeypatch, tmp_path)
     store = Store(str(tmp_path))
     tid = store.add_task("example", "Idea", "support", 1, "proposed", "support")
     out = mcp_server.decide_task("example", tid, "approve", tool="draft_support_reply", priority=2)

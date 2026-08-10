@@ -325,6 +325,124 @@ def v1_drafts_post(ctx):
     return 200, {"ok": True, **adapters.drafts_payload(store, ctx.slug)}
 
 
+# --- documents ------------------------------------------------------------------
+#
+# Four endpoints, and the one thing to keep straight across all of them: **a refused file is not a
+# failed request.** Asking to store a `.zip` is a perfectly well-formed thing to ask; the answer is
+# `stored: false` with a `reason` the client turns into a sentence. So the error envelope is reserved
+# for requests that were wrong — an unknown company, a body that is not base64 — and the outcome of a
+# well-formed one travels in the payload. That distinction is what lets a drop zone report six files
+# stored and one skipped in a single pass instead of a banner saying the upload failed.
+#
+# None of these are on a poll. `inventory` opens and extracts every file it lists, and a PDF parse on
+# a polled path is the same mistake as a network probe on one — a rule this project wrote after
+# `/api/providers` opened a socket on every refresh.
+
+
+def v1_documents(ctx):
+    """What the company has on file, and what of it an agent actually reads.
+
+    The number that matters is not how many files exist, it is how many reach a prompt: `reaching`
+    against `total`, and `used` against `budget`. A company holding twelve documents can be feeding
+    two of them to its agents while the other ten sit there looking like knowledge, and nothing in
+    the product said so before this resource existed.
+    """
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    return 200, {"ok": True, **documents.inventory(ctx.slug)}
+
+
+def v1_document_text(ctx):
+    """One document's whole extracted text, with no prompt budget applied.
+
+    The reading surface and the prompt budget are different questions. The card used to reuse the
+    text an agent gets, capped at `documents.MAX_CHARS` so a thirty-page deck cannot swallow a turn —
+    honest, and still the wrong answer for a person rereading their own brief.
+    """
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    path = str(ctx.query.get("path", ""))
+    if not path:
+        return contracts.refuse(400, contracts.INVALID, "a document path is required", field="path")
+    doc = documents.full_text(ctx.slug, path)
+    if doc is None:
+        return contracts.refuse(404, contracts.NOT_FOUND, "no such document", path=path)
+    return 200, {"ok": True, "path": doc.label, **doc.as_dict(), "text": doc.text}
+
+
+def v1_documents_post(ctx):
+    """Store one file the operator dropped on the console.
+
+    One file per request, deliberately: a batch would need a body ceiling sized for the worst case it
+    might ever carry, would collapse ten outcomes into one answer, and would make per-file progress
+    something the client invented.
+
+    The refreshed inventory rides back with the result, so the card the operator is looking at is the
+    folder as it now stands rather than as it was — and a client does not have to make a second
+    request to find out what its own write did.
+    """
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    try:
+        # validate=True, so a body that is not base64 says so here rather than writing whatever
+        # survived a lenient decode into the operator's folder.
+        data = base64.b64decode(str(ctx.body.get("data", "")), validate=True)
+    except ValueError:  # binascii.Error subclasses it
+        return contracts.refuse(
+            400, contracts.INVALID, "the file did not arrive as valid base64", field="data"
+        )
+    name = str(ctx.body.get("name", ""))
+    try:
+        path, replaced = documents.save(ctx.slug, name, data)
+    except documents.Refused as refused:
+        return 200, {
+            "ok": True,
+            "stored": False,
+            "name": name,
+            "reason": refused.reason,
+            "detail": refused.detail,
+            **documents.inventory(ctx.slug),
+        }
+    return 200, {
+        "ok": True,
+        "stored": True,
+        "replaced": replaced,
+        "name": path.name,
+        **documents.inventory(ctx.slug),
+    }
+
+
+def v1_documents_delete(ctx):
+    """Take one document out of the folder.
+
+    Moved aside rather than erased, like a deleted company: the answer says where it went, so a
+    misread badge is recoverable. No typed confirmation, unlike deleting a company — that gate exists
+    because a company is the whole thing, and friction on a routine action buys nothing here.
+    """
+    _company, refusal = adapters.for_company(ctx.slug)
+    if refusal:
+        return refusal
+    try:
+        moved = documents.remove(ctx.slug, str(ctx.body.get("path", "")))
+    except documents.Refused as refused:
+        return 200, {
+            "ok": True,
+            "removed": False,
+            "reason": refused.reason,
+            "detail": refused.detail,
+            **documents.inventory(ctx.slug),
+        }
+    return 200, {
+        "ok": True,
+        "removed": True,
+        "trashed": moved.name,
+        **documents.inventory(ctx.slug),
+    }
+
+
 def v1_jobs(ctx):
     """Work this company has done or is doing, newest first.
 

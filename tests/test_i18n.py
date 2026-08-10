@@ -19,6 +19,21 @@ the dot catches both.
 Renamed to `diag.`, and `co.` (the company editor, 36 keys) to `company.` because it was a prefix
 of both `col.` and `conn.`. 43 namespaces now, none a prefix of another — which is the assertion,
 so the confusion cannot come back.
+
+**And the same shape lived on one level deeper, in two places, because that assertion splits on the
+first dot only.** `test_no_computed_family_is_shadowed_by_a_complete_key` found both on the run it
+was written:
+
+* `docs.no.*` — seven refusal strings looked up as `t("docs.no." + reason)` — beside the complete key
+  `docs.none`. Renamed to `docs.refused.`;
+* `prov.pf.*` — five probe states looked up as `t("prov.pf." + state)` — beside `prov.pfNothing` and
+  `prov.pfSkippedWhy`, the second of which is *the explanation for `prov.pf.skipped`*, which is as
+  confusable as a pair of keys gets. Renamed to `prov.probeNoTier` and `prov.probeSkipReason`.
+
+Neither was live: both lookups carry the trailing dot, so only `reason == "ne"` or
+`state == "Nothing"` could have reached the wrong string. The human half was live from the day each
+was written, and the human half is what the original bug was made of — somebody asked to change "the
+skipped explanation" reaches for either name about half the time.
 """
 
 import json
@@ -96,6 +111,24 @@ def _namespaces(table: dict) -> set[str]:
     return {k.split(".")[0] for k in table if "." in k}
 
 
+def _computed_prefixes() -> set[str]:
+    """Every prefix looked up at runtime — `t("ib.fix." + m.fix)` — across both front ends.
+
+    The page **and** `web/src/*.svelte`, because the console is being rebuilt and a scan of the old
+    one would quietly stop covering the new one file at a time. That is the failure this project keeps
+    finding: a scanner that under-reports passes.
+    """
+    sources = [PAGE.read_text(encoding="utf-8")]
+    sources += [
+        p.read_text(encoding="utf-8") for p in sorted(pathlib.Path("web/src").glob("*.svelte"))
+    ]
+    return {
+        prefix
+        for source in sources
+        for prefix in re.findall(r'\bt\("([a-z][a-z.]*\.)"\s*\+', source)
+    }
+
+
 def test_no_namespace_is_a_prefix_of_another():
     """The assertion that makes the `doc.`/`docs.` bug impossible rather than fixed.
 
@@ -113,6 +146,38 @@ def test_no_namespace_is_a_prefix_of_another():
     assert not collisions, (
         f"{collisions}. Two namespaces where one starts the other is how 'Diagnostics' ended up on "
         "the Documents card. Rename one so neither begins the other."
+    )
+
+
+def test_no_computed_family_is_shadowed_by_a_complete_key():
+    """The same collision one level deeper, which the test above cannot see.
+
+    `_namespaces` splits on the **first** dot, so it compares `docs` against `diag` and never looks
+    inside either. Measured: the table shipped `docs.no.bad-name` … `docs.no.write-failed` — a family
+    looked up as `t("docs.no." + reason)` — alongside the complete key **`docs.none`**. `docs.none`
+    starts with `docs.no` and is not a member of the family, which is exactly the `doc.`/`docs.` shape
+    that put *Diagnostics* on the Documents card.
+
+    Not live: the lookup carries the trailing dot, so only `reason == "ne"` could have reached it. The
+    human half was live from the day it was written — somebody asked to change "the no-documents
+    message" picks `docs.no.` half the time — and that half is what the original bug was made of.
+
+    Renamed to `docs.refused.`, and asserted here so the next family cannot be born shadowed. The rule
+    is exact: for every prefix looked up at runtime, no key may start with it-minus-its-dot without
+    being a member of the family.
+    """
+    en = _json("en")
+    families = _computed_prefixes()
+    assert families, "no computed prefix found: this guard would be vacuous"
+    shadowed = sorted(
+        f"{key!r} shadows the {prefix!r} family"
+        for prefix in families
+        for key in en
+        if key.startswith(prefix.rstrip(".")) and not key.startswith(prefix)
+    )
+    assert not shadowed, (
+        f"{shadowed}. A key that begins a computed prefix but is not in its family is the "
+        "`doc.`/`docs.` bug in miniature: rename one so neither begins the other."
     )
 
 
@@ -168,8 +233,7 @@ def test_the_computed_prefixes_all_have_at_least_one_key():
     needs its namespace to exist at all. An empty prefix is a card that renders raw keys for every
     row, which is the same visible failure as a missing string and just as silent in code."""
     en = _json("en")
-    page = PAGE.read_text(encoding="utf-8")
-    prefixes = set(re.findall(r'\bt\("([a-z][a-z.]*\.)"\s*\+', page))
+    prefixes = _computed_prefixes()
     assert len(prefixes) >= 8, f"the computed-lookup scan found {sorted(prefixes)}"
     empty = sorted(p for p in prefixes if not any(k.startswith(p) for k in en))
     assert not empty, f"these prefixes are looked up at runtime and have no keys: {empty}"

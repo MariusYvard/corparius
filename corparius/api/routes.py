@@ -41,6 +41,21 @@ ROUTES: tuple[Route, ...] = (
     Route("POST", "/api/v1/rules", handlers.v1_rules_post, needs_slug=True),
     Route("POST", "/api/v1/memory", handlers.v1_memory_post),
     Route("POST", "/api/v1/drafts", handlers.v1_drafts_post, needs_slug=True),
+    # The documents tab. Off every poll, all four: `inventory` opens and extracts every file it
+    # lists, and a PDF parse on a polled path is the same mistake as a network probe on one.
+    Route("GET", "/api/v1/documents", handlers.v1_documents, needs_slug=True),
+    Route("GET", "/api/v1/documents/text", handlers.v1_document_text, needs_slug=True),
+    Route("POST", "/api/v1/documents/delete", handlers.v1_documents_delete, needs_slug=True),
+    # The one route in v1 with its own ceiling, and it belongs next to the route that needs it: a
+    # global limit wide enough for a 6 MB PDF is a global limit wide enough for a flood through
+    # everything else. Base64 costs a third, and the slack covers the JSON around it.
+    Route(
+        "POST",
+        "/api/v1/documents",
+        handlers.v1_documents_post,
+        needs_slug=True,
+        max_body=documents.MAX_UPLOAD * 4 // 3 + (1 << 16),
+    ),
     # The first v1 writes. Durable work: a client that loses the answer can ask again with the
     # same `Idempotency-Key` and will not start a second run.
     Route("POST", "/api/v1/runs", handlers.v1_runs_post, needs_slug=True),

@@ -16,6 +16,7 @@
    *     you can authenticate, and it has no v1 spelling yet.
    */
   import { onMount } from "svelte";
+  import Documents from "./Documents.svelte";
   import Operations from "./Operations.svelte";
   import Overview from "./Overview.svelte";
   import { get, Refused } from "./api.js";
@@ -51,6 +52,7 @@
   const TABS = [
     { id: "overview", component: Overview },
     { id: "operations", component: Operations },
+    { id: "documents", component: Documents },
   ];
   let tab = $state(localStorage.getItem("corparius-tab") || "overview");
   let shown = $derived(TABS.find((entry) => entry.id === tab) ?? TABS[0]);

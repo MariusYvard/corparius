@@ -53,14 +53,25 @@ assertion, not a convention: `doc.` (Diagnostics) and `docs.` (Documents) once c
 Rebuilt one tab per commit, so each can be looked at in a browser as it lands. A styled empty frame
 would say less about whether the direction is right than one page an operator can read.
 
-| Tab | State |
-| --- | --- |
-| Overview | done — what needs you, the pulse, the run |
-| Operations | done — the board, the rules, the memory, the drafts, the log |
-| Documents | to do |
-| Providers | to do |
-| CEO | to do |
-| Settings | to do — and it gains Backup, which the old page rendered under Operations |
+**"Done" here means every card named in the row, and nothing else.** The shipped page has seven tabs
+carrying about thirty cards between them; a row that said "done" while three of eight cards existed
+would be the kind of claim this project spends its tests refusing. So the table is a map of where
+each card landed, and what is still only in the old page.
+
+| Tab | Rebuilt | Still only in `webui.html` |
+| --- | --- | --- |
+| Overview | what needs you · the pulse · the run | Getting started · Go live · Sales site · Spend by agent · Payments · Recent activity |
+| Operations | the board · standing rules · memory · drafts · the action log | — (Backup moved to Settings, below) |
+| Documents | the drop zone · what is on file · reading one | — |
+| Providers | — | Claude subscription · Ollama · runtime · free tiers · routing tiers · Anthropic |
+| CEO | — | the chat, and the CEO's own powers |
+| Settings | — | the 80-field registry · Backup, from the old Operations tab |
+| Plugins | — | the seven seams · Skills |
+
+Recent activity and Spend by agent are the two Overview cards with a v1 resource already behind them
+(`activity`, and `spend_by_agent` inside `summary`), so they are the cheapest to bring across. Go live
+and Sales site need `/api/golive` and `/api/site` versioned first. Naming that here rather than
+discovering it per tab.
 
 **Overview reads three v1 resources and writes to three more.** `summary` (2 859 bytes, polled),
 `jobs` (the durable run), and `companies`; it posts to `approvals`, `inbox` and `runs`. Every one of

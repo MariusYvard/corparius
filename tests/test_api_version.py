@@ -85,6 +85,13 @@ ALIASED = {
     # sum are two chances for one to become just one state. Written out twice, identically, until the
     # v1 pair was added; `adapters.drafts_payload` is the one copy now.
     ("GET", "drafts"): "adapters.drafts_payload(",
+    # The four documents endpoints. Not an `app_*` service either, and for a reason worth stating:
+    # `documents.py` is rank 4 and already host-free — it takes a slug and a `Path` and no `Store`,
+    # no `Settings`, no `Ctx` — so it *is* the service. Extracting an `app/documents.py` that forwarded
+    # to it would be the pure indirection the plan's "what not to do" list names.
+    ("GET", "documents"): "documents.inventory(",
+    ("POST", "documents"): "documents.save(",
+    ("POST", "documents/delete"): "documents.remove(",
     # Not an `app_*` service, and audited rather than assumed. Revoking a standing rule is one store
     # call with nothing that belongs beside it: nothing is parked on a rule — revoking means the tool
     # asks again next time — so the two-calls-one-caller-forgets shape that produced the approvals
@@ -95,6 +102,19 @@ ALIASED = {
     # one": listing the companies is `company.list_slugs()` behind a one-line reader, and both
     # handlers reach it. The v1 payload omits `templates`, which belongs to the creation wizard.
     ("GET", "companies"): "state.companies()",
+}
+
+# The third category, and it needed naming: an endpoint whose **v1 path is a different spelling**.
+# `ALIASED` finds pairs by suffix intersection, so a renamed one is invisible to it — the guard would
+# have reported both halves as unpaired and asserted nothing about either.
+#
+# `/api/document/text` is singular because the shipped page reads one document; in v1 it is
+# `/api/v1/documents/text`, a sub-resource of the collection, which is what it actually is. Renaming
+# it is the whole reason v1 exists, and it must not also become a second implementation.
+#
+# (method, legacy suffix, v1 suffix) -> the function both handlers must reach.
+RENAMED = {
+    ("GET", "document/text", "documents/text"): "documents.full_text(",
 }
 
 
@@ -136,6 +156,30 @@ def test_every_endpoint_offered_twice_goes_through_one_service():
             )
 
 
+def test_every_renamed_endpoint_still_meets_its_old_spelling():
+    """The same property for the paths whose v1 name differs, which the suffix intersection cannot see.
+
+    Both halves have to exist — a rename that quietly dropped the legacy path is a client broken
+    without a version bump — and both have to reach one function, or the rename shipped a second
+    implementation under a tidier name.
+    """
+    import ast
+
+    source = ast.parse(pathlib.Path("corparius/api/handlers.py").read_text(encoding="utf-8"))
+    bodies = {n.name: ast.unparse(n) for n in source.body if isinstance(n, ast.FunctionDef)}
+    for (method, was, now), service in sorted(RENAMED.items()):
+        found = {
+            r.path: r.handler.__name__
+            for r in routes.ALL_ROUTES
+            if r.method == method and r.path in (f"/api/{was}", f"{V1}{now}")
+        }
+        assert len(found) == 2, f"{method} {was} -> {now}: expected both spellings, found {found}"
+        for handler in found.values():
+            assert service in bodies[handler], (
+                f"{handler} does not call {service}: the rename produced a second implementation"
+            )
+
+
 # The reads that moved to v1 ahead of their writes. Declared, because it is the one place a client
 # meets the migration: it polls `GET /api/v1/tasks` and still posts a decision to
 # `POST /api/tasks`. Reads moved first because that is where the cost was — `/api/overview` was
@@ -144,7 +188,21 @@ def test_every_endpoint_offered_twice_goes_through_one_service():
 # `companies` is here for the opposite reason: the v1 read exists and the legacy one carries
 # `templates` as well, which belongs to the creation wizard and not to a list of companies. It
 # becomes its own v1 resource when that wizard is rebuilt.
-SPLIT_NOUNS = {"tasks", "memory", "approvals", "inbox", "companies", "drafts", "rules"}
+SPLIT_NOUNS = {
+    "tasks",
+    "memory",
+    "approvals",
+    "inbox",
+    "companies",
+    "drafts",
+    "rules",
+    "documents",
+    "documents/delete",
+    # `document/text` and `documents/text` are deliberately **not** here: the suffixes differ, so
+    # they never appear in the intersection this set describes. `RENAMED` above is what holds them,
+    # and it exists because without it the guard reported both halves as unpaired and asserted
+    # nothing about either.
+}
 
 
 def test_the_nouns_split_across_versions_are_declared():

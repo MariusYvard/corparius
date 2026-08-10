@@ -786,6 +786,62 @@ immédiatement signalé `approved`, qui venait de
 une clé. La règle qu'il impose est donc qu'un appel `t()` ne contient que des clés, ce qui est bon à
 prendre : l'alternative est un scanner qui devrait comprendre JavaScript.
 
+### Le troisième onglet, et la capacité que le terminal n'avait pas du tout
+
+`Documents` porte la zone de dépôt, l'inventaire et la lecture d'un fichier. Quatre points d'entrée
+en v1, **aucun sur un sondage** : `inventory` ouvre et extrait chaque fichier qu'il liste — PDF, docx,
+xlsx, csv — et mettre ça sur un timer de cinq secondes est la même faute qu'une sonde réseau sur un
+point sondé, interdite ici depuis que `/api/providers` ouvrait une socket à chaque rafraîchissement.
+
+La distinction qui traverse les quatre : **un fichier refusé n'est pas une requête en échec.**
+Demander à stocker un `.zip` est parfaitement bien formé ; la réponse est `stored: false` avec un code
+`reason`. L'enveloppe d'erreur est donc réservée aux requêtes *fausses* — société inconnue, corps qui
+n'est pas du base64 — et le résultat d'une requête correcte voyage dans la charge utile. C'est ce qui
+permet à un dépôt de sept fichiers d'annoncer six enregistrés et un ignoré en une passe, au lieu d'une
+bannière disant que l'envoi a échoué.
+
+**Mesuré avant d'écrire quoi que ce soit : aucun module de `cli/` ne référençait `documents`.** Pas
+une divergence — il n'y avait pas deux implémentations — mais le trou que l'étape 6 existe pour
+combler, encore ouvert : un opérateur sur une machine sans écran ne pouvait pas voir que dix de ses
+douze fichiers étaient au-delà du budget de prompt, et ne pouvait pas relire une note que son propre
+agent design avait écrite. `corparius docs` lit le même `documents.inventory` que la console.
+
+Et **il n'y a pas de `--add`**, délibérément : copier un fichier dans le dossier que `--list` affiche
+*est* l'envoi, `load()` relit le répertoire à chaque appel, et un fichier illisible se signale tout
+seul en `no-extractor`. Une commande qui ferait `cp` pour l'opérateur serait de la cérémonie sur un
+chemin qu'il a déjà. Épinglé par un test, pour que personne ne l'ajoute par réflexe.
+
+### Une troisième catégorie de contrat : le point d'entrée *renommé*
+
+`ALIASED` trouve les paires par intersection de suffixes, donc un point d'entrée dont le chemin v1
+s'écrit autrement lui est **invisible** : la garde signalait les deux moitiés comme non appariées et
+n'affirmait rien sur aucune des deux. `/api/document/text` est au singulier parce que la page livrée
+lit un document ; en v1 c'est `/api/v1/documents/text`, une sous-ressource de la collection, ce qu'il
+est réellement. `RENAMED` déclare le triplet et exige la même propriété : les deux moitiés existent et
+atteignent une seule fonction.
+
+### La collision `doc.`/`docs.`, deux fois de plus, un niveau plus bas
+
+`test_no_namespace_is_a_prefix_of_another` découpe **au premier point**. Il compare `docs` à `diag` et
+ne regarde jamais à l'intérieur. Le nouveau test a trouvé deux instances de la même forme, dès la
+première exécution :
+
+| Famille calculée | Clé complète qui la masque | Renommé en |
+| --- | --- | --- |
+| `docs.no.` (7 refus) | `docs.none` | `docs.refused.` |
+| `prov.pf.` (5 états de sonde) | `prov.pfNothing`, `prov.pfSkippedWhy` | `prov.probeNoTier`, `prov.probeSkipReason` |
+
+Aucune des deux n'était vivante : la recherche porte le point final, donc seul `reason == "ne"` ou
+`state == "Nothing"` aurait atteint la mauvaise chaîne. **La moitié humaine l'était depuis le premier
+jour** — et c'est de cette moitié que le bug d'origine était fait. `prov.pfSkippedWhy` est
+*l'explication de `prov.pf.skipped`* : deux noms aussi confusables que possible, pour deux choses dont
+l'une explique l'autre.
+
+Le scanner lit maintenant **la page et `web/src/*.svelte`**, parce qu'une garde qui ne couvre que
+l'ancien front cesserait de couvrir le nouveau un fichier à la fois. C'est la même leçon que le `glob`
+plat, l'entrée mypy périmée et le scanner de clés : *une garde qui sous-rapporte passe.* Quatrième
+instance comptée dans ce chantier.
+
 ## Un vrai tour, sur la vraie configuration
 
 La liste de vérification du plan demande « un vrai tour sur la vraie entreprise ». Lancé sur une

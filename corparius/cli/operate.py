@@ -177,6 +177,64 @@ def cmd_board(args) -> None:
         print(f"{col:12} ({len(items)}): {head}")
 
 
+def cmd_docs(args) -> None:
+    """What the company has on file, from a terminal.
+
+    A capability the console had and the command line did not — which is stage 6's own finding, still
+    open here: measured before writing this, **no CLI module referenced `documents` at all.** So an
+    operator on a headless box could not see that ten of their twelve files were sitting past the
+    prompt budget, and could not read a brief their own design agent had written.
+
+    `--read` and `--remove` and nothing else, and the omission is deliberate: **there is no `--add`.**
+    Copying a file into the folder that `--list` prints is the upload, `load()` re-reads the directory
+    on every call, and a file nothing can extract simply reports `no-extractor` in the listing. A
+    command that shelled out to `cp` for the operator would be ceremony over a path they now have.
+
+    The same `documents.inventory` the console reads, so the two cannot disagree about which files
+    reach a prompt — the property `tests/test_two_callers_agree.py` exists to hold.
+    """
+    from .. import documents
+
+    cfg = support.load_company(args.company)
+    slug = cfg["slug"]
+
+    if args.remove:
+        try:
+            moved = documents.remove(slug, args.remove)
+        except documents.Refused as refused:
+            print(f"{args.remove} was not removed: {refused.reason} {refused.detail}".rstrip())
+            return
+        print(f"moved out of the folder, kept at {moved.name}")
+        return
+
+    if args.read:
+        doc = documents.full_text(slug, args.read)
+        if doc is None:
+            print(f"no document at {args.read}")
+            return
+        # The whole text, with no prompt budget applied. `MAX_CHARS` caps what an agent gets so a
+        # thirty-page deck cannot swallow a turn; a person rereading their own brief wants the file.
+        print(doc.text)
+        return
+
+    inv = documents.inventory(slug)
+    print(f"== documents: {cfg.get('name')} ==")
+    print(f"folder: {inv['folder']}")
+    # The number that matters is not how many files exist, it is how many reach a prompt.
+    print(
+        f"{inv['total']} on file, {inv['reaching']} reach the agents, "
+        f"{inv['used']} of {inv['budget']} characters used"
+    )
+    for doc in inv["documents"]:
+        mark = "->" if doc["reaches"] else "  "
+        origin = "written" if doc["written"] else "dropped"
+        print(f"{mark} {doc['path']:44} {origin:8} {doc.get('reason') or ''}")
+    if not inv["documents"]:
+        print("nothing on file; copy a PDF, a deck or a note into the folder above")
+    elif inv["total"] > len(inv["documents"]):
+        print(f"{inv['total'] - len(inv['documents'])} more on file, not listed")
+
+
 def register(sub) -> None:
     sp = support.with_company(sub.add_parser("run"))
     sp.add_argument("--ticks", type=int, default=6, help="simulated hours to run")
@@ -189,6 +247,13 @@ def register(sub) -> None:
 
     support.with_company(sub.add_parser("flow")).set_defaults(fn=cmd_flow)
     support.with_company(sub.add_parser("board")).set_defaults(fn=cmd_board)
+
+    sp = support.with_company(
+        sub.add_parser("docs", help="what the company has on file, and what reaches a prompt")
+    )
+    sp.add_argument("--read", default="", help="print one document's whole text")
+    sp.add_argument("--remove", default="", help="move one document out of the folder")
+    sp.set_defaults(fn=cmd_docs)
 
     sp = support.with_company(
         sub.add_parser("ceo", help="ask the CEO something (the console chat)")

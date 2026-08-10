@@ -1194,8 +1194,8 @@ en: {
  "prov.pf.capacity": "cold",
  "prov.pf.unknown": "unknown",
  "prov.pf.skipped": "not probed",
- "prov.pfSkippedWhy": "Not an OpenAI-compatible endpoint, so this cannot prove it.",
- "prov.pfNothing": "No tier points at an API provider, so there is nothing to call.",
+ "prov.probeSkipReason": "Not an OpenAI-compatible endpoint, so this cannot prove it.",
+ "prov.probeNoTier": "No tier points at an API provider, so there is nothing to call.",
  "prov.format": "Format: target:model, e.g. groq:llama-3.3-70b-versatile",
  "tier.trivial": "trivial",
  "tier.normal": "normal",
@@ -1397,8 +1397,8 @@ en: {
  "docs.readAll": "Read all {n} characters",
  "docs.remove": "Remove",
  "docs.removed": "{name} moved out of the folder",
- "docs.no.no-such-document": "{name} was not removed: it is not in the folder.",
- "docs.no.outside": "{name} was not removed: that path is not inside the folder.",
+ "docs.refused.no-such-document": "{name} was not removed: it is not in the folder.",
+ "docs.refused.outside": "{name} was not removed: that path is not inside the folder.",
  "docs.written": "written by the company",
  "docs.dropped": "you dropped it in",
  "docs.why.prompt": "reaches the agents",
@@ -1418,11 +1418,11 @@ en: {
  "docs.sending": "Sending {name}…",
  "docs.stored": "{name} is on file",
  "docs.replaced": "{name} replaced the file already there",
- "docs.no.bad-name": "{name} was not stored: that name would be written and then never read.",
- "docs.no.no-extractor": "{name} was not stored: nothing here can read {detail}, so it could never become context.",
- "docs.no.empty-file": "{name} was not stored: the file is empty.",
- "docs.no.too-large": "{name} was not stored: it is larger than the {mb} MB limit.",
- "docs.no.write-failed": "{name} was not stored: it could not be written. {detail}",
+ "docs.refused.bad-name": "{name} was not stored: that name would be written and then never read.",
+ "docs.refused.no-extractor": "{name} was not stored: nothing here can read {detail}, so it could never become context.",
+ "docs.refused.empty-file": "{name} was not stored: the file is empty.",
+ "docs.refused.too-large": "{name} was not stored: it is larger than the {mb} MB limit.",
+ "docs.refused.write-failed": "{name} was not stored: it could not be written. {detail}",
  "bk.run": "Back up now",
  "bk.running": "Zipping…",
  "bk.done": "Backup written",
@@ -1721,8 +1721,8 @@ fr: {
  "prov.pf.capacity": "à froid",
  "prov.pf.unknown": "inconnu",
  "prov.pf.skipped": "non sondé",
- "prov.pfSkippedWhy": "Point d'accès non compatible OpenAI : impossible de le prouver ici.",
- "prov.pfNothing": "Aucun palier ne pointe vers un fournisseur API, il n'y a rien à appeler.",
+ "prov.probeSkipReason": "Point d'accès non compatible OpenAI : impossible de le prouver ici.",
+ "prov.probeNoTier": "Aucun palier ne pointe vers un fournisseur API, il n'y a rien à appeler.",
  "prov.format": "Format : cible:modèle, ex. groq:llama-3.3-70b-versatile",
  "tier.trivial": "trivial",
  "tier.normal": "normal",
@@ -1869,8 +1869,8 @@ fr: {
  "docs.readAll": "Lire les {n} caractères",
  "docs.remove": "Retirer",
  "docs.removed": "{name} sorti du dossier",
- "docs.no.no-such-document": "{name} n’a pas été retiré : il n’est pas dans le dossier.",
- "docs.no.outside": "{name} n’a pas été retiré : ce chemin n’est pas dans le dossier.",
+ "docs.refused.no-such-document": "{name} n’a pas été retiré : il n’est pas dans le dossier.",
+ "docs.refused.outside": "{name} n’a pas été retiré : ce chemin n’est pas dans le dossier.",
  "docs.written": "écrit par l’entreprise",
  "docs.dropped": "déposé par vous",
  "docs.why.prompt": "atteint les agents",
@@ -1890,11 +1890,11 @@ fr: {
  "docs.sending": "Envoi de {name}…",
  "docs.stored": "{name} est au dossier",
  "docs.replaced": "{name} a remplacé le fichier déjà présent",
- "docs.no.bad-name": "{name} n’a pas été enregistré : ce nom serait écrit puis jamais relu.",
- "docs.no.no-extractor": "{name} n’a pas été enregistré : rien ici ne sait lire {detail}, il ne pourrait donc jamais devenir du contexte.",
- "docs.no.empty-file": "{name} n’a pas été enregistré : le fichier est vide.",
- "docs.no.too-large": "{name} n’a pas été enregistré : il dépasse la limite de {mb} Mo.",
- "docs.no.write-failed": "{name} n’a pas été enregistré : l’écriture a échoué. {detail}",
+ "docs.refused.bad-name": "{name} n’a pas été enregistré : ce nom serait écrit puis jamais relu.",
+ "docs.refused.no-extractor": "{name} n’a pas été enregistré : rien ici ne sait lire {detail}, il ne pourrait donc jamais devenir du contexte.",
+ "docs.refused.empty-file": "{name} n’a pas été enregistré : le fichier est vide.",
+ "docs.refused.too-large": "{name} n’a pas été enregistré : il dépasse la limite de {mb} Mo.",
+ "docs.refused.write-failed": "{name} n’a pas été enregistré : l’écriture a échoué. {detail}",
  "bk.run": "Sauvegarder maintenant",
  "bk.running": "Compression…",
  "bk.done": "Sauvegarde écrite",
@@ -2943,7 +2943,7 @@ async function toBase64(file) {
 
 function docRefusal(d) {
   return `<span class="badge warn">${
-    t("docs.no." + d.reason)
+    t("docs.refused." + d.reason)
       .replace("{name}", esc(d.name || ""))
       .replace("{detail}", esc(d.detail || ""))
       .replace("{mb}", Math.round((state.maxUpload || 0) / MB))
@@ -3044,7 +3044,7 @@ document.addEventListener("click", async (e) => {
       // `ok` qualified the request; `removed` carries the verdict.
       toast(d.removed
         ? t("docs.removed").replace("{name}", name)
-        : t("docs.no." + d.reason).replace("{name}", name).replace("{detail}", d.detail || ""),
+        : t("docs.refused." + d.reason).replace("{name}", name).replace("{detail}", d.detail || ""),
         !d.removed);
       renderDocuments(d);
       describeDrop(d);
@@ -3427,9 +3427,9 @@ document.addEventListener("click", async e => {
           + (d.skipped || []).map(s => `
           <div class="kv"><span><span class="badge dim">${esc(t("prov.pf.skipped"))}</span>
             <span class="mono">${esc(s.tier)}</span> ${esc(s.model)}</span>
-            <span class="note">${esc(t("prov.pfSkippedWhy"))}</span></div>`).join("");
+            <span class="note">${esc(t("prov.probeSkipReason"))}</span></div>`).join("");
         if (!(d.probes || []).length && !(d.skipped || []).length)
-          out.innerHTML = `<span class="note">${esc(t("prov.pfNothing"))}</span>`;
+          out.innerHTML = `<span class="note">${esc(t("prov.probeNoTier"))}</span>`;
       } catch (e) { out.innerHTML = `<span class="badge danger">${esc(e.message)}</span>`; }
       b.disabled = false;
     } else if (b.id === "sweep-all") {

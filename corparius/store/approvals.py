@@ -69,6 +69,25 @@ class ApprovalsMixin(Connected):
         return [dict(r) for r in rows]
 
     @_locked
+    def decided_approvals(self, company) -> int:
+        """How many approvals this company's operator has actually answered.
+
+        The durable answer to "has a human ever decided anything here", and it exists because the
+        shipped page kept that in `localStorage` — so it was lost on a new browser and invisible to a
+        phone. The onboarding thread's third step is exactly this question.
+
+        **Approvals, not tasks**, and the page's own comment says why: the company completing its own
+        work is not the human deciding, so a done task must never tick that step off. Approvals are
+        different — `set_approval_status` has exactly two callers and both are the operator, one
+        pressing the button and one asking the CEO to in the chat ("approved in the CEO chat"). Nothing
+        automatic moves an approval off `pending`.
+        """
+        row = self.db.execute(
+            "SELECT COUNT(*) n FROM approvals WHERE company=? AND status<>'pending'", (company,)
+        ).fetchone()
+        return int(row["n"])
+
+    @_locked
     def set_approval_status(self, approval_id, status, note="") -> bool:
         cur = self.db.execute(
             "UPDATE approvals SET status=?, note=? WHERE id=?", (status, note, approval_id)

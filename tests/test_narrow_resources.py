@@ -124,6 +124,10 @@ DECLARED = {
             "llm_mock",
             "loop",
             "ok",
+            # The onboarding thread. In `summary` rather than behind its own route because this is the
+            # resource the Overview tab already polls and the whole card is three booleans plus which
+            # step leads — a second request for that would cost more than it carries. One extra COUNT.
+            "onboarding",
             "permission_mode",
             "proposals_need_you",
             "role_tool",
@@ -160,7 +164,9 @@ def test_build_is_the_declared_union_and_nothing_more(a_company):
     whole = overview.build(store, settings, "t", company=company, run={})
     declared = frozenset().union(*DECLARED.values())
     assert set(whole) == declared, f"build differs by {sorted(set(whole) ^ declared)}"
-    assert len(declared) == 29, "the payload gained or lost a key; say which in DECLARED"
+    # 30 since the onboarding thread joined `summary`. Pinned as a count as well as a set, so a key
+    # added to both the payload and the declaration in one commit still has to be a line somebody reads.
+    assert len(declared) == 30, "the payload gained or lost a key; say which in DECLARED"
 
 
 def test_no_key_lives_in_two_parts(a_company):

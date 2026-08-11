@@ -179,7 +179,9 @@
          interval running against the wrong endpoints. -->
     {#key shown.id}
       <div role="tabpanel" id={`panel-${shown.id}`} aria-labelledby={`tab-${shown.id}`}>
-        <shown.component {lang} {company} {token} />
+        <!-- `onTab` lets a card whose call to action is "Open Providers" actually open it. Only
+             Overview reads it; the others ignore an extra prop. -->
+        <shown.component {lang} {company} {token} onTab={pickTab} />
       </div>
     {/key}
   {/if}

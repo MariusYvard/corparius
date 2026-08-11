@@ -65,7 +65,7 @@ each card landed, and what is still only in the old page.
 
 | Tab | Rebuilt | Still only in `webui.html` |
 | --- | --- | --- |
-| Overview | what needs you · the pulse · the run · Go live · Sales site · Payments · Spend by agent · Recent activity | Getting started |
+| Overview | Getting started · what needs you · the pulse · the run · Go live · Sales site · Payments · Spend by agent · Recent activity | — |
 | Operations | the board · standing rules · memory · drafts · the action log | — (Backup moved to Settings, below) |
 | Documents | the drop zone · what is on file · reading one | — |
 | Providers | Claude subscription · runtime toggles · free tiers · routing tiers · Ollama status and pull · preflight and the full sweep | — |
@@ -73,9 +73,27 @@ each card landed, and what is still only in the old page.
 | Settings | the 80-field registry (generated) · Backup · theme and accent | — |
 | Plugins | the seven seams · the registry · Skills and their scope | — |
 
-**Getting started** is the one card left, and it is the one with no resource behind it: the `ob.*`
-onboarding logic decides what to show next from the state of the whole install, and that judgement lives
-in the shipped page's JavaScript rather than in a payload. It needs a service before it needs a card.
+**Getting started** was the last card, and the last one with no resource behind it. It is
+`app/onboarding.py` now, and moving it was not tidying — it holds three judgements a second client would
+otherwise reimplement, two of them easy to get backwards in a way that nags an operator who has already
+finished:
+
+* **staying in mock is a finished choice.** Step one is satisfied by a real provider *or* by having run
+  once, because running once means the operator either wired a model or accepted the mock deliberately.
+* **a failed run is not a run you watched work.** Ticking the step off on the strength of an error would
+  tell an operator they had seen the agents work when they had seen a traceback.
+* **the company working is not the human deciding.** The page had this right and kept the answer in
+  `localStorage`, so it was lost on a new browser and invisible to a phone. `store.decided_approvals`
+  is the durable version — `set_approval_status` has exactly two callers and both are the operator, one
+  pressing the button and one asking the CEO to in the chat. A test asserts there is no third.
+
+`lead` — which single step is next — comes from the server too, because that is the entire content of an
+onboarding thread and two clients answering it differently would be two different products.
+
+Dismissing stays per-browser, deliberately: the card retires itself once the three are done, so the worst
+a new browser costs is seeing a thread that is nearly finished. A settings row for it would be a schema
+change to remember a shrug — a different trade from the theme, which is server-side precisely because an
+operator wants it to follow them.
 
 The Overview cadence, now that it has eight cards:
 

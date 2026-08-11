@@ -22,7 +22,9 @@
   import { get, post, Refused } from "./api.js";
   import { translator } from "./i18n.js";
 
-  let { lang, company, token = "" } = $props();
+  // `onTab` is how a card whose call to action is "Open Providers" can actually open it. Optional, so
+  // a caller that does not pass it gets a card whose tab buttons do nothing rather than a crash.
+  let { lang, company, token = "", onTab = undefined } = $props();
   let t = $derived(translator(lang));
 
   let summary = $state(null);
@@ -120,6 +122,15 @@
   }
 
   let said = $state("");
+  // Dismissing is a per-browser preference and deliberately not a server field: the card retires
+  // itself once the three steps are done, so the worst a new browser costs is seeing a thread that is
+  // nearly finished. A settings row for it would be a schema change to remember a shrug.
+  let hidden = $state(localStorage.getItem("corparius-onboard-hidden") === "1");
+
+  function hideOnboarding() {
+    hidden = true;
+    localStorage.setItem("corparius-onboard-hidden", "1");
+  }
 
   $effect(() => {
     refresh({ first: true });
@@ -188,6 +199,10 @@
     }
   }
 
+  // The thread comes from the server: which step leads is the whole content of an onboarding card, and
+  // two clients answering it differently would be two different products.
+  let onboarding = $derived(summary?.onboarding ?? []);
+  let onboardingDone = $derived(onboarding.length > 0 && onboarding.every((s) => s.done));
   let spend = $derived(summary?.spend_by_agent ?? []);
   // "Not reported" and "free" are different facts. A provider that says nothing about money must
   // never read as costing nothing, which is why `cost_reported` is a separate boolean and not a
@@ -211,6 +226,38 @@
 {#if !summary}
   <p class="muted">{t("docs.reading")}</p>
 {:else}
+  <!-- The thread leads the page until it retires itself, because on an empty install it *is* the page.
+       Once the three are done, what needs a person takes over. -->
+  {#if onboarding.length && !onboardingDone && !hidden}
+    <section class="card">
+      <div class="head">
+        <div>
+          <h2>{t("ob.title")}</h2>
+          <p class="desc">{t("ob.desc")}</p>
+        </div>
+        <button class="link" onclick={hideOnboarding}>{t("ob.dismiss")}</button>
+      </div>
+      {#each onboarding as step, i (step.key)}
+        <div class="step" class:done={step.done} class:lead={step.lead}>
+          <span class="mark">{step.done ? "✓" : i + 1}</span>
+          <span>
+            <strong>{t("ob." + step.key)}</strong>
+            <p class="muted small">{t("ob." + step.key + "Hint")}</p>
+          </span>
+          {#if !step.done}
+            <!-- One call to action, on the step the server says leads. Three competing buttons is how
+                 a guided thread stops guiding. -->
+            <button
+              class:quiet={!step.lead}
+              disabled={busy === "run"}
+              onclick={() => (step.act === "run" ? startRun(24, false) : onTab?.(step.tab))}
+            >{t("ob." + step.key + "Cta")}</button>
+          {/if}
+        </div>
+      {/each}
+    </section>
+  {/if}
+
   <!-- What needs a person leads the page. The human gate is the subject of this product and should
        not have to be looked for; the old console learned that and put it first too. -->
   <section class="card" class:attention={needsYou > 0}>
@@ -520,6 +567,32 @@
   .pulse { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1.4rem; margin: 0; }
   dt { color: var(--muted); }
   dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .step {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr auto;
+    gap: 0.6rem;
+    align-items: start;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--border);
+  }
+  .step:first-of-type { border-top: 0; }
+  .step p { margin: 0.15rem 0 0; }
+  .mark {
+    display: grid;
+    place-items: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-ui);
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  /* Done is settled, leading is the one to do now, the rest wait. Three states because a thread with
+     two cannot say which of the unfinished steps is next. */
+  .step.done .mark { color: var(--ok); border-color: var(--ok); }
+  .step.done strong { color: var(--muted); }
+  .step.lead .mark { color: var(--accent); border-color: var(--accent); }
+  .head { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; }
   .jobs, .feed { list-style: none; padding: 0; margin: 0.8rem 0 0; display: grid; gap: 0.3rem; font-size: 0.88rem; }
   .feed li { display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }
   .state { font-variant-numeric: tabular-nums; color: var(--muted); }

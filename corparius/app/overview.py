@@ -46,6 +46,7 @@ from .. import inbox as inbox_mod
 from ..config import permissions
 from ..roster import ROSTER
 from ..tools.spec import ROLE_TOOL, SPEC
+from . import onboarding
 
 # Completed tasks sent to a caller. They accumulate for the life of a company and this payload is
 # polled; the store keeps all of them, and `done_total` reports the true count.
@@ -214,6 +215,10 @@ def summary(
         "session_budget": s.session_token_budget,
         "llm_mock": s.llm_mock,
         "cloud_enabled": s.cloud_enabled,
+        # The onboarding thread. In `summary` rather than behind its own route because this is the one
+        # resource the Overview tab already polls, and the whole card is three booleans plus which step
+        # leads — a second request for that would cost more than it carries. One extra COUNT.
+        "onboarding": onboarding.steps(store, s, slug, run=run),
         "running": bool(run.get("running")),
         "last_run": run.get("result"),
         "loop": bool(run.get("loop")),

@@ -144,10 +144,45 @@ def _keys_asked_for(source: str) -> set[str]:
     """
     keys = set()
     for arguments in re.findall(r"\bt\(([^()]*)\)", source):
-        for literal in re.findall(r'"([a-zA-Z][a-zA-Z0-9.]*)"', arguments):
+        literals = re.findall(r'"([a-zA-Z][a-zA-Z0-9.]*)"', arguments)
+        # `t("ob." + step.key + "Cta")` — a prefix **and** a suffix around a variable. Both literals
+        # are fragments rather than keys, and this reported `Cta` and `Hint` as invented ones. That
+        # form is checked by `_computed_families` below; here it is skipped.
+        if len(literals) == 2 and literals[0].endswith("."):
+            continue
+        for literal in literals:
             if not literal.endswith("."):
                 keys.add(literal)
     return keys
+
+
+def _computed_families(source: str) -> list[tuple[str, str]]:
+    r"""The `t("prefix." + x + "Suffix")` forms, as (prefix, suffix) pairs.
+
+    A third lookup shape, after the literal and the bare prefix. The onboarding thread renders three
+    keys per step out of one loop — `ob.model`, `ob.modelHint`, `ob.modelCta` — which is what makes the
+    step key the only thing a client has to know about it. Unchecked, a typo in either fragment shows
+    three raw keys per row at once.
+    """
+    return re.findall(r'\bt\("([a-z][a-z.]*\.)"\s*\+[^()"]*\+\s*"(\w+)"\)', source)
+
+
+@pytest.mark.parametrize("path", COMPONENTS, ids=lambda p: p.name)
+def test_every_computed_family_has_keys_at_both_ends(path):
+    """A prefix and a suffix that between them name nothing is a row of raw keys on screen."""
+    import json
+
+    en = json.loads(pathlib.Path("web/i18n/en.json").read_text(encoding="utf-8"))
+    for prefix, suffix in _computed_families(path.read_text(encoding="utf-8")):
+        assert any(k.startswith(prefix) and k.endswith(suffix) for k in en), (
+            f"{path.name}: t({prefix!r} + x + {suffix!r}) matches no key"
+        )
+
+
+def test_the_scanner_sees_a_prefix_and_suffix_pair():
+    """The guard on the guard, and it earned its place: the scanner read `Cta` as a key first."""
+    assert _computed_families('t("ob." + step.key + "Cta")') == [("ob.", "Cta")]
+    assert _keys_asked_for('t("ob." + step.key + "Cta") t("a.one")') == {"a.one"}
 
 
 def test_the_scanner_sees_a_key_in_a_ternary():

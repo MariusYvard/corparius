@@ -29,6 +29,7 @@
    * subject of this product and should not have to be looked for. The full detail is here.
    */
   import { get, post, Refused } from "./api.js";
+  import Ticked from "./Ticked.svelte";
   import { fill, translator } from "./i18n.js";
 
   let { lang, company, token = "" } = $props();
@@ -191,8 +192,11 @@
 {#if !summary || !board}
   <p class="muted">{t("docs.reading")}</p>
 {:else}
-  <!-- 1. The gate, with the whole explanation rather than two buttons. -->
-  <section class="card">
+  <!-- 1. The gate, with the whole explanation rather than two buttons. It is warm-tinted only when
+       something is actually held, so "nothing waits" and "three things wait" are different at a
+       glance rather than the same card with different text in it. -->
+  <div class="grid cols">
+  <section class="card" class:attention={summary.approvals.length > 0}>
     <h2>{t("ops.waiting")}</h2>
     <p class="desc">{t("ops.waitingDesc")}</p>
     <p class="posture muted">
@@ -206,7 +210,7 @@
       <article class="row block">
         <header>
           <strong>{approval.tool}</strong>
-          <span class="chip risk {approval.risk}">{t("risk." + approval.risk)}</span>
+          <span class="badge risk {approval.risk}">{t("risk." + approval.risk)}</span>
           <span class="muted">· {t("ops.requestedBy")} {approval.agent}</span>
         </header>
 
@@ -238,15 +242,15 @@
         </label>
 
         <div class="actions">
-          <button disabled={busy === approval.id} onclick={() => decide(approval.id, "approved")}>
+          <button class="primary" disabled={busy === approval.id} onclick={() => decide(approval.id, "approved")}>
             {t("btn.approve")}
           </button>
           {#if approval.can_remember}
-            <button class="quiet" disabled={busy === approval.id} onclick={() => decide(approval.id, "approved", "always")}>
+            <button disabled={busy === approval.id} onclick={() => decide(approval.id, "approved", "always")}>
               {t("ops.always")}
             </button>
           {/if}
-          <button class="quiet" disabled={busy === approval.id} onclick={() => decide(approval.id, "rejected")}>
+          <button disabled={busy === approval.id} onclick={() => decide(approval.id, "rejected")}>
             {t("btn.reject")}
           </button>
         </div>
@@ -254,7 +258,7 @@
     {/each}
 
     {#if summary.approvals.length === 0 && summary.inbox.length === 0}
-      <p class="muted">{t("ops.calm")}</p>
+      <p class="empty">{t("ops.calm")}</p>
     {/if}
   </section>
 
@@ -262,25 +266,33 @@
   <section class="card">
     <h2>{t("ops.rules")}</h2>
     <p class="desc">{t("ops.rulesDesc")}</p>
+    <div class="rows">
     {#each summary.rules as rule (rule.tool)}
       <div class="row">
         <div><strong>{rule.tool}</strong> <span class="muted">· {rule.scope}</span></div>
-        <button class="quiet" disabled={busy === `rule:${rule.tool}`} onclick={() => revoke(rule.tool)}>
+        <button disabled={busy === `rule:${rule.tool}`} onclick={() => revoke(rule.tool)}>
           {t("ops.revoke")}
         </button>
       </div>
     {/each}
-    {#if summary.rules.length === 0}<p class="muted">{t("ops.rulesEmpty")}</p>{/if}
+    </div>
+    {#if summary.rules.length === 0}<p class="empty">{t("ops.rulesEmpty")}</p>{/if}
   </section>
+  </div>
 
   <!-- 3. The board. -->
-  <section>
-    <h2 class="bare">{t("ops.backlog")}</h2>
-    <p class="desc">{t("ops.backlogDesc")}</p>
+  <!-- One card: the heading and the five columns it names. It was a card containing a title and a
+       sentence, with the columns as siblings *below* it — so the heading looked like a stray paragraph
+       and the board looked like five unlabelled slabs. -->
+  <section class="card board">
+    <div>
+      <h2>{t("ops.backlog")}</h2>
+      <p class="desc">{t("ops.backlogDesc")}</p>
+    </div>
     <div class="kanban">
       {#each COLUMNS as column (column)}
         {@const rows = board.tasks[column] ?? []}
-        <div class="column">
+        <div class="kcol">
           <h3>
             <!-- "Proposed, your call" only when nobody else will look. The CEO reviews proposals on
                  its own cadence and that is the point of having one; the old page counted every
@@ -295,9 +307,9 @@
           </h3>
 
           {#each rows.slice(0, opened[`col:${column}`] ? rows.length : SHOWN) as task (task.id)}
-            <article class="task" class:untooled={!task.tool}>
+            <article class="kcard" class:untooled={!task.tool}>
               <p class="title">{task.title}</p>
-              <p class="meta muted">
+              <p class="meta">
                 {task.target}
                 · {task.tool || t("task.noTool")}
                 {#if task.priority}· p{task.priority}{/if}
@@ -315,7 +327,7 @@
                   <div class="actions">
                     <button disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task)}>{t("task.save")}</button>
                     {#if task.status === "proposed"}
-                      <button class="quiet" disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task, "approved")}>
+                      <button disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task, "approved")}>
                         {t("ib.assign")}
                       </button>
                     {/if}
@@ -326,10 +338,10 @@
                 <div class="actions">
                   <button class="link" onclick={() => startEdit(task)}>{t("task.edit")}</button>
                   {#if task.status === "proposed"}
-                    <button disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task, "approved")}>
+                    <button class="primary" disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task, "approved")}>
                       {t("btn.approve")}
                     </button>
-                    <button class="quiet" disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task, "rejected")}>
+                    <button disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task, "rejected")}>
                       {t("btn.reject")}
                     </button>
                   {/if}
@@ -346,7 +358,7 @@
           {#if column === "done" && board.done_total > rows.length}
             <p class="muted small">{fill(t("col.rest"), { n: board.done_total - rows.length })}</p>
           {/if}
-          {#if rows.length === 0}<p class="muted small">{t("col.empty")}</p>{/if}
+          {#if rows.length === 0}<p class="empty slim">{t("col.empty")}</p>{/if}
         </div>
       {/each}
     </div>
@@ -362,12 +374,12 @@
       {#each drafts.drafts as draft (draft.id)}
         <article class="row block">
           <header>
-            <span class="chip">{t("dft.state." + draft.state)}</span>
+            <span class="badge">{t("dft.state." + draft.state)}</span>
             <span class="muted">· {draft.kind ?? ""} {draft.channel ?? ""}</span>
           </header>
           <pre>{draft.body ?? ""}</pre>
           <div class="actions">
-            <button class="quiet" onclick={() => copy(draft.body ?? "", draft.id)}>
+            <button onclick={() => copy(draft.body ?? "", draft.id)}>
               {copied === draft.id ? t("dft.copied") : t("dft.copy")}
             </button>
             {#if draft.state !== "published"}
@@ -376,7 +388,7 @@
               </button>
             {/if}
             {#if draft.state !== "discarded"}
-              <button class="quiet" disabled={busy === `dft:${draft.id}`} onclick={() => setDraft(draft.id, "discarded")}>
+              <button disabled={busy === `dft:${draft.id}`} onclick={() => setDraft(draft.id, "discarded")}>
                 {t("dft.discard")}
               </button>
             {/if}
@@ -398,14 +410,14 @@
         <div class="row">
           <div>
             {fact.fact}
-            {#if fact.pinned}<span class="chip">{t("mem.pinned")}</span>{/if}
+            {#if fact.pinned}<span class="badge">{t("mem.pinned")}</span>{/if}
             {#if fact.why}<p class="muted small">{fact.why}</p>{/if}
           </div>
           <div class="actions">
-            <button class="quiet" disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, fact.pinned ? "unpin" : "pin")}>
+            <button disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, fact.pinned ? "unpin" : "pin")}>
               {t(fact.pinned ? "mem.unpin" : "mem.pin")}
             </button>
-            <button class="quiet" disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, "forget")}>
+            <button disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, "forget")}>
               {t("mem.forget")}
             </button>
           </div>
@@ -430,19 +442,26 @@
         <tbody>
           {#each actions as action, i (action.ts + ":" + i)}
             <tr>
-              <td class="num">{new Date(action.ts * 1000).toLocaleTimeString(lang)}</td>
+              <td class="num">
+                {new Date(action.ts * 1000).toLocaleString(lang, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </td>
               <td>{action.agent}</td>
               <td>{action.tool}</td>
               <td>
-                <span class="state {action.ok ? 'ok' : 'bad'}">{t(action.ok ? "badge.ok" : "badge.fail")}</span>
+                <span class="badge {action.ok ? 'ok' : 'danger'}">{t(action.ok ? "badge.ok" : "badge.fail")}</span>
                 <!-- Which provider answered, and whether the chain fell back. Schema 18 exists
                      because this was produced and thrown away: an operator read "Nothing usable
                      drafted" as a broken site generator while groq and cerebras both answered 429,
                      and by then it had cost 365 026 tokens. -->
                 {#if action.source}<span class="muted small">{action.source}</span>{/if}
-                {#if action.fell_back}<span class="chip warn">{t("tier.chain")}</span>{/if}
+                {#if action.fell_back}<span class="badge warn">{t("tier.chain")}</span>{/if}
               </td>
-              <td class="out">{action.output}</td>
+              <td class="out"><Ticked text={action.output} /></td>
             </tr>
           {/each}
           {#if actions.length === 0}
@@ -455,135 +474,51 @@
 {/if}
 
 <style>
-  /* Tokens only. `tokens.css` carries the measured oklch ramps, ported verbatim from the shipped
-     page — including the one that shipped a dark band at 1.16:1, which is why no colour is written
-     here and `tests/test_console_tokens.py` asserts it rather than trusting it. */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem 1.1rem;
-    margin: 0 0 1rem;
-  }
-  section { margin: 0 0 1rem; }
-  h2, h3 {
-    font-size: 0.82rem;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--muted);
-    margin: 0 0 0.35rem;
-  }
-  h2.bare { margin-left: 0.1rem; }
-  .desc { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.9rem; }
-  .posture { font-size: 0.88rem; margin: 0 0 0.9rem; }
-  .row {
-    display: flex;
-    gap: 1rem;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 0.65rem 0;
-    border-top: 1px solid var(--border);
-  }
-  .row:first-of-type { border-top: 0; }
+  /* Only what Operations has. The card, the rows, the badges, the buttons, the board columns and the
+     tables are the console's language and live in `console.css` — including the kanban, which the
+     Overview does not use but which belongs to the language rather than to this file. */
+  .board { gap: 16px; }
+  /* Inside a card, a column needs no surface of its own: the card is the surface. A border and a
+     header rule are enough to say "column", and boxing each one again inside a box is the drift that
+     made every tab look like a stack of the same rectangle. */
+  .board :global(.kcol) { background: none; border: 0; border-radius: 0; padding: 0; }
+  .board :global(.kcol h3) { padding: 2px 0 10px; }
+  .board :global(.kcard) { padding: 11px 0; }
+  .posture { font-size: 13.5px; margin: 0; color: var(--muted); }
   .row.block { display: block; }
-  .row.block header { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }
-  .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-top: 0.5rem; }
-  button {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    font: inherit;
-  }
-  button.quiet { background: none; color: var(--text); border-color: var(--border-ui); }
-  button.link {
-    background: none;
-    border: 0;
-    color: var(--accent);
-    padding: 0.2rem 0;
-    text-decoration: underline;
-  }
-  button:disabled { opacity: 0.45; cursor: default; }
-  button:focus-visible, select:focus-visible, input:focus-visible {
-    outline: 2px solid var(--select);
-    outline-offset: 2px;
-  }
-  select, input {
-    background: var(--raised);
-    color: var(--text);
-    border: 1px solid var(--border-ui);
-    border-radius: 6px;
-    padding: 0.3rem 0.5rem;
-    font: inherit;
-  }
-  .muted { color: var(--muted); }
-  .small { font-size: 0.86rem; }
-  .banner { padding: 0.6rem 0.85rem; border-radius: 8px; margin: 0 0 1rem; border: 1px solid; }
-  .banner.danger { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
-  .banner.warn { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
-  .banner.ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
-  .chip {
-    background: var(--raised);
-    border: 1px solid var(--border-ui);
-    border-radius: 999px;
-    padding: 0 0.5rem;
-    font-size: 0.78rem;
-  }
+  .row.block header { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+
   /* The five risk tiers, and the ramp is the point: read is furniture, money is the one an operator
      must never approve by reflex. */
-  .chip.risk.read, .chip.risk.write_local { color: var(--muted); }
-  .chip.risk.external { color: var(--warn); }
-  .chip.risk.code, .chip.risk.money { color: var(--danger); border-color: var(--danger); }
-  .chip.warn { color: var(--warn); border-color: var(--warn); }
-  .count {
-    background: var(--raised);
-    border-radius: 999px;
-    padding: 0 0.45rem;
-    margin-left: 0.3rem;
-    color: var(--text);
-  }
-  .detail { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem; margin: 0.5rem 0; font-size: 0.9rem; }
-  dt { color: var(--muted); }
-  dd { margin: 0; }
-  .note { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem; font-size: 0.88rem; }
+  .badge.risk.read, .badge.risk.write_local { color: var(--muted); }
+  .badge.risk.external { color: var(--warn); background: var(--warn-soft); }
+  .badge.risk.code, .badge.risk.money { color: var(--danger); background: var(--danger-soft); }
+
+  .count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 400; }
+  .detail { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 16px; margin: 10px 0; font-size: 13.5px; }
+  .detail dt { color: var(--muted); }
+  .detail dd { margin: 0; }
+  .note { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 13.5px; }
   .note input { flex: 1; }
   pre {
-    background: var(--raised);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.6rem;
-    margin: 0.5rem 0 0;
+    margin: 8px 0 0;
     white-space: pre-wrap;
-    font-size: 0.86rem;
     max-height: 14rem;
     overflow: auto;
-  }
-  .kanban {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-    gap: 0.7rem;
-    align-items: start;
-  }
-  .column {
-    background: var(--surface);
+    background: var(--raised);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 0.7rem 0.8rem;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
   }
-  .task { border-top: 1px solid var(--border); padding: 0.5rem 0; }
-  .task:first-of-type { border-top: 0; }
   /* A task with no tool completes having done nothing — 22 of 24 on one company — so it is marked
      rather than left looking like the others. */
-  .task.untooled { border-left: 2px solid var(--warn); padding-left: 0.5rem; }
-  .task .title { margin: 0; font-size: 0.92rem; }
-  .task .meta { margin: 0.15rem 0 0; font-size: 0.8rem; }
-  .edit { display: grid; gap: 0.35rem; margin-top: 0.4rem; }
+  .kcard.untooled { border-left: 2px solid var(--warn); padding-left: 10px; }
+  .kcard .title { margin: 0; font-size: 13.5px; }
+  .kcard .meta { margin: 3px 0 0; }
+  .edit { display: grid; gap: 6px; margin-top: 8px; }
   .scroll { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
-  th, td { text-align: left; padding: 0.35rem 0.5rem; border-top: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 500; }
   .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
   .out { color: var(--muted); }
   .state.ok { color: var(--ok); }

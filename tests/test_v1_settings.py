@@ -294,13 +294,27 @@ def test_the_theme_is_stored_on_the_server_not_in_the_browser(server):
 
 def test_a_light_theme_needs_the_attribute_the_tokens_key_off(server):
     """`tokens.css` treats `:root` as dark and keys light off `[data-theme="light"]`, so a console that
-    never writes the attribute gives every operator dark whatever they chose. The rebuilt one did not
-    write it until this tab existed."""
+    never writes the attribute gives every operator dark whatever they chose.
+
+    **And it has to be written at boot, not by the tab that edits it.** This test used to look for the
+    rule inside `Settings.svelte`, which is where it was — so an operator who had chosen light got dark
+    on every tab until they opened Settings, and then light everywhere, which reads as the console
+    changing its mind. The rule lives in `theme.js` now and the shell calls it while it is fetching the
+    company list; this asserts both halves, because either one alone is the bug.
+    """
     import pathlib
 
     tokens = pathlib.Path("web/src/tokens.css").read_text(encoding="utf-8")
     assert ':root, [data-theme="dark"]' in tokens
     assert '[data-theme="light"]' in tokens
+
+    theme = pathlib.Path("web/src/theme.js").read_text(encoding="utf-8")
+    assert 'setAttribute("data-theme"' in theme
+    assert 'removeAttribute("data-theme")' in theme, "resetting has to clear it, not set 'dark'"
+
+    # The other half: the shell reads it, so the first paint of any tab is the chosen theme.
+    shell = pathlib.Path("web/src/App.svelte").read_text(encoding="utf-8")
+    assert "loadTheme(" in shell, "the theme is applied by whichever tab happens to mount, again"
     settings = pathlib.Path("web/src/Settings.svelte").read_text(encoding="utf-8")
-    assert 'setAttribute("data-theme"' in settings
-    assert 'removeAttribute("data-theme")' in settings, "resetting has to clear it, not set 'dark'"
+    assert "applyTheme(theme)" in settings, "the tab that edits it must still apply what it saved"
+    assert 'setAttribute("data-theme"' not in settings, "two copies of the rule is how they drifted"

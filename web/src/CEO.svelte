@@ -129,9 +129,14 @@
 {/if}
 {#if said}<p class="banner ok">{said}</p>{/if}
 
-<section class="card">
-  <div class="head">
-    <div>
+<section class="card chat">
+  <!-- An identity header, because this tab is a conversation with somebody. It carried the shipped
+       page's pixel-art portrait and no longer does: three blind design reviews independently read the
+       11-icon set as emoji placeholder art — "a red heart for the social agent" — at 36px and at 20px.
+       The art is charming in a terminal and it does not survive being next to a monochrome line-icon
+       nav, which is a judgement about this interface rather than about the drawings. -->
+  <div class="chat-id">
+    <div class="grow">
       <h2>{t("ceo.name")}</h2>
       <p class="desc">{t("ceo.role")}</p>
     </div>
@@ -145,23 +150,27 @@
   {#if mockOn}<p class="banner warn small">{t("ceo.mockNote")}</p>{/if}
 
   {#if history.length === 0}
-    <p class="muted">{t("ceo.empty")}</p>
-    <div class="actions">
-      {#each SUGGESTIONS as key (key)}
-        <button class="quiet" disabled={sending} onclick={() => send(t(key))}>{t(key)}</button>
-      {/each}
+    <!-- Suggestion chips rather than an empty box: the first move is a thing to click, and a dead
+         rectangle with a placeholder in it tells an operator nothing about what to ask. -->
+    <div class="chat-log is-empty">
+      <p class="muted centred">{t("ceo.empty")}</p>
+      <div class="suggest">
+        {#each SUGGESTIONS as key (key)}
+          <button disabled={sending} onclick={() => send(t(key))}>{t(key)}</button>
+        {/each}
+      </div>
     </div>
   {:else}
-    <div class="log">
+    <div class="chat-log">
       {#each history as turn, i (turn.ts ?? `optimistic-${i}`)}
-        <article class="turn {turn.role}">
+        <article class="msg {turn.role === 'user' ? 'user' : 'ceo'}" class:failed={turn.unanswered}>
           <p class="text">{turn.text}</p>
           {#if turn.role === "assistant"}
-            <p class="who muted small">
+            <p class="meta">
               <!-- Which model answered, per turn: a conversation can span a tier change or a
                    fallback, and "who said this" is a question about one reply. -->
               {#if turn.provider}{turn.provider}{#if turn.model} / {turn.model}{/if}{/if}
-              {#if turn.unanswered}<span class="chip danger">{t("badge.fail")}</span>{/if}
+              {#if turn.unanswered}<span class="badge danger">{t("badge.fail")}</span>{/if}
             </p>
           {/if}
         </article>
@@ -174,14 +183,14 @@
     <div class="proposal">
       <p class="small">{t("ceo.proposes")} <strong>{proposal.label}</strong></p>
       <div class="actions">
-        <button disabled={sending} onclick={accept}>{proposal.label}</button>
-        <button class="quiet" onclick={() => (proposal = null)}>{t("ceo.notNow")}</button>
+        <button class="primary" disabled={sending} onclick={accept}>{proposal.label}</button>
+        <button onclick={() => (proposal = null)}>{t("ceo.notNow")}</button>
       </div>
     </div>
   {/if}
 
   <form
-    class="ask"
+    class="composer"
     onsubmit={(e) => {
       e.preventDefault();
       send();
@@ -202,72 +211,22 @@
         }
       }}
     ></textarea>
-    <button type="submit" disabled={sending || !draft.trim()}>{t("ceo.send")}</button>
+    <button class="primary" type="submit" disabled={sending || !draft.trim()}>{t("ceo.send")}</button>
   </form>
 </section>
 
 <style>
-  /* Tokens only; `tests/test_console_tokens.py` asserts it. */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem 1.1rem;
-  }
-  .head { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; }
-  h2 {
-    font-size: 0.82rem;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--muted);
-    margin: 0 0 0.35rem;
-  }
-  .desc { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.9rem; }
-  .log { display: grid; gap: 0.7rem; margin: 0 0 1rem; }
-  .turn { padding: 0.6rem 0.8rem; border-radius: 10px; max-width: 44rem; }
-  /* The operator's own words sit to the right and in the raised surface; the CEO's fill the width.
-     Position carries the speaker, so the transcript is readable without a label per line. */
-  .turn.user { background: var(--raised); border: 1px solid var(--border-ui); margin-left: auto; }
-  .turn.assistant { background: var(--accent-soft); border: 1px solid var(--border); }
+  /* Only the CEO's own. The card, the chat frame, the bubbles, the chips, the composer and the
+     buttons are in `console.css`, because a conversation panel that styles its own buttons is how
+     seven tabs came to have seven slightly different ones. */
+  .grow { flex: 1; min-width: 0; }
+  .centred { text-align: center; margin: 0 0 4px; }
   .text { margin: 0; white-space: pre-wrap; }
-  .who { margin: 0.3rem 0 0; }
-  .proposal { border-top: 1px solid var(--border); padding-top: 0.7rem; margin-bottom: 0.7rem; }
-  .ask { display: grid; gap: 0.5rem; }
-  .ask button { justify-self: end; }
-  textarea {
-    background: var(--raised);
-    color: var(--text);
-    border: 1px solid var(--border-ui);
-    border-radius: 8px;
-    padding: 0.5rem 0.6rem;
-    font: inherit;
-    resize: vertical;
-  }
-  .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
-  button {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    font: inherit;
-  }
-  button.quiet { background: none; color: var(--text); border-color: var(--border-ui); }
-  button.link { background: none; border: 0; color: var(--accent); text-decoration: underline; padding: 0.2rem 0; }
-  button:disabled { opacity: 0.45; cursor: default; }
-  button:focus-visible, textarea:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
-  .muted { color: var(--muted); }
-  .small { font-size: 0.86rem; }
-  .banner { padding: 0.6rem 0.85rem; border-radius: 8px; margin: 0 0 1rem; border: 1px solid; }
-  .banner.danger { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
-  .banner.warn { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
-  .banner.ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
-  .chip {
-    border: 1px solid var(--border-ui);
-    border-radius: 999px;
-    padding: 0 0.45rem;
-    font-size: 0.76rem;
-  }
-  .chip.danger { color: var(--danger); border-color: var(--danger); }
+  /* The proposal is a decision, so it is separated from the transcript by a rule rather than sitting
+     in it as another turn: the CEO said what it would do, and the button belongs to the operator. */
+  .proposal { border-top: 1px solid var(--border); padding-top: 12px; display: grid; gap: 10px; }
+  .proposal .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  /* No handle. It sat in the corner of the card as a browser artefact; the field already grows to its
+     max height on its own, and the panel is not something an operator needs to resize. */
+  .composer textarea { resize: none; }
 </style>

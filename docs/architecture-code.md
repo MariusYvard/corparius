@@ -1155,6 +1155,90 @@ refuse de construire. Le lanceur affiche un chiffre à suivre, 24, et la plage r
 test affirme que la plage accepte le chiffre, parce que 23 est exactement le piège — plus récent que
 22 et exclu.
 
+## La console avait des jetons, pas un design
+
+Le premier passage a porté `tokens.css` — les rampes oklch mesurées — et **la couche de composants
+n'est pas venue avec.** Le résultat, sur capture : sept onglets de rectangles bleu marine identiques
+dans une colonne de 46rem, chaque titre de carte en petites capitales grises de 0,82rem, chaque bouton
+du même bleu plein, aucune icône, aucune profondeur, aucune hiérarchie. **Les jetons sont une palette.
+Ce n'est pas un design.**
+
+`web/src/console.css` est cette couche : 856 lignes globales, et les huit composants passent de 767
+lignes de CSS propre à 248 — parce que chacun avait fait pousser son propre `.card`, `.badge`,
+`.banner` et `button`, qui dérivaient d'un pixel ici et d'un rayon là. Le `<style>` d'un composant est
+pour ce qu'il a en propre.
+
+### Six revues à l'aveugle
+
+À chaque tour, un agent qui n'avait jamais vu le produit, à qui on demandait de juger comme il
+jugerait les captures d'un concurrent, et de ne pas ménager. Verdict demandé en OUI ou NON strict.
+
+| Tour | Note | Ce que la revue a nommé en premier |
+| --- | --- | --- |
+| 1 | 4/10 | fonds de cartes ragged, le nombre du bandeau peint en gris de légende, Réglages à 45 % de vide, des booléens rendus en champs texte contenant `false` |
+| 2 | 5,5/10 | chemins absolus sur quatre lignes comme corps de texte, le paragraphe de Réglages en ruban de 145px, la case à cocher #3b3b3b de Chromium sur du marine, les portraits lus comme des emoji |
+| 3 | 5/10 | **les cartes empilées se touchent** — 2px de bordure et aucun écart —, le contenu « centré » décalé de 250px, aucun système d'élévation |
+| 4 | 6/10 | Réglages en mur de 5 100px, le panneau CEO flottant au-dessus de 290px de vide, l'en-tête du Backlog seul dans une carte |
+| 5 | 6/10 | libellés de boutons tronqués, les pastilles dans les étiquettes décalant chaque ligne française de 30px, deux curseurs bruts |
+| 6 | 6/10 | le logo raster, aucune hiérarchie de page, l'état actif invisible, un tiers de chaque écran mort |
+
+Quatre de ces revues ont trouvé ce qu'aucun test ne pouvait :
+
+**Les marges automatiques de `.wrap` annulaient l'étirement transversal du flex.** `main` était donc
+dimensionné par son contenu. Les onglets larges tapaient dans le plafond de 1200px et paraissaient
+corrects ; l'onglet CEO sortait à 827px, centré — passer dessus déplaçait toute l'interface de 162px de
+chaque côté. Mesuré dans un navigateur, pas deviné.
+
+**Le thème de l'exploitant ne s'appliquait qu'après ouverture de Réglages.** `applyTheme` vivait dans
+cet onglet : un exploitant en clair obtenait du sombre partout ailleurs, puis du clair partout — la
+console avait l'air de changer d'avis. C'est `theme.js` maintenant, appelé par la coque au démarrage.
+Le test qui épinglait l'ancienne adresse affirme les deux moitiés, parce que l'une sans l'autre est le
+bug.
+
+**Six chaînes françaises du registre avaient perdu tous leurs accents** — « Chaque dossier de company
+comme depot prive independant », « Portee 'repo' », « si vous y etes deja connecte » — et « companies »
+figurait dans des étiquettes françaises. Du français sans accent est du Python valide et de l'UTF-8
+valide : rien dans le dépôt ne pouvait le voir. `tests/test_french_spec.py` le voit, et **dit ce qu'il
+ne voit pas** : un accent perdu sur quatre. Prouvé en retirant exactement celui-là et en le regardant
+passer.
+
+**Une phrase à moitié traduite par construction.** Le verdict est en français, la mesure derrière est
+produite en anglais par `providers/hardware.py`, qui rapporte des nombres et n'a pas à connaître une
+langue. Les deux étaient collés en une phrase ; la mesure a sa propre ligne, dans la fonte que la
+console réserve aux valeurs machine.
+
+### Le thème clair : une rampe mesurée, corrigée par la mesure
+
+Page 0,975 contre carte 0,99 mettait une carte à **1,044:1 sur sa propre page** — le sombre est à
+1,121:1. Le clair avait donc la moitié de la structure et se lisait comme un filaire : en-tête,
+navigation, bandeau et cartes en une seule feuille blanche indifférenciée. Page 0,955 et carte blanche
+donnent **1,140:1**, texte sur carte 14,6:1, atténué sur carte 7,5:1, atténué sur page 6,5:1. Changé
+dans les deux copies, avec les nombres dans le commentaire.
+
+### Deux choses retirées, et pourquoi
+
+**Les onze portraits en pixel art.** Trois revues indépendantes les ont lus comme des emoji de
+substitution — « un cœur rouge pour l'agent social » — à 36px comme à 20px. Les garder parce qu'ils me
+plaisent, ce serait préférer mon goût à la preuve. Le paquet reperd les 45 Ko de base64 au passage.
+
+**La texture de points derrière le panneau Plugins.** Les bandeaux de cette page utilisent une teinte
+à 20 % d'alpha, donc les points se voyaient **à travers** et se lisaient comme un défaut de rendu. Une
+texture qui se bat avec le contenu devant elle est pire qu'une surface plane.
+
+### Où ça s'arrête, dit franchement
+
+**La revue à l'aveugle dit encore NON, à 6/10.** Ce qu'elle demande ensuite est au dossier : une marque
+en SVG, une véritable échelle de couleurs d'état employée à l'identique partout, la ligne Providers
+reconstruite, et la fin de la passe terminologique française (palier/tier, PDG/CEO, jetons/tokens). Je
+ne prétends pas que c'est beau ; je prétends que c'est mesurablement mieux qu'avant et que la liste de
+ce qui reste est écrite plutôt que devinée.
+
+**Une correction de méthode.** Le premier banc de captures utilisait `fullPage`, qui compose mal ce qui
+est sous la ligne de flottaison quand une carte porte un `mix-blend-mode` : il a rendu un panneau entier
+à ~10 % d'opacité, et une revue a légitimement conclu à une page cassée. Vérifié dans un vrai viewport
+— où le panneau est intact — avant de toucher à quoi que ce soit. Le banc agrandit le viewport
+maintenant.
+
 ## Le cliquet
 
 Chaque règle embarque l'ensemble exact des violations d'aujourd'hui et affirme

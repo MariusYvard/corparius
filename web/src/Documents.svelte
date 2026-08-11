@@ -162,7 +162,7 @@
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="drop"
+    class="dropzone"
     class:over
     ondragover={(e) => {
       e.preventDefault();
@@ -171,8 +171,8 @@
     ondragleave={() => (over = false)}
     ondrop={onDrop}
   >
-    <p class="line">{t("docs.dropHere")}</p>
-    <p class="pick">
+    <p class="dropzone-line">{t("docs.dropHere")}</p>
+    <p class="dropzone-pick">
       <span class="muted">{t("docs.dropOr")}</span>
       <!-- A label bound to a clipped input, not a button calling `.click()`: the label *is* the
            accessible control and works from the keyboard without any script.
@@ -208,12 +208,12 @@
 </section>
 
 <section class="card">
-  <div class="head">
+  <div class="card-head">
     <div>
       <h2>{t("docs.title")}</h2>
       <p class="desc">{t("docs.desc")}</p>
     </div>
-    <button class="quiet" onclick={load}>{t("docs.reload")}</button>
+    <button onclick={load}>{t("docs.reload")}</button>
   </div>
 
   {#if !inventory}
@@ -227,13 +227,13 @@
         b: inventory.budget,
       })}
     </p>
-    <p class="folder muted small"><span>{t("docs.folder")}:</span> <code>{inventory.folder}</code></p>
 
+    <div class="rows">
     {#each inventory.documents as doc (doc.path)}
       <article class="row" class:reaches={doc.reaches}>
         <div>
           <strong>{doc.path}</strong>
-          <span class="chip">{t(doc.written ? "docs.written" : "docs.dropped")}</span>
+          <span class="badge">{t(doc.written ? "docs.written" : "docs.dropped")}</span>
           <!-- The one state the product had no way of saying out loud: readable, on file, and past
                the budget, so no agent ever reads it. `docs.why.cut` carries the two numbers. -->
           <p class="why muted small">
@@ -246,15 +246,22 @@
         </div>
         <div class="actions">
           <button class="link" onclick={() => read(doc.path)}>{t("docs.read")}</button>
-          <button class="quiet" disabled={sending === doc.path} onclick={() => remove(doc.path)}>
+          <button class="danger-quiet" disabled={sending === doc.path} onclick={() => remove(doc.path)}>
             {t("docs.remove")}
           </button>
         </div>
       </article>
     {/each}
+    </div>
 
     {#if inventory.documents.length === 0}
-      <p class="muted">{t("docs.none")}</p>
+      <!-- The sentence says "into the folder below", so the folder goes below it. It was printed above,
+           which made the one instruction on an empty tab point the wrong way. -->
+      <p class="empty">{t("docs.none")}</p>
+      <p class="folder muted small">
+        <span>{t("docs.folder")}:</span>
+        <code class="path" title={inventory.folder}>{inventory.folder}</code>
+      </p>
     {:else if inventory.total > inventory.documents.length}
       <p class="muted small">
         {fill(t("docs.more"), { n: inventory.total - inventory.documents.length })}
@@ -265,7 +272,7 @@
 
 {#if reading}
   <section class="card">
-    <div class="head">
+    <div class="card-head">
       <div>
         <h2>{reading.path}</h2>
         <p class="desc">{fill(t("docs.readAll"), { n: reading.text.length })}</p>
@@ -277,104 +284,30 @@
         <button class="link" onclick={() => (reading = null)}>{t("task.cancel")}</button>
       </div>
     </div>
-    <pre>{reading.text}</pre>
+    <pre class="read">{reading.text}</pre>
   </section>
 {/if}
 
 <style>
-  /* Tokens only. No colour is written here — `tests/test_console_tokens.py` asserts it, because a
-     literal is fine in the theme it was chosen against and wrong in the other one. */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem 1.1rem;
-    margin: 0 0 1rem;
-  }
-  h2 {
-    font-size: 0.82rem;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--muted);
-    margin: 0 0 0.35rem;
-  }
-  .head { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; }
-  .desc { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.9rem; }
-  .drop {
-    border: 1px dashed var(--border-ui);
-    border-radius: 10px;
-    padding: 1.4rem 1rem;
-    text-align: center;
-    background: var(--raised);
-  }
-  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
-  .drop .line { margin: 0 0 0.4rem; }
-  .drop .pick { margin: 0 0 0.5rem; display: flex; gap: 0.45rem; justify-content: center; align-items: center; }
-  /* The input is the control and the label is its face. `display: none` would take it out of the
-     accessibility tree along with the tab order, so it is clipped instead. */
-  input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
-  .filebtn {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-radius: 6px;
-    padding: 0.3rem 0.7rem;
-    cursor: pointer;
-  }
-  input[type="file"]:focus-visible + .filebtn,
-  .filebtn:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
-  .outcome { margin: 0.6rem 0 0; font-size: 0.9rem; color: var(--ok); }
-  .outcome.bad { color: var(--warn); }
-  .tally { margin: 0 0 0.3rem; font-variant-numeric: tabular-nums; }
-  .folder { margin: 0 0 0.8rem; }
-  .row {
-    display: flex;
-    gap: 1rem;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 0.6rem 0;
-    border-top: 1px solid var(--border);
-    /* Not reaching a prompt is the default state a reader should notice, so the marker goes on the
-       ones that do rather than on the ones that do not. */
-    border-left: 2px solid transparent;
-    padding-left: 0.5rem;
-  }
-  .row.reaches { border-left-color: var(--ok); }
-  .why { margin: 0.2rem 0 0; }
-  .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
-  button {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    font: inherit;
-  }
-  button.quiet { background: none; color: var(--text); border-color: var(--border-ui); }
-  button.link { background: none; border: 0; color: var(--accent); padding: 0.2rem 0; text-decoration: underline; }
-  button:disabled { opacity: 0.45; cursor: default; }
-  button:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
-  .chip {
-    background: var(--raised);
-    border: 1px solid var(--border-ui);
-    border-radius: 999px;
-    padding: 0 0.5rem;
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
-  .muted { color: var(--muted); }
-  .small { font-size: 0.86rem; }
-  .banner { padding: 0.6rem 0.85rem; border-radius: 8px; margin: 0 0 1rem; border: 1px solid; }
-  .banner.danger { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
-  pre {
-    background: var(--raised);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.7rem;
-    margin: 0;
-    white-space: pre-wrap;
-    font-size: 0.86rem;
-    max-height: 30rem;
-    overflow: auto;
+  /* Only what Documents has. The dropzone, the card, the rows, the badges and the buttons are the
+     console's language and live in `console.css`. */
+  .outcome { font-size: 13px; color: var(--ok); margin: 0; }
+  .outcome.bad { color: var(--danger); }
+  .tally { font-size: 14px; margin: 0; }
+  .folder { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; overflow-wrap: anywhere; }
+  /* A file past the prompt budget is dimmed rather than hidden: it is on disk, it is readable, and
+     nothing reads it — which is a fact the operator needs, not one to tidy away. */
+  .row:not(.reaches) strong { color: var(--muted); }
+  .why { margin: 3px 0 0; }
+  .read { white-space: pre-wrap; background: var(--raised); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; font-size: 13.5px; max-height: 60vh; overflow: auto; }
+  /* Clipped, never `display: none`: the label is the control, and hiding the input would take the
+     whole tab out of the keyboard's reach. */
+  input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
   }
 </style>

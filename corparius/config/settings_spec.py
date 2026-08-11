@@ -87,12 +87,12 @@ GROUPS: list[dict] = [
     {
         "name": "versioning",
         "label_en": "Company versioning",
-        "label_fr": "Versionnement des companies",
+        "label_fr": "Versionnement des entreprises",
         "help_en": "Each company folder as its own private repository. Hosted repositories "
         "are always created private: a company folder can hold prospect names and "
         "correspondence.",
-        "help_fr": "Chaque dossier de company comme depot prive independant. Les depots "
-        "heberges sont toujours crees en prive : un dossier de company peut contenir des "
+        "help_fr": "Chaque dossier d'entreprise comme dépôt privé indépendant. Les dépôts "
+        "hébergés sont toujours créés en privé : un dossier d'entreprise peut contenir des "
         "noms de prospects et de la correspondance.",
     },
 ]
@@ -1237,9 +1237,9 @@ SPEC: list[FieldSpec] = [
         label_fr="Ordre des providers",
         help_en="Tried in order, first that works wins. 'local' is a bare repo on this "
         "disk and is always available, so keep it last or nothing hosted is ever reached.",
-        help_fr="Essayes dans l'ordre, le premier qui marche gagne. 'local' est un depot "
+        help_fr="Essayés dans l'ordre, le premier qui marche gagne. 'local' est un dépôt "
         "bare sur ce disque, toujours disponible : gardez-le en dernier, sinon rien "
-        "d'heberge n'est jamais atteint.",
+        "d'hébergé n'est jamais atteint.",
     ),
     _f(
         "CORP_REPO_AUTOCOMMIT",
@@ -1247,11 +1247,11 @@ SPEC: list[FieldSpec] = [
         type="bool",
         default="false",
         label_en="Commit after each run",
-        label_fr="Commit apres chaque run",
+        label_fr="Commit après chaque run",
         help_en="Commit and push the company folder when a run ends, if anything changed. "
         "Once per run, not per tick. A failed push never costs the run.",
-        help_fr="Commite et pousse le dossier de la company a la fin d'un run, si quelque "
-        "chose a change. Une fois par run, pas par tick. Un push en echec ne coute jamais "
+        help_fr="Commite et pousse le dossier de l'entreprise à la fin d'un run, si quelque "
+        "chose a changé. Une fois par run, pas par tick. Un push en échec ne coûte jamais "
         "le run.",
     ),
     _f(
@@ -1261,7 +1261,7 @@ SPEC: list[FieldSpec] = [
         label_en="GitHub token",
         label_fr="Jeton GitHub",
         help_en="Scope 'repo'. Leave empty to use the gh CLI if you are already signed in.",
-        help_fr="Portee 'repo'. Laissez vide pour utiliser le CLI gh si vous y etes deja connecte.",
+        help_fr="Portée 'repo'. Laissez vide pour utiliser le CLI gh si vous y êtes déjà connecté.",
     ),
     _f(
         "GITLAB_TOKEN",
@@ -1271,7 +1271,7 @@ SPEC: list[FieldSpec] = [
         label_en="GitLab token",
         label_fr="Jeton GitLab",
         help_en="Scope 'api'. Set CORP_GITLAB_URL too for a self-hosted instance.",
-        help_fr="Portee 'api'. Renseignez aussi CORP_GITLAB_URL pour une instance auto-hebergee.",
+        help_fr="Portée 'api'. Renseignez aussi CORP_GITLAB_URL pour une instance auto-hébergée.",
     ),
     _f(
         "CORP_REPO_SSH_TARGET",
@@ -1280,7 +1280,7 @@ SPEC: list[FieldSpec] = [
         label_en="SSH target",
         label_fr="Cible SSH",
         help_en="A directory on a box you own, e.g. git@homelab:/srv/git. The slug is appended.",
-        help_fr="Un dossier sur une machine a vous, ex. git@homelab:/srv/git. Le slug est ajoute.",
+        help_fr="Un dossier sur une machine à vous, ex. git@homelab:/srv/git. Le slug est ajouté.",
     ),
     _f(
         "CORP_REPO_LOCAL_DIR",
@@ -1290,8 +1290,8 @@ SPEC: list[FieldSpec] = [
         label_fr="Depots bare locaux",
         help_en="Where the 'local' provider keeps its bare repos. Defaults to repos/ under "
         "the writable home. Same disk, so it is a fallback, not a backup.",
-        help_fr="Ou le provider 'local' garde ses depots bare. Par defaut repos/ sous le "
-        "home inscriptible. Meme disque : c'est un repli, pas une sauvegarde.",
+        help_fr="Où le provider 'local' garde ses dépôts bare. Par défaut repos/ sous le "
+        "home inscriptible. Même disque : c'est un repli, pas une sauvegarde.",
     ),
 ]
 BY_KEY: dict[str, FieldSpec] = {f.key: f for f in SPEC}

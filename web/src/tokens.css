@@ -44,7 +44,12 @@
 [data-theme="light"] {
   /* Cool white base. Ink, action and selection all follow --ui-hue, so a custom
      accent re-tints light mode the same way it does dark. */
-  --bg: oklch(0.975 calc(0.006 * var(--ui-chroma)) var(--ui-hue)); --surface: oklch(0.99 calc(0.003 * var(--ui-chroma)) var(--ui-hue));
+  /* Measured, and changed because the measurement was bad: page 0.975 against card 0.99 put a card
+     at **1.044:1** on its own page — dark's card sits at 1.121:1, so light had half the structure and
+     read as a wireframe with the header, the nav, the hero and every card in one undifferentiated
+     white sheet. A white card on a tinted page is the convention and the numbers agree: card:page
+     becomes **1.140:1**, text on card 14.6:1, muted on card 7.5:1, muted on the page 6.5:1. */
+  --bg: oklch(0.955 calc(0.010 * var(--ui-chroma)) var(--ui-hue)); --surface: oklch(1 0 0);
   --raised: oklch(0.945 calc(0.014 * var(--ui-chroma)) var(--ui-hue));
   --border: oklch(0.86 calc(0.02 * var(--ui-chroma)) var(--ui-hue)); --border-ui: oklch(0.44 calc(0.11 * var(--ui-chroma)) var(--ui-hue));
   --select: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue)); --select-soft: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue) / 0.12);

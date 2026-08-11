@@ -1,0 +1,856 @@
+/* The component layer, ported from the shipped page — and the thing the first pass left behind.
+ *
+ * `tokens.css` carried the measured oklch ramps across; **this did not come with them**, and the
+ * result was seven tabs of identical navy rectangles in a 46rem column: every card the same fill,
+ * every heading the same tiny uppercase muted label, every button the same solid accent, no icons,
+ * no depth, no hierarchy. Tokens are a palette. They are not a design.
+ *
+ * Global rather than per-component on purpose. Svelte scopes a component's `<style>`, which is
+ * exactly right for what belongs to one view and exactly wrong for the shared language: eight
+ * components each grew their own `.card`, `.badge` and `button`, drifting apart by a pixel here and
+ * a radius there. One file, one language, and a component's own `<style>` is for what only it has.
+ *
+ * The order below is deliberate: elements, then layout, then components, then motion. A reader
+ * looking for "what does a button look like" should not have to search past a kanban column.
+ */
+
+/* ── elements ─────────────────────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
+html { height: 100%; }
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 15px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--select); }
+code, .mono { font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 13px; }
+/* A path is the one string long enough to push a card through its own border. */
+code, .mono { overflow-wrap: anywhere; min-width: 0; }
+/* A path is shown by its tail: the end names the file, the start names a machine. Clipped from the
+ * left with the useful half kept, and the whole thing on the element's `title`. */
+.path {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  vertical-align: bottom;
+}
+
+/* A scale, which is what the first pass did not have. Every card title was 0.82rem uppercase muted,
+ * so a page of nine cards had nine labels of equal weight and no subject. Section titles are text
+ * now; the uppercase treatment is kept for the one thing it suits — a small caption over a number. */
+h1, h2, h3 { margin: 0; font-weight: 600; }
+h2 { font-size: 16.5px; letter-spacing: -0.006em; }
+h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.desc { font-size: 13.5px; color: var(--muted); margin: 4px 0 0; }
+/* One measure for prose, because a 1200px shell does not mean a 157-character line. Anything that is
+ * read rather than scanned gets a ceiling; tables, rows and inputs are unaffected. */
+.desc, .note, p { max-width: 78ch; }
+/* And centred inside whatever centres it: the cap alone made a "centred" dropzone line sit 270px left
+ * of the box's own axis, in three different places on two pages. */
+[style*="text-align: center"] > p, .dropzone p, .chat-log.is-empty p, .empty { margin-inline: auto; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.note { font-size: 13px; color: var(--muted); }
+
+select {
+  appearance: none;
+  padding-right: 30px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 14px center, right 9px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+select, input[type="text"], input[type="password"], input[type="number"], input:not([type]), textarea {
+  text-overflow: ellipsis;
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--border-ui);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 14px;
+}
+/* The browser's own checkbox is grey, square and 13px on every platform, which is the one control
+ * that made the console look unfinished in a screenshot. `accent-color` is the whole fix: the native
+ * behaviour, the native keyboard handling, and the console's blue. */
+/* Drawn, not the browser's. `color-scheme: dark` makes Chromium paint an unchecked box #3b3b3b, and a
+ * neutral grey square on a navy card is the single clearest sign that nobody styled the page. */
+input[type="checkbox"] {
+  appearance: none;
+  width: 17px;
+  height: 17px;
+  flex: none;
+  border: 1px solid var(--border-ui);
+  border-radius: 5px;
+  background: var(--raised);
+  display: inline-grid;
+  place-content: center;
+  transition: background-color var(--t-feedback) var(--ease), border-color var(--t-feedback) var(--ease);
+}
+input[type="checkbox"]::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border: 2px solid var(--accent-ink);
+  border-top: 0;
+  border-right: 0;
+  transform: rotate(-45deg) translate(1px, -1px);
+  opacity: 0;
+}
+input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+input[type="checkbox"]:checked::after { opacity: 1; }
+input[type="checkbox"]:hover:not(:disabled) { border-color: var(--muted); }
+input[type="radio"] { accent-color: var(--select); width: 16px; height: 16px; }
+
+/* The slider's unfilled track was the same #3b3b3b in dark and #efefef in light — the browser's
+ * neutral in both, against two tinted pages. */
+input[type="range"] {
+  appearance: none;
+  height: 22px;
+  background: none;
+  padding: 0;
+  border: 0;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--raised);
+  border: 1px solid var(--border);
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -6px;
+  border-radius: 999px;
+  background: var(--select);
+  border: 2px solid var(--surface);
+}
+input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--select); outline-offset: 2px; }
+/* In light mode `--raised` is *darker* than `--surface`, which is right for a hovered row and wrong
+ * for a form field: it produced a sunken tinted input on a near-white card, which is the 2011
+ * convention and reads as dated. The field takes the lightest surface and the page keeps the tint. */
+[data-theme="light"] select,
+[data-theme="light"] input[type="text"],
+[data-theme="light"] input[type="password"],
+[data-theme="light"] input[type="number"],
+[data-theme="light"] input:not([type]),
+[data-theme="light"] textarea {
+  background: var(--surface);
+  border-color: var(--border);
+}
+[data-theme="light"] select:hover,
+[data-theme="light"] input:hover:not([type="checkbox"]):not([type="range"]),
+[data-theme="light"] textarea:hover { border-color: var(--border-ui); }
+/* Focus is selection, not action, so it takes the blue and leaves the warm accent to mean the one
+ * thing the warm accent means. */
+input:focus-visible, select:focus-visible, textarea:focus-visible,
+button:focus-visible, [role="tab"]:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--select);
+  outline-offset: 2px;
+}
+
+/* Three button weights, because a row of four identical solid-blue buttons tells an operator nothing
+ * about which one to press. Default is quiet and bordered; `.primary` is the one action a card is
+ * for; `.link` is a text button that is not competing at all. */
+button, .filebtn {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--border-ui);
+  background: transparent;
+  color: var(--text);
+  padding: 7px 14px;
+  transition:
+    background-color var(--t-feedback) var(--ease),
+    border-color var(--t-feedback) var(--ease),
+    transform var(--t-feedback) var(--ease),
+    opacity var(--t-feedback) var(--ease);
+}
+/* French labels run ~6% longer and some of them wrapped a button into two lines beside a one-line
+ * sibling. Nothing here is so long that keeping it on one line costs a layout. */
+button, .filebtn { white-space: nowrap; }
+button:hover:not(:disabled), .filebtn:hover { background: var(--raised); border-color: var(--muted); }
+button:active:not(:disabled), .filebtn:active { transform: translateY(1px); }
+button:disabled { opacity: 0.42; cursor: not-allowed; }
+/* A disabled primary loses its fill rather than fading it. A washed-out lavender block with white text
+ * on it reads as a button that failed to paint; an outline reads as "not yet", which is what it is. */
+button.primary:disabled {
+  background: transparent;
+  border-color: var(--border-ui);
+  color: var(--muted);
+  opacity: 1;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) { filter: brightness(1.07); background: var(--accent); border-color: var(--accent); }
+button.link, button.quiet-link {
+  background: none;
+  border: 0;
+  color: var(--select);
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+button.link:hover:not(:disabled) { text-decoration: underline; background: none; }
+button.danger-quiet { color: var(--danger); }
+button.danger-quiet:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
+button.icon { padding: 7px 9px; line-height: 0; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  text-align: left;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── icons ────────────────────────────────────────────────────────────────── */
+
+/* The pixel-art agent portrait, on a soft halo rather than a solid chip: the glow follows the art's
+ * own alpha, and a touch of brightness lifts the colours enough to read on the dark surface.
+ *
+ * **At its own size, and only where there is room for it.** The art is 36x36; at 20px in an activity
+ * feed it downscaled to a coloured blob and a reviewer read the set as emoji placeholders — a red
+ * heart for the social agent, a cog for system. It now appears once, as the CEO's face in the
+ * conversation header, at 1:1 where it is a drawing. The lists identify a role by its name, which is
+ * what they were already doing next to the picture. */
+.ai {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: none;
+  image-rendering: pixelated;
+  vertical-align: middle;
+  flex: none;
+  filter: brightness(1.12) drop-shadow(0 0 3px var(--halo)) drop-shadow(0 0 1px var(--halo));
+}
+[data-theme="light"] .ai { filter: brightness(0.95) drop-shadow(0 0 3px var(--halo)); }
+/* The tab glyphs are line SVG, all seven drawn on the same 24-unit grid with the same stroke. The
+ * shipped page had pixel-art for five tabs and nothing for the other two, and a tab strip where two
+ * entries are missing their icon reads as unfinished rather than as restrained. */
+.tab-glyph { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.7; }
+
+/* ── layout ───────────────────────────────────────────────────────────────── */
+
+/* 1200px, not 46rem. The narrow column was the second half of the flatness: on a desktop it left
+ * two thirds of the window empty and forced every card to be full width, which is what made nine of
+ * them read as one undifferentiated stack. */
+/* `width: 100%` is load-bearing, and the bug it fixes took a measurement to find. `main.wrap` is a
+ * flex item of the shell, and **auto margins in a flex container's cross axis absorb the free space
+ * and cancel the stretch** — so `main` was sized to its own content instead of the window. Wide pages
+ * hit the 1200px cap and looked right; the CEO tab, whose content is narrow, came out 827px wide and
+ * centred, so switching to it moved the whole interface inwards by 162px on each side. */
+.wrap { max-width: 1200px; width: 100%; margin: 0 auto; padding: 0 24px; }
+
+header.top { border-bottom: 1px solid var(--border); background: var(--surface); }
+/* The switcher says it is one. It was a bare rounded box with a company name in it, indistinguishable
+ * from a button, and in light mode its border was fainter than the control next to it. */
+header.top select { border-color: var(--border-ui); font-weight: 600; }
+
+header.top .wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 76px;
+  flex-wrap: wrap;
+}
+/* The wordmark, on a halo rather than a chip: the glow follows the art's own alpha, which is why the
+ * mark can sit on the header in either theme without a plate behind it. On light it is darkened back
+ * so it reads, which is the shipped page's own treatment. */
+.brand { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 600; font-size: 17px; letter-spacing: 0.01em; }
+.brand img {
+  height: 46px;
+  width: auto;
+  image-rendering: pixelated;
+  display: block;
+  filter: drop-shadow(0 0 8px var(--halo)) drop-shadow(0 0 3px var(--halo));
+}
+[data-theme="light"] .brand img { filter: brightness(0.42) saturate(1.25) drop-shadow(0 0 6px var(--halo)); }
+.brand .dim { color: var(--muted); font-weight: 400; }
+.spacer { flex: 1; }
+
+nav.tabs { border-bottom: 1px solid var(--border); background: var(--surface); }
+nav.tabs .wrap { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+/* The first tab starts where the logo and every card start. Its own 14px of padding was
+   landing inside the 24px gutter, so the rail was 15px out from everything else. */
+nav.tabs [role="tab"]:first-child { margin-left: -14px; }
+nav.tabs .wrap::-webkit-scrollbar { display: none; }
+[role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: none;
+  padding: 12px 14px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+[role="tab"]:hover:not(:disabled) { color: var(--text); background: none; }
+[role="tab"][aria-selected="true"] { color: var(--text); border-bottom-color: var(--select); }
+
+/* One gap on both axes. The grids had `gap: 16-20px` horizontally and **nothing** between stacked
+ * cards, so a tab's four sections shared a 2px border and read as a single slab. The panel owns the
+ * vertical rhythm now, which is why it is a grid rather than a plain block. */
+main { padding: 24px 0 56px; }
+.page-title { font-size: 27px; font-weight: 650; letter-spacing: -0.02em; margin: 0 0 18px; }
+main [role="tabpanel"] { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.bento, .grid { gap: 20px; }
+/* The rule is drawn inside the padding, not across it: the footer used to carry `border-top` on the
+ * element that also owns the 24px gutter, so the line ran 24px past the cards on each side and
+ * aligned to nothing. And the shell fills the window, so a short tab does not end in bare background
+ * two thirds of the way down. */
+.shell { min-height: 100dvh; display: flex; flex-direction: column; }
+.shell main { flex: 1; }
+footer.foot { color: var(--muted); font-size: 12.5px; }
+footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
+
+/* One vertical rhythm for a page of cards, and two- and three-column fields for the pages that have
+ * something to put beside something else. `minmax(0, 1fr)` rather than the implicit `auto`: an auto
+ * track grows to its widest child's max-content, so one wide card (the action log) would stretch its
+ * whole column and every sibling with it. */
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+/* `start`, not `stretch`. Two columns holding unrelated panels are not two halves of one thing: the
+ * Plugins registry ended 350px below its own last line because the skills list beside it was long.
+ * The bento keeps `stretch`, where equal heights are the composition. */
+.grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 900px) {
+  .grid.half { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.cols { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .grid.thirds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1040px) {
+  .grid.side { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); }
+  /* Anything declared a rail follows the scroll: a panel pinned to the top of a 6000px form is a panel
+     you scroll away from and cannot find again. */
+  .grid.side > .stack { position: sticky; top: 16px; align-content: start; }
+}
+
+/* Bento: the daily state as varied cells rather than a stack of identical cards. Weight follows
+ * stakes — the log is wide, the meters are small. */
+/* `stretch`, not `start`. `start` was the wrong cure for a real problem: cards sized to their own
+ * content, so a row of three ended at three different heights and the shortest left a hole under it.
+ * Equal heights plus `margin-top: auto` on a trailing action row is the fix — the row closes on one
+ * line and the card's own button goes to the bottom instead of floating in the middle of a void. */
+.bento { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+@media (min-width: 900px) {
+  .bento { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .b-2 { grid-column: span 2; }
+  .b-3 { grid-column: span 3; }
+  .b-4 { grid-column: span 4; }
+  .b-6 { grid-column: span 6; }
+}
+
+/* ── card ─────────────────────────────────────────────────────────────────── */
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  /* A real step, not `--shadow: none`. In light the card lifts off the tinted page; in dark a shadow
+     is invisible, so the step is the surface itself — and the chrome above stays flat on purpose, so
+     the header and the nav read as chrome rather than as two more cards. */
+  box-shadow: 0 1px 2px oklch(0.2 0.03 var(--ui-hue) / 0.05), 0 4px 16px -6px oklch(0.2 0.04 var(--ui-hue) / 0.10);
+}
+[data-theme="light"] header.top, [data-theme="light"] nav.tabs { background: oklch(0.985 0.004 var(--ui-hue)); }
+.card > * + * { margin-top: 14px; }
+/* The last thing in a card, when it is what you press, sits at the bottom — but only in the bento,
+ * where cards are deliberately stretched to a common height. Applied everywhere, this rule stretched a
+ * two-line panel to the height of an 80-field form and left its button 900px under its own text. */
+.bento > .card > .actions:last-child { margin-top: auto; padding-top: 14px; }
+/* `flex: 1` on the text and `flex: none` on whatever sits opposite it. Without the first, a nowrap
+ * control on the right won the shrink fight and the description was rendered in a 145px ribbon —
+ * eight lines of French — beside 480px of empty card. */
+.card-head { display: flex; gap: 24px; justify-content: space-between; align-items: flex-start; }
+.card-head > :first-child { flex: 1 1 auto; min-width: 0; }
+.card-head > :first-child + * { flex: 0 0 auto; }
+.card-head .desc { margin-top: 3px; }
+/* The one card that wants you reads warm before a word of it is read, and it is a tinted surface
+ * with a full border rather than a side stripe. */
+.card.attention { border-color: var(--warm-line); background: linear-gradient(var(--warm-soft), var(--warm-soft)), var(--surface); }
+
+/* A soft light follows the cursor across a card: an overlay that lightens rather than a layer
+ * behind the content, so it needs no z-index juggling and cannot hide anything. `--mx`/`--my` are
+ * set by `spotlight.js` on one document-level listener. */
+.card:not(.hero)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--t-state) var(--ease);
+  mix-blend-mode: screen;
+  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, -30%), var(--select-soft), transparent 62%);
+}
+.card:not(.hero):hover::after { opacity: 1; }
+[data-theme="light"] .card:not(.hero)::after { mix-blend-mode: multiply; }
+
+/* ── hero ─────────────────────────────────────────────────────────────────── */
+
+@property --beam {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* The status band. A dotted field behind it (a texture, not a gradient), the human gate in display
+ * scale on the left, the live pulse on the right: full-bleed presence instead of one card among
+ * nine identical ones. */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 22px 28px;
+  display: grid;
+  /* A column the gate's own width, then the readouts. `auto` plus `1fr` let the gate keep 190px of
+     minimum and pushed the first readout 327px away from the label it belongs beside. */
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 40px;
+  align-items: center;
+}
+.hero .field {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--border-ui) 1.1px, transparent 1.1px);
+  background-size: 22px 22px;
+  opacity: 0.32;
+  -webkit-mask: radial-gradient(115% 90% at 22% -10%, #000 30%, transparent 72%);
+  mask: radial-gradient(115% 90% at 22% -10%, #000 30%, transparent 72%);
+}
+/* Border beam: a light that travels the edge **only while a run is live**. It says "working now",
+ * which is the one continuous motion worth having because it maps to a real state. */
+.hero.is-running::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  pointer-events: none;
+  background: conic-gradient(from var(--beam), transparent 62%, var(--ok) 80%, oklch(0.85 0.11 220) 88%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: beam 3.2s linear infinite;
+}
+@keyframes beam {
+  to { --beam: 360deg; }
+}
+.hero-gate {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  display: block;
+  padding: 6px 16px 8px 0;
+  min-width: 0;
+  transition: transform var(--t-feedback) var(--ease);
+}
+.hero-gate .g-label, .hero-gate .g-num, .hero-gate .g-hint { display: block; }
+.hero-gate .g-label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.hero-gate .g-num {
+  font-size: clamp(56px, 8vw, 84px);
+  line-height: 0.95;
+  font-weight: 650;
+  /* The UI face with tabular figures, not the monospace one: a slashed zero in a coder font made the
+     headline number read as the empty-set symbol. */
+  font-feature-settings: "zero" 0;
+  /* `--text`, not `--muted`. The largest glyph on the flagship screen in the secondary text colour
+   * read as a disabled placeholder or a font that had failed to load. Warm still means "this wants
+   * you"; quiet no longer means "ignore me". */
+  color: var(--text);
+  letter-spacing: -0.02em;
+  margin: 4px 0 2px;
+  transition: color var(--t-state) var(--ease);
+  font-variant-numeric: tabular-nums;
+}
+.hero-gate .g-hint { font-size: 13.5px; color: var(--muted); font-weight: 600; }
+.hero-gate.needs .g-num, .hero-gate.needs .g-hint, .hero-gate.needs .g-label { color: var(--warm); }
+.hero-gate::before {
+  content: "";
+  position: absolute;
+  inset: -6px -14px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  transition: border-color var(--t-feedback) var(--ease), background-color var(--t-feedback) var(--ease);
+}
+.hero-gate:hover::before { border-color: var(--warm-line); background: var(--warm-soft); }
+.hero-gate:not(.needs):hover::before { border-color: var(--border); background: var(--raised); }
+.hero-gate:active { transform: translateY(1px); }
+.hero-side { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
+.hero-side .pulse-row { justify-content: space-between; gap: 26px; width: 100%; }
+.hero-side .stat { text-align: right; min-width: 0; }
+@media (max-width: 760px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .hero-side { align-items: flex-start; }
+  .hero-side .pulse-row { justify-content: flex-start; gap: 22px; }
+  .hero-side .stat { text-align: left; }
+}
+
+/* ── readouts ─────────────────────────────────────────────────────────────── */
+
+.pulse-row { display: flex; gap: 36px; row-gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.stat { min-width: 92px; }
+.stat .label { font-size: 12px; color: var(--muted); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.05em; }
+.stat .value {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining;
+  font-feature-settings: "zero" 0;
+  letter-spacing: -0.01em;
+}
+.stat .value .of { font-size: 13px; font-weight: 400; color: var(--muted); }
+
+.kv { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.kv:last-child { border-bottom: 0; }
+.kv .k { color: var(--muted); }
+.kv .v { text-align: right; font-size: 13.5px; }
+.kv .v.num { font-family: ui-monospace, monospace; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.bar { height: 6px; border-radius: 999px; background: var(--raised); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--ok); border-radius: 999px; transform-origin: left; transition: width var(--t-state) var(--ease); }
+.spend-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 72px; gap: 12px; align-items: center; padding: 6px 0; font-size: 13.5px; }
+.spend-row .who { display: flex; align-items: center; gap: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spend-row .bar > i { background: var(--warn); }
+.spend-row .n { text-align: right; font-family: ui-monospace, monospace; font-size: 12.5px; color: var(--muted); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--raised);
+  color: var(--muted);
+}
+a.badge { text-decoration: none; }
+a.badge:hover { text-decoration: underline; }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.warm { background: var(--warm-soft); color: var(--warm); }
+.badge.danger { background: var(--danger-soft); color: var(--danger); }
+.dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; flex: none; }
+
+/* A count is a number. It was a pill, next to state pills and provenance pills and tag pills, and a
+ * page where everything is a badge is a page where a badge means nothing. */
+.count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.chip {
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13.5px;
+  background: var(--raised);
+  border: 1px solid var(--border-ui);
+  color: var(--text);
+}
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+/* A list of rows inside a card: separators, not nine nested boxes. Boxing a child inside a surface
+ * that already has a border and a radius is the drift that made every tab look the same. */
+.rows { display: grid; gap: 0; }
+.rows > .row {
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.rows > .row:first-child { border-top: 0; padding-top: 2px; }
+.rows > .row .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.feed { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; font-size: 13.5px; }
+.feed li { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; padding: 9px 0; border-top: 1px solid var(--border); }
+/* A status column of a fixed width, because "ok" and "échec" are not the same number of pixels and the
+ * six tool names after them were starting at six different x positions. */
+.feed li > .badge:first-child { min-width: 58px; justify-content: center; }
+.feed li:first-child { border-top: 0; }
+.feed .grow { flex: 1; min-width: 0; }
+
+/* One empty state. There were two — a dashed centred box and a plain left-aligned line — 200px apart
+ * on the same page, saying the same thing two ways. `.empty.slim` is the same language at column
+ * scale rather than a second one. */
+.empty {
+  width: 100%;
+  max-width: none;
+  padding: 26px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  /* Flat and tinted, not dashed. A dash says "target" — the drop zone is the only thing here that is
+     one, and eleven dashed rectangles across five pages made the word meaningless. */
+  background: var(--raised);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  /* It grows. A card whose whole content is "nothing yet" was stretched to its row and left a 172px
+     hole under one short sentence; the frame now occupies what the card was given. */
+  flex: 1;
+  display: grid;
+  place-content: center;
+  min-height: 84px;
+}
+/* At column scale it is a line, not a panel. Five filled rounded rectangles in a row, each containing
+ * the word "Empty", is five placeholders where the honest answer is one quiet sentence. */
+.empty.slim {
+  padding: 10px 0;
+  font-size: 12.5px;
+  margin: 0;
+  min-height: 0;
+  background: none;
+  text-align: left;
+}
+.empty .mono { display: inline-block; margin-top: 8px; background: var(--raised); padding: 4px 10px; border-radius: 6px; overflow-wrap: anywhere; }
+
+.banner {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 10px 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13.5px;
+}
+.banner.danger { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+.banner.warn { border-color: var(--warn); color: var(--text); background: var(--warn-soft); }
+
+/* ── the onboarding thread ────────────────────────────────────────────────── */
+
+.ob-step { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 11px 2px; border-top: 1px solid var(--border); }
+.ob-step:first-of-type { border-top: 0; }
+.ob-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border-ui);
+  color: var(--muted);
+}
+.ob-step.done .ob-mark { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.ob-step.now .ob-mark { background: var(--select-soft); border-color: var(--select); color: var(--select); }
+.ob-step.done strong { color: var(--muted); font-weight: 400; }
+@media (max-width: 560px) {
+  .ob-step { grid-template-columns: 24px minmax(0, 1fr); }
+  .ob-step > :last-child { grid-column: 2; }
+}
+
+/* ── the board ────────────────────────────────────────────────────────────── */
+
+.kanban { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) {
+  /* Five, because there are five statuses. Four tracks left `done` alone on a second row with three
+     empty cells beside it. */
+  .kanban { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+.kcol { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 4px 4px; }
+/* Two lines' worth of room whether the label needs it or not: three of five French headers wrap and
+ * the columns that did not were starting their first row 18px higher. */
+.kcol h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 12px 10px;
+  border-bottom: 1px solid var(--border);
+  min-height: 4.4em;
+  align-items: flex-start;
+}
+.kcard { padding: 11px 12px; font-size: 13.5px; display: grid; gap: 6px; border-bottom: 1px solid var(--border); transition: background-color var(--t-feedback) var(--ease); }
+.kcol .kcard:last-child { border-bottom: 0; }
+.kcard:hover { background: var(--raised); }
+.kcard .meta { display: flex; gap: 8px; color: var(--muted); font-size: 12px; align-items: center; flex-wrap: wrap; }
+
+/* ── providers ────────────────────────────────────────────────────────────── */
+
+/* Named cells, and a cell that stays empty. Five flex items per row meant the one provider with no
+ * "get a key" link handed its slack to the buttons, so `custom` alone sat 87px right of a column of
+ * sixteen. The meta column is 220px because "clé enregistrée" does not fit in 150. */
+.prow {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) auto 128px;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+.prow .plink { justify-self: start; font-size: 13px; }
+.prow:last-child { border-bottom: 0; }
+.prow .pname { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.prow .pname .badge { font-weight: 500; }
+.prow .pkey { display: flex; gap: 8px; align-items: center; }
+.prow input { width: 100%; }
+.prow .pacts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 1000px) {
+  .prow { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+}
+
+.switch { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; }
+.switch button[role="switch"] { width: 40px; height: 22px; border-radius: 999px; padding: 0; background: var(--raised); border-color: var(--border-ui); position: relative; flex: none; }
+.switch button[role="switch"] i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--muted);
+  transition: transform var(--t-feedback) var(--ease), background-color var(--t-feedback) var(--ease);
+}
+.switch button[aria-checked="true"] { background: var(--select-soft); border-color: var(--select); }
+.switch button[aria-checked="true"] i { transform: translateX(18px); background: var(--select); }
+
+.tier-grid { display: grid; gap: 10px; }
+@media (min-width: 700px) {
+  .tier-grid { grid-template-columns: 130px minmax(0, 1fr); align-items: center; }
+}
+.tier-grid label { font-size: 13.5px; color: var(--muted); }
+.tier-grid input { width: 100%; font-family: ui-monospace, monospace; font-size: 13px; }
+
+/* ── documents ────────────────────────────────────────────────────────────── */
+
+/* A dashed border says "this is a target" the way a solid one cannot, and the dragover state changes
+ * colour rather than moving anything: the pointer is already carrying a file, and a target that
+ * shifts under it is a target you miss. */
+.dropzone {
+  border: 2px dashed var(--border-ui);
+  border-radius: 12px;
+  padding: 26px 20px;
+  text-align: center;
+  background: var(--raised);
+  transition: background-color var(--t-feedback) var(--ease), border-color var(--t-feedback) var(--ease);
+}
+.dropzone.over { border-color: var(--select); background: var(--select-soft); }
+.dropzone-line { margin: 0 0 10px; color: var(--text); font-size: 15px; }
+.dropzone.over .dropzone-line { color: var(--select); }
+.dropzone-pick { margin: 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; color: var(--muted); font-size: 14px; }
+/* The ring has to land on the label, because the element actually taking focus is invisible.
+ * Without this the tab stop is silent — worse than ugly. */
+.dropzone-pick:focus-within .filebtn { outline: 2px solid var(--select); outline-offset: 2px; }
+
+/* ── the CEO ──────────────────────────────────────────────────────────────── */
+
+/* It fills what it was given. The panel was a fixed 460px in a 900px window, so a conversation sat
+ * above 290px of bare background — and the transcript, the thing that should grow, was the part being
+ * kept short. The header and the composer are fixed rows; the middle takes the rest. */
+.chat { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; min-height: calc(100dvh - 260px); }
+.chat-id { display: flex; align-items: center; gap: 13px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
+.chat-log { display: grid; gap: 12px; align-content: start; overflow-y: auto; min-height: 0; }
+.chat-log.is-empty { align-content: center; justify-items: center; gap: 18px; }
+.msg { max-width: 76ch; padding: 10px 14px; border-radius: 12px; font-size: 14.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.user { justify-self: end; background: var(--accent-soft); border: 1px solid transparent; }
+.msg.ceo { justify-self: start; background: var(--raised); border: 1px solid var(--border); }
+.msg .meta { font-size: 11.5px; color: var(--muted); margin-top: 6px; font-family: ui-monospace, monospace; }
+/* A turn where the model said nothing usable reads as a status, not an answer. */
+.msg.failed { border-style: dashed; color: var(--muted); font-style: italic; }
+.suggest { display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; }
+.suggest button { font-size: 13px; border-radius: 999px; padding: 8px 15px; color: var(--muted); }
+.suggest button:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+.composer { display: flex; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px; align-items: flex-end; }
+.composer textarea { flex: 1; resize: vertical; min-height: 46px; max-height: 160px; }
+
+/* ── plugins ──────────────────────────────────────────────────────────────── */
+
+/* The registry is small by design; a dot texture and framed empty states give the page presence
+ * without inventing content that is not there. */
+.pl-field {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--border-ui) 1.1px, transparent 1.1px);
+  background-size: 22px 22px;
+  opacity: 0.14;
+  -webkit-mask: radial-gradient(90% 80% at 92% 0%, #000 18%, transparent 68%);
+  mask: radial-gradient(90% 80% at 92% 0%, #000 18%, transparent 68%);
+}
+.pl-body { position: relative; z-index: 1; }
+
+/* A sticky strip inside a card: the section index at the top, the save bar at the bottom. Both exist
+ * because the registry is 5 000px tall — an index that scrolls away is a table of contents you read
+ * once, and a Save at the very bottom is a button you scroll 5 000px to reach after every edit. */
+.sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sticky-bottom {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 14px 0 2px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* ── motion ───────────────────────────────────────────────────────────────── */
+
+/* A view arrives once per navigation, staggered, and the 5s poll must never replay it — which is why
+ * the class goes on the panel at mount and the delay is capped so nothing waits longer. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); filter: blur(5px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+.enter > * { animation: rise var(--t-enter) var(--ease) both; }
+.enter > :nth-child(1) { animation-delay: 0ms; }
+.enter > :nth-child(2) { animation-delay: 45ms; }
+.enter > :nth-child(3) { animation-delay: 90ms; }
+.enter > :nth-child(4) { animation-delay: 135ms; }
+.enter > :nth-child(5) { animation-delay: 180ms; }
+.enter > :nth-child(n + 6) { animation-delay: 200ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

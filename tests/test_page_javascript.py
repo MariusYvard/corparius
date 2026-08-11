@@ -98,7 +98,10 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # The same numbers `tests/test_i18n.py` asserts against the JSON, here proved against what a
     # browser would actually load. Two tables, one count: a language that lost a key would show up
     # as a smaller number here and as a raw key below.
-    assert result["counts"] == {"en": 526, "fr": 526}, result["counts"]
+    # 528: `prov.recheck` and `cfg.unsaved`, both added when a design review found a line reading
+    # "58 · 7d" — two numbers with no sentence — and a Save button at the bottom of a 5 000px form with
+    # nothing saying how much was unsaved.
+    assert result["counts"] == {"en": 528, "fr": 528}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

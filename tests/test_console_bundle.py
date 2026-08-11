@@ -72,6 +72,25 @@ def test_the_dev_server_proxies_the_api_to_a_running_core():
     assert '"/site"' in config
 
 
+def test_the_wordmark_is_the_page_s_own_bytes():
+    """Two consoles, one mark. `web/src/wordmark.png` is the base64 image inlined in the shipped page,
+    decoded — and a second copy of a brand asset is exactly the kind of thing that drifts into two
+    slightly different logos, so it is asserted byte for byte rather than by eye.
+
+    Imported through Vite rather than inlined again, so the bundle carries a file the server already
+    knows how to serve (`.png` is in `CONSOLE_TYPES`) instead of another 9 KB of base64 in the script.
+    """
+    import base64
+    import re
+
+    page = (pathlib.Path("corparius/webui.html")).read_text(encoding="utf-8")
+    match = re.search(
+        r'<h1 class="brand".*?<img src="data:image/png;base64,([A-Za-z0-9+/=]+)"', page, re.S
+    )
+    assert match, "the shipped page no longer inlines a wordmark; this test has gone blind"
+    assert base64.b64decode(match.group(1)) == (WEB / "src" / "wordmark.png").read_bytes()
+
+
 def test_the_build_writes_inside_the_package():
     """The decision the whole packaging story rests on. `outDir` pointing anywhere else would need
     a per-mode fallback, and the mode it would break is the installed wheel — the one hardest to

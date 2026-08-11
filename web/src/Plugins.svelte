@@ -122,7 +122,14 @@
 {#if !data}
   <p class="muted">{t("docs.reading")}</p>
 {:else}
+  <!-- Two columns: the registry is sparse by design and the skills list is the long one.
+
+       There was a dot texture behind this panel, for presence. It is gone: the banners on this page use
+       a 20%-alpha tint, so the dots showed *through* them and read as a rendering fault. A texture that
+       fights the content in front of it is worse than a plain surface. -->
+  <div class="grid cols">
   <section class="card">
+    <div>
     <h2>{t("pl.title")}</h2>
     <p class="desc">{t("pl.intro")}</p>
     <!-- Said before the list rather than after: an operator who enables a plugin while the feature is
@@ -131,18 +138,19 @@
     <p class="banner warn small">{t("pl.unverified")}</p>
 
     <h3>{t("pl.installed")}</h3>
+    <div class="rows">
     {#each installed as plugin (plugin.name)}
       <article class="row">
         <div>
           <strong>{plugin.name}</strong>
           <span class="muted">{plugin.version}</span>
           {#if plugin.verified}
-            <span class="chip ok">{t("pl.verified")}</span>
+            <span class="badge ok">{t("pl.verified")}</span>
           {:else}
-            <span class="chip danger">{t("pl.unverifiedTag")}</span>
+            <span class="badge danger">{t("pl.unverifiedTag")}</span>
           {/if}
-          {#if plugin.disabled}<span class="chip">{t("pl.disabled")}</span>{/if}
-          {#if plugin.loaded}<span class="chip ok">{t("pl.loaded")}</span>{/if}
+          {#if plugin.disabled}<span class="badge">{t("pl.disabled")}</span>{/if}
+          {#if plugin.loaded}<span class="badge ok">{t("pl.loaded")}</span>{/if}
           {#if plugin.description}<p class="muted small">{plugin.description}</p>{/if}
           <!-- Which seams it binds. Seven exist; naming the ones a plugin uses is the difference
                between "a plugin" and "something that can answer your model calls". -->
@@ -156,7 +164,7 @@
               {t("pl.enable")}
             </button>
           {:else}
-            <button class="quiet" disabled={busy === `disable:${plugin.name}`} onclick={() => act("disable", plugin.name)}>
+            <button disabled={busy === `disable:${plugin.name}`} onclick={() => act("disable", plugin.name)}>
               {t("pl.disable")}
             </button>
           {/if}
@@ -172,9 +180,11 @@
         </div>
       </article>
     {/each}
-    {#if installed.length === 0}<p class="muted">{t("pl.none")}</p>{/if}
+    </div>
+    {#if installed.length === 0}<p class="empty">{t("pl.none")}</p>{/if}
 
     <h3>{t("pl.available")}</h3>
+    <div class="rows">
     {#each offers as offer (offer.name)}
       <article class="row">
         <div>
@@ -186,7 +196,9 @@
         </button>
       </article>
     {/each}
-    {#if offers.length === 0}<p class="muted">{t("pl.regEmpty")}</p>{/if}
+    </div>
+    {#if offers.length === 0}<p class="empty">{t("pl.regEmpty")}</p>{/if}
+    </div>
   </section>
 
   <section class="card">
@@ -207,15 +219,15 @@
         <article class="row block" class:wide={skill.unscoped}>
           <header>
             <strong>{skill.name}</strong>
-            <span class="chip">{skill.scope}</span>
-            <span class="chip">{skill.chars} {t("sk.chars")}</span>
+            <span class="badge">{skill.scope}</span>
+            <span class="badge">{skill.chars} {t("sk.chars")}</span>
             {#if skill.always}
               <!-- Declared, so badged as a statement rather than a warning. -->
-              <span class="chip">{t("sk.alwaysDeclared")}</span>
+              <span class="badge">{t("sk.alwaysDeclared")}</span>
             {:else if skill.unscoped}
-              <span class="chip warn">{t("sk.unscoped")}</span>
+              <span class="badge warn">{t("sk.unscoped")}</span>
             {/if}
-            {#if skill.truncated}<span class="chip danger">{t("sk.truncated")}</span>{/if}
+            {#if skill.truncated}<span class="badge danger">{t("sk.truncated")}</span>{/if}
           </header>
           {#if skill.description}<p class="muted small">{skill.description}</p>{/if}
           <p class="small muted">
@@ -243,7 +255,7 @@
                 {/each}
               </div>
               <div class="actions">
-                <button disabled={busy === `scope:${skill.name}`} onclick={() => saveScope(skill.name)}>
+                <button class="primary" disabled={busy === `scope:${skill.name}`} onclick={() => saveScope(skill.name)}>
                   {t("sk.scopeSave")}
                 </button>
                 <button class="link" onclick={() => (scoping = "")}>{t("task.cancel")}</button>
@@ -251,101 +263,41 @@
             </div>
           {:else}
             <div class="actions">
-              <button class="quiet" onclick={() => openScope(skill)}>{t("sk.scopeIt")}</button>
+              <button onclick={() => openScope(skill)}>{t("sk.scopeIt")}</button>
               <!-- The path, not an editor. A skill is a file the operator wrote, and this console is
                    not going to be a second, worse text editor for it. -->
-              <code class="small muted">{skill.path}</code>
+              <code class="path small muted" title={skill.path}>{skill.path}</code>
             </div>
           {/if}
         </article>
       {/each}
-      {#if skills.length === 0}<p class="muted">{t("sk.none")}</p>{/if}
+      {#if skills.length === 0}<p class="empty">{t("sk.none")}</p>{/if}
     {/if}
   </section>
+  </div>
 {/if}
 
 <style>
-  /* Tokens only; `tests/test_console_tokens.py` asserts it. */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem 1.1rem;
-    margin: 0 0 1rem;
-  }
-  h2 {
-    font-size: 0.82rem;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--muted);
-    margin: 0 0 0.35rem;
-  }
-  h3 {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    margin: 1rem 0 0.3rem;
-  }
-  .desc { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.9rem; }
-  .row {
-    display: flex;
-    gap: 1rem;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 0.6rem 0;
-    border-top: 1px solid var(--border);
-  }
+  /* Only what Plugins has. The card, the dot field, the rows, the badges and the buttons are the
+     console's language and live in `console.css`. */
+  h3 { margin: 18px 0 8px; }
   .row.block { display: block; }
-  /* An unscoped skill is the one an operator is meant to act on, so it is marked rather than left
-     looking like the others. */
-  .row.wide { border-left: 2px solid var(--warn); padding-left: 0.5rem; }
-  .row header { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
-  .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-top: 0.4rem; }
-  .picker { margin-top: 0.5rem; }
+  .row.block header { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  /* Scoping a skill: the tool list is long, so it scrolls in its own box rather than pushing the rest
+     of the panel off the screen. */
+  .picker { margin-top: 10px; }
   .tools {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
-    gap: 0.15rem 0.6rem;
-    max-height: 16rem;
-    overflow: auto;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 2px 14px;
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 8px 0 10px;
+    padding: 8px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 0.5rem;
-    margin: 0.4rem 0;
   }
-  .tool { display: flex; gap: 0.35rem; align-items: center; font-size: 0.86rem; }
-  button {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    font: inherit;
-  }
-  button.quiet { background: none; color: var(--text); border-color: var(--border-ui); }
-  button.link { background: none; border: 0; color: var(--accent); text-decoration: underline; padding: 0.2rem 0; }
-  button:disabled { opacity: 0.45; cursor: default; }
-  button:focus-visible, input:focus-visible { outline: 2px solid var(--select); outline-offset: 2px; }
-  input[type="checkbox"] { width: auto; }
-  .muted { color: var(--muted); }
-  .small { font-size: 0.86rem; }
+  .tool { display: flex; gap: 7px; align-items: center; font-size: 13px; cursor: pointer; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
   .bad { color: var(--danger); }
-  .banner { padding: 0.6rem 0.85rem; border-radius: 8px; margin: 0 0 1rem; border: 1px solid; }
-  .banner.danger { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
-  .banner.warn { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
-  .banner.ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
-  .chip {
-    background: var(--raised);
-    border: 1px solid var(--border-ui);
-    border-radius: 999px;
-    padding: 0 0.45rem;
-    font-size: 0.76rem;
-    color: var(--muted);
-  }
-  .chip.ok { color: var(--ok); border-color: var(--ok); }
-  .chip.warn { color: var(--warn); border-color: var(--warn); }
-  .chip.danger { color: var(--danger); border-color: var(--danger); }
-  code { font-size: 0.8rem; }
 </style>

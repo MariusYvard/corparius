@@ -283,15 +283,16 @@
   {#if mockOn}<p class="banner warn">{t("prov.stillMock")}</p>{/if}
   {#if cloudOff}<p class="banner warn">{t("prov.cloudOff")}</p>{/if}
 
+  <div class="grid half">
   <section class="card">
     <h2>{t("cc.title")}</h2>
     <p class="desc">{t("cc.desc")}</p>
     {#if claude}
       <p>
-        <span class="chip" class:ok={claude.installed}>
+        <span class="badge" class:ok={claude.installed}>
           {t(claude.installed ? "cc.found" : "cc.missing")}
         </span>
-        {#if claude.ready}<span class="chip ok">{t("cc.on")}</span>{/if}
+        {#if claude.ready}<span class="badge ok">{t("cc.on")}</span>{/if}
       </p>
       {#if !claude.installed}
         <!-- The single most common confusion in this setup, and it costs nothing to answer from the
@@ -307,10 +308,10 @@
           {/if}
         </p>
         <div class="actions">
-          <button disabled={busy === "claude"} onclick={() => useClaude(false)}>
+          <button class="primary" disabled={busy === "claude"} onclick={() => useClaude(false)}>
             {busy === "claude" ? t("cc.applying") : t(claude.ready ? "cc.reapply" : "cc.use")}
           </button>
-          <button class="quiet" disabled={busy === "claude"} onclick={() => useClaude(true)}>
+          <button disabled={busy === "claude"} onclick={() => useClaude(true)}>
             {t("cc.useAll")}
           </button>
         </div>
@@ -349,24 +350,25 @@
       />
     </label>
   </section>
+  </div>
 
   <section class="card">
     <h2>{t("prov.free")}</h2>
     <p class="desc">{t("prov.freeNote")}</p>
 
     {#each providers.providers as p (p.name)}
-      <article class="row block">
-        <header>
+      <article class="prow">
+        <div class="pname">
           <strong>{p.name}</strong>
-          {#if p.recommended}<span class="chip ok">{t("prov.startHere")}</span>{/if}
-          {#if p.no_card}<span class="chip" title={t("prov.noCardTip")}>{t("prov.noCard")}</span>{/if}
-          {#if p.key_optional}<span class="chip">{t("prov.optional")}</span>{/if}
-          <span class="chip" class:ok={p.configured}>
+          {#if p.recommended}<span class="badge ok">{t("prov.startHere")}</span>{/if}
+          {#if p.no_card}<span class="badge" title={t("prov.noCardTip")}>{t("prov.noCard")}</span>{/if}
+          {#if p.key_optional}<span class="badge">{t("prov.optional")}</span>{/if}
+          <span class="badge" class:ok={p.configured}>
             {t(p.key_set ? "badge.keySet" : "badge.noKey")}
           </span>
-        </header>
+        </div>
 
-        <div class="key">
+        <div class="pkey">
           <input
             type="password"
             autocomplete="off"
@@ -374,26 +376,32 @@
             value={typed[p.name] ?? ""}
             oninput={(e) => (typed[p.name] = e.currentTarget.value)}
           />
+        </div>
+
+        <div class="pacts">
           <button disabled={busy === p.name} onclick={() => saveKey(p)}>{t("btn.save")}</button>
-          <button class="quiet" disabled={busy === `probe:${p.name}`} onclick={() => probe(p.name)}>
+          <button disabled={busy === `probe:${p.name}`} onclick={() => probe(p.name)}>
             {busy === `probe:${p.name}` ? t("prov.testing") : t("prov.test")}
           </button>
-          <button
-            class="quiet"
-            disabled={busy === `models:${p.name}`}
-            onclick={() => listModels(p.name)}
-          >
+          <button disabled={busy === `models:${p.name}`} onclick={() => listModels(p.name)}>
             {busy === `models:${p.name}` ? t("prov.loadingModels") : t("prov.models")}
           </button>
+        </div>
+
+        <!-- Its own cell, empty when a provider has no signup page: the row is a grid, so an absent
+             link leaves a gap rather than handing its width to the buttons beside it. -->
+        <span class="plink">
           {#if p.signup}
-            <a class="link" href={p.signup} target="_blank" rel="noreferrer noopener">
+            <!-- One line, in every language. "Obtenir une clé gratuite" wrapped in thirteen of sixteen
+                 rows and orphaned "gratuite" onto a second line, which cost the list its rhythm. -->
+            <a class="link nowrap" href={p.signup} target="_blank" rel="noreferrer noopener">
               {t("prov.getKey")}
             </a>
           {/if}
-        </div>
+        </span>
 
         {#if probed[p.name]}
-          <p class="small" class:good={probed[p.name].ok} class:bad={!probed[p.name].ok}>
+          <p class="pfull small" class:good={probed[p.name].ok} class:bad={!probed[p.name].ok}>
             {probed[p.name].detail}
           </p>
         {/if}
@@ -402,7 +410,7 @@
           <!-- The proven set is the part that was measured rather than claimed: 10 of 18 NVIDIA
                catalogue entries answered 404 with a real key, so an unmarked catalogue is a coin
                flip. Proven models are named first and marked. -->
-          <p class="small muted">
+          <p class="pfull small muted">
             {#each models[p.name].models.slice(0, 24) as m (m)}
               <button
                 class="model"
@@ -424,11 +432,15 @@
     <div class="actions">
       <button disabled={busy === "routing"} onclick={recommend}>{t("prov.useRouting")}</button>
     </div>
-    <div class="grid">
+    <!-- One label column and one input width. Inline labels put all five inputs at a different x —
+         five left edges on a diagonal — and each was too narrow to show its own value, truncating
+         `groq:llama-3.3-70b-versatile` mid-token. -->
+    <div class="tiers">
       {#each [["trivial", "tier.trivial"], ["normal", "tier.normal"], ["hard", "tier.hard"], ["local_fallback", "tier.local"], ["fallback_chain", "tier.chain"]] as [field, label] (field)}
-        <label>
-          <span class="muted">{t(label)}</span>
+        <label class="tier">
+          <span>{t(label)}</span>
           <input
+            class="mono"
             value={tiers[field] ?? ""}
             oninput={(e) => (tiers[field] = e.currentTarget.value)}
           />
@@ -436,8 +448,8 @@
       {/each}
     </div>
     <div class="actions">
-      <button disabled={busy === "tiers"} onclick={saveTiers}>{t("prov.saveTiers")}</button>
-      <button class="quiet" disabled={busy === "preflight" || mockOn} onclick={runPreflight}>
+      <button class="primary" disabled={busy === "tiers"} onclick={saveTiers}>{t("prov.saveTiers")}</button>
+      <button disabled={busy === "preflight" || mockOn} onclick={runPreflight}>
         {busy === "preflight" ? t("prov.preflightRunning") : t("prov.preflight")}
       </button>
     </div>
@@ -446,7 +458,7 @@
       <div class="report">
         {#each report.probes ?? [] as row, i (row.tier + ":" + i)}
           <p class="small">
-            <span class="chip {row.state}">{t("prov.pf." + row.state)}</span>
+            <span class="badge {row.state}">{t("prov.pf." + row.state)}</span>
             <strong>{row.tier}</strong> <span class="muted">{row.model}</span>
             {#if row.detail}<span class="muted">— {row.detail}</span>{/if}
           </p>
@@ -455,7 +467,7 @@
              tiers and reports success is worse than one that admits its reach. -->
         {#each report.skipped ?? [] as row, i (row.tier + ":" + i)}
           <p class="small muted">
-            <span class="chip">{t("prov.pf.skipped")}</span>
+            <span class="badge">{t("prov.pf.skipped")}</span>
             <strong>{row.tier}</strong> {row.model} — {t("prov.probeSkipReason")}
           </p>
         {/each}
@@ -472,7 +484,7 @@
       {#if sweepJob.state === "running"}
         <span class="chip warn">{t("badge.running")}</span>
         <span class="small muted">{sweepJob.progress}</span>
-        <button class="quiet" disabled={busy === "stop"} onclick={() => stopJob("/api/v1/preflight/sweep")}>
+        <button disabled={busy === "stop"} onclick={() => stopJob("/api/v1/preflight/sweep")}>
           {t("prov.sweepStop")}
         </button>
       {:else if estimate}
@@ -485,7 +497,7 @@
         <button disabled={busy === "sweep"} onclick={startSweep}>{t("prov.sweepAll")}</button>
         <button class="link" onclick={() => (estimate = null)}>{t("task.cancel")}</button>
       {:else}
-        <button class="quiet" disabled={busy === "sweep" || mockOn} onclick={priceSweep}>
+        <button disabled={busy === "sweep" || mockOn} onclick={priceSweep}>
           {t("prov.sweepAll")}
         </button>
       {/if}
@@ -495,13 +507,15 @@
       <p class="small muted">
         {fill(t("prov.sweepDone"), { n: setup.known ?? 0 })}
         {#each Object.entries(setup.usable_by_provider ?? {}) as [name, count] (name)}
-          <span class="chip">{name} {count}</span>
+          <span class="badge">{name} {count}</span>
         {/each}
       </p>
       <!-- A verdict is a measurement and measurements age. Said out loud so nobody reads a
            six-month-old `blocked` as current fact. -->
       {#if setup.worth_rechecking}
-        <p class="small muted">{setup.worth_rechecking} · {setup.oldest_days}d</p>
+        <p class="small muted">
+          {fill(t("prov.recheck"), { n: setup.worth_rechecking, d: setup.oldest_days })}
+        </p>
       {/if}
       <!-- `interrupted` is a state a client really sees: a console killed mid-sweep leaves a row the
            next process marks on startup. Nothing was resumed, and saying so beats both silence and a
@@ -517,7 +531,7 @@
     <p class="desc">{t("oll.desc")}</p>
     {#if ollama}
       <p>
-        <span class="chip" class:ok={ollama.reachable}>{t(ollama.reachable ? "oll.ready" : "oll.off")}</span>
+        <span class="badge" class:ok={ollama.reachable}>{t(ollama.reachable ? "oll.ready" : "oll.off")}</span>
         {#if ollama.missing?.length}
           <span class="chip warn">{t("oll.partial")}</span>
         {:else if ollama.reachable}
@@ -530,7 +544,7 @@
         <div class="actions">
           {#if pullJob.state === "running"}
             <span class="chip warn">{t("oll.pulling")}</span>
-            <button class="quiet" disabled={busy === "stop"} onclick={() => stopJob("/api/v1/ollama/pull/stop")}>
+            <button disabled={busy === "stop"} onclick={() => stopJob("/api/v1/ollama/pull/stop")}>
               {t("run.stop")}
             </button>
           {:else}
@@ -568,103 +582,61 @@
           {t("oll.serves")} <code>{ollama.local_model}</code>
         </p>
       {:else if ollama.local_reason}
-        <p class="muted small">{t("oll.fallbackOnly")} {ollama.local_reason}</p>
+        <p class="muted small">{t("oll.fallbackOnly")}</p>
+        <p class="note mono">{ollama.local_reason}</p>
       {/if}
     {/if}
   </section>
 {/if}
 
 <style>
-  /* Tokens only; `tests/test_console_tokens.py` asserts it. */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem 1.1rem;
-    margin: 0 0 1rem;
-  }
-  h2 {
-    font-size: 0.82rem;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--muted);
-    margin: 0 0 0.35rem;
-  }
-  .desc { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.9rem; }
-  .row {
+  /* Only what Providers has. The card, the badges, the buttons, the inputs, the provider row and the
+     tier grid are the console's language and live in `console.css`. */
+
+  /* A toggle is a row you can click anywhere on, with the control at the end where every other row
+     puts its value. */
+  .row.toggle {
     display: flex;
-    gap: 1rem;
+    gap: 14px;
     justify-content: space-between;
-    align-items: flex-start;
-    padding: 0.6rem 0;
+    align-items: center;
+    padding: 11px 0;
     border-top: 1px solid var(--border);
-  }
-  .row:first-of-type { border-top: 0; }
-  .row.block { display: block; }
-  .row.block header { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
-  .row.toggle { align-items: center; cursor: pointer; }
-  .key { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-top: 0.45rem; }
-  .key input { flex: 1 1 12rem; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.6rem; margin: 0.8rem 0; }
-  .grid label { display: grid; gap: 0.2rem; font-size: 0.88rem; }
-  .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-top: 0.5rem; }
-  button {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 0.35rem 0.75rem;
     cursor: pointer;
-    font: inherit;
   }
-  button.quiet { background: none; color: var(--text); border-color: var(--border-ui); }
+  .row.toggle:first-of-type { border-top: 0; }
+  /* The probe result and the model list belong to the whole provider row, not to one of its cells, so
+     they break out of the grid rather than squeezing into the last column. */
+  .pfull { grid-column: 1 / -1; margin: 2px 0 0; }
+  /* A model is a chip you can press: it fills the normal tier. Small, because there are 24 of them. */
   button.model {
     background: var(--raised);
     color: var(--muted);
     border-color: var(--border);
     border-radius: 999px;
-    padding: 0.1rem 0.55rem;
-    font-size: 0.8rem;
-    margin: 0.15rem 0.15rem 0 0;
+    padding: 2px 9px;
+    font-size: 12.5px;
+    margin: 3px 3px 0 0;
   }
   button.model.proved { color: var(--ok); border-color: var(--ok); }
-  button:disabled { opacity: 0.45; cursor: default; }
-  button:focus-visible, input:focus-visible, a:focus-visible {
-    outline: 2px solid var(--select);
-    outline-offset: 2px;
-  }
-  input {
-    background: var(--raised);
-    color: var(--text);
-    border: 1px solid var(--border-ui);
-    border-radius: 6px;
-    padding: 0.3rem 0.5rem;
-    font: inherit;
-  }
-  input[type="checkbox"] { width: auto; }
-  a.link { color: var(--accent); font-size: 0.88rem; }
-  .muted { color: var(--muted); }
-  .small { font-size: 0.86rem; margin: 0.35rem 0 0; }
   .good { color: var(--ok); }
   .bad { color: var(--danger); }
-  .banner { padding: 0.6rem 0.85rem; border-radius: 8px; margin: 0 0 1rem; border: 1px solid; }
-  .banner.danger { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
-  .banner.warn { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
-  .banner.ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
-  .chip {
-    background: var(--raised);
-    border: 1px solid var(--border-ui);
-    border-radius: 999px;
-    padding: 0 0.5rem;
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
-  .chip.ok { color: var(--ok); border-color: var(--ok); }
-  .chip.warn { color: var(--warn); border-color: var(--warn); }
+  a.link { color: var(--select); font-size: 13px; }
+  a.link.nowrap { white-space: nowrap; }
   /* The probe legend, and the ramp carries the meaning: blocked is a key that will not work,
      capacity is one that will later, usable is measured. */
-  .chip.blocked { color: var(--danger); border-color: var(--danger); }
-  .chip.capacity { color: var(--warn); border-color: var(--warn); }
-  .chip.usable { color: var(--ok); border-color: var(--ok); }
-  .report { margin-top: 0.7rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
+  .badge.blocked { color: var(--danger); background: var(--danger-soft); }
+  .badge.capacity { color: var(--warn); background: var(--warn-soft); }
+  .badge.usable { color: var(--ok); background: var(--ok-soft); }
+  .report { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+
+  /* One grid for the five tiers: a fixed label column, one input width, and enough of it to hold a
+     full `target:model` string. */
+  .tiers { display: grid; gap: 10px; }
+  .tier { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-items: center; }
+  .tier > span { color: var(--muted); font-size: 13.5px; }
+  .tier input { width: 100%; }
+  @media (min-width: 640px) {
+    .tier { grid-template-columns: 128px minmax(0, 1fr); gap: 12px; }
+  }
 </style>

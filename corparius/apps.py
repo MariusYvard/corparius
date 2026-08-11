@@ -234,8 +234,6 @@ def run(app: App, slug: str, store, user_input: str, company: dict | None = None
     `ok` qualifies the call, not the answer — the same rule as everywhere else
     here. A model that replied "I don't know" succeeded.
     """
-    import requests
-
     from .config.settings import Settings
     from .providers.llm import HybridRouter, ProviderError
 
@@ -250,7 +248,16 @@ def run(app: App, slug: str, store, user_input: str, company: dict | None = None
     # The router walks its own fallback chain and then retries the local model
     # once; what reaches here is everything having failed. A visitor gets a
     # refusal, not a traceback, and the site that called stays up.
-    except (ProviderError, requests.RequestException, OSError) as exc:
+    # No `requests` import, and nothing was lost by dropping it: the `requests.RequestException` this
+    # used to name is **already an `OSError`**, which was in the same tuple all along. Measured rather
+    # than assumed — `RequestException.__mro__` is (RequestException, OSError, Exception, ...), and the
+    # same holds for every exception in the package.
+    #
+    # `(ProviderError, OSError)` is therefore the complete and minimal set: the non-HTTP providers raise
+    # the first (a `claudecode` CLI that is not installed is unreachable in the same sense as a refused
+    # socket), and every transport failure is the second. A starred `(*UNREACHABLE, OSError)` said the
+    # same thing and mypy refused it — an `except` clause has to be a tuple it can see the members of.
+    except (ProviderError, OSError) as exc:
         log.warning("app %s could not reach a model: %s", app.name, exc)
         return {"ok": False, "error": "no model could be reached", "detail": str(exc)}
     store.record_usage(

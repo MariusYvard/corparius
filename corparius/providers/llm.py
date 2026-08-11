@@ -37,6 +37,18 @@ class ProviderError(Exception):
     """Raised by non-HTTP providers so the fallback chain can catch failures."""
 
 
+# What "the model could not be reached" is, named by the layer that owns the transport.
+#
+# Rank 4 needs to catch this and must not import `requests` to do it — that is the domain-purity rule,
+# and it was the last thing keeping `orchestrator` and `apps` on the exception list. Naming the tuple
+# here puts the knowledge where the transport choice lives: swap `requests` for something else and this
+# is the one line that changes, instead of every caller that catches its exceptions.
+#
+# Both members matter. `ProviderError` is what the non-HTTP providers raise — `claudecode` shells out,
+# and a CLI that is not installed is unreachable in exactly the same sense as a refused socket.
+UNREACHABLE: tuple[type[BaseException], ...] = (ProviderError, requests.RequestException)
+
+
 def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 

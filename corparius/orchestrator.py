@@ -10,16 +10,15 @@ import logging
 import time
 from dataclasses import dataclass, field, replace
 
-import requests
-
 from . import curator, documents, inbox
 from .agents import Executor
 from .config.permissions import PermissionEngine
 from .config.settings import Settings
 from .hitl import ApprovalGate
+from .kernel import clock
 from .kernel.records import AgentRole
 from .providers import llm
-from .providers.llm import HybridRouter
+from .providers.llm import UNREACHABLE, HybridRouter
 from .roster import ROSTER, AgentSpec
 from .safety import CircuitBreaker, TokenBudget
 from .skills import SkillLoader
@@ -329,7 +328,7 @@ class Runtime:
                     try:
                         for line in executor.run_turn(slug, spec, ctx):
                             log.info("tick %d [%s] %s", tick, spec.role.value, line)
-                    except requests.RequestException as exc:
+                    except UNREACHABLE as exc:
                         # LLM unreachable even after retries: leave a trace the
                         # operator can see and stop cleanly instead of crashing.
                         log.error("tick %d [%s] LLM unreachable: %s", tick, spec.role.value, exc)
@@ -409,7 +408,12 @@ class Runtime:
             skills = _load_skills(self.settings, slug, self.store)
             memory_top_k = _memory_top_k(self.settings)
             executor = Executor(self.router, gate, self.store, self.settings)
-            time.sleep(1)
+            # A floor on how fast a `--loop` run may go round, not a delay for its own sake: a day
+            # whose every role is paused finishes in milliseconds, and without this the loop spins.
+            # Through `kernel.clock` because that is the one place allowed to wait — the same argument
+            # `kernel/proc.py` makes for `subprocess`, and what lets a `--loop` test patch one function
+            # instead of taking a real second per simulated day.
+            clock.pace()
         # A rule granted "for this run" that outlived the run would be a standing
         # authorisation the operator never gave.
         self.store.clear_run_rules(slug)

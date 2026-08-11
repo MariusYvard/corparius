@@ -66,7 +66,11 @@ ALL_SRC = "\n".join(SRC.values())
 # durable jobs. The plan names `setup` in the rank-5 list; it had simply never been written.
 # +1 for `store/chat.py`: schema 21, the `chat_turns` table two docstrings promised before it
 # existed. The plan named it beside `jobs`; it was the half of schema 19 never written.
-MODULE_COUNT = 138
+# +1 for `app/onboarding.py`: the three-step thread, which lived in the shipped page's
+# JavaScript and was the last Overview card with no resource behind it.
+# +1 for `kernel/clock.py`: one wrapper around the last `time.sleep`, so the layer test can
+# forbid the primitive everywhere else — the same argument `kernel/proc.py` makes.
+MODULE_COUNT = 140
 
 
 def test_every_source_file_is_scanned():

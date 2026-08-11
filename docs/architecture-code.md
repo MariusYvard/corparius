@@ -999,6 +999,60 @@ et n'archivera aucune des trois compétences de `vigil`, qui sont toutes en usag
 
 Un tour contre de vrais fournisseurs reste à l'opérateur : il dépense ses jetons.
 
+## Les trois cliquets sont à zéro
+
+C'est le compteur public d'avancement que le plan nomme, et il est arrivé au bout :
+
+| Cliquet | Au départ | Maintenant |
+| --- | --- | --- |
+| Violations de rang | ~60 arêtes | **0** |
+| Cycles d'import | 5 composantes | **0** |
+| Impuretés du domaine | 3 | **0** |
+
+Les trois dernières impuretés sont parties comme les cycles : non pas en supprimant l'arête, mais en
+déplaçant ce qui n'était pas à sa place.
+
+**`("apps", "requests")` ne coûtait rien.** L'import ne servait qu'à nommer
+`requests.RequestException` dans un `except` qui contenait **déjà `OSError`** — et toute exception de
+`requests` en dérive. Mesuré, pas supposé : `RequestException.__mro__` est
+`(RequestException, OSError, Exception, ...)`. `(ProviderError, OSError)` est le même ensemble, minimal,
+et mypy en voit les membres — ce qu'il refusait pour un `(*UNREACHABLE, OSError)` étoilé.
+
+**`("orchestrator", "requests")` n'avait pas d'`OSError` à côté.** Élargir aurait donc étiqueté une
+erreur de fichier en « LLM injoignable ». C'est le rang 3 qui nomme le tuple :
+`llm.UNREACHABLE = (ProviderError, requests.RequestException)`. La couche qui possède le transport
+possède ce que « injoignable » veut dire, et changer de client HTTP devient une ligne au lieu de chaque
+appelant qui attrape ses exceptions.
+
+**`("orchestrator", "time.sleep")` était porteur.** C'est le plancher de cadence à la frontière de
+journée d'un run `--loop` : une journée dont tous les rôles sont en pause se termine en millisecondes,
+et sans lui la boucle tourne à vide à plein régime. Le supprimer pour satisfaire la règle aurait échangé
+une règle contre une boucle folle. Il est passé dans `kernel/clock.pace()` — **exactement l'argument que
+`kernel/proc.py` fait pour `subprocess` : l'emballage existe pour que l'interdiction puisse exister** —
+et cela rend un test de `--loop` possible : on remplace une fonction au lieu de payer une seconde réelle
+par journée simulée.
+
+Et écrire cette interdiction a trouvé un **second** propriétaire que rien ne surveillait :
+`providers/sitecheck` attend la propagation d'un CDN avant la vérification unique de déploiement.
+`KNOWN_IMPURE` ne couvrait que le rang 4, donc il n'avait jamais figuré sur aucune liste. Ce n'est ni un
+plancher de boucle ni une reprise — les octets ne sont pas encore servis, et c'est l'affaire du rang 3.
+Borné par `MAX_WAIT`, réglé par `wait_seconds()`, journalisé, et contournable par le paramètre `wait`
+pour qu'un test n'attende jamais. Les deux sont déclarés ; un troisième échoue.
+
+## Les deux décisions qui restaient
+
+**Le framework du front : Svelte 5 + Vite**, tranché à l'étape 9 comme le plan le prévoyait. L'argument
+React Native ne tient pas à l'examen : React DOM et React Native ne partagent pas de composants, et ce
+qui se partage réellement avec un client mobile — le client d'API et les tables i18n en JSON — est
+agnostique du framework. Le poids du bundle voyage dans le binaire PyInstaller, et 80 champs de réglages
+favorisent `bind:` sur une bibliothèque de formulaires.
+
+**Le bug de slug : rien à migrer, et la prémisse du plan était fausse.** Mesuré à l'étape 1 :
+`company.load` dérive le slug du **nom du dossier** avant toute validation, donc pour une entreprise déjà
+sur le disque les deux orthographes sont idempotentes. La seule orthographe cassée ne produisait un
+dossier qu'à un seul endroit — l'assistant de création, où aucun slug n'est donné. Donc pas de migration
+de renommage : `slugify` dérive, `slugify_loose` préserve, et aucune entreprise installée n'est touchée.
+
 ## Le cliquet
 
 Chaque règle embarque l'ensemble exact des violations d'aujourd'hui et affirme

@@ -48,6 +48,7 @@ RANKS: dict[str, int] = {
     # 0 — kernel
     "kernel/__init__": 0,
     "kernel/i18n": 0,
+    "kernel/clock": 0,
     "kernel/crypto": 0,
     "kernel/dotenv": 0,
     "kernel/vectors": 0,
@@ -180,6 +181,7 @@ RANKS: dict[str, int] = {
     "app/directives": 5,
     "app/mail": 5,
     "app/skills": 5,
+    "app/onboarding": 5,
     "app/overview": 5,
     "app/support": 5,
     "app/runs": 5,
@@ -280,21 +282,31 @@ KNOWN_RANK_VIOLATIONS: frozenset[tuple[str, str]] = frozenset()
 # thing that did not belong moved out.
 KNOWN_CYCLES: frozenset[tuple[str, ...]] = frozenset()
 
-# Rank 4 may not touch the host at all. Two exceptions today, same cause.
+# Rank 4 may not touch the host at all. **No exceptions left**; see KNOWN_IMPURE below for how
+# the last three went.
 BANNED_IN_DOMAIN = ("requests", "subprocess", "sqlite3", "smtplib", "imaplib", "socket")
-KNOWN_IMPURE: frozenset[tuple[str, str]] = frozenset(
-    {
-        # Both catch `requests.RequestException` from the layer below. The fix is not to
-        # stop catching it: it is for the provider layer to raise its own error, and
-        # `llm.ProviderError` already exists — `apps.py:223` catches both. Stage 5.
-        ("apps", "requests"),
-        ("orchestrator", "requests"),
-        # The tick loop sleeps, so it cannot be tested without real time passing. Becomes
-        # a `sleep=time.sleep` default parameter, not an injected Clock ABC: two callers
-        # and one fake beats an interface.
-        ("orchestrator", "time.sleep"),
-    }
-)
+# **Empty**, like the two lists above, and the last three went the way the earlier ones did — not by
+# suppressing the edge but by moving the thing that did not belong.
+#
+#   ("apps", "requests")            the import named `requests.RequestException` in an `except`
+#                                   tuple that **already contained `OSError`** — and every requests
+#                                   exception subclasses it. `RequestException.__mro__` is
+#                                   (RequestException, OSError, Exception, ...), measured. The import
+#                                   bought nothing; `(ProviderError, OSError)` is the same set,
+#                                   minimal, and mypy can see its members.
+#   ("orchestrator", "requests")    same `except`, no `OSError` beside it — so widening to bare
+#                                   `OSError` would have relabelled a file error as "LLM
+#                                   unreachable". Rank 3 names the tuple instead:
+#                                   `llm.UNREACHABLE = (ProviderError, requests.RequestException)`.
+#                                   The layer that owns the transport owns what unreachable means, and
+#                                   swapping `requests` out becomes one line rather than every caller.
+#   ("orchestrator", "time.sleep")  the day-boundary floor of a `--loop` run, and load-bearing: a day
+#                                   with every role paused finishes in milliseconds and the loop would
+#                                   spin. Deleting it would trade a rule for a busy loop, so it moved
+#                                   to `kernel/clock.pace()` — the same argument `kernel/proc.py`
+#                                   makes for `subprocess`, and what lets a `--loop` test patch one
+#                                   function instead of taking a real second per simulated day.
+KNOWN_IMPURE: frozenset[tuple[str, str]] = frozenset()
 
 # One owner per host capability. The right-hand side is where each is allowed to appear
 # *today*; the target is in the comment.
@@ -555,7 +567,7 @@ def test_the_ratchet_only_ever_tightens():
     stands so a reader can see it move, and fails if someone pads a list instead of
     fixing a module."""
     assert len(KNOWN_RANK_VIOLATIONS) <= 2, "upward imports should only ever decrease"
-    assert len(KNOWN_IMPURE) <= 3, "domain impurities should only ever decrease"
+    assert len(KNOWN_IMPURE) == 0, "domain impurities should only ever decrease"
     assert len(KNOWN_CYCLES) == 0, "cycles should only ever decrease"
 
 
@@ -593,6 +605,39 @@ def test_every_declared_strictness_target_still_exists():
             "module went, or strike it off — a ratchet on no file is worse than no ratchet, "
             "because the passing run reads the same."
         )
+
+
+def test_only_the_clock_waits():
+    """`time.sleep` in one place, for the reason `subprocess` is in one place.
+
+    Not in `OWNERS` above, and that is deliberate: its detector matches `import X` and
+    `from X import`, and this is a *call* on an already-imported module. Bending that detector to
+    take a dotted attribute would weaken it for the four capabilities it does check, so this asks the
+    narrower question directly.
+
+    The wrapper exists **so that** the ban can. One call was left in the package — the day-boundary
+    floor of a `--loop` run, which is load-bearing, since a day with every role paused finishes in
+    milliseconds and the loop would spin. Deleting it to satisfy a rule would have traded the rule for
+    a busy loop. It moved to `kernel/clock.pace()` instead, which also makes a `--loop` test possible:
+    patch one function rather than take a real second per simulated day.
+
+    **And writing this test found a second owner.** `KNOWN_IMPURE` only covered rank 4, so
+    `providers/sitecheck` had never been on any list: it waits for CDN propagation before the *single*
+    deploy check. Not a loop floor and not a retry — the bytes are not served yet, and rank 3 is the
+    layer whose business that is. Bounded by `MAX_WAIT`, set by `wait_seconds()`, logged, and
+    overridable through the `wait` parameter so a test never actually waits. `clock.pace` deliberately
+    does not absorb it: its own docstring says a backoff or a poll interval belongs to whoever owns the
+    retry or the poll.
+
+    A third would fail here, which is the point.
+    """
+    found = sorted(
+        _key(path) for path in _modules() if "time.sleep(" in path.read_text(encoding="utf-8")
+    )
+    assert found == ["kernel/clock", "providers/sitecheck"], (
+        f"time.sleep is called in {found}. Waiting belongs to `kernel/clock.pace()`, or to the rank-3 "
+        "module whose remote is being waited for — and each such place has to be named here."
+    )
 
 
 def _ratchet(observed: set, known: frozenset, what: str) -> None:

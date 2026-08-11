@@ -2,7 +2,7 @@
   "corparius/__init__.py": 100.0,
   "corparius/agents.py": 92.3,
   "corparius/api/__init__.py": 100.0,
-  "corparius/api/adapters.py": 91.8,
+  "corparius/api/adapters.py": 92.1,
   "corparius/api/contracts.py": 100.0,
   "corparius/api/handlers.py": 87.2,
   "corparius/api/routes.py": 100.0,

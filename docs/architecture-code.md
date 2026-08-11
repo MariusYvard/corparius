@@ -978,18 +978,61 @@ tests, dont celui qui vérifie qu'un fichier ne peut pas forger sa propre sortie
 c'est la porte de permissions : un appel d'outil qu'un fichier a réussi à souffler passe toujours par
 `ask_above`, et `hitl_tools` ne peut être fait taire par rien de ce qu'un fichier raconte.
 
+## L'étape 10 : la preuve, pas l'application
+
+Le plan dit qu'il n'y a rien à inventer une fois l'étape 8 faite. Ce que corparius doit n'est donc pas
+un projet iOS dans un dépôt Python : c'est **la preuve que la surface v1 suffit au périmètre annoncé**,
+exercée comme un appareil le ferait. `tests/test_thin_client.py` est ce client — il s'apparie, lit,
+décide et pilote un tour, et **chaque appel passe par une socket** avec `Authorization: Bearer`. Aucun
+import de `app/`, aucune poignée de store dans le client : si une requête avait besoin de quelque chose
+que v1 n'offre pas, le fichier échoue, et c'est la seule définition utile de « l'étape 10 est possible ».
+
+Ce qu'il établit, et qui ne se déduit pas des tests unitaires :
+
+* **Deux portées, et la seconde veut dire quelque chose.** Un téléphone apparié en `read` lit le
+  résumé et le backlog, et se voit refuser `forbidden` sur approuver, lancer et arrêter — puis
+  l'approbation est vérifiée encore `pending`, parce qu'un refus qui a déjà écrit est pire qu'un refus
+  qui mentirait.
+* **Révoquer un appareil n'en déconnecte pas un autre.** La propriété que le jeton partagé ne pouvait
+  pas avoir, et la raison du schéma 20.
+* **Le tour n'est pas dans l'application.** Il est une ligne de `jobs` sur le cœur, donc fermer le
+  téléphone ne l'arrête pas et le rouvrir le retrouve. C'est la version honnête de « piloter sa société
+  depuis son téléphone », et pourquoi le plan refuse de promettre l'exécution en arrière-plan sur
+  l'appareil : aucun des deux OS ne la garantit.
+* **Un réessai en 4G ne lance pas deux tours.** Même `Idempotency-Key`, même travail, `created: false`.
+* **Le téléphone arrête un tour que la console a lancé**, parce que `cancel_requested` est une colonne
+  et non un `threading.Event` — et un tour interrompu se lit `interrupted` avec la ligne de progression
+  qu'il avait atteinte, pas silence et pas reprise.
+
+Deux gardes tiennent le fichier honnête : aucun chemin autre que `/api/v1/` n'y apparaît (un client
+mince qui toucherait un chemin legacy figerait la forme interne de la console, ce que le versionnement
+existe pour empêcher), et le helper `Device` n'importe ni `app/` ni `store/`.
+
 ## Un vrai tour, sur la vraie configuration
 
 La liste de vérification du plan demande « un vrai tour sur la vraie entreprise ». Lancé sur une
 copie de `vigil` en mode mock — pour ne rien dépenser ni toucher à l'état du propriétaire —
 24 ticks, dix agents, aucune erreur. Ce que ça a prouvé et qu'aucun test unitaire ne prouve :
 
-| | |
-| --- | --- |
-| Schéma | **18**, migré en place sur un store neuf |
-| Tours rédigés portant leur trace | **12**, avec le modèle qui a répondu |
-| Actions sans trace | 61 — celles qui n'ont appelé aucun modèle, `NULL` comme prévu |
-| `promesse-clinique` | **24 usages en 24 ticks** |
+Relancé à la fin du chantier, sur une copie de `vigil` en mode mock — 24 ticks, dix agents, aucune
+erreur, 59 619 jetons :
+
+| | à l'étape 4 | à la fin |
+| --- | --- | --- |
+| Schéma | 18 | **21**, migré en place sur un store neuf |
+| Actions | 73 | **73**, dont 62 portant une trace de routage |
+| Actions sans trace | 61 | **11** — celles qui n'ont appelé aucun modèle, `NULL` comme prévu |
+| `promesse-clinique` | 24 usages en 24 ticks | **24 en 24**, inchangé |
+
+Et ce que seule la fin du chantier pouvait montrer : **le tour est une ligne de `jobs`** en état `done`,
+`chat_turns` est vide (personne n'a parlé au CEO, donc aucune ligne fantôme), et le fil d'accueil lit
+`(model ✓, run ✓, decide ✗ — en tête)` avec une approbation en attente. Les trois jugements de
+`app/onboarding.py` donnent la bonne réponse sur des données réelles.
+
+Le compte d'actions identique de part en part n'est pas une coïncidence à célébrer : c'est le mode mock
+qui est déterministe. Ce qui a changé, c'est le nombre d'actions **portant leur trace** — 62 contre 12
+tours rédigés à l'étape 4, parce que `record_action` enregistre désormais le détail de routage pour
+chaque effet et non pour les seuls tours qui ont rédigé.
 
 Les deux dernières lignes valent d'être lues ensemble. `routing_health` répond enfin à « qui a
 répondu » — `haiku` 6 fois, `gemma4:e4b` 5, `sonnet` 1 — et c'est précisément la visibilité dont
@@ -1075,6 +1118,31 @@ interpréteur neuf — parce que `sys.modules` est global et qu'un test qui a d�
 
 C'est le test d'acceptation de trois étapes de la restructuration : les lignes de
 `settings_spec`, d'`agents` et de `llm` doivent maigrir, et le test dit exactement de combien.
+
+## L'emballage, vérifié depuis un wheel installé
+
+La liste du plan demande « l'installation du wheel dans un venv neuf, servie **sans Node installé** ».
+Refait à la main à la fin du chantier, depuis un répertoire neutre pour que le checkout ne puisse pas
+masquer l'installation :
+
+```text
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: requests>=2.31          <- la règle des deux dépendances, depuis les métadonnées du wheel
+console files carried:  index.html, console.css, console.js, console-fr.js
+corparius run --company example --ticks 4   ->  "ticks_run": 4
+GET /app/                                  ->  <div id="app">
+GET /app/console.js                        ->  200, 155 519 octets
+GET /api/v1/meta                           ->  api_version 1, schema_version 21, durable_jobs true
+```
+
+`paths.console_built()` est la ligne qui compte : c'est le mode où se tromper est le plus difficile à
+remarquer depuis un checkout, et toute la raison pour laquelle le build écrit **dans** le paquet plutôt
+qu'à côté.
+
+**Une réserve, dite plutôt qu'enjolivée** : cette machine a Node installé, donc l'exécution locale ne
+prouve pas l'absence de Node comme la CI le fait avec `which node`. Ce qu'elle prouve : le venv ne
+contient que corparius, les deux dépendances d'exécution et leurs transitives, et il sert la console.
+La jambe CI reste la mesure de l'affirmation « sans Node ».
 
 ## La couverture par fichier
 

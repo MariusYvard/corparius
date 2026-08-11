@@ -1096,6 +1096,65 @@ sur le disque les deux orthographes sont idempotentes. La seule orthographe cass
 dossier qu'à un seul endroit — l'assistant de création, où aucun slug n'est donné. Donc pas de migration
 de renommage : `slugify` dérive, `slugify_loose` préserve, et aucune entreprise installée n'est touchée.
 
+## Le drapeau tombe : `/` sert la console Svelte
+
+Le plan gardait l'ancienne page sur `/` « jusqu'à ce que le nouveau bundle passe le test d'égalité
+des jeux de clés i18n ». Il passe, les sept onglets sont refaits, donc la condition est remplie et le
+drapeau a fini son travail. `/` sert le shell construit ; `start-windows.bat` le construit avant de
+servir quand Node est là, de sorte qu'un double-clic donne la nouvelle console sans qu'on tape un
+chemin.
+
+**Un détail a mordu, et il rendait un 200 indistinguable d'une console cassée.** `base` valait `./`
+dans la configuration Vite, avec un commentaire disant qu'un base relatif « fait que le bundle ne se
+soucie pas du chemin sous lequel il est servi ». C'est le contraire dès qu'il est servi sous **deux**
+chemins : `./console.js` se résout contre celui que le navigateur a demandé, donc la copie servie
+sur `/` réclamait `/console.js` et recevait un 404. Une page blanche, avec un statut 200. `base` vaut
+maintenant `/app/` — absolu — donc les ressources sont au même endroit quel que soit le chemin du
+shell, et c'est ce qui rend possible de le servir depuis plus d'un chemin.
+
+La justification qui accompagnait l'ancienne valeur — un base relatif permettrait d'ouvrir le bundle
+depuis `file://` — n'était **exercée par aucun test**, et ne pouvait pas l'être : c'est un module ES
+qui importe dynamiquement le morceau français, et un navigateur refuse le chargement de modules sur
+`file://`.
+
+**Le repli n'est pas un réglage, c'est un fait sur la copie de travail.** `corparius/api/static/`
+n'existe qu'après `npm run build`. Sans lui, `/` sert la page d'un seul fichier — une console
+entière, sans étape de build — et `/app/` répond 404 en nommant la commande. Construit veut dire
+nouvelle, non construit veut dire ancienne, et aucun des deux états n'est une console cassée. C'est
+pourquoi les deux jambes de CI l'affirment séparément : `/app/` et `/` diffèrent d'un seul
+branchement, et le repli répond 200 avec l'ancienne page, donc un aiguillage cassé ressemble à un
+succès.
+
+La page d'origine garde un chemin à elle, **`/legacy`**. Un chemin plutôt qu'une variable
+d'environnement : quelqu'un qui tombe sur un défaut de la nouvelle console a besoin d'un endroit où
+cliquer, pas d'une variable à poser et d'un redémarrage pour le faire.
+
+**Et `start.py` est testé pour la première fois.** Aucun test ne l'importait, ce qui était tolérable
+tant qu'il ne faisait qu'un venv et un `pip install` — une panne y est bruyante. Construire la
+console ne l'est pas : son mode de défaillance est de **servir un vieux bundle pour toujours**, ce
+qui ressemble exactement à du code qui n'a pas changé. La comparaison de fraîcheur est donc épinglée
+dans les deux sens — une source éditée reconstruit, un arbre intact n'invoque pas npm — et la
+non-vacuité est prouvée en inversant l'opérateur : trois tests tombent.
+
+Ce que le lanceur affiche est une ligne, choisie parmi quatre, et `tests/test_start_script.py` tient
+les deux bouts du fil dessus comme partout ailleurs : tout état que `build_console` renvoie a une
+ligne, et toute ligne déclarée est atteignable. Sans ça, un état sans ligne est un `KeyError` sur la
+dernière instruction avant le démarrage du serveur — après le venv, l'installation et le doctor, au
+premier lancement de quelqu'un.
+
+Quatre plutôt que trois pour une raison qui tient en une phrase : « construite à l'instant » et
+« déjà à jour » sont la même console et pas la même affirmation, et un lanceur qui dit « à l'instant »
+à chaque démarrage apprend à ne pas être lu. Le cas `--no-build` ne prétend rien non plus : il a
+sauté la vérification qui aurait su.
+
+**La version de Node est lue, pas écrite.** Le message est adressé à quelqu'un qui va installer
+quelque chose, donc il ne peut pas être un chiffre rond de mon invention : `engines` dans
+`web/package.json` vaut `^20.19 || ^22.12 || >=24` — l'exigence de Vite 7 elle-même, mesurée dans le
+`package.json` installé — et « Node 20+ » aurait envoyé quelqu'un vers 20.0, qui s'installe puis
+refuse de construire. Le lanceur affiche un chiffre à suivre, 24, et la plage réelle en dessous ; un
+test affirme que la plage accepte le chiffre, parce que 23 est exactement le piège — plus récent que
+22 et exclu.
+
 ## Le cliquet
 
 Chaque règle embarque l'ensemble exact des violations d'aujourd'hui et affirme

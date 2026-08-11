@@ -1,16 +1,28 @@
 # Console opérateur
 
-La console web (corparius/api/, corparius/webui.html) sert une page unique sur http://127.0.0.1:8600 via la bibliothèque standard, sans dépendance ni étape de build. Elle lit le même store SQLite que le CLI et pilote le même Runtime.
+La console web (corparius/api/) est servie sur http://127.0.0.1:8600 par la bibliothèque standard.
+Elle lit le même store SQLite que le CLI et pilote le même Runtime.
 
-## Deux consoles, pendant un temps
+## Une console, et un chemin de repli
 
-La page d'origine — un seul fichier, sans étape de build — est servie sur `/` et y reste. La
-nouvelle, Vite + Svelte 5, est servie sur **`/app/`** quand elle a été construite.
+**`/` sert la console Svelte** dès qu'elle a été construite, et c'est ce que `start-windows.bat`
+donne sans qu'on tape quoi que ce soit : le lanceur la construit avant de servir quand Node est
+installé. `/app/` sert le même shell et porte ses **ressources** — `base` vaut `/app/`, donc la
+copie servie sur `/` nomme son script en absolu et le trouve là.
 
-Les deux, plutôt qu'un drapeau qui remplace l'une par l'autre : un exploitant peut regarder la
-nouvelle sans s'y engager, et une console à moitié construite n'est jamais le seul moyen d'entrer.
-`npm run build` dans `web/` écrit dans `corparius/api/static/` ; sans ça, `/app/` répond 404 en
-nommant la commande, et `/` continue de marcher. Voir `web/README.md`.
+Le drapeau du plan a fini son travail. Il devait garder l'ancienne page sur `/` « jusqu'à ce que le
+nouveau bundle passe le test d'égalité des jeux de clés i18n » : il passe, les sept onglets sont
+refaits, donc `/` est la nouvelle console.
+
+**Le repli n'est pas un réglage, c'est un fait sur la copie de travail.** `corparius/api/static/`
+n'existe qu'après `npm run build` : sans lui, `/` sert la page d'origine — une console entière, sans
+étape de build — et `/app/` répond 404 en nommant la commande. Construit veut dire nouvelle, non
+construit veut dire ancienne, et aucun des deux états n'est une console cassée.
+
+La page d'origine garde un chemin à elle, **`/legacy`**, tant qu'elle est livrée. Un chemin plutôt
+qu'une variable d'environnement : un exploitant qui tombe sur un défaut de la nouvelle a besoin d'un
+endroit où cliquer, pas d'une variable à poser et d'un redémarrage pour le faire. Voir
+`web/README.md`.
 
 **Node n'est jamais nécessaire à l'exécution.** La construction est une étape de développement et de
 CI ; le wheel et le binaire gelé servent le résultat sans Node installé.

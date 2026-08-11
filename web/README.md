@@ -7,11 +7,32 @@ built output with no Node installed, which is the promise the restructuring plan
 cd web
 npm install          # once
 npm run build        # writes ../corparius/api/static/
-npm run dev          # a dev server on :5173, proxied to a running core
+npm run dev          # a dev server, proxied to a running core
+CORP_UI_PORT=9000 npm run dev   # when the core is not on 8600
 ```
 
-Then `python -m corparius.cli ui` and open **`/app/`**. The single-file console is still at `/`, and
-stays there until this one replaces it.
+**The proxy is real now, and it was not before.** This file promised "proxied to a running core"
+since the folder existed and `vite.config.js` had no `server.proxy` in it, so `npm run dev` served
+the console and every `/api/...` call it made went to Vite — which answered its own 404 page. The
+console rendered and then reported that it could not reach the core, on a machine where the core was
+running fine. `/api` and `/site` now proxy to `127.0.0.1:${CORP_UI_PORT || 8600}`.
+
+Measured while changing `base`: Vite's dev server redirects `/` to `/app/` by itself, so both
+addresses behave in development the way they do in production, with no config for it.
+
+Then `python -m corparius.cli ui` and open **`/`** — this is the console now. `start-windows.bat`
+builds it before serving when Node is installed, so a double-click gets the new one and nothing has
+to be typed.
+
+`/app/` serves the same shell, and it is where the **assets** are: `base` is `/app/`, so the copy
+served at `/` names its script absolutely and finds it here. That is why the base is absolute and
+not relative — a relative `./console.js` resolves against whichever path the browser asked for, so
+the shell served at `/` requested `/console.js` and got a 404, which renders as a blank page with a
+200 status.
+
+The single-file page keeps a path of its own, `/legacy`, for as long as it ships — a path rather
+than an environment variable, because somebody who hits a bug in this console needs somewhere to
+click, not something to set and a restart to do it.
 
 ## Where the output goes, and why it matters
 
@@ -24,7 +45,9 @@ need, for nothing.
 
 The directory is **not tracked**. It is declared as a wheel artifact and in the PyInstaller spec,
 and CI builds it before either packages anything. A checkout that has never run `npm run build`
-simply has no `/app/`, which `paths.console_built()` reports and the route says out loud.
+simply has no shell, which `paths.console_built()` reports: `/app/` answers 404 naming the command,
+and `/` falls back to the single-file page. **That fallback is a fact about the checkout, not a
+setting** — built means new, unbuilt means old, and neither state is a broken console.
 
 ## The two things this console does not do
 
@@ -72,6 +95,10 @@ each card landed, and what is still only in the old page.
 | CEO | the conversation · the CEO's proposals · forget | — |
 | Settings | the 80-field registry (generated) · Backup · theme and accent | — |
 | Plugins | the seven seams · the registry · Skills and their scope | — |
+
+**The empty right-hand column is what let `/` switch.** The plan's condition for retiring the flag
+was the i18n key-set equality test, and this table is the other half of it: a key set can match while
+a card is missing, so the switch waited on both.
 
 **Getting started** was the last card, and the last one with no resource behind it. It is
 `app/onboarding.py` now, and moving it was not tidying — it holds three judgements a second client would

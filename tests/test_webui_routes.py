@@ -15,7 +15,8 @@ from corparius.api import contracts, routes
 # about what the console exposes, so it has to be made here, in a diff a
 # reviewer reads, rather than as a side effect of adding an endpoint.
 PUBLIC = {
-    ("GET", "/"),  # the shipped page; carries no operator data
+    ("GET", "/"),  # the console shell, built or shipped; carries no operator data
+    ("GET", "/legacy"),  # the same shipped page, at a path of its own now that `/` is the new one
     ("GET", "/api/session"),  # how the page learns a token is required
     # For the same reason as `/api/session`, one step earlier: a second client has to learn
     # what it is talking to before it can authenticate to it — and refuse a core too old for

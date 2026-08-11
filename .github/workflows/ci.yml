@@ -161,7 +161,12 @@ jobs:
           curl -fsS http://127.0.0.1:8600/app/ | grep -q '<div id="app">'
           curl -fsS http://127.0.0.1:8600/app/console.js  > /dev/null
           curl -fsS http://127.0.0.1:8600/app/console.css > /dev/null
-          echo "smoke OK: console up, example seeded, mock mode, update-check off, v1 meta + ETag/304, /app/ served"
+          # And `/` is that same shell, because that is what somebody double-clicking the binary
+          # gets. Asserted separately from /app/: the two differ by one branch in the handler, and
+          # the fallback answers 200 with the old page, so a broken switch looks like success.
+          curl -fsS http://127.0.0.1:8600/ | grep -q '<div id="app">'
+          curl -fsS http://127.0.0.1:8600/legacy | grep -q 'corparius console'
+          echo "smoke OK: console up, example seeded, mock mode, update-check off, v1 meta + ETag/304, / and /app/ served"
           kill "$pid" 2>/dev/null || true
 
   # Build the wheel, install it into a clean environment, and run it from a
@@ -225,5 +230,6 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8611/app/ | grep -q '<div id="app">'
           curl -fsS http://127.0.0.1:8611/app/console.js > /dev/null
+          curl -fsS http://127.0.0.1:8611/ | grep -q '<div id="app">'
           kill "$pid" 2>/dev/null || true
-          echo "wheel smoke OK: installed package runs a day offline and serves /app/"
+          echo "wheel smoke OK: installed package runs a day offline and serves the console at /"

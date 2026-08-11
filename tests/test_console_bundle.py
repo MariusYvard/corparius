@@ -52,14 +52,35 @@ def test_the_front_end_source_is_here_and_declares_its_tools():
     assert (WEB / "src" / "i18n.js").is_file()
 
 
+def test_the_dev_server_proxies_the_api_to_a_running_core():
+    """`web/README.md` promised this from the day the folder existed and the config never had it, so
+    `npm run dev` served the console and sent every `/api/...` call to Vite, which answered its own
+    404 page — the console rendered and then said it could not reach the core.
+
+    A test rather than a corrected sentence, because the failure is a *missing* line: nothing in a
+    build, a lint or a suite notices config that was never written. Verified by hand at the commit
+    that added it, against a core on a port of its own: `/api/v1/meta` through the dev server
+    answered `schema_version 21` and `/api/companies` listed only the test home's company.
+    """
+    config = (WEB / "vite.config.js").read_text(encoding="utf-8")
+    assert 'proxy: { "/api": CORE, "/site": CORE }' in config
+    assert "process.env.CORP_UI_PORT || 8600" in config, (
+        "the port must be the setting's, not a constant; a core on 9000 is a normal configuration"
+    )
+    # `/site` too: the Sales-site card renders the generated site in an iframe, and a preview that
+    # 404s in development is the kind of thing that gets 'fixed' in the component instead.
+    assert '"/site"' in config
+
+
 def test_the_build_writes_inside_the_package():
     """The decision the whole packaging story rests on. `outDir` pointing anywhere else would need
     a per-mode fallback, and the mode it would break is the installed wheel — the one hardest to
     notice from a checkout."""
     config = (WEB / "vite.config.js").read_text(encoding="utf-8")
     assert 'outDir: "../corparius/api/static"' in config
-    assert 'base: "./"' in config, (
-        "a relative base is what lets the same bundle be served from /app/ or opened from file://"
+    assert 'base: "/app/"' in config, (
+        "the shell is served from both / and /app/, so its assets must be named absolutely; a "
+        "relative base resolves them against whichever path was asked for and 404s from one of them"
     )
 
 
@@ -148,8 +169,8 @@ def test_the_shell_is_served_with_its_assets(server):
     status, kind, body = _fetch(server, "/app/")
     assert status == 200 and "text/html" in kind
     assert b'<div id="app">' in body
-    # The shell names its own assets relatively, which is what `base: "./"` buys.
-    assert b'src="./console.js"' in body
+    # Absolutely, because the same shell is served from `/` as well — see the base test above.
+    assert b'src="/app/console.js"' in body
     for asset, expected in (("console.js", "javascript"), ("console.css", "text/css")):
         status, kind, body = _fetch(server, f"/app/{asset}")
         assert status == 200 and expected in kind, asset
@@ -169,13 +190,39 @@ def test_the_french_table_is_a_separate_chunk(server):
 
 
 @built
-def test_the_single_file_console_is_still_what_slash_serves(server):
-    """The plan's "behind a flag", and serving both is the honest reading of it: an operator can look
-    at the new console without committing, and a half-built one is never the only way in."""
+def test_slash_serves_the_built_console(server):
+    """The flag's job is over. The plan kept the old page at `/` "until the new bundle passes the
+    i18n key-set equality test"; it passes, all seven tabs are rebuilt, and so `/` is the new
+    console — which is what somebody gets from `start-windows.bat` without typing a path.
+
+    Both, and the asset with them, because serving a shell whose `src` 404s is a 200 that renders
+    a blank page — the exact failure an absolute base exists to prevent.
+    """
     status, kind, body = _fetch(server, "/")
     assert status == 200 and "text/html" in kind
-    assert b"corparius console" in body
-    assert len(body) > 200_000, "that is the single-file page, not the new shell"
+    assert b'<div id="app">' in body
+    assert len(body) < 2_000, "that is the single-file page, not the new shell"
+    assert _fetch(server, "/app/console.js")[0] == 200, "the shell's own script must resolve"
+
+
+def test_slash_falls_back_to_the_shipped_page_when_nothing_is_built(server, monkeypatch):
+    """The state of a fresh clone, and it is a fact about the checkout rather than a setting: there
+    is no shell to serve, so `/` serves the page that needs no build. Neither state is broken, and
+    nothing has to be configured to get either."""
+    monkeypatch.setattr(paths, "console_built", lambda: False)
+    status, kind, body = _fetch(server, "/")
+    assert status == 200 and "text/html" in kind
+    assert b"corparius console" in body and len(body) > 200_000
+
+
+def test_the_shipped_page_keeps_a_path_of_its_own(server):
+    """The way back, and unconditional — a path rather than an environment variable, because an
+    operator who hits a bug in the new console needs somewhere to click, not something to set and
+    a restart to do it. It answers the same whether a build exists or not."""
+    status, kind, body = _fetch(server, "/legacy")
+    assert status == 200 and "text/html" in kind
+    assert len(body) > 200_000
+    assert body == paths.page_file().read_bytes()
 
 
 @built
@@ -219,7 +266,7 @@ def test_an_unbuilt_console_says_so_and_names_the_command(server, monkeypatch):
     assert status == 404 and "json" in kind
     payload = json.loads(body)
     assert "npm run build" in payload["error"]
-    assert " / " in payload["error"], "it has to point at the console that does work"
+    assert "/legacy" in payload["error"], "it has to point at the console that does work"
 
 
 # The absolute URLs the bundle is allowed to contain, and why each one is not a request:

@@ -20,6 +20,9 @@ from .contracts import Route
 # Exact matches, checked first.
 ROUTES: tuple[Route, ...] = (
     Route("GET", "/", handlers.page, public=True),
+    # The way back. `/` serves the built console once there is one, so the single-file page needs a
+    # path of its own or a built install has no route to it at all.
+    Route("GET", "/legacy", handlers.legacy_page, public=True),
     Route("GET", "/api/v1/meta", handlers.meta, public=True),
     # The narrow resources. `/api/overview` stays for the shipped page; these four are what a
     # second client polls, and `summary` is 2 859 bytes where the whole is 48 530.

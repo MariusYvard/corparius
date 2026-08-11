@@ -182,7 +182,11 @@ def dotenv_file() -> Path:
 
 
 def page_file() -> Path:
-    """The single-file operator console HTML (a shipped resource)."""
+    """The single-file operator console HTML (a shipped resource).
+
+    Served at `/legacy`, and at `/` when the built console is absent. It stays shipped because it is
+    the one console that needs no build step, which is exactly what makes it the fallback.
+    """
     return _resource("corparius", "webui.html")
 
 
@@ -198,7 +202,8 @@ def console_dir() -> Path:
 
     It can be **absent**, and that is a supported state rather than an error: the directory only
     exists after `npm run build`, and a source checkout that has never run it still has a working
-    console at `webui.html`. `console_built()` is the question a caller should ask.
+    console — `/` falls back to `webui.html`. `console_built()` is the question a caller should ask,
+    and since the switch it is what decides which console `/` serves at all.
     """
     return _resource("corparius", "api", "static")
 

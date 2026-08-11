@@ -63,6 +63,35 @@ PAGE = paths.page_file()
 
 
 def page(ctx):
+    """The console, and from this commit that means the built one.
+
+    The plan put the new console behind a flag "until the new bundle passes the i18n key-set
+    equality test". It passes, all seven tabs are rebuilt, and so the flag's job is finished: `/`
+    serves the shell from `corparius/api/static/`, which is what an operator gets by double-clicking
+    `start-windows.bat` and typing nothing.
+
+    **The fallback is not a flag, it is a fact about the checkout.** `static/` exists only after
+    `npm run build`, so a source tree that has never run it — and a wheel built without the CI step
+    — has no shell to serve. There, `/` keeps serving the single-file page it always did. That is
+    the one arrangement where neither state is a broken console: built means new, unbuilt means old,
+    and nothing has to be configured for either.
+
+    The old page stays reachable at `/legacy` for as long as it ships. A path rather than an
+    environment variable on purpose: an operator who hits a bug in the new console needs somewhere
+    to click, not something to set and a restart to do it.
+    """
+    if paths.console_built():
+        return 200, (paths.console_dir() / "index.html").read_bytes(), "text/html"
+    return 200, PAGE.read_bytes(), "text/html"
+
+
+def legacy_page(ctx):
+    """The single-file console, unconditionally — the way back when the new one misbehaves.
+
+    Its assets are not a concern the way the new shell's are: `webui.html` is 3 617 lines of HTML,
+    CSS and JS in one file with no external reference, which is exactly why it can be served from
+    any path with no build and no base. Every request it makes is a root-relative `/api/...`.
+    """
     return 200, PAGE.read_bytes(), "text/html"
 
 
@@ -1318,14 +1347,15 @@ CONSOLE_TYPES = {
 def console(ctx):
     """The built console, from `corparius/api/static/`.
 
-    Its own path — `/app/` — rather than a flag that decides whether it exists. An operator can look
-    at the new console without committing to it, and `/` keeps serving the single-file page it always
-    has. That is the plan's "behind a flag" arrangement, and serving both is the honest reading of
-    it: a flag that *replaced* the old page would make a half-built console the only way in.
+    Two paths reach the same shell and that is deliberate: `/` is what an operator gets by typing
+    nothing, and `/app/` is where the **assets** live — `base: "/app/"` in the Vite config, so a
+    shell served from either path names its script and stylesheet absolutely and resolves them here.
+    This handler is therefore both the shell's second address and the only one its assets have.
 
     Absent is a supported state and says so. The directory exists only after a build, and a source
-    checkout that has never run `npm run build` still has a working console at `/`. A 404 saying
-    "not built" with the command in it is worth more than an empty page.
+    checkout that has never run `npm run build` still has a working console — `/` falls back to the
+    single-file page, and `/legacy` serves it unconditionally. A 404 saying "not built" with the
+    command in it is worth more than an empty page.
 
     The same two guards as the site preview, and for the same reason: resolve, then check the
     resolved path is still inside the root. Checking the text of the URL instead is what
@@ -1334,8 +1364,8 @@ def console(ctx):
     if not paths.console_built():
         return 404, {
             "ok": False,
-            "error": "the new console is not built here. Run `npm run build` in web/, or use / "
-            "for the single-file console.",
+            "error": "the new console is not built here. Run `npm run build` in web/, or use "
+            "/legacy for the single-file console.",
         }
     root = paths.console_dir()
     rest = ctx.path[len("/app/") :] if ctx.path.startswith("/app/") else ""

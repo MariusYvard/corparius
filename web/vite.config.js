@@ -10,12 +10,33 @@ import { defineConfig } from "vite";
 // Anything written beside the package instead would need the `_data/` fallback that `companies/`
 // and `plugins/` need, for no gain.
 //
-// `base` is relative, so the bundle does not care what path it is served under. The console is
-// served from `/app/` today; a relative base means that can change without a rebuild, and it means
-// the same bundle opens from `file://` when someone wants to look at it.
+// `base` is `/app/` — absolute, and it was relative until the console became the default one. A
+// relative base sounds strictly more flexible and is the opposite here: the shell is now served
+// from **two** paths, `/` and `/app/`, and a relative `./console.js` resolves against whichever one
+// the browser asked for, so the copy served at `/` requested `/console.js` and got a 404 — a blank
+// page with a 200. An absolute base means the assets are at `/app/` no matter where the shell is
+// served from, which is what makes serving it from more than one path possible at all.
+//
+// The claim that went with the old value — that a relative base lets the bundle open from
+// `file://` — was never exercised by a test, and could not have been: this is an ES module that
+// dynamic-imports the French chunk, and a browser refuses module loads over `file://`.
+// The dev server's proxy, which `web/README.md` has promised since this folder existed and which
+// was never here. Without it `npm run dev` serves the console and every `/api/...` call it makes
+// goes to Vite, which answers its own 404 page — so the console renders and then reports that it
+// cannot reach the core, on a machine where the core is running fine.
+//
+// Measured while changing `base`: Vite's dev server redirects `/` to `/app/` on its own, so the two
+// addresses behave the same in development as in production without any config for it.
+const CORE = `http://127.0.0.1:${process.env.CORP_UI_PORT || 8600}`;
+
 export default defineConfig({
   plugins: [svelte()],
-  base: "./",
+  base: "/app/",
+  server: {
+    // `/site` is here because the Sales-site card renders the generated site in an iframe, and a
+    // preview that 404s in development is the kind of thing that gets "fixed" in the component.
+    proxy: { "/api": CORE, "/site": CORE },
+  },
   build: {
     outDir: "../corparius/api/static",
     emptyOutDir: true,

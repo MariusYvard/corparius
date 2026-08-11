@@ -1144,6 +1144,22 @@ prouve pas l'absence de Node comme la CI le fait avec `which node`. Ce qu'elle p
 contient que corparius, les deux dépendances d'exécution et leurs transitives, et il sert la console.
 La jambe CI reste la mesure de l'affirmation « sans Node ».
 
+Et le binaire gelé, la jambe où une analyse PyInstaller qui rate un import différé se voit :
+
+```text
+GET /api/companies    ->  ["example"]                    (le home de test, pas celui de l'opérateur)
+GET /api/v1/meta      ->  schema_version 21              tout sous-paquet s'importe, en une requête
+GET /app/console.js   ->  200, 155 519 octets            la console livrée depuis l'intérieur du .exe
+POST /api/v1/preflight ->  409 conflict                  l'enveloppe v1 refuse une sonde payante en mock
+```
+
+**La première tentative n'a rien prouvé, et c'est la procédure qui était fausse, pas le produit.** Le
+binaire a refusé de démarrer — « port 8600 is already in use », avec la commande pour en choisir un
+autre — et les requêtes sont donc parties vers la console que l'opérateur avait déjà ouverte. Elles ont
+répondu `schema_version: 20` et listé `vigil` : deux signatures qui n'appartenaient pas à un binaire
+fraîchement construit sur un home vide, et c'est ce désaccord qui a révélé l'erreur. Refait sur un port
+libre, avec l'assertion que la liste des sociétés est bien celle du home de test.
+
 ## La couverture par fichier
 
 `coverage report --fail-under=72` lit **un** nombre pour tout le paquet, et un nombre ne voit

@@ -87,12 +87,12 @@ GROUPS: list[dict] = [
     {
         "name": "versioning",
         "label_en": "Company versioning",
-        "label_fr": "Versionnement des entreprises",
+        "label_fr": "Versionnement des sociétés",
         "help_en": "Each company folder as its own private repository. Hosted repositories "
         "are always created private: a company folder can hold prospect names and "
         "correspondence.",
-        "help_fr": "Chaque dossier d'entreprise comme dépôt privé indépendant. Les dépôts "
-        "hébergés sont toujours créés en privé : un dossier d'entreprise peut contenir des "
+        "help_fr": "Chaque dossier de société comme dépôt privé indépendant. Les dépôts "
+        "hébergés sont toujours créés en privé : un dossier de société peut contenir des "
         "noms de prospects et de la correspondance.",
     },
 ]
@@ -1250,7 +1250,7 @@ SPEC: list[FieldSpec] = [
         label_fr="Commit après chaque run",
         help_en="Commit and push the company folder when a run ends, if anything changed. "
         "Once per run, not per tick. A failed push never costs the run.",
-        help_fr="Commite et pousse le dossier de l'entreprise à la fin d'un run, si quelque "
+        help_fr="Commite et pousse le dossier de la société à la fin d'un run, si quelque "
         "chose a changé. Une fois par run, pas par tick. Un push en échec ne coûte jamais "
         "le run.",
     ),

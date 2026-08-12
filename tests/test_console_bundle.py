@@ -72,23 +72,29 @@ def test_the_dev_server_proxies_the_api_to_a_running_core():
     assert '"/site"' in config
 
 
-def test_the_wordmark_is_the_page_s_own_bytes():
-    """Two consoles, one mark. `web/src/wordmark.png` is the base64 image inlined in the shipped page,
-    decoded — and a second copy of a brand asset is exactly the kind of thing that drifts into two
-    slightly different logos, so it is asserted byte for byte rather than by eye.
+def test_the_mark_is_the_brand_s_own_geometry():
+    """The mark is drawn, and its four fills are **sampled from the brand file** rather than picked.
 
-    Imported through Vite rather than inlined again, so the bundle carries a file the server already
-    knows how to serve (`.png` is in `CONSOLE_TYPES`) instead of another 9 KB of base64 in the script.
+    It was the shipped page's 213x136 raster wordmark scaled to 46px behind a glow, and a blind design
+    review called it the first thing a stranger sees and a dev placeholder — correctly: the art was
+    being downscaled to a third of its size and the word *corparius* was baked into the bitmap, so the
+    brand's own name rendered as four illegible pixels.
+
+    This asserts the redraw did not invent a logo. The colours are the ones in
+    `docs/icons/logo-corparius-mark.png`; if that file changes, this fails and somebody re-samples.
     """
-    import base64
-    import re
-
-    page = (pathlib.Path("corparius/webui.html")).read_text(encoding="utf-8")
-    match = re.search(
-        r'<h1 class="brand".*?<img src="data:image/png;base64,([A-Za-z0-9+/=]+)"', page, re.S
+    mark = (WEB / "src" / "Mark.svelte").read_text(encoding="utf-8")
+    for fill in ("#51b436", "#f8d509", "#fb7f25", "#318ada"):
+        assert fill in mark, f"{fill} is one of the brand mark's four fills"
+    assert 'stroke="currentColor"' in mark, (
+        "the rule follows the text colour so it holds on both themes"
     )
-    assert match, "the shipped page no longer inlines a wordmark; this test has gone blind"
-    assert base64.b64decode(match.group(1)) == (WEB / "src" / "wordmark.png").read_bytes()
+    assert not (WEB / "src" / "wordmark.png").exists(), (
+        "the raster is gone; it must not ship as well"
+    )
+    # And the name is a string the operator's font renders, not pixels.
+    shell = (WEB / "src" / "App.svelte").read_text(encoding="utf-8")
+    assert '<span class="name">corparius</span>' in shell
 
 
 def test_the_build_writes_inside_the_package():

@@ -27,10 +27,10 @@
   import { get, Refused } from "./api.js";
   import { LANGUAGES, load, translator } from "./i18n.js";
   import { loadTheme } from "./theme.js";
-  // The wordmark, byte for byte the one the shipped page carries inline. Imported rather than
-  // inlined so Vite emits it as a file the server already knows how to serve, and so the two
-  // consoles cannot end up showing two different marks.
-  import wordmark from "./wordmark.png";
+  // The mark as geometry rather than as a bitmap; see `Mark.svelte` for why the raster went.
+  import Mark from "./Mark.svelte";
+  import Segmented from "./Segmented.svelte";
+  import Ticked from "./Ticked.svelte";
 
   // The starting language is resolved and its table awaited in `main.js`, before this mounts, so
   // the first paint is already in the right language.
@@ -116,15 +116,25 @@
     document.documentElement.lang = lang;
     boot();
   });
+
+  // While the core is unreachable, keep asking. A restart takes a few seconds and the console finding
+  // that out by itself is the difference between "it broke" and "it was busy". Only while `failure` is a
+  // transport failure — a 401 or a version mismatch is an answer, and retrying an answer is a loop.
+  $effect(() => {
+    if (!failure || failure.code) return;
+    const timer = setInterval(boot, 3000);
+    return () => clearInterval(timer);
+  });
 </script>
 
 <div class="shell">
 <header class="top">
   <div class="wrap">
-    <h1 class="brand">
-      <img src={wordmark} alt="corparius" />
+    <div class="brand">
+      <Mark />
+      <span class="name">corparius</span>
       <span class="dim">{t("brand.console")}</span>
-    </h1>
+    </div>
     <span class="spacer"></span>
     {#if companies.length > 1}
       <select
@@ -135,13 +145,15 @@
         {#each companies as slug}<option value={slug}>{slug}</option>{/each}
       </select>
     {/if}
-    <!-- A segmented pair rather than two loose buttons: the two languages are one control with one
-         answer, and two separate outlines said they were two independent toggles. -->
-    <div class="seg" role="group" aria-label="language">
-      {#each LANGUAGES as code}
-        <button onclick={() => choose(code)} aria-pressed={lang === code}>{code}</button>
-      {/each}
-    </div>
+    <!-- The shared control: one outline, one seam, one answer. Two loose buttons said the two
+         languages were two independent toggles — and this component's own copy of the rule was the
+         reason the *unselected* segment read as active in light mode. -->
+    <Segmented
+      label="language"
+      value={lang}
+      options={LANGUAGES.map((code) => ({ value: code, label: code }))}
+      onpick={choose}
+    />
   </div>
 </header>
 
@@ -188,7 +200,21 @@
       </form>
     </section>
   {:else if failure}
-    <p class="banner danger">{t("conn.error")} {failure.message}</p>
+    <!-- A state, not a banner. When the core is not answering there is nothing else on the page, so a red
+         strip in the top-left corner of an empty window was the whole design of the most common failure
+         an operator will ever see. It says what happened, what it probably is, and keeps trying — a
+         restarting server comes back on its own, and having to press reload to find that out is the
+         console making its problem the operator's. -->
+    <section class="down">
+      <Mark size={44} />
+      <h1>{t("conn.title")}</h1>
+      <p class="desc"><Ticked text={t("conn.hint")} /></p>
+      <p class="reason mono">{failure.message}</p>
+      <div class="actions">
+        <button class="primary" onclick={boot}>{t("conn.retry")}</button>
+        <span class="muted small">{t("conn.retrying")}</span>
+      </div>
+    </section>
   {:else if meta && meta.api_version !== SPEAKS}
     <!-- Refusing once, by version, rather than failing one request at a time. This is the whole
          reason `meta` carries three of them. -->
@@ -204,10 +230,14 @@
          different resources on different cadences; a reused component would keep the other one's
          interval running against the wrong endpoints. -->
     {#key shown.id}
-      <!-- The page's own title. It uses the tab's name rather than a second string per tab: a subtitle
-           per tab would be seven more keys in two languages saying what the cards under them already
-           say. -->
-      <h1 class="page-title">{t("nav." + shown.id)}</h1>
+      <!-- The page's own top. Every tab went from a 76px header straight into a card, so the largest
+           text on any screen was a 16.5px card title and nothing said where you were but a 2px tab
+           underline. The subtitle is a key per tab rather than a reused sentence: seven tabs that all
+           describe themselves the same way describe none of themselves. -->
+      <header class="page-head">
+        <h1>{t("nav." + shown.id)}</h1>
+        <p class="desc">{t("sub." + shown.id)}</p>
+      </header>
       <div
         class="enter"
         role="tabpanel"
@@ -237,22 +267,24 @@
      strip, the wrap — is in `console.css`, because eight components each growing their own `.card`
      is how they drifted apart in the first place. */
 
-  /* The two languages are one control, so they share one outline and one seam. */
-  .seg { display: inline-flex; border: 1px solid var(--border-ui); border-radius: 8px; overflow: hidden; }
-  .seg button {
-    border: 0;
-    border-radius: 0;
-    padding: 6px 12px;
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .seg button + button { border-left: 1px solid var(--border-ui); }
-  .seg button[aria-pressed="true"] { background: var(--select-soft); color: var(--select); }
-
   /* The credential form is the one thing an operator may see before anything else, so it is centred
      and narrow rather than a full-width card with an input floating at the top of it. */
   .gate { max-width: 30rem; margin: 8vh auto 0; }
+
+  /* The unreachable state: centred, in the middle of the window, with the mark to say the console itself
+     is fine and it is the server that is missing. */
+  .down {
+    max-width: 34rem;
+    margin: 12vh auto 0;
+    display: grid;
+    justify-items: center;
+    text-align: center;
+    gap: 14px;
+  }
+  .down h1 { font-size: 21px; font-weight: 650; letter-spacing: -0.015em; }
+  .down .desc { margin: 0; }
+  .down .reason { color: var(--danger); background: var(--danger-soft); border-radius: 8px; padding: 7px 12px; }
+  .down .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
   .gate form { display: flex; gap: 8px; }
   .gate input { flex: 1; }
 </style>

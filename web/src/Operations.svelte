@@ -31,6 +31,8 @@
   import { get, post, Refused } from "./api.js";
   import Ticked from "./Ticked.svelte";
   import { fill, translator } from "./i18n.js";
+  import Empty from "./Empty.svelte";
+  import AgentIcon from "./AgentIcon.svelte";
 
   let { lang, company, token = "" } = $props();
   let t = $derived(translator(lang));
@@ -53,6 +55,12 @@
   // row count — a column showing 60 for a company that finished three hundred is the failure that
   // number exists to prevent.
   const COLUMNS = ["proposed", "approved", "in_progress", "waiting", "done"];
+
+  // Whether the board has anything at all. Said once, under the five columns, rather than five times
+  // inside them: "Empty" under a 0 in each of five lanes is five placeholders for one fact.
+  let boardEmpty = $derived(
+    Boolean(board) && COLUMNS.every((column) => (board.tasks[column] ?? []).length === 0),
+  );
   const SHOWN = 6;
 
   const q = () => `company=${encodeURIComponent(company)}`;
@@ -258,7 +266,7 @@
     {/each}
 
     {#if summary.approvals.length === 0 && summary.inbox.length === 0}
-      <p class="empty">{t("ops.calm")}</p>
+      <Empty text={t("ops.calm")} />
     {/if}
   </section>
 
@@ -276,7 +284,7 @@
       </div>
     {/each}
     </div>
-    {#if summary.rules.length === 0}<p class="empty">{t("ops.rulesEmpty")}</p>{/if}
+    {#if summary.rules.length === 0}<Empty text={t("ops.rulesEmpty")} />{/if}
   </section>
   </div>
 
@@ -358,13 +366,17 @@
           {#if column === "done" && board.done_total > rows.length}
             <p class="muted small">{fill(t("col.rest"), { n: board.done_total - rows.length })}</p>
           {/if}
-          {#if rows.length === 0}<p class="empty slim">{t("col.empty")}</p>{/if}
+          <!-- Nothing per column. Five columns each printing "Empty" under a 0 is five placeholders
+               where the board itself can say it once, below. -->
         </div>
       {/each}
     </div>
+    {#if boardEmpty}<Empty text={t("col.empty")} />{/if}
   </section>
 
-  <!-- 4. What the agents wrote and nothing published. -->
+  <!-- 4 and 5, side by side: each was a full-width card holding a paragraph half its own width, so the
+       right half of both was empty. -->
+  <div class="grid half">
   <section class="card">
     <h2>{t("dft.title")}</h2>
     <p class="desc">{t("dft.desc")}</p>
@@ -399,7 +411,7 @@
     {/if}
   </section>
 
-  <!-- 5. What the company learned, and the operator's veto over it. -->
+  <!-- What the company learned, and the operator's veto over it. -->
   <section class="card">
     <h2>{t("mem.title")}</h2>
     <p class="desc">{t("mem.desc")}</p>
@@ -426,6 +438,7 @@
       {#if memory.memory.length === 0}<p class="muted">{t("mem.none")}</p>{/if}
     {/if}
   </section>
+  </div>
 
   <!-- 6. The audit trail, and the column that cost 365 026 tokens to be missing. -->
   <section class="card">
@@ -450,7 +463,7 @@
                   minute: "2-digit",
                 })}
               </td>
-              <td>{action.agent}</td>
+              <td class="who"><AgentIcon id={action.agent} />{action.agent}</td>
               <td>{action.tool}</td>
               <td>
                 <span class="badge {action.ok ? 'ok' : 'danger'}">{t(action.ok ? "badge.ok" : "badge.fail")}</span>
@@ -520,6 +533,8 @@
   .edit { display: grid; gap: 6px; margin-top: 8px; }
   .scroll { overflow-x: auto; }
   .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .who { white-space: nowrap; }
+  .who :global(svg) { margin-right: 6px; }
   .out { color: var(--muted); }
   .state.ok { color: var(--ok); }
   .state.bad { color: var(--danger); }

@@ -27,6 +27,7 @@
    */
   import { get, post, Refused } from "./api.js";
   import { fill, translator } from "./i18n.js";
+  import Empty from "./Empty.svelte";
 
   let { lang, company, token = "" } = $props();
   let t = $derived(translator(lang));
@@ -219,14 +220,38 @@
   {#if !inventory}
     <p class="muted">{t("docs.reading")}</p>
   {:else}
-    <p class="tally">
-      {fill(t("docs.head"), {
-        n: inventory.total,
-        r: inventory.reaching,
-        u: inventory.used,
-        b: inventory.budget,
-      })}
-    </p>
+    <!-- Three readouts and a meter. It was one sentence carrying four numbers — "0 on file · 0 reach
+         the agents · 0 of 6000 characters used" — which is a debug line, not a report. The full
+         sentence stays as the meter's label, so nothing is lost for a screen reader. -->
+    <div class="pulse-row">
+      <div class="stat">
+        <div class="label">{t("docs.onFile")}</div>
+        <div class="value">{inventory.total}</div>
+      </div>
+      <div class="stat">
+        <div class="label">{t("docs.reaching")}</div>
+        <div class="value">{inventory.reaching}</div>
+      </div>
+      <div class="stat budget">
+        <div class="label">{t("docs.budget")}</div>
+        <div class="value">
+          {inventory.used.toLocaleString(lang)}
+          <span class="of">/ {inventory.budget.toLocaleString(lang)}</span>
+        </div>
+        <span
+          class="bar"
+          role="img"
+          aria-label={fill(t("docs.head"), {
+            n: inventory.total,
+            r: inventory.reaching,
+            u: inventory.used,
+            b: inventory.budget,
+          })}
+        >
+          <i style="width: {Math.min(100, Math.round((inventory.used / Math.max(1, inventory.budget)) * 100))}%"></i>
+        </span>
+      </div>
+    </div>
 
     <div class="rows">
     {#each inventory.documents as doc (doc.path)}
@@ -257,7 +282,7 @@
     {#if inventory.documents.length === 0}
       <!-- The sentence says "into the folder below", so the folder goes below it. It was printed above,
            which made the one instruction on an empty tab point the wrong way. -->
-      <p class="empty">{t("docs.none")}</p>
+      <Empty text={t("docs.none")} />
       <p class="folder muted small">
         <span>{t("docs.folder")}:</span>
         <code class="path" title={inventory.folder}>{inventory.folder}</code>
@@ -293,7 +318,8 @@
      console's language and live in `console.css`. */
   .outcome { font-size: 13px; color: var(--ok); margin: 0; }
   .outcome.bad { color: var(--danger); }
-  .tally { font-size: 14px; margin: 0; }
+  .stat.budget { min-width: 190px; }
+  .stat.budget .bar { margin-top: 7px; }
   .folder { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; overflow-wrap: anywhere; }
   /* A file past the prompt budget is dimmed rather than hidden: it is on disk, it is readable, and
      nothing reads it — which is a fact the operator needs, not one to tidy away. */

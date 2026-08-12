@@ -58,9 +58,11 @@ def test_there_are_tokens_to_check():
     """The guard on the guard: an empty read would make the comparison below vacuously true."""
     assert TOKENS.is_file(), "the tokens were never extracted"
     themes = _themes(TOKENS.read_text(encoding="utf-8"))
-    # Measured: 25 in the dark block, 23 in the light one, 4 motion durations in `:root`.
+    # Measured: 26 in the dark block, 24 in the light one, 4 motion durations in `:root`. Both gained
+    # `--well`, the surface a form field sits on — darker than the card in dark, lighter in light, which
+    # is the one token that has to move in opposite directions between the themes.
     assert sorted(themes) == ["dark", "light", "root"], sorted(themes)
-    assert len(themes["dark"]) == 25 and len(themes["light"]) == 23, {
+    assert len(themes["dark"]) == 26 and len(themes["light"]) == 24, {
         k: len(v) for k, v in themes.items()
     }
 

@@ -98,10 +98,11 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # The same numbers `tests/test_i18n.py` asserts against the JSON, here proved against what a
     # browser would actually load. Two tables, one count: a language that lost a key would show up
     # as a smaller number here and as a raw key below.
-    # 528: `prov.recheck` and `cfg.unsaved`, both added when a design review found a line reading
-    # "58 · 7d" — two numbers with no sentence — and a Save button at the bottom of a 5 000px form with
-    # nothing saying how much was unsaved.
-    assert result["counts"] == {"en": 528, "fr": 528}, result["counts"]
+    # 543. The fifteen since 528: a subtitle for each of the seven tabs, three readouts on Documents
+    # where one sentence had carried four numbers, a sentence for the intensity control, and four names
+    # for its steps, and three column headings for the provider list — which used to print "0% 21% 43% 71% 100%", the ramp's arithmetic showing through.
+    # Every one exists because a blind design review asked what a number on screen meant.
+    assert result["counts"] == {"en": 551, "fr": 551}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

@@ -1239,6 +1239,77 @@ est sous la ligne de flottaison quand une carte porte un `mix-blend-mode` : il a
 — où le panneau est intact — avant de toucher à quoi que ce soit. Le banc agrandit le viewport
 maintenant.
 
+## Treize revues à l'aveugle, et où la note s'arrête
+
+Après le premier passage (4/10), douze tours de plus, chacun jugé par un agent qui n'avait jamais vu le
+produit et à qui l'on demandait un verdict OUI/NON strict et de ne rien ménager.
+
+| Tour | Note | Ce qui a été corrigé ensuite |
+| --- | --- | --- |
+| 1 | 4/10 | la couche de composants entière, portée depuis la page livrée |
+| 2 | 5,5/10 | cases à cocher dessinées, mesure de 68 caractères, chemins tronqués, états vides |
+| 3 | 5/10 | **l'écart entre cartes empilées** — il n'y en avait aucun —, l'élévation, le centrage |
+| 4 | 6/10 | Réglages en sections, `theme.js` au démarrage, les accents français |
+| 5 | 6/10 | Réglages en une section à la fois, pastilles hors des étiquettes, pastilles de teinte |
+| 6 | 6/10 | la marque en SVG, un titre par page, l'échelle d'état, la marque désaturée refusée |
+| 7 | 5/10 | **une régression de ma main** : la grille appariée rendait une aide sur un caractère par ligne |
+| 8 | 6,5/10 | trois composants partagés — `Empty`, `Toggle`, `Segmented` — employés sans exception |
+| 9 | 7/10 | le puits des champs, la hiérarchie des boutons, le drapeau de danger sur les plugins |
+| 10 | 6/10 | cartes à la hauteur de leur contenu, une gouttière, cinq tailles de texte |
+| 11 | 6/10 | pastilles qui reviennent à la ligne au lieu d'être coupées, en-tête de tableau |
+| 12 | 6/10 | l'accent redevient « la chose à faire », les nombres passent en taille d'affichage |
+| 13 | 6,5/10 | le panneau CEO à la taille de son invitation, l'aperçu du site, les onze glyphes d'agent |
+
+**La note plafonne, et la treizième revue dit pourquoi mieux que moi.** Question posée directement :
+l'écart qui reste jusqu'à 9/10 est-il une liste de défauts, ou de l'ambition de conception ? Réponse
+citée : « **Ambition, not a defect list.** On peut corriger chaque point ci-dessus et atterrir à 7,5 —
+plus propre, toujours oubliable. » Ce qui manque n'est pas une correction mais une composition : une
+stratégie de densité pour Providers, une échelle d'affichage pour les nombres, une raison pour qu'une
+page ne ressemble pas à la suivante.
+
+**Deux revues se contredisent, et il fallait trancher.** Le tour 3 exigeait que les fonds de cartes
+d'une même rangée s'alignent ; les tours 10 et 11 exigeaient que chaque carte s'arrête où s'arrête son
+contenu. Les deux ne peuvent pas être vrais. Choix retenu : la hauteur du contenu, parce que
+l'alternative rembourre les cartes courtes de 150 px de vide, et qu'une rangée de cartes inégales est
+une composition alors qu'une rangée de cartes à moitié vides est une erreur.
+
+**Et un refus, dit avec sa raison.** Trois revues ont demandé de désaturer les surfaces vers un gris
+ardoise. Mesuré : cela améliore chaque contraste de texte. Refusé quand même — « tout est bleu » est une
+décision de marque écrite dans `tokens.css` avec la palette du propriétaire, et `--ui-chroma` est déjà
+le bouton de l'exploitant, désormais en quatre pas nommés (Aucune / Discrète / Moyenne / Pleine). Une
+revue esthétique ne renverse pas une décision documentée du propriétaire ; elle la rend réglable.
+
+### Ce que les revues ont trouvé qu'aucun test ne pouvait
+
+Les marges automatiques de `.wrap` annulant l'étirement du flex (l'onglet CEO 330 px plus étroit que les
+autres). Le thème de l'exploitant appliqué seulement après ouverture des Réglages. Six chaînes
+françaises du registre sans un accent. Une phrase à moitié traduite par construction. Et, la plus
+instructive, **la spécificité que Svelte ajoute à un sélecteur de composant** : trois fois j'ai corrigé
+la pastille sélectionnée dans le mauvais fichier, parce que `.rail button` scopé bat `.chip.on` global.
+Le gagnant doit être écrit là où vit le perdant.
+
+### Ce que l'aperçu et les glyphes rendent au produit
+
+Deux choses demandées pendant le chantier, et les deux étaient des régressions de ma part plutôt que des
+souhaits : **l'aperçu du site de vente** existait sur la page livrée — une iframe de `/site/<slug>/`
+rendue à 400 % et réduite au quart, de sorte qu'une page entière tient dans une carte — et la carte
+refaite montrait une date et deux boutons en parlant d'un site. Et **les onze glyphes d'agent** : les
+portraits en pixel art ont été retirés parce que trois revues les lisaient comme des emoji, ce qui
+laissait les rôles nommés en texte seulement. `AgentIcon.svelte` est la réponse que les revues
+demandaient réellement — un jeu monochrome sur la même grille de 24 unités, la même graisse de trait et
+la même taille optique que `TabIcon.svelte`, de sorte qu'un agent dans le journal et un onglet dans la
+navigation appartiennent au même dessin.
+
+### L'état « serveur injoignable » est un état, pas un bandeau
+
+Quand le cœur ne répond pas, il n'y a rien d'autre sur la page : un liseré rouge dans le coin supérieur
+gauche d'une fenêtre vide était donc toute la conception de la panne la plus courante qu'un exploitant
+verra. C'est une page centrée maintenant — la marque, ce qui s'est passé, ce que c'est probablement, la
+raison brute en rouge, et un bouton — **et elle réessaie toute les trois secondes.** Un serveur qui
+redémarre revient de lui-même ; devoir presser F5 pour l'apprendre, c'est la console qui fait de son
+problème celui de l'exploitant. Seulement quand l'échec est un échec de transport : un 401 ou une
+version incompatible sont des réponses, et réessayer une réponse est une boucle.
+
 ## Le cliquet
 
 Chaque règle embarque l'ensemble exact des violations d'aujourd'hui et affirme

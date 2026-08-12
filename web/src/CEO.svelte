@@ -34,6 +34,7 @@
    */
   import { get, post, Refused } from "./api.js";
   import { translator } from "./i18n.js";
+  import AgentIcon from "./AgentIcon.svelte";
 
   let { lang, company, token = "" } = $props();
   let t = $derived(translator(lang));
@@ -129,13 +130,14 @@
 {/if}
 {#if said}<p class="banner ok">{said}</p>{/if}
 
-<section class="card chat">
+<section class="card chat" class:talking={history.length > 0}>
   <!-- An identity header, because this tab is a conversation with somebody. It carried the shipped
        page's pixel-art portrait and no longer does: three blind design reviews independently read the
        11-icon set as emoji placeholder art — "a red heart for the social agent" — at 36px and at 20px.
        The art is charming in a terminal and it does not survive being next to a monochrome line-icon
        nav, which is a judgement about this interface rather than about the drawings. -->
   <div class="chat-id">
+    <AgentIcon id="ceo" size={26} />
     <div class="grow">
       <h2>{t("ceo.name")}</h2>
       <p class="desc">{t("ceo.role")}</p>
@@ -229,4 +231,10 @@
   /* No handle. It sat in the corner of the card as a browser artefact; the field already grows to its
      max height on its own, and the panel is not something an operator needs to resize. */
   .composer textarea { resize: none; }
+  /* Two heights, and which one depends on whether there is a conversation. An empty panel that reserves
+     a screen is a screen of nothing: the invitation collapses to the height of its own content, and the
+     transcript takes the window once there is something in it. Every review since the first named this
+     as the worst thing in the set. */
+  .chat { min-height: 0; }
+  .chat.talking { min-height: calc(100dvh - 330px); }
 </style>

@@ -20,7 +20,9 @@
    * writing the assertion before reading the product would have shipped something wrong.
    */
   import { get, post, Refused } from "./api.js";
-  import { translator } from "./i18n.js";
+  import { fill, translator } from "./i18n.js";
+  import Empty from "./Empty.svelte";
+  import AgentIcon from "./AgentIcon.svelte";
 
   // `onTab` is how a card whose call to action is "Open Providers" can actually open it. Optional, so
   // a caller that does not pass it gets a card whose tab buttons do nothing rather than a crash.
@@ -268,7 +270,6 @@
        equal-weight cards this page had, where "0 waiting" and "253 simulated hours" were the same
        size and neither was the answer to "does this need me". -->
   <section class="card hero" class:is-running={summary.running}>
-    <span class="field"></span>
     <button class="hero-gate" class:needs={needsYou > 0} onclick={() => onTab?.("operations")}>
       <span class="g-label">{t("stat.waiting")}</span>
       <span class="g-num">{needsYou}</span>
@@ -467,7 +468,7 @@
         {#if payments.source === "mock"}<p class="note">{t("pay.mock")}</p>{/if}
         {#if payments.source === "error"}<p class="note">{t("pay.error")} {payments.error}</p>{/if}
         {#if payments.payments.length === 0}
-          <p class="empty">{t("pay.none")}</p>
+          <Empty text={t("pay.none")} />
         {:else}
           <div class="stat">
             <div class="label">{t("pay.total")}</div>
@@ -497,7 +498,7 @@
         {/if}
       </div>
       {#if actions.length === 0}
-        <p class="empty">{t("activity.empty")}</p>
+        <Empty text={t("activity.empty")} />
       {:else}
         <ul class="feed">
           {#each actions.slice(0, 7) as action, i (action.ts + ":" + i)}
@@ -505,7 +506,7 @@
               <span class="badge {action.ok ? 'ok' : 'danger'}"
                 >{t(action.ok ? "badge.ok" : "badge.fail")}</span>
               <strong>{action.tool}</strong>
-              <span class="muted grow">{action.agent}</span>
+              <span class="who muted grow"><AgentIcon id={action.agent} />{action.agent}</span>
               <!-- Which provider answered, and whether the chain fell back. Schema 18 exists because
                    this was produced and thrown away: an operator read "Nothing usable drafted" as a
                    broken site generator while two providers were answering 429, after 365 026
@@ -522,17 +523,38 @@
       <h2>{t("spend.title")}</h2>
       <p class="desc">{t("spend.desc")}</p>
       {#if spend.length === 0}
-        <p class="empty">{t("spend.empty")}</p>
+        <Empty text={t("spend.empty")} />
       {:else}
+        <!-- Bars compare; with one series there is nothing to compare it to, and a single 100%-wide bar
+             reads as a progress meter that is finished. Two or more and the bars come back. -->
         <div>
           {#each spend as row (row.agent)}
-            <div class="spend-row">
-              <span class="who">{row.agent}</span>
-              <span class="bar"><i style="width: {Math.round(((row.t ?? 0) / busiest) * 100)}%"></i></span>
-              <span class="n">{row.t.toLocaleString(lang)}</span>
-            </div>
+            {#if spend.length > 1}
+              <div class="spend-row">
+                <span class="who"><AgentIcon id={row.agent} />{row.agent}</span>
+                <span class="bar"><i style="width: {Math.round(((row.t ?? 0) / busiest) * 100)}%"></i></span>
+                <span class="n">{row.t.toLocaleString(lang)}</span>
+              </div>
+            {:else}
+              <div class="kv">
+                <span class="k who"><AgentIcon id={row.agent} />{row.agent}</span>
+                <span class="v num">{row.t.toLocaleString(lang)}</span>
+              </div>
+            {/if}
           {/each}
         </div>
+        <!-- The session budget, in the card about what is being spent. It was on the status band as one
+             of six numbers; here it is the denominator the rows above are a share of, which is what
+             makes a card with one agent in it worth reading. -->
+        <div class="kv">
+          <span class="k">{t("progress.tokens")}</span>
+          <span class="v num">
+            {summary.status.tokens.toLocaleString(lang)} / {summary.session_budget.toLocaleString(lang)}
+          </span>
+        </div>
+        <span class="bar">
+          <i style="width: {Math.min(100, Math.round((summary.status.tokens / Math.max(1, summary.session_budget)) * 100))}%"></i>
+        </span>
         <!-- A total of 0.00 and "nobody reported a cost" are different facts, and `cost_reported` is
              what separates them. Telling an operator on a paid key that they spent nothing would be
              the worst kind of wrong: quietly plausible. -->
@@ -552,11 +574,14 @@
         </div>
         {#if site}
           <div class="actions">
+            <!-- Regenerate is the safe, expected action and takes the accent. Publish is the one with a
+                 real-world effect — it puts a site on the internet — so it takes the warm treatment this
+                 console uses for exactly that, rather than being a quiet button beside a loud one. -->
             <button class="primary" disabled={busy === "site"} onclick={buildSite}>
               {t(site.built ? "site.regenerate" : "site.generate")}
             </button>
             {#if site.built}
-              <button disabled={busy === "publish"} onclick={publish}>
+              <button class="real" disabled={busy === "publish"} onclick={publish}>
                 {busy === "publish" ? t("site.publishing") : t("site.publish")}
               </button>
             {/if}
@@ -565,15 +590,30 @@
       </div>
       {#if site}
         {#if site.built}
+          <!-- The preview, from `/site/<slug>/`. The frame is 16:9 and the document inside it is rendered
+               at 400% and scaled to a quarter, so a whole page fits a card at a legible density — and
+               `pointer-events: none` means a click lands on the card rather than inside somebody's site.
+               Keyed on the mtime so regenerating actually repaints it instead of showing the old build. -->
+          {#key site.mtime}
+            <div class="site-frame">
+              <iframe src={`/site/${encodeURIComponent(company)}/`} title={t("site.title")} tabindex="-1"
+              ></iframe>
+            </div>
+          {/key}
           <p class="note">
-            {new Date(site.mtime * 1000).toLocaleString(lang)}
+            {new Date(site.mtime * 1000).toLocaleString(lang, {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
             <!-- Which site this is. The console once previewed the generated path while the terminal
                  published the owned one, and both reported success — the second live divergence this
                  restructuring found. -->
-            {#if site.owned}· <code>{site.pages.length} {t("site.title")}</code>{/if}
+            {#if site.owned}· {fill(t("site.pages"), { n: site.pages.length })}{/if}
           </p>
         {:else}
-          <p class="empty">{t("site.none")}</p>
+          <Empty text={t("site.none")} />
         {/if}
         {#if said}<p class="note">{said}</p>{/if}
       {/if}
@@ -588,6 +628,9 @@
      to a third of the card truncated two of the three labels — which reads as a string bug rather than
      as a design decision. Three rows is the same shape in every language. */
   .run-choice { display: grid; gap: 8px; }
+
+  /* The glyph and the name read as one thing. */
+  .who { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 
   .hero-state {
     display: flex;

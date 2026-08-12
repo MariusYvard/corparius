@@ -31,6 +31,8 @@
   import { get, post, Refused } from "./api.js";
   import { applyTheme } from "./theme.js";
   import Ticked from "./Ticked.svelte";
+  import Segmented from "./Segmented.svelte";
+  import Toggle from "./Toggle.svelte";
   import { fill, translator } from "./i18n.js";
 
   let { lang, token = "" } = $props();
@@ -44,6 +46,15 @@
   let backup = $state(null);
   let mailTest = $state(null);
   let showAdvanced = $state(false);
+
+  // The four steps the intensity control offers, and the chroma each one means. Named, because a
+  // percentage of a chroma is arithmetic rather than a choice somebody can make.
+  const INTENSITY = [
+    { key: "flat", chroma: 0 },
+    { key: "subtle", chroma: 0.06 },
+    { key: "medium", chroma: 0.12 },
+    { key: "full", chroma: 0.2 },
+  ];
   // Edits in flight, keyed by field. Not seeded from the payload: a refresh must never overwrite what
   // somebody is halfway through typing, and an untouched field simply is not submitted.
   let edited = $state({});
@@ -229,10 +240,14 @@
     </div>
     <!-- Its own row. Beside the description it was a flex sibling that never shrinks, so the French
          label squeezed the paragraph into a 130px ribbon eight lines tall next to half an empty card. -->
-    <label class="toggle small">
-      <input type="checkbox" checked={showAdvanced} onchange={() => (showAdvanced = !showAdvanced)} />
+    <span class="toggle small">
+      <Toggle
+        checked={showAdvanced}
+        label={t("cfg.advanced")}
+        onchange={(next) => (showAdvanced = next)}
+      />
       <span class="muted">{t("cfg.advanced")}</span>
-    </label>
+    </span>
 
     <!-- Said once. It was rendered under every group that touches real-world effects, which on this
          page is three identical full-width boxes in one scroll — and three identical warnings teach
@@ -263,6 +278,12 @@
           <legend>
             {groupLabel(group)}
             {#if warnGroups.has(group.name)}<span class="dot warn-dot"></span>{/if}
+            <!-- Once, on the heading of the section it is about. It was a pill on every affected field —
+                 eight identical pills in one screen — and then a bare sentence under the description,
+                 which read as debug output. -->
+            {#if fields.some((f) => f.restart_required)}
+              <span class="badge plain">{t("cfg.restart")}</span>
+            {/if}
           </legend>
           <p class="desc small">{groupHelp(group)}</p>
 
@@ -280,22 +301,19 @@
             </label>
           {/if}
 
-          <div class="fields">
+          <div class="fields paired">
           {#each fields as f (f.key)}
             <label class="field" class:locked={!f.editable}>
               <span class="fname">{labelOf(f)}</span>
 
               {#if f.type === "bool"}
                 {@const on = String(edited[f.key] ?? f.value ?? f.default) === "true"}
-                <span class="switch">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={on}
-                    disabled={!f.editable}
-                    onclick={() => (edited[f.key] = on ? "false" : "true")}
-                  ><i></i></button>
-                </span>
+                <Toggle
+                  checked={on}
+                  disabled={!f.editable}
+                  label={labelOf(f)}
+                  onchange={(next) => (edited[f.key] = next ? "true" : "false")}
+                />
               {:else if f.type === "select"}
                 <select
                   disabled={!f.editable}
@@ -327,19 +345,21 @@
                 />
               {/if}
 
-              <!-- Under the field, not in the label. As label suffixes these two wrapped to a second
-                   line in French and staggered every input in the row by 30px. -->
-              <small class="meta">
-                {#if f.restart_required}<span class="badge">{t("cfg.restart")}</span>{/if}
-                {#if !f.editable}<span class="badge warn" title={t("cfg.envTip")}>{t("cfg.env")}</span>{/if}
-              </small>
-              {#if helpOf(f)}<small class="muted"><Ticked text={helpOf(f)} /></small>{/if}
-              {#if f.help_url}
-                <a class="link small" href={f.help_url} target="_blank" rel="noreferrer noopener">
-                  {t("cfg.stepOpen")}
-                </a>
-              {/if}
-              {#if refusals[f.key]}<small class="bad">{refusals[f.key]}</small>{/if}
+              <!-- Everything that documents the field, in one element. Beside the label these wrapped to
+                   a second line in French and staggered every input in the row by 30px; as three
+                   separate grid children they landed in the same cell and drew on top of each other. -->
+              <div class="fhelp">
+                {#if !f.editable}
+                  <span class="badge warn" title={t("cfg.envTip")}>{t("cfg.env")}</span>
+                {/if}
+                {#if helpOf(f)}<small class="muted"><Ticked text={helpOf(f)} /></small>{/if}
+                {#if f.help_url}
+                  <a class="link small" href={f.help_url} target="_blank" rel="noreferrer noopener">
+                    {t("cfg.stepOpen")}
+                  </a>
+                {/if}
+                {#if refusals[f.key]}<small class="bad">{refusals[f.key]}</small>{/if}
+              </div>
             </label>
           {/each}
           </div>
@@ -394,12 +414,15 @@
     <div class="field">
       <span>{t("settings.theme")}</span>
       <div class="actions">
-        {#each ["dark", "light"] as mode (mode)}
-          <button
-            aria-pressed={theme?.mode === mode}
-            onclick={() => setTheme({ mode })}
-          >{t("settings." + mode)}</button>
-        {/each}
+        <Segmented
+          label={t("settings.theme")}
+          value={theme?.mode ?? ""}
+          options={[
+            { value: "dark", label: t("settings.dark") },
+            { value: "light", label: t("settings.light") },
+          ]}
+          onpick={(mode) => setTheme({ mode })}
+        />
         <button class="link" onclick={() => setTheme({ mode: "", hue: "", chroma: "" })}>
           {t("settings.reset")}
         </button>
@@ -421,22 +444,22 @@
         {/each}
       </div>
     </div>
-    <label class="field">
+    <div class="field">
       <!-- The knob that makes "turn the colour off" still legible: chroma at 0 is greyscale, and the
            measured ramps still hold their contrast because only the chroma moves. -->
-      <span class="fname">
-        {t("settings.intensity")}
-        <span class="count">{Number(theme?.chroma ?? 0.12).toFixed(2)}</span>
-      </span>
-      <input
-        type="range"
-        min="0"
-        max="0.3"
-        step="0.01"
-        value={theme?.chroma ?? 0.12}
-        onchange={(e) => setTheme({ chroma: e.currentTarget.value })}
+      <span class="fname">{t("settings.intensity")}</span>
+      <!-- Named steps, not percentages. "0% 21% 43% 71% 100%" is the ramp's arithmetic showing through:
+           nobody outside `tokens.css` knows what 43% of a chroma is, and four names are what the
+           operator is choosing between. -->
+      <Segmented
+        label={t("settings.intensity")}
+        value={INTENSITY.find((s) => Math.abs(Number(theme?.chroma ?? 0.12) - s.chroma) < 0.03)?.key ??
+          "medium"}
+        options={INTENSITY.map((s) => ({ value: s.key, label: t("settings." + s.key) }))}
+        onpick={(key) => setTheme({ chroma: String(INTENSITY.find((s) => s.key === key).chroma) })}
       />
-    </label>
+      <small class="muted">{t("settings.intensityHint")}</small>
+    </div>
   </section>
   </div>
 {/if}
@@ -451,18 +474,33 @@
   .rail { display: flex; flex-wrap: wrap; gap: 4px 2px; }
   .rail button { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
   .rail button:hover { color: var(--select); }
+  /* Declared here, not in `console.css`: Svelte scopes `.rail button` to this component and that beats a
+     global `.chip.on`, so the selected pill kept the muted colour and the unselected ones read as
+     active. The winner has to be written where the loser lives. */
+  .rail button.on { color: var(--accent-ink); }
   .warn-dot { background: var(--warn); }
   legend { display: flex; align-items: center; gap: 8px; }
 
-  .fields { display: grid; gap: 14px 20px; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); }
+  /* Three columns of fields at this card's width, each one label over control over documentation. The
+     alternative — control on the left, documentation on the right — was tried and reverted: it needs a
+     column count of one, and eighty single-file fields is the 5 000px page this replaced.
+
+     `align-items: start` is what keeps a field whose help runs five lines from stretching its two
+     neighbours to match. */
+  .fields {
+    display: grid;
+    gap: 18px 28px;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    align-items: start;
+  }
+  .field { display: grid; gap: 5px; align-content: start; font-size: 13.5px; min-width: 0; }
+  /* Everything that documents the field, in one child: as three grid children they landed in the same
+     cell and drew on top of each other. */
+  .fhelp { display: grid; gap: 5px; justify-items: start; }
+  .fhelp small { font-size: 12px; line-height: 1.55; color: var(--muted); }
   fieldset { border: 0; border-top: 1px solid var(--border); margin: 16px 0 0; padding: 14px 0 0; min-width: 0; }
   legend { padding: 0; font-size: 14px; font-weight: 600; color: var(--text); }
-  .field { display: grid; gap: 4px; align-content: start; font-size: 13.5px; min-width: 0; }
   .field > .fname { color: var(--muted); }
-  /* Empty most of the time, and it collapses when it is: `:empty` rather than a conditional wrapper, so
-     a field with neither chip costs no vertical space. */
-  .field .meta { display: flex; gap: 6px; flex-wrap: wrap; }
-  .field .meta:empty { display: none; }
   .field input, .field select { width: 100%; }
   /* A field the environment owns is shown, not hidden: an operator looking for it needs to find it
      and read why it is not theirs to change here. */
@@ -473,7 +511,6 @@
      unselected option in full-contrast white, so the unselected one read as active. */
   button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   input:disabled, select:disabled { opacity: 0.6; cursor: not-allowed; }
-  input[type="range"] { padding: 0; accent-color: var(--select); }
   .hues { display: flex; gap: 8px; flex-wrap: wrap; }
   .hue {
     width: 26px;

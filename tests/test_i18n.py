@@ -258,7 +258,11 @@ def test_the_untranslated_strings_are_the_ones_that_should_be():
     """
     en, fr = _json("en"), _json("fr")
     same = sorted(k for k in en if en[k] == fr[k])
-    assert len(same) == 21, (
+    # 20. Down to 19 when `progress.tokens` became *jetons* and `nav.providers` became *Fournisseurs*,
+    # then back to 20 for `site.pages` — "{n} pages", which is the same word in both languages and is the
+    # kind of entry this list exists to hold. A number that only ever goes up has stopped meaning
+    # anything; so has one that is never allowed to.
+    assert len(same) == 20, (
         f"{len(same)} keys are identical in both languages: {same}. If that is a word that does "
         "not translate, raise the number here and say which; if it is a forgotten string, "
         "translate it."

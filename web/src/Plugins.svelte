@@ -34,6 +34,7 @@
    */
   import { get, post, Refused } from "./api.js";
   import { fill, translator } from "./i18n.js";
+  import Empty from "./Empty.svelte";
 
   let { lang, company, token = "" } = $props();
   let t = $derived(translator(lang));
@@ -135,7 +136,10 @@
     <!-- Said before the list rather than after: an operator who enables a plugin while the feature is
          off has done everything right and nothing will happen. -->
     {#if !data.enabled}<p class="banner warn small">{t("pl.off")}</p>{/if}
-    <p class="banner warn small">{t("pl.unverified")}</p>
+    <!-- A danger, not a note. It said the same thing in the same blue box as "plugins are off", which
+         is an information notice — so the one sentence on this page about running unaudited third-party
+         code carried no more weight than a tip. -->
+    <p class="banner danger small">{t("pl.unverified")}</p>
 
     <h3>{t("pl.installed")}</h3>
     <div class="rows">
@@ -181,7 +185,7 @@
       </article>
     {/each}
     </div>
-    {#if installed.length === 0}<p class="empty">{t("pl.none")}</p>{/if}
+    {#if installed.length === 0}<Empty text={t("pl.none")} />{/if}
 
     <h3>{t("pl.available")}</h3>
     <div class="rows">
@@ -197,7 +201,7 @@
       </article>
     {/each}
     </div>
-    {#if offers.length === 0}<p class="empty">{t("pl.regEmpty")}</p>{/if}
+    {#if offers.length === 0}<Empty text={t("pl.regEmpty")} />{/if}
     </div>
   </section>
 
@@ -271,7 +275,7 @@
           {/if}
         </article>
       {/each}
-      {#if skills.length === 0}<p class="empty">{t("sk.none")}</p>{/if}
+      {#if skills.length === 0}<Empty text={t("sk.none")} />{/if}
     {/if}
   </section>
   </div>

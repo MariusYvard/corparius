@@ -21,9 +21,18 @@
      stay fixed. Health (teal) and danger (red) keep their own hue on purpose:
      they carry meaning, not brand. */
   --ui-hue: 264; --ui-chroma: 1;   /* --ui-chroma scales the brand saturation (0 = neutral) */
-  --bg: oklch(0.195 calc(0.065 * var(--ui-chroma)) var(--ui-hue)); --surface: oklch(0.245 calc(0.085 * var(--ui-chroma)) var(--ui-hue));
-  --raised: oklch(0.31 calc(0.105 * var(--ui-chroma)) var(--ui-hue));
-  --border: oklch(0.40 calc(0.12 * var(--ui-chroma)) var(--ui-hue));
+  /* Measured, and lifted because the measurement was thin: a card at 0.245 against a 0.195 page is
+     **1.121:1**, so seven tabs read as one flat navy slab held together by hairlines. 0.275 puts
+     card:page at **1.226:1** and border:card at 1.858:1 — visible structure — and the text ramp still
+     clears everything that matters: text on card 13.6:1, muted on card 6.0:1, muted on raised 4.9:1,
+     and `--border-ui` on card 3.7:1 against the 3:1 a control outline needs. */
+  --bg: oklch(0.195 calc(0.065 * var(--ui-chroma)) var(--ui-hue)); --surface: oklch(0.275 calc(0.085 * var(--ui-chroma)) var(--ui-hue));
+  --raised: oklch(0.335 calc(0.10 * var(--ui-chroma)) var(--ui-hue));
+  /* The field, recessed. A control that is lighter than the card it sits on reads as another
+     card; sixteen of them down a list read as sixteen. 1.178:1 below the surface, text in it
+     15.9:1, its outline 4.4:1. Light mode wants the opposite and gets it below. */
+  --well: oklch(0.215 calc(0.075 * var(--ui-chroma)) var(--ui-hue));
+  --border: oklch(0.435 calc(0.115 * var(--ui-chroma)) var(--ui-hue));
   --border-ui: oklch(0.60 calc(0.145 * var(--ui-chroma)) var(--ui-hue));    /* >=3:1 on surface and raised */
   --select: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue));       /* focus and selection */
   --select-soft: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue) / 0.20);
@@ -52,6 +61,9 @@
   --bg: oklch(0.955 calc(0.010 * var(--ui-chroma)) var(--ui-hue)); --surface: oklch(1 0 0);
   --raised: oklch(0.945 calc(0.014 * var(--ui-chroma)) var(--ui-hue));
   --border: oklch(0.86 calc(0.02 * var(--ui-chroma)) var(--ui-hue)); --border-ui: oklch(0.44 calc(0.11 * var(--ui-chroma)) var(--ui-hue));
+  /* In light the field is the lightest thing on the page, not the darkest: white on a tinted
+     card, which is the convention a sunken tinted input gets backwards. */
+  --well: oklch(1 0 0);
   --select: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue)); --select-soft: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue) / 0.12);
   --text: oklch(0.283 calc(0.083 * var(--ui-chroma)) var(--ui-hue)); --muted: oklch(0.45 calc(0.05 * var(--ui-chroma)) var(--ui-hue));
   --accent: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue)); --accent-ink: oklch(0.99 calc(0.004 * var(--ui-chroma)) var(--ui-hue));
@@ -61,7 +73,12 @@
   --warm: oklch(0.55 0.135 58); --warm-soft: oklch(0.55 0.135 58 / 0.12); --warm-line: oklch(0.55 0.135 58 / 0.5);
   --halo: oklch(0.55 0.14 250 / 0.30);
   --danger: oklch(0.52 0.17 25); --danger-soft: oklch(0.52 0.17 25 / 0.13);  /* fixed */
-  --shadow: 0 1px 2px oklch(0.28 calc(0.08 * var(--ui-chroma)) var(--ui-hue) / 0.08); color-scheme: light;
+  /* A real step, because a white card on a 0.955 page with no shadow is a paler rectangle rather than a
+     surface. Two shadows: a 1px contact edge and a soft 12px lift, both in the brand hue so the light
+     theme does not go grey at the edges. */
+  --shadow: 0 1px 2px oklch(0.28 calc(0.08 * var(--ui-chroma)) var(--ui-hue) / 0.10),
+    0 6px 16px -8px oklch(0.28 calc(0.08 * var(--ui-chroma)) var(--ui-hue) / 0.14);
+  color-scheme: light;
 }
 :root {
   /* Motion. One curve, three speeds; see DESIGN.md. Exits run at 75% of entrances. */

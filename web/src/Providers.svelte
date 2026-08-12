@@ -34,6 +34,7 @@
    */
   import { get, post, Refused } from "./api.js";
   import { fill, translator } from "./i18n.js";
+  import Toggle from "./Toggle.svelte";
 
   let { lang, token = "" } = $props();
   let t = $derived(translator(lang));
@@ -322,33 +323,33 @@
   <section class="card">
     <h2>{t("prov.runtime")}</h2>
     <p class="desc">{t("prov.note")}</p>
-    <label class="row toggle">
+    <div class="row toggle">
       <span><strong>{t("prov.mock")}</strong> <span class="muted">· {t("prov.mockHint")}</span></span>
-      <input
-        type="checkbox"
+      <Toggle
         checked={providers.llm_mock}
         disabled={busy === "CORP_LLM_MOCK"}
-        onchange={(e) => toggle("CORP_LLM_MOCK", e.currentTarget.checked)}
+        label={t("prov.mock")}
+        onchange={(next) => toggle("CORP_LLM_MOCK", next)}
       />
-    </label>
-    <label class="row toggle">
+    </div>
+    <div class="row toggle">
       <span><strong>{t("prov.cloud")}</strong> <span class="muted">· {t("prov.cloudHint")}</span></span>
-      <input
-        type="checkbox"
+      <Toggle
         checked={providers.cloud_enabled}
         disabled={busy === "CORP_CLOUD_ENABLED"}
-        onchange={(e) => toggle("CORP_CLOUD_ENABLED", e.currentTarget.checked)}
+        label={t("prov.cloud")}
+        onchange={(next) => toggle("CORP_CLOUD_ENABLED", next)}
       />
-    </label>
-    <label class="row toggle">
+    </div>
+    <div class="row toggle">
       <span><strong>{t("prov.cc")}</strong> <span class="muted">· {t("prov.ccHint")}</span></span>
-      <input
-        type="checkbox"
+      <Toggle
         checked={providers.claude_code}
         disabled={busy === "CORP_CLAUDE_CODE"}
-        onchange={(e) => toggle("CORP_CLAUDE_CODE", e.currentTarget.checked)}
+        label={t("prov.cc")}
+        onchange={(next) => toggle("CORP_CLAUDE_CODE", next)}
       />
-    </label>
+    </div>
   </section>
   </div>
 
@@ -356,15 +357,27 @@
     <h2>{t("prov.free")}</h2>
     <p class="desc">{t("prov.freeNote")}</p>
 
+    <!-- A header row, because sixteen rows of four controls with nothing naming the columns is a wall
+         rather than a table. -->
+    <div class="prow phead" aria-hidden="true">
+      <span>{t("prov.th.name")}</span>
+      <span>{t("prov.th.key")}</span>
+      <span>{t("prov.th.actions")}</span>
+      <span></span>
+    </div>
     {#each providers.providers as p (p.name)}
       <article class="prow">
         <div class="pname">
           <strong>{p.name}</strong>
-          {#if p.recommended}<span class="badge ok">{t("prov.startHere")}</span>{/if}
-          {#if p.no_card}<span class="badge" title={t("prov.noCardTip")}>{t("prov.noCard")}</span>{/if}
-          {#if p.key_optional}<span class="badge">{t("prov.optional")}</span>{/if}
-          <span class="badge" class:ok={p.configured}>
-            {t(p.key_set ? "badge.keySet" : "badge.noKey")}
+          <!-- Their own strip, which scrolls rather than wraps: three providers carried a third badge
+               and grew the row, so a list of seventeen had three heights. -->
+          <span class="pbadges">
+            <span class="badge" class:ok={p.configured}>
+              {t(p.key_set ? "badge.keySet" : "badge.noKey")}
+            </span>
+            {#if p.recommended}<span class="badge action">{t("prov.startHere")}</span>{/if}
+            {#if p.no_card}<span class="badge plain" title={t("prov.noCardTip")}>{t("prov.noCard")}</span>{/if}
+            {#if p.key_optional}<span class="badge plain">{t("prov.optional")}</span>{/if}
           </span>
         </div>
 
@@ -583,7 +596,13 @@
         </p>
       {:else if ollama.local_reason}
         <p class="muted small">{t("oll.fallbackOnly")}</p>
-        <p class="note mono">{ollama.local_reason}</p>
+        <!-- Behind a disclosure. `providers/hardware.py` builds this in English because it reports
+             numbers and has no business knowing a language, so on the French page it was an English
+             sentence in a monospace face — engineering output shown as prose. -->
+        <details class="measure">
+          <summary>{t("ops.more")}</summary>
+          <p class="note mono">{ollama.local_reason}</p>
+        </details>
       {/if}
     {/if}
   </section>
@@ -628,6 +647,7 @@
   .badge.blocked { color: var(--danger); background: var(--danger-soft); }
   .badge.capacity { color: var(--warn); background: var(--warn-soft); }
   .badge.usable { color: var(--ok); background: var(--ok-soft); }
+  .measure summary { cursor: pointer; color: var(--select); font-size: 13px; }
   .report { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
 
   /* One grid for the five tiers: a fixed label column, one input width, and enough of it to hold a

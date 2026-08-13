@@ -306,7 +306,7 @@
       </div>
       <div class="hero-state">
         {#if summary.running}
-          <span class="badge ok"><i class="dot"></i>{t("badge.running")}</span>
+          <span class="badge ok">{t("badge.running")}</span>
           {#if summary.loop}<span class="badge">{t("badge.looping")}</span>{/if}
           {#if summary.stopping}<span class="badge warn">{t("badge.stopping")}</span>{/if}
         {/if}
@@ -314,6 +314,49 @@
           <span class="badge warn">{t("badge.frozen")} · {summary.freezes}</span>
         {/if}
       </div>
+    </div>
+
+    <!-- The run control, inside the band. Seeing what needs you and starting a day are the two things an
+         operator does first, and they were a band and a card two rows apart — so the page opened with a
+         number and made you scroll to act on it. -->
+    <div class="hero-act">
+{#if summary.running}
+        <button disabled={busy === "run"} onclick={stopRun}>{t("run.stop")}</button>
+      {:else}
+        <!-- One column of three. See the note on `.run-choice`. -->
+        <div class="run-choice">
+          <button
+            class="primary"
+            disabled={busy === "run"}
+            onclick={() => startRun(6, false)}
+            title={t("run.tickTip")}
+          >{t("run.h6")}</button>
+          <button disabled={busy === "run"} onclick={() => startRun(24, false)}>{t("run.h24")}</button>
+          <button disabled={busy === "run"} onclick={() => startRun(24, true)}>{t("run.loop")}</button>
+        </div>
+      {/if}
+      {#if lastRun}
+        <!-- An interrupted run says so in its own words, from the core. Nothing was resumed, and
+             reporting it as finished would claim ticks that never happened. -->
+        <p class="note">
+          {#if lastRun.error}
+            {lastRun.error}
+          {:else}
+            {t("progress.lastRun")}: {lastRun.ticks_run ?? 0} {t("progress.run")}
+          {/if}
+        </p>
+      {/if}
+      {#if jobs.length}
+        <ul class="feed">
+          {#each jobs.slice(0, 3) as job (job.id)}
+            <li>
+              <span class="badge {job.state === 'done' || job.state === 'running' ? 'ok' : 'danger'}"
+                >{job.state}</span>
+              <span class="muted grow">{job.progress || job.kind}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </div>
   </section>
 
@@ -377,117 +420,16 @@
 
   <!-- Varied cells rather than a stack of identical ones: the log is wide because it is read, the
        meters are narrow because they are glanced at. -->
-  <div class="bento">
-    <section class="card b-2">
-      <h2>{t("run.button")}</h2>
-      <p class="desc">{t("run.title")}</p>
-      {#if summary.running}
-        <button disabled={busy === "run"} onclick={stopRun}>{t("run.stop")}</button>
-      {:else}
-        <!-- One column of three. See the note on `.run-choice`. -->
-        <div class="run-choice">
-          <button
-            class="primary"
-            disabled={busy === "run"}
-            onclick={() => startRun(6, false)}
-            title={t("run.tickTip")}
-          >{t("run.h6")}</button>
-          <button disabled={busy === "run"} onclick={() => startRun(24, false)}>{t("run.h24")}</button>
-          <button disabled={busy === "run"} onclick={() => startRun(24, true)}>{t("run.loop")}</button>
-        </div>
-      {/if}
-      {#if lastRun}
-        <!-- An interrupted run says so in its own words, from the core. Nothing was resumed, and
-             reporting it as finished would claim ticks that never happened. -->
-        <p class="note">
-          {#if lastRun.error}
-            {lastRun.error}
-          {:else}
-            {t("progress.lastRun")}: {lastRun.ticks_run ?? 0} {t("progress.run")}
-          {/if}
-        </p>
-      {/if}
-      {#if jobs.length}
-        <ul class="feed">
-          {#each jobs.slice(0, 3) as job (job.id)}
-            <li>
-              <span class="badge {job.state === 'done' || job.state === 'running' ? 'ok' : 'danger'}"
-                >{job.state}</span>
-              <span class="muted grow">{job.progress || job.kind}</span>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </section>
-
-    <section class="card b-2">
-      <h2>{t("live.title")}</h2>
-      <p class="desc">{t("live.desc")}</p>
-      {#if golive}
-        <div>
-          <div class="kv">
-            <span class="k">{t("live.payment")}</span>
-            <span class="badge {golive.payment.wired ? 'ok' : 'warn'}"
-              >{t(golive.payment.wired ? "live.paidOk" : "live.paidNo")}</span>
-          </div>
-          <div class="kv">
-            <span class="k">{t("live.mail")}</span>
-            <span class="badge {golive.mail.wired ? 'ok' : 'warn'}"
-              >{t(golive.mail.wired ? "live.mailOk" : "live.mailNo")}</span>
-          </div>
-          <div class="kv">
-            <span class="k">{t("live.hosting")}</span>
-            <!-- Three states, not two: not hosted, a token set but nothing published yet, and live at
-                 a URL. Collapsing the middle one would tell an operator who has done half the work
-                 that they have done none of it. -->
-            <span class="v">
-              {#if golive.hosting.published_url}
-                <a class="badge ok" href={golive.hosting.published_url} target="_blank" rel="noreferrer noopener">
-                  {t("live.hostLive")}
-                </a>
-              {:else if golive.hosting.token_set}
-                <span class="badge warn">{t("live.hostReady")}</span>
-              {:else}
-                <span class="badge">{t("live.hostNo")}</span>
-              {/if}
-            </span>
-          </div>
-        </div>
-      {/if}
-    </section>
-
-    <section class="card b-2">
-      <h2>{t("pay.title")}</h2>
-      <p class="desc">{t("pay.desc")}</p>
-      {#if payments?.error}
-        <p class="note">{t("pay.error")} {payments.error}</p>
-      {:else if payments}
-        <!-- `source` is "stripe", "mock" or "error" — never "live", which was my invention and would
-             have labelled real charges as samples. Sample data reading as sales is the worst kind of
-             wrong on the one card about money, so the mock says so and an error says which. -->
-        {#if payments.source === "mock"}<p class="note">{t("pay.mock")}</p>{/if}
-        {#if payments.source === "error"}<p class="note">{t("pay.error")} {payments.error}</p>{/if}
-        {#if payments.payments.length === 0}
-          <Empty text={t("pay.none")} />
-        {:else}
-          <div class="stat">
-            <div class="label">{t("pay.total")}</div>
-            <div class="value">{payments.total_paid.toFixed(2)}</div>
-          </div>
-          <ul class="feed">
-            {#each payments.payments.slice(0, 4) as charge, i (charge.ts + ":" + i)}
-              <li>
-                <strong>{charge.amount.toFixed(2)} {charge.currency}</strong>
-                <span class="muted grow">{charge.description}</span>
-                {#if !charge.paid}<span class="badge danger">{t("badge.fail")}</span>{/if}
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      {/if}
-    </section>
-
-    <section class="card b-4">
+  <!-- The composition, top to bottom, and the reason each page now looks unlike the next: **what needs
+       you and what you do about it**, then **what happened**, then **what it cost and what it produced**.
+       It was six equal cells in a bento; a bento is a shape, not an order. -->
+  <div class="grid cols">
+    <!-- The reading column: what the agents did, then what they produced. **One grid child**, because in
+         a two-column grid three children means the third wraps to a second row — which is how this page
+         grew a 700x800 hole where its own rail should have been. -->
+    <div class="stack">
+    <!-- What the agents actually did. -->
+    <section class="card">
       <div class="card-head">
         <div>
           <h2>{t("activity.title")}</h2>
@@ -519,54 +461,10 @@
       {/if}
     </section>
 
-    <section class="card b-2">
-      <h2>{t("spend.title")}</h2>
-      <p class="desc">{t("spend.desc")}</p>
-      {#if spend.length === 0}
-        <Empty text={t("spend.empty")} />
-      {:else}
-        <!-- Bars compare; with one series there is nothing to compare it to, and a single 100%-wide bar
-             reads as a progress meter that is finished. Two or more and the bars come back. -->
-        <div>
-          {#each spend as row (row.agent)}
-            {#if spend.length > 1}
-              <div class="spend-row">
-                <span class="who"><AgentIcon id={row.agent} />{row.agent}</span>
-                <span class="bar"><i style="width: {Math.round(((row.t ?? 0) / busiest) * 100)}%"></i></span>
-                <span class="n">{row.t.toLocaleString(lang)}</span>
-              </div>
-            {:else}
-              <div class="kv">
-                <span class="k who"><AgentIcon id={row.agent} />{row.agent}</span>
-                <span class="v num">{row.t.toLocaleString(lang)}</span>
-              </div>
-            {/if}
-          {/each}
-        </div>
-        <!-- The session budget, in the card about what is being spent. It was on the status band as one
-             of six numbers; here it is the denominator the rows above are a share of, which is what
-             makes a card with one agent in it worth reading. -->
-        <div class="kv">
-          <span class="k">{t("progress.tokens")}</span>
-          <span class="v num">
-            {summary.status.tokens.toLocaleString(lang)} / {summary.session_budget.toLocaleString(lang)}
-          </span>
-        </div>
-        <span class="bar">
-          <i style="width: {Math.min(100, Math.round((summary.status.tokens / Math.max(1, summary.session_budget)) * 100))}%"></i>
-        </span>
-        <!-- A total of 0.00 and "nobody reported a cost" are different facts, and `cost_reported` is
-             what separates them. Telling an operator on a paid key that they spent nothing would be
-             the worst kind of wrong: quietly plausible. -->
-        {#if summary.cost_reported}
-          <p class="note">{money.toFixed(4)}</p>
-        {:else}
-          <p class="note">{t("spend.noCost")}</p>
-        {/if}
-      {/if}
-    </section>
 
-    <section class="card b-6">
+    <!-- …and what it produced. The preview closes the reading column rather than trailing the page, so
+         the two columns are comparable in height and the composition has a bottom instead of a hole. -->
+    <section class="card">
       <div class="card-head">
         <div>
           <h2>{t("site.title")}</h2>
@@ -618,16 +516,143 @@
         {#if said}<p class="note">{said}</p>{/if}
       {/if}
     </section>
+
+    </div>
+
+    <!-- The rail: three small readings, each a fact about the day rather than a place to work. -->
+    <div class="stack">
+    <section class="card">
+      <h2>{t("live.title")}</h2>
+      <p class="desc">{t("live.desc")}</p>
+      {#if golive}
+        <div>
+          <div class="kv">
+            <span class="k">{t("live.payment")}</span>
+            <span class="badge {golive.payment.wired ? 'ok' : 'warn'}"
+              >{t(golive.payment.wired ? "live.paidOk" : "live.paidNo")}</span>
+          </div>
+          <div class="kv">
+            <span class="k">{t("live.mail")}</span>
+            <span class="badge {golive.mail.wired ? 'ok' : 'warn'}"
+              >{t(golive.mail.wired ? "live.mailOk" : "live.mailNo")}</span>
+          </div>
+          <div class="kv">
+            <span class="k">{t("live.hosting")}</span>
+            <!-- Three states, not two: not hosted, a token set but nothing published yet, and live at
+                 a URL. Collapsing the middle one would tell an operator who has done half the work
+                 that they have done none of it. -->
+            <span class="v">
+              {#if golive.hosting.published_url}
+                <a class="badge ok" href={golive.hosting.published_url} target="_blank" rel="noreferrer noopener">
+                  {t("live.hostLive")}
+                </a>
+              {:else if golive.hosting.token_set}
+                <span class="badge warn">{t("live.hostReady")}</span>
+              {:else}
+                <span class="badge">{t("live.hostNo")}</span>
+              {/if}
+            </span>
+          </div>
+        </div>
+      {/if}
+    </section>
+
+    <section class="card">
+      <h2>{t("pay.title")}</h2>
+      <p class="desc">{t("pay.desc")}</p>
+      {#if payments?.error}
+        <p class="note">{t("pay.error")} {payments.error}</p>
+      {:else if payments}
+        <!-- `source` is "stripe", "mock" or "error" — never "live", which was my invention and would
+             have labelled real charges as samples. Sample data reading as sales is the worst kind of
+             wrong on the one card about money, so the mock says so and an error says which. -->
+        {#if payments.source === "mock"}<p class="note">{t("pay.mock")}</p>{/if}
+        {#if payments.source === "error"}<p class="note">{t("pay.error")} {payments.error}</p>{/if}
+        <div class="stat">
+          <div class="label">{t("pay.total")}</div>
+          <div class="value">{(payments.total_paid ?? 0).toFixed(2)}</div>
+        </div>
+        {#if payments.payments.length === 0}
+          <!-- The total above stays, at 0.00. A card whose whole content is a sentence, beside two cards
+               full of readings, was the only one on the rail with nothing to read. -->
+          <Empty text={t("pay.none")} />
+        {:else}
+          <ul class="feed">
+            {#each payments.payments.slice(0, 4) as charge, i (charge.ts + ":" + i)}
+              <li>
+                <strong>{charge.amount.toFixed(2)} {charge.currency}</strong>
+                <span class="muted grow">{charge.description}</span>
+                {#if !charge.paid}<span class="badge danger">{t("badge.fail")}</span>{/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      {/if}
+    </section>
+
+    <section class="card">
+      <h2>{t("spend.title")}</h2>
+      <p class="desc">{t("spend.desc")}</p>
+      {#if spend.length === 0}
+        <Empty text={t("spend.empty")} />
+      {:else}
+        <!-- Bars compare; with one series there is nothing to compare it to, and a single 100%-wide bar
+             reads as a progress meter that is finished. Two or more and the bars come back. -->
+        <div>
+          {#each spend as row (row.agent)}
+            {#if spend.length > 1}
+              <div class="spend-row">
+                <span class="who"><AgentIcon id={row.agent} />{row.agent}</span>
+                <span class="bar"><i style="width: {Math.round(((row.t ?? 0) / busiest) * 100)}%"></i></span>
+                <span class="n">{row.t.toLocaleString(lang)}</span>
+              </div>
+            {:else}
+              <div class="kv">
+                <span class="k who"><AgentIcon id={row.agent} />{row.agent}</span>
+                <span class="v num">{row.t.toLocaleString(lang)}</span>
+              </div>
+            {/if}
+          {/each}
+        </div>
+        <!-- The session budget, in the card about what is being spent. It was on the status band as one
+             of six numbers; here it is the denominator the rows above are a share of, which is what
+             makes a card with one agent in it worth reading. -->
+        <div class="kv">
+          <span class="k">{t("progress.tokens")}</span>
+          <span class="v num">
+            {summary.status.tokens.toLocaleString(lang)} / {summary.session_budget.toLocaleString(lang)}
+          </span>
+        </div>
+        <span class="bar">
+          <i style="width: {Math.min(100, Math.round((summary.status.tokens / Math.max(1, summary.session_budget)) * 100))}%"></i>
+        </span>
+        <!-- A total of 0.00 and "nobody reported a cost" are different facts, and `cost_reported` is
+             what separates them. Telling an operator on a paid key that they spent nothing would be
+             the worst kind of wrong: quietly plausible. -->
+        {#if summary.cost_reported}
+          <p class="note">{money.toFixed(4)}</p>
+        {:else}
+          <p class="note">{t("spend.noCost")}</p>
+        {/if}
+      {/if}
+    </section>
+
+    </div>
   </div>
+
 {/if}
 
 <style>
   /* Only what this page has. The card, the hero, the bento, the badges, the stats and the buttons all
      come from `console.css`: they are the console's language, not the Overview's. */
-  /* Stacked, full width. Side by side they wrapped 2+1 in English and 1+2 in French, and capping them
-     to a third of the card truncated two of the three labels — which reads as a string bug rather than
-     as a design decision. Three rows is the same shape in every language. */
-  .run-choice { display: grid; gap: 8px; }
+  /* Three across, in one row, inside a horizontal band. Written here rather than in `console.css`
+     because a Svelte-scoped `.run-choice` outranks any global `.hero-act .run-choice` — the third time
+     this specificity trap has cost me a fix in the wrong file.
+
+     Side by side in a *card* they wrapped 2+1 in English and 1+2 in French; in the band there is room for
+     all three on one line, and `flex` with no wrap keeps that true in both languages. */
+  .run-choice { display: flex; gap: 7px; flex-wrap: nowrap; }
+  .run-choice button { padding: 7px 11px; font-size: 12.5px; white-space: nowrap; }
 
   /* The glyph and the name read as one thing. */
   .who { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }

@@ -47,13 +47,16 @@
   let mailTest = $state(null);
   let showAdvanced = $state(false);
 
-  // The four steps the intensity control offers, and the chroma each one means. Named, because a
-  // percentage of a chroma is arithmetic rather than a choice somebody can make.
+  // The four steps, as **multipliers of the brand saturation** — which is what `--ui-chroma` is:
+  // `calc(0.065 * var(--ui-chroma))`, 1 being the palette as designed. They were written as chroma
+  // values (0.06, 0.12, 0.2), so every step asked for a tenth of the colour, the differences between
+  // them were invisible, and the control looked broken because it was. `medium` is 1 on purpose: it is
+  // the shipped look, and the range's ceiling is the shipped page's own slider maximum of 1.5.
   const INTENSITY = [
     { key: "flat", chroma: 0 },
-    { key: "subtle", chroma: 0.06 },
-    { key: "medium", chroma: 0.12 },
-    { key: "full", chroma: 0.2 },
+    { key: "subtle", chroma: 0.5 },
+    { key: "medium", chroma: 1 },
+    { key: "full", chroma: 1.5 },
   ];
   // Edits in flight, keyed by field. Not seeded from the payload: a refresh must never overwrite what
   // somebody is halfway through typing, and an untouched field simply is not submitted.
@@ -176,12 +179,23 @@
     }
   }
 
-  /** The theme is stored on this corparius, not in the browser: it follows the operator. */
+  /** The theme is stored on this corparius, not in the browser: it follows the operator.
+   *
+   * Applied first, persisted second. It used to await the POST before touching a single custom
+   * property, so every click on a swatch waited for a store write — which reads as a control that does
+   * not work rather than one that is thorough. The server is still the record: its answer replaces the
+   * optimistic value, and a refusal puts the previous one back.
+   */
   async function setTheme(patch) {
+    const previous = theme;
+    theme = { ...(theme ?? {}), ...patch };
+    applyTheme(theme);
     try {
       theme = await post("/api/theme", patch, { token });
       applyTheme(theme);
     } catch (e) {
+      theme = previous;
+      applyTheme(theme);
       failure = e;
     }
   }
@@ -453,7 +467,7 @@
            operator is choosing between. -->
       <Segmented
         label={t("settings.intensity")}
-        value={INTENSITY.find((s) => Math.abs(Number(theme?.chroma ?? 0.12) - s.chroma) < 0.03)?.key ??
+        value={INTENSITY.find((s) => Math.abs(Number(theme?.chroma ?? 1) - s.chroma) < 0.24)?.key ??
           "medium"}
         options={INTENSITY.map((s) => ({ value: s.key, label: t("settings." + s.key) }))}
         onpick={(key) => setTheme({ chroma: String(INTENSITY.find((s) => s.key === key).chroma) })}

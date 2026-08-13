@@ -70,7 +70,9 @@ ALL_SRC = "\n".join(SRC.values())
 # JavaScript and was the last Overview card with no resource behind it.
 # +1 for `kernel/clock.py`: one wrapper around the last `time.sleep`, so the layer test can
 # forbid the primitive everywhere else — the same argument `kernel/proc.py` makes.
-MODULE_COUNT = 140
+# +1 for `sitegen/critique.py`: the generated page's own review pass, measured rather than judged —
+# contrast on the pairs the page paints, and the copy defects a redraft can actually fix.
+MODULE_COUNT = 141
 
 
 def test_every_source_file_is_scanned():

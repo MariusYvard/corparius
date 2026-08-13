@@ -58,7 +58,7 @@
      becomes **1.140:1**, text on card 14.6:1, muted on card 7.5:1, muted on the page 6.5:1. */
   --bg: oklch(0.955 calc(0.010 * var(--ui-chroma)) var(--ui-hue)); --surface: oklch(1 0 0);
   --raised: oklch(0.945 calc(0.014 * var(--ui-chroma)) var(--ui-hue));
-  --border: oklch(0.86 calc(0.02 * var(--ui-chroma)) var(--ui-hue)); --border-ui: oklch(0.44 calc(0.11 * var(--ui-chroma)) var(--ui-hue));
+  --border: oklch(0.80 calc(0.028 * var(--ui-chroma)) var(--ui-hue)); --border-ui: oklch(0.44 calc(0.11 * var(--ui-chroma)) var(--ui-hue));
   /* In light the field is the lightest thing on the page, not the darkest: white on a tinted
      card, which is the convention a sunken tinted input gets backwards. */
   --well: oklch(1 0 0);
@@ -1236,6 +1236,8 @@ en: {
  "tier.local": "local fallback",
  "tier.chain": "fallback chain",
  "prov.free": "Free-tier providers",
+ "prov.keysOpen": "Keys",
+ "prov.keysSet": "{n} of {total} keys set",
  "prov.freeNote": "A provider joins the routing pool once its key is set (and cloud is enabled). Keys are write-only: the console never displays them back.",
  "prov.ccNote": "The claudecode target uses your local Claude Code CLI login instead of a key; enable it in Runtime.",
  "prov.paste": "paste key",
@@ -1789,6 +1791,8 @@ fr: {
  "tier.local": "repli local",
  "tier.chain": "chaîne de repli",
  "prov.free": "Fournisseurs gratuits",
+ "prov.keysOpen": "Clés",
+ "prov.keysSet": "{n} clés sur {total} enregistrées",
  "prov.freeNote": "Un fournisseur rejoint le pool dès que sa clé est saisie (et que le cloud est activé). Clés en écriture seule : jamais réaffichées.",
  "prov.ccNote": "La cible claudecode utilise la connexion de votre CLI Claude Code local au lieu d'une clé ; activez-la dans Exécution.",
  "prov.paste": "coller la clé",

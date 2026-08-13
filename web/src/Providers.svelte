@@ -353,10 +353,135 @@
   </section>
   </div>
 
-  <section class="card">
-    <h2>{t("prov.free")}</h2>
-    <p class="desc">{t("prov.freeNote")}</p>
 
+
+  <section class="card">
+    <h2>{t("prov.tiers")}</h2>
+    <p class="desc">{t("prov.format")}</p>
+    <p class="muted small">{t("prov.routingNote")}</p>
+
+    <!-- One label column and one input width. Inline labels put all five inputs at a different x —
+         five left edges on a diagonal — and each was too narrow to show its own value, truncating
+         `groq:llama-3.3-70b-versatile` mid-token. -->
+    <div class="tiers">
+      {#each [["trivial", "tier.trivial"], ["normal", "tier.normal"], ["hard", "tier.hard"], ["local_fallback", "tier.local"], ["fallback_chain", "tier.chain"]] as [field, label] (field)}
+        <label class="tier">
+          <span>{t(label)}</span>
+          <input
+            class="mono"
+            value={tiers[field] ?? ""}
+            oninput={(e) => (tiers[field] = e.currentTarget.value)}
+          />
+        </label>
+      {/each}
+    </div>
+    <!-- One row, primary first. It was three rows — "use recommended" alone, then save and prove, then
+         check every model alone — which buries the primary in the middle of the stack. -->
+    <div class="actions">
+      <button class="primary" disabled={busy === "tiers"} onclick={saveTiers}>{t("prov.saveTiers")}</button>
+      <button disabled={busy === "routing"} onclick={recommend}>{t("prov.useRouting")}</button>
+      <button disabled={busy === "preflight" || mockOn} onclick={runPreflight}>
+        {busy === "preflight" ? t("prov.preflightRunning") : t("prov.preflight")}
+      </button>
+    </div>
+
+    {#if report}
+      <div class="report">
+        {#each report.probes ?? [] as row, i (row.tier + ":" + i)}
+          <p class="small">
+            <span class="badge {row.state}">{t("prov.pf." + row.state)}</span>
+            <strong>{row.tier}</strong> <span class="muted">{row.model}</span>
+            {#if row.detail}<span class="muted">— {row.detail}</span>{/if}
+          </p>
+        {/each}
+        <!-- What a preflight cannot reach, named rather than dropped: one that covers three of six
+             tiers and reports success is worse than one that admits its reach. -->
+        {#each report.skipped ?? [] as row, i (row.tier + ":" + i)}
+          <p class="small muted">
+            <span class="badge">{t("prov.pf.skipped")}</span>
+            <strong>{row.tier}</strong> {row.model} — {t("prov.probeSkipReason")}
+          </p>
+        {/each}
+        {#if (report.probes ?? []).length === 0 && (report.skipped ?? []).length === 0}
+          <p class="small muted">{t("prov.probeNoTier")}</p>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- The full sweep, and it asks before it spends. `estimate` is a real answer from the server
+         (`{estimate: true}` makes no calls), so the number in front of the operator is measured
+         rather than guessed. NVIDIA alone advertises 102 models. -->
+    <div class="actions">
+      {#if sweepJob.state === "running"}
+        <span class="chip warn">{t("badge.running")}</span>
+        <span class="small muted">{sweepJob.progress}</span>
+        <button disabled={busy === "stop"} onclick={() => stopJob("/api/v1/preflight/sweep")}>
+          {t("prov.sweepStop")}
+        </button>
+      {:else if estimate}
+        <p class="small">
+          {fill(t("prov.sweepConfirm"), {
+            n: estimate.total ?? 0,
+            p: Object.keys(estimate.providers ?? {}).length,
+          })}
+        </p>
+        <button disabled={busy === "sweep"} onclick={startSweep}>{t("prov.sweepAll")}</button>
+        <button class="link" onclick={() => (estimate = null)}>{t("task.cancel")}</button>
+      {:else}
+        <button disabled={busy === "sweep" || mockOn} onclick={priceSweep}>
+          {t("prov.sweepAll")}
+        </button>
+      {/if}
+    </div>
+
+    {#if setup}
+      <p class="small muted">
+        {fill(t("prov.sweepDone"), { n: setup.known ?? 0 })}
+        {#each Object.entries(setup.usable_by_provider ?? {}) as [name, count] (name)}
+          <span class="badge">{name} {count}</span>
+        {/each}
+      </p>
+      <!-- A verdict is a measurement and measurements age. Said out loud so nobody reads a
+           six-month-old `blocked` as current fact. -->
+      {#if setup.worth_rechecking}
+        <p class="small muted">
+          {fill(t("prov.recheck"), { n: setup.worth_rechecking, d: setup.oldest_days })}
+        </p>
+      {/if}
+      <!-- `interrupted` is a state a client really sees: a console killed mid-sweep leaves a row the
+           next process marks on startup. Nothing was resumed, and saying so beats both silence and a
+           silent restart of hundreds of paid calls. -->
+      {#if sweepJob.state && sweepJob.state !== "running"}
+        <p class="small muted"><span class="chip {sweepJob.state}">{sweepJob.state}</span> {sweepJob.progress}</p>
+      {/if}
+    {/if}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>{t("prov.free")}</h2>
+        <p class="desc">{t("prov.freeNote")}</p>
+      </div>
+
+    </div>
+    <!-- Sixteen rows of four controls is reference material, not the subject of a page. It opens when
+         somebody wants to paste a key; the count above answers the question the table was being kept
+         open to answer. -->
+    <details class="keys">
+      <summary>
+        <!-- A row with a chevron and a count, not a bare blue word. It had no affordance at all, so the
+             card read as an empty band with a floating link in it. -->
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+        <span>{t("prov.keysOpen")}</span>
+        <span class="badge plain">
+          {fill(t("prov.keysSet"), {
+            n: providers.providers.filter((p) => p.key_set).length,
+            total: providers.providers.length,
+          })}
+        </span>
+      </summary>
     <!-- A header row, because sixteen rows of four controls with nothing naming the columns is a wall
          rather than a table. -->
     <div class="prow phead" aria-hidden="true">
@@ -436,109 +561,8 @@
         {/if}
       </article>
     {/each}
+    </details>
   </section>
-
-  <section class="card">
-    <h2>{t("prov.tiers")}</h2>
-    <p class="desc">{t("prov.format")}</p>
-    <p class="muted small">{t("prov.routingNote")}</p>
-    <div class="actions">
-      <button disabled={busy === "routing"} onclick={recommend}>{t("prov.useRouting")}</button>
-    </div>
-    <!-- One label column and one input width. Inline labels put all five inputs at a different x —
-         five left edges on a diagonal — and each was too narrow to show its own value, truncating
-         `groq:llama-3.3-70b-versatile` mid-token. -->
-    <div class="tiers">
-      {#each [["trivial", "tier.trivial"], ["normal", "tier.normal"], ["hard", "tier.hard"], ["local_fallback", "tier.local"], ["fallback_chain", "tier.chain"]] as [field, label] (field)}
-        <label class="tier">
-          <span>{t(label)}</span>
-          <input
-            class="mono"
-            value={tiers[field] ?? ""}
-            oninput={(e) => (tiers[field] = e.currentTarget.value)}
-          />
-        </label>
-      {/each}
-    </div>
-    <div class="actions">
-      <button class="primary" disabled={busy === "tiers"} onclick={saveTiers}>{t("prov.saveTiers")}</button>
-      <button disabled={busy === "preflight" || mockOn} onclick={runPreflight}>
-        {busy === "preflight" ? t("prov.preflightRunning") : t("prov.preflight")}
-      </button>
-    </div>
-
-    {#if report}
-      <div class="report">
-        {#each report.probes ?? [] as row, i (row.tier + ":" + i)}
-          <p class="small">
-            <span class="badge {row.state}">{t("prov.pf." + row.state)}</span>
-            <strong>{row.tier}</strong> <span class="muted">{row.model}</span>
-            {#if row.detail}<span class="muted">— {row.detail}</span>{/if}
-          </p>
-        {/each}
-        <!-- What a preflight cannot reach, named rather than dropped: one that covers three of six
-             tiers and reports success is worse than one that admits its reach. -->
-        {#each report.skipped ?? [] as row, i (row.tier + ":" + i)}
-          <p class="small muted">
-            <span class="badge">{t("prov.pf.skipped")}</span>
-            <strong>{row.tier}</strong> {row.model} — {t("prov.probeSkipReason")}
-          </p>
-        {/each}
-        {#if (report.probes ?? []).length === 0 && (report.skipped ?? []).length === 0}
-          <p class="small muted">{t("prov.probeNoTier")}</p>
-        {/if}
-      </div>
-    {/if}
-
-    <!-- The full sweep, and it asks before it spends. `estimate` is a real answer from the server
-         (`{estimate: true}` makes no calls), so the number in front of the operator is measured
-         rather than guessed. NVIDIA alone advertises 102 models. -->
-    <div class="actions">
-      {#if sweepJob.state === "running"}
-        <span class="chip warn">{t("badge.running")}</span>
-        <span class="small muted">{sweepJob.progress}</span>
-        <button disabled={busy === "stop"} onclick={() => stopJob("/api/v1/preflight/sweep")}>
-          {t("prov.sweepStop")}
-        </button>
-      {:else if estimate}
-        <p class="small">
-          {fill(t("prov.sweepConfirm"), {
-            n: estimate.total ?? 0,
-            p: Object.keys(estimate.providers ?? {}).length,
-          })}
-        </p>
-        <button disabled={busy === "sweep"} onclick={startSweep}>{t("prov.sweepAll")}</button>
-        <button class="link" onclick={() => (estimate = null)}>{t("task.cancel")}</button>
-      {:else}
-        <button disabled={busy === "sweep" || mockOn} onclick={priceSweep}>
-          {t("prov.sweepAll")}
-        </button>
-      {/if}
-    </div>
-
-    {#if setup}
-      <p class="small muted">
-        {fill(t("prov.sweepDone"), { n: setup.known ?? 0 })}
-        {#each Object.entries(setup.usable_by_provider ?? {}) as [name, count] (name)}
-          <span class="badge">{name} {count}</span>
-        {/each}
-      </p>
-      <!-- A verdict is a measurement and measurements age. Said out loud so nobody reads a
-           six-month-old `blocked` as current fact. -->
-      {#if setup.worth_rechecking}
-        <p class="small muted">
-          {fill(t("prov.recheck"), { n: setup.worth_rechecking, d: setup.oldest_days })}
-        </p>
-      {/if}
-      <!-- `interrupted` is a state a client really sees: a console killed mid-sweep leaves a row the
-           next process marks on startup. Nothing was resumed, and saying so beats both silence and a
-           silent restart of hundreds of paid calls. -->
-      {#if sweepJob.state && sweepJob.state !== "running"}
-        <p class="small muted"><span class="chip {sweepJob.state}">{sweepJob.state}</span> {sweepJob.progress}</p>
-      {/if}
-    {/if}
-  </section>
-
   <section class="card">
     <h2>{t("oll.title")}</h2>
     <p class="desc">{t("oll.desc")}</p>

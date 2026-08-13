@@ -1310,6 +1310,49 @@ redémarre revient de lui-même ; devoir presser F5 pour l'apprendre, c'est la c
 problème celui de l'exploitant. Seulement quand l'échec est un échec de transport : un 401 ou une
 version incompatible sont des réponses, et réessayer une réponse est une boucle.
 
+## La boucle de revue, appliquée au site des sociétés
+
+La console vient de passer treize tours de *générer, faire juger, corriger, refaire juger*. Ce que ce
+chantier a appris sur la boucle elle-même vaut plus que les corrections : **les revues qui servent
+portent un nombre.** « La carte est à 1,044:1 sur sa propre page » a produit un correctif en quelques
+minutes ; « il manque une intention de composition » a produit quatre tours de tâtonnement. Une boucle
+qui mélange les deux apprend à son lecteur à ignorer les deux.
+
+`corparius/sitegen/critique.py` est donc la moitié déterministe de cette boucle pour la page générée, et
+elle n'a le droit de dire que ce qu'elle peut prouver :
+
+* **le contraste, sur les paires que la page peint vraiment** — corps sur fond, secondaire sur fond,
+  corps et secondaire sur le bandeau de prix inversé, corps sur le lavis du héros, libellé sur l'accent.
+  Nommées depuis les clés de `palette_for` plutôt que devinées, et un test affirme que **tout ce que la
+  palette résout comme texte apparaît dans une paire mesurée** : un contrôle de contraste ignore ce qu'on
+  ne lui a pas donné, ce qui est exactement la forme du bug d'origine — le bandeau sombre à **1,16:1**,
+  presque noir sur presque noir, que rien dans le dépôt ne pouvait voir ;
+* **les défauts de texte démontrables** : un H1 absent, un H1 devenu paragraphe, un `[mock:` arrivé sur
+  la page depuis un brouillon hors ligne, une page trop maigre pour décider quoi que ce soit.
+
+**Et la distinction qui fait marcher la boucle : `fixable_by_copy`.** Une reformulation peut réparer un
+titre ; elle ne peut pas relever un ratio de contraste qu'elle ne voit pas, ni écrire un prix que la
+société n'a pas configuré. Le compte rendu du build dit tout ; le brief envoyé au tour suivant ne porte
+que ce qu'une reformulation peut corriger. Envoyer un modèle réparer une couleur produit des excuses,
+pas un correctif.
+
+### Le juge doit être un autre modèle, et c'est vérifiable ici
+
+Décision prise pendant ce chantier : dans la boucle, **le modèle qui juge n'est pas celui qui a écrit.**
+La machinerie existe déjà — `structured.ask(..., model=)` épingle un modèle, les paliers de routage en
+nomment plusieurs, et depuis le schéma 18 `record_action` enregistre `source`, donc « qui a répondu » est
+une colonne et non une supposition. Un juge disjoint est donc non seulement possible mais **contrôlable
+après coup** : le journal dit quel fournisseur a rédigé et quel fournisseur a jugé.
+
+Ce qui reste à écrire est la moitié modèle, et sa forme est déjà contrainte par l'architecture : un effet
+d'outil atteint `company`, `data_path`, `leads`, `store` et `structured` — **délibérément pas de poignée
+de modèle**, parce que l'exécuteur possède le routage, le budget de jetons et la comptabilité. Un tour de
+critique par un modèle est donc soit une capacité de l'exécuteur (un outil qui déclare « juge-moi »,
+l'exécuteur dépense un second appel et rejoue l'effet), soit — moins cher et plus dans l'esprit du projet
+— **un outil de revue à part, sur la cadence qui existe déjà**, dont les conclusions attendent le
+prochain tour design. C'est l'argument que le plan tient déjà pour le curateur de compétences : ça
+s'accroche à la frontière de journée qui existe, pas à un fork par tour.
+
 ## Le cliquet
 
 Chaque règle embarque l'ensemble exact des violations d'aujourd'hui et affirme

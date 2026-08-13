@@ -452,16 +452,33 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 .hero {
   position: relative;
   overflow: hidden;
-  padding: 20px 28px;
+  padding: 16px 28px;
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
-  gap: 40px;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content);
+  gap: 36px;
   align-items: start;
+}
+/* The act, at the end of the band. A column of its own rather than a row under the readouts: the run
+ * choice is three buttons and the band is 1150px wide, so there is room for the decision beside the
+ * numbers it is made from. */
+.hero-act { position: relative; z-index: 1; display: grid; gap: 8px; align-content: start; justify-items: end; }
+/* Three across, not three down. Stacked, they inflated a horizontal band to 180px and read as a leftover
+ * column rather than as the page's verb. */
+.hero-act .run-choice { display: flex; gap: 7px; flex-wrap: nowrap; }
+.hero-act .run-choice button { padding: 7px 11px; font-size: 12.5px; }
+.hero-act .note { margin: 0; }
+.hero-act .feed { margin-top: 4px; }
+@media (max-width: 1100px) {
+  .hero { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); }
+  .hero-act { grid-column: 1 / -1; }
+  .hero-act .run-choice { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 /* The rule between the hero number and the rest, which is what says "this one is different" now that
    the dots are not there to say it. */
 @media (min-width: 900px) {
-  .hero-side { border-left: 1px solid var(--border); padding-left: 32px; }
+  /* The rule runs the full height of the band. On a padded column it stopped short at both ends, which
+     reads as a border that failed rather than as a divider. */
+  .hero-side { border-left: 1px solid var(--border); padding-left: 32px; margin: -16px 0; padding-top: 16px; padding-bottom: 16px; }
 }
 /* Five equal cells rather than five items pushed apart by `space-between`: the gaps were uneven and the
  * labels did not line up under each other. */
@@ -552,6 +569,7 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 .stat { min-width: 92px; }
 .stat .label { font-size: 11px; color: var(--muted); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.05em; }
 .stat .value {
+  white-space: nowrap;
   font-size: 26px;
   font-weight: 600;
   font-variant-numeric: tabular-nums lining;
@@ -566,13 +584,13 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 .kv .v { text-align: right; font-size: 13px; }
 .kv .v.num { font-family: ui-monospace, monospace; font-size: 13px; font-variant-numeric: tabular-nums; }
 
-.bar { height: 7px; border-radius: 999px; background: var(--raised); overflow: hidden; }
+.bar { height: 8px; border-radius: 999px; background: var(--raised); overflow: hidden; }
 .bar > i {
   display: block;
   height: 100%;
   /* A minimum, because 531 of 100 000 is 0.5% and half a percent of a 300px track is a dot somebody
      reads as a broken bar rather than as a small number. */
-  min-width: 8px;
+  min-width: 10px;
   background: var(--ok);
   border-radius: 999px;
   transform-origin: left;
@@ -753,6 +771,25 @@ a.badge:hover { text-decoration: underline; }
 .prow .pbadges { display: flex; gap: 5px; flex-wrap: wrap; min-width: 0; }
 .prow .plink { justify-self: stretch; }
 /* The header takes the same grid, so a column heading is above the column it names. */
+/* The disclosure that holds the key table. Its summary is a control, so it looks like one. */
+.keys > summary::-webkit-details-marker { display: none; }
+.keys { border-top: 1px solid var(--border); }
+.keys > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--select);
+  padding: 7px 0;
+}
+.keys > summary .chev { width: 15px; height: 15px; transition: transform var(--t-feedback) var(--ease); }
+.keys[open] > summary .chev { transform: rotate(90deg); }
+.keys > summary:hover { color: var(--text); }
+.keys[open] > summary { margin-bottom: 6px; border-bottom: 1px solid var(--border); }
+
 .prow.phead > :nth-child(3) { text-align: right; }
 .prow.phead {
   min-height: 0;

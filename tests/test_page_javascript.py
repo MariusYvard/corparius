@@ -102,7 +102,7 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # where one sentence had carried four numbers, a sentence for the intensity control, and four names
     # for its steps, and three column headings for the provider list — which used to print "0% 21% 43% 71% 100%", the ramp's arithmetic showing through.
     # Every one exists because a blind design review asked what a number on screen meant.
-    assert result["counts"] == {"en": 551, "fr": 551}, result["counts"]
+    assert result["counts"] == {"en": 553, "fr": 553}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

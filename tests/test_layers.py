@@ -160,6 +160,7 @@ RANKS: dict[str, int] = {
     "sitegen/__init__": 4,
     "sitegen/base": 4,
     "sitegen/palette": 4,
+    "sitegen/critique": 4,
     "sitegen/copy": 4,
     "sitegen/style": 4,
     "sitegen/head": 4,

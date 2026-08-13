@@ -365,6 +365,8 @@
  "prov.free": "Free-tier providers",
  "prov.freeNote": "A provider joins the routing pool once its key is set (and cloud is enabled). Keys are write-only: the console never displays them back.",
  "prov.getKey": "Free key",
+ "prov.keysOpen": "Keys",
+ "prov.keysSet": "{n} of {total} keys set",
  "prov.loadingModels": "Loading models…",
  "prov.localServer": "Local server preset…",
  "prov.mock": "Mock mode",

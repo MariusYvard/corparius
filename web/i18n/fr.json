@@ -365,6 +365,8 @@
  "prov.free": "Fournisseurs gratuits",
  "prov.freeNote": "Un fournisseur rejoint le pool dès que sa clé est saisie (et que le cloud est activé). Clés en écriture seule : jamais réaffichées.",
  "prov.getKey": "Clé gratuite",
+ "prov.keysOpen": "Clés",
+ "prov.keysSet": "{n} clés sur {total} enregistrées",
  "prov.loadingModels": "Chargement des modèles…",
  "prov.localServer": "Préréglage serveur local…",
  "prov.mock": "Mode mock",

@@ -235,6 +235,9 @@
      a screen is a screen of nothing: the invitation collapses to the height of its own content, and the
      transcript takes the window once there is something in it. Every review since the first named this
      as the worst thing in the set. */
-  .chat { min-height: 0; }
-  .chat.talking { min-height: calc(100dvh - 330px); }
+  /* The panel fills the window whether or not there is a conversation, because a 280px card above 900px
+     of background is a page that stops halfway. What made a tall panel read as a void the first time was
+     the invitation floating in the middle of it; it is anchored to the composer now (`align-content: end`
+     in `console.css`), so the height is a frame rather than a hole. */
+  .chat { min-height: calc(100dvh - 330px); }
 </style>

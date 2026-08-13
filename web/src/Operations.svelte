@@ -58,6 +58,18 @@
 
   // Whether the board has anything at all. Said once, under the five columns, rather than five times
   // inside them: "Empty" under a 0 in each of five lanes is five placeholders for one fact.
+  // Quiet in pairs. `hushed` collapses a card with nothing in it, and applying it per card left rows
+  // where one had collapsed and the other had not — which a review called flexbox debris, correctly.
+  let gateQuiet = $derived(
+    Boolean(summary)
+    && !summary.approvals.length
+    && !summary.inbox.length
+    && !(summary.rules ?? []).length,
+  );
+  let writingsQuiet = $derived(
+    !(drafts?.drafts ?? []).length && !(memory?.memory ?? []).length,
+  );
+
   let boardEmpty = $derived(
     Boolean(board) && COLUMNS.every((column) => (board.tasks[column] ?? []).length === 0),
   );
@@ -203,8 +215,12 @@
   <!-- 1. The gate, with the whole explanation rather than two buttons. It is warm-tinted only when
        something is actually held, so "nothing waits" and "three things wait" are different at a
        glance rather than the same card with different text in it. -->
-  <div class="grid cols">
-  <section class="card" class:attention={summary.approvals.length > 0}>
+  <div class="grid half">
+  <section
+    class="card prose"
+    class:attention={summary.approvals.length > 0}
+    class:hushed={gateQuiet}
+  >
     <h2>{t("ops.waiting")}</h2>
     <p class="desc">{t("ops.waitingDesc")}</p>
     <p class="posture muted">
@@ -271,7 +287,7 @@
   </section>
 
   <!-- 2. What the operator told the gate to stop asking about. -->
-  <section class="card">
+  <section class="card" class:hushed={gateQuiet}>
     <h2>{t("ops.rules")}</h2>
     <p class="desc">{t("ops.rulesDesc")}</p>
     <div class="rows">
@@ -292,7 +308,7 @@
   <!-- One card: the heading and the five columns it names. It was a card containing a title and a
        sentence, with the columns as siblings *below* it — so the heading looked like a stray paragraph
        and the board looked like five unlabelled slabs. -->
-  <section class="card board">
+  <section class="card board" class:hushed={boardEmpty}>
     <div>
       <h2>{t("ops.backlog")}</h2>
       <p class="desc">{t("ops.backlogDesc")}</p>
@@ -383,7 +399,7 @@
   <!-- 4 and 5, side by side: each was a full-width card holding a paragraph half its own width, so the
        right half of both was empty. -->
   <div class="grid half">
-  <section class="card">
+  <section class="card prose" class:hushed={writingsQuiet}>
     <h2>{t("dft.title")}</h2>
     <p class="desc">{t("dft.desc")}</p>
     {#if drafts}
@@ -418,7 +434,7 @@
   </section>
 
   <!-- What the company learned, and the operator's veto over it. -->
-  <section class="card">
+  <section class="card prose" class:hushed={writingsQuiet}>
     <h2>{t("mem.title")}</h2>
     <p class="desc">{t("mem.desc")}</p>
     {#if memory && !memory.memory_enabled}

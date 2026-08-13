@@ -23,7 +23,7 @@ body {
   min-height: 100%;
   background: var(--bg);
   color: var(--text);
-  font: 400 14px/1.6 -apple-system, "Segoe UI", system-ui, sans-serif;
+  font: 400 13.5px/1.62 -apple-system, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 a { color: var(--select); }
@@ -57,7 +57,7 @@ code, .mono { overflow-wrap: anywhere; min-width: 0; }
  * rule below picks one of them — there is no 13.5 or 14.5 any more, which is what "no scale" looked
  * like in a screenshot. */
 h1, h2, h3 { margin: 0; font-weight: 600; }
-h2 { font-size: 16px; letter-spacing: -0.006em; }
+h2 { font-size: 17px; letter-spacing: -0.008em; }
 h3 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
 .desc { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
 /* One measure for prose, because a 1200px shell does not mean a 157-character line. Anything that is
@@ -336,6 +336,15 @@ main { padding: 24px 0 56px; }
 .page-head { margin: 0 0 20px; }
 .page-head h1 { font-size: 28px; font-weight: 650; letter-spacing: -0.022em; }
 .page-head .desc { font-size: 14.5px; margin-top: 5px; }
+/* Between the page title and a card title: the level a page of five cards had no way to say. */
+.group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  margin: 4px 0 -8px;
+}
 main [role="tabpanel"] { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
 .bento, .grid { gap: 24px; }
 /* The rule is drawn inside the padding, not across it: the footer used to carry `border-top` on the
@@ -351,7 +360,12 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
  * something to put beside something else. `minmax(0, 1fr)` rather than the implicit `auto`: an auto
  * track grows to its widest child's max-content, so one wide card (the action log) would stretch its
  * whole column and every sibling with it. */
-.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-content: start; }
+/* **Cards size to their content, everywhere.** Settled rather than tuned: three review rounds asked for
+ * this and one asked for aligned bottoms, and the reason content height wins is that the alternative
+ * pads a short card with 150px of nothing. An uneven row is a composition; a row of half-empty cards is
+ * a mistake. `height: 100%` lived here for exactly one round.
+ */
 /* `start`, not `stretch`. Two columns holding unrelated panels are not two halves of one thing: the
  * Plugins registry ended 350px below its own last line because the skills list beside it was long.
  * The bento keeps `stretch`, where equal heights are the composition. */
@@ -404,7 +418,29 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 /* And the preview stops being a black rectangle punched into a white page: the frame gets the page's own
  * ground behind it, so a dark generated site reads as a picture of a site rather than as a hole. */
 [data-theme="light"] .site-frame { background: var(--bg); }
+/* The preview is a picture of a site, so it gets a frame: an inset border and the page's own ground
+ * behind it, rather than a black rectangle punched through the layout. */
+/* A matte and an inset rule: the generated site is often dark, and a dark rectangle bled to a card's
+ * edges reads as a hole in the page rather than as a picture of a website. */
+.site-frame { box-shadow: inset 0 0 0 1px var(--border); }
+.site-matte { background: var(--raised); border: 1px solid var(--border); border-radius: 12px; padding: 10px; }
 .card > * + * { margin-top: 14px; }
+/* `.card.prose` used to cap the card at 46rem, which was the wrong instrument: a narrow card inside a
+ * full-width slot leaves the dead surface exactly where it was, just outside the border instead of
+ * inside it. A card holding prose belongs in a **half slot** — that is a grid decision, not a card one —
+ * and a card that spans the width earns the span by having something to put in it. What survives here is
+ * only the measure for the text itself. */
+.card.prose > p, .card.prose > .card-head .desc { max-width: 62ch; }
+
+/* A card with nothing in it collapses to a row: title and the one sentence on one line, no description,
+ * no 150px of padding around the word "Empty". Five of those on one page read as a page that failed to
+ * load; five short rows read as a quiet day. The card comes back to full size the moment it has rows. */
+.card.hushed { min-height: 52px; padding: 12px 22px; flex-direction: row; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.card.hushed > * + * { margin-top: 0; }
+.card.hushed h2 { font-size: 13px; color: var(--muted); font-weight: 600; }
+.card.hushed .desc, .card.hushed .card-head .desc { display: none; }
+.card.hushed .empty { padding: 0; text-align: left; }
+.card.hushed .empty p { font-size: 12.5px; }
 /* The last thing in a card, when it is what you press, sits at the bottom — but only in the bento,
  * where cards are deliberately stretched to a common height. Applied everywhere, this rule stretched a
  * two-line panel to the height of an 80-field form and left its button 900px under its own text. */
@@ -464,7 +500,19 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 /* The act, at the end of the band. A column of its own rather than a row under the readouts: the run
  * choice is three buttons and the band is 1150px wide, so there is room for the decision beside the
  * numbers it is made from. */
-.hero-act { position: relative; z-index: 1; display: grid; gap: 8px; align-content: start; justify-items: end; }
+.hero-act {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  justify-items: end;
+}
+@media (min-width: 1100px) {
+  /* A rule, so the band reads as "here is the day / here is what you do about it" rather than as six
+     readouts of which three are buttons. */
+  .hero-act { border-left: 1px solid var(--border); padding-left: 28px; margin: -16px 0; padding-top: 16px; padding-bottom: 16px; }
+}
 /* Three across, not three down. Stacked, they inflated a horizontal band to 180px and read as a leftover
  * column rather than as the page's verb. */
 .hero-act .run-choice { display: flex; gap: 7px; flex-wrap: nowrap; }
@@ -487,8 +535,12 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
  * labels did not line up under each other. */
 .hero-side .pulse-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 20px;
+  /* Sized to content, not five equal fifths: "857 260 / 100 000" at 26px is wider than a fifth of the
+     band and was overflowing its neighbour. `auto` lets the long one take what it needs and the four
+     short ones give it back. */
+  grid-template-columns: repeat(5, minmax(0, auto));
+  justify-content: space-between;
+  gap: 12px 24px;
   align-items: start;
 }
 .hero-side .stat { text-align: left; }
@@ -525,7 +577,11 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
   min-width: 0;
   transition: transform var(--t-feedback) var(--ease);
 }
-.hero-gate .g-label, .hero-gate .g-num, .hero-gate .g-hint { display: block; }
+/* Above the hover overlay. `::before` carries the tint and the inset border, and an unpositioned child
+ * loses to a positioned pseudo-element in the same stacking context — so hovering the gate covered its
+ * own number with an opaque panel. Seen on a real company in light mode, where `--raised` is nearly
+ * solid; in dark it merely dimmed and looked like a design choice. */
+.hero-gate .g-label, .hero-gate .g-num, .hero-gate .g-hint { display: block; position: relative; z-index: 1; }
 .hero-gate .g-label { font-size: 12.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
 .hero-gate .g-num {
   font-size: clamp(44px, 5.5vw, 58px);
@@ -570,8 +626,18 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 
 .pulse-row { display: flex; gap: 36px; row-gap: 18px; flex-wrap: wrap; align-items: flex-start; }
 .stat { min-width: 92px; }
-.stat .label { font-size: 11px; color: var(--muted); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.05em; }
+/* One line, sentence case. Uppercase at 11px turned "in progress now" into three lines and put the five
+ * numbers under it on three different baselines — the labels are what broke the row, not the numbers. */
+.stat .label {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-bottom: 3px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
 .stat .value {
+  /* The number does not break; the denominator below it does. `nowrap` on the pair is what pushed
+     "/ 100 000" out of the cell instead of onto its own line. */
   white-space: nowrap;
   font-size: 26px;
   font-weight: 600;
@@ -579,7 +645,7 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
   font-feature-settings: "zero" 0;
   letter-spacing: -0.01em;
 }
-.stat .value .of { font-size: 12px; font-weight: 400; color: var(--muted); }
+.stat .value .of { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
 
 .kv { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .kv:last-child { border-bottom: 0; }
@@ -699,6 +765,23 @@ a.badge:hover { text-decoration: underline; }
   align-items: center;
   font-size: 13px;
 }
+/* An alert, not a tinted rectangle. A 3px rule on the leading edge, a glyph, and the first clause in
+ * bold: "these keys authorise real-world effects" is the most consequential sentence the console prints
+ * and it read exactly like a disabled input. */
+.banner { border-left-width: 3px; align-items: flex-start; }
+.banner::before {
+  content: "";
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  background: currentColor;
+  /* An exclamation in a circle, as a mask so it takes the banner's own colour. */
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 5a1.2 1.2 0 011.2 1.3l-.35 5.2a.85.85 0 01-1.7 0l-.35-5.2A1.2 1.2 0 0112 7zm0 9.2a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z"/></svg>') center / contain no-repeat;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 5a1.2 1.2 0 011.2 1.3l-.35 5.2a.85.85 0 01-1.7 0l-.35-5.2A1.2 1.2 0 0112 7zm0 9.2a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z"/></svg>') center / contain no-repeat;
+}
+.banner.warn { color: var(--warm); }
+.banner.warn strong, .banner.danger strong { font-weight: 700; }
 .banner.danger { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
 .banner.warn { border-color: var(--warm-line); color: var(--text); background: var(--warm-soft); }
 
@@ -911,7 +994,9 @@ a.badge:hover { text-decoration: underline; }
 .chat-log { display: grid; gap: 12px; align-content: start; overflow-y: auto; min-height: 0; }
 /* At the bottom, next to the thing it is inviting you to use. Centred, it floated in 500px of empty
  * panel with four chips adrift in the middle of it. */
-.chat-log.is-empty { align-content: end; justify-items: center; gap: 18px; padding-bottom: 6px; }
+/* Centred, now that the panel no longer reserves a screen: the invitation was pushed to the bottom to
+ * escape 400px of nothing above it, and with the nothing gone the middle is where it belongs. */
+.chat-log.is-empty { align-content: center; justify-items: center; gap: 18px; }
 .msg { max-width: 76ch; padding: 11px 14px; border-radius: 12px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .msg.user { justify-self: end; background: var(--accent-soft); border: 1px solid transparent; }
 .msg.ceo { justify-self: start; background: var(--raised); border: 1px solid var(--border); }
@@ -955,9 +1040,14 @@ a.badge:hover { text-decoration: underline; }
   position: sticky;
   bottom: 0;
   z-index: 2;
+  /* Full-bleed inside the card's padding, so the bar reads as a bar rather than as a button that
+     happens to be last. `--surface` alone left the content showing through at the edges when a long
+     form scrolled under it. */
+  margin: 8px -22px -20px;
+  padding: 14px 22px;
   background: var(--surface);
   border-top: 1px solid var(--border);
-  padding: 14px 0 2px;
+  border-radius: 0 0 12px 12px;
   display: flex;
   gap: 12px;
   align-items: center;

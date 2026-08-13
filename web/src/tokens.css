@@ -76,8 +76,10 @@
   /* A real step, because a white card on a 0.955 page with no shadow is a paler rectangle rather than a
      surface. Two shadows: a 1px contact edge and a soft 12px lift, both in the brand hue so the light
      theme does not go grey at the edges. */
-  --shadow: 0 1px 2px oklch(0.28 calc(0.08 * var(--ui-chroma)) var(--ui-hue) / 0.10),
-    0 6px 16px -8px oklch(0.28 calc(0.08 * var(--ui-chroma)) var(--ui-hue) / 0.14);
+  /* Strengthened after a review read the cards as a wireframe: a 1px hairline on near-white is not an
+     elevation model, and the two layers below are what make a card sit *on* the page. */
+  --shadow: 0 1px 2px oklch(0.28 calc(0.08 * var(--ui-chroma)) var(--ui-hue) / 0.13),
+    0 8px 20px -10px oklch(0.28 calc(0.08 * var(--ui-chroma)) var(--ui-hue) / 0.20);
   color-scheme: light;
 }
 :root {

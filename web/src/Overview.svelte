@@ -493,9 +493,11 @@
                `pointer-events: none` means a click lands on the card rather than inside somebody's site.
                Keyed on the mtime so regenerating actually repaints it instead of showing the old build. -->
           {#key site.mtime}
+            <div class="site-matte">
             <div class="site-frame">
               <iframe src={`/site/${encodeURIComponent(company)}/`} title={t("site.title")} tabindex="-1"
               ></iframe>
+            </div>
             </div>
           {/key}
           <p class="note">

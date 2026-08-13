@@ -377,7 +377,7 @@
     </div>
     <!-- One row, primary first. It was three rows — "use recommended" alone, then save and prove, then
          check every model alone — which buries the primary in the middle of the stack. -->
-    <div class="actions">
+    <div class="actions tight">
       <button class="primary" disabled={busy === "tiers"} onclick={saveTiers}>{t("prov.saveTiers")}</button>
       <button disabled={busy === "routing"} onclick={recommend}>{t("prov.useRouting")}</button>
       <button disabled={busy === "preflight" || mockOn} onclick={runPreflight}>
@@ -671,12 +671,21 @@
   .badge.blocked { color: var(--danger); background: var(--danger-soft); }
   .badge.capacity { color: var(--warn); background: var(--warn-soft); }
   .badge.usable { color: var(--ok); background: var(--ok-soft); }
+  .actions.tight { flex-wrap: wrap; row-gap: 8px; }
   .measure summary { cursor: pointer; color: var(--select); font-size: 13px; }
   .report { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
 
   /* One grid for the five tiers: a fixed label column, one input width, and enough of it to hold a
      full `target:model` string. */
-  .tiers { display: grid; gap: 10px; }
+  /* Two columns from 900px. Five tier fields down the left of a full-width card is what left a dead
+     half-page of navy beside them; the card spans the width because it now has something to put in it. */
+  .tiers { display: grid; gap: 10px 28px; }
+  @media (min-width: 900px) {
+    .tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* The fallback chain is a comma-separated list and the one field that wants the whole row. */
+    .tiers > .tier:last-child { grid-column: 1 / -1; }
+    .tiers > .tier:last-child input { max-width: none; }
+  }
   .tier { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-items: center; }
   .tier > span { color: var(--muted); font-size: 13.5px; }
   .tier input { width: 100%; }

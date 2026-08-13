@@ -231,6 +231,11 @@
   /* No handle. It sat in the corner of the card as a browser artefact; the field already grows to its
      max height on its own, and the panel is not something an operator needs to resize. */
   .composer textarea { resize: none; }
+  /* Send inside the field's own gutter. Bottom-aligned beside an 80px textarea it read as a button that
+     happened to be next to a box rather than the box's own action. */
+  .composer { position: relative; }
+  .composer textarea { padding-right: 92px; }
+  .composer :global(button) { position: absolute; right: 10px; bottom: 10px; }
   /* Two heights, and which one depends on whether there is a conversation. An empty panel that reserves
      a screen is a screen of nothing: the invitation collapses to the height of its own content, and the
      transcript takes the window once there is something in it. Every review since the first named this
@@ -239,5 +244,9 @@
      of background is a page that stops halfway. What made a tall panel read as a void the first time was
      the invitation floating in the middle of it; it is anchored to the composer now (`align-content: end`
      in `console.css`), so the height is a frame rather than a hole. */
-  .chat { min-height: calc(100dvh - 330px); }
+  /* 280px when there is nothing to read, the window when there is. A transcript reserving 400px above a
+     centred paragraph is a void; the same height once there are messages in it is a frame. */
+  .chat { min-height: 0; }
+  .chat.talking { min-height: calc(100dvh - 330px); }
+  .chat:not(.talking) .chat-log { min-height: 220px; }
 </style>

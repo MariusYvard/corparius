@@ -119,7 +119,14 @@ def test_a_tool_the_operator_chose_is_not_overwritten(store):
 
 def test_executable_fields_says_nothing_when_there_is_nothing_to_say():
     assert executable_fields({"target": "support", "tool": "draft_support_reply"}) == {}
-    assert executable_fields({"target": "finance", "tool": ""}) == {}  # no default for that role
+    # `ceo`, not `finance`. This line used `finance` as its example of a role with no default, which is
+    # to say it was documenting the gap rather than a rule: five of the ten roles had none, so a task
+    # aimed at any of them was approved and closed "done (no tool mapped)" having done nothing. Four of
+    # the five have a default now; the CEO deliberately does not, because it arbitrates the backlog
+    # rather than working it — and `unrunnable_reason` refuses that case out loud instead of letting it
+    # through. See tests/test_unrunnable_tasks.py.
+    assert executable_fields({"target": "ceo", "tool": ""}) == {}
+    assert executable_fields({"target": "finance", "tool": ""}) == {"tool": "reconcile_stripe"}
     assert executable_fields({"target": "", "tool": ""}) == {}
 
 

@@ -363,7 +363,53 @@ ROLE_TOOL = {
     # Rendering happens anyway: it is the last step of the design playbook every
     # turn. What a backlog task needs is the step that changes something.
     "design": "write_site_content",
+    # The five that had no entry, which meant an approved task for any of them
+    # completed "done (no tool mapped)" — the 22-of-24 defect above, still live for
+    # half the roster. Not derived from the playbook: three of the five existing
+    # entries **disagree** with their role's first playbook step, and the reason is
+    # the rule this table is really written to. `find_targets`, `review_kpis` and
+    # `triage_inbox` come first in their playbooks and all three only *look*; a task
+    # approved onto one of them finishes having produced nothing, which is the same
+    # nothing as no tool at all. **The default is a tool that produces.**
+    #
+    # And each is the producing tool its role can run *without* a gate: `adjust_bids`
+    # is external, `send_financial_transaction` is money and `publish_production_code`
+    # is code — all three would park an approved task on the human gate the moment the
+    # CEO approved it, which is not approval, it is a queue.
+    "ads": "review_ad_budget",
+    "coder": "generate_code",
+    "competitor": "scan_competitors",
+    "finance": "reconcile_stripe",
+    # No entry for `ceo`, on purpose, and the guard below is what makes that
+    # honest rather than an omission: the CEO arbitrates the backlog, it does not
+    # work it. A task owned by the CEO is a proposal nobody will execute, so
+    # `unrunnable_reason` refuses it out loud instead of approving it to die quietly.
 }
+
+
+def unrunnable_reason(task: dict) -> str:
+    """Why this task would finish having done nothing, or "" when it will run.
+
+    The measured defect: **24 tasks for one role with no tool, 22 closed "done (no
+    tool mapped)"**. `executable_fields` fixes the case where a default exists; this
+    is the other half — the case where none does, which was silently approved and
+    silently completed. Half the roster had no default until the entries above.
+
+    A sentence rather than a boolean, because both callers put it in front of a
+    person: the CEO's review writes it into the rejection, and the console's approve
+    button shows it. "Rejected" with no cause is how the condition that produced the
+    proposal survives to produce it again.
+    """
+    if task.get("tool"):
+        return ""
+    target = (task.get("target") or "").strip()
+    if not target:
+        return "no role owns it, so nothing would pick it up"
+    if target in ROLE_TOOL:
+        return ""
+    if target == "ceo":
+        return "the CEO arbitrates the backlog rather than working it, so no tool would run this"
+    return f"no tool is mapped to '{target[:24]}', so it would complete having done nothing"
 
 
 def executable_fields(task: dict) -> dict:

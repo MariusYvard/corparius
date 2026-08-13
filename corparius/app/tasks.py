@@ -27,7 +27,7 @@ prints it.
 from __future__ import annotations
 
 from ..kernel.records import AgentRole
-from ..tools.spec import SPEC, executable_fields
+from ..tools.spec import SPEC, executable_fields, unrunnable_reason
 from .errors import Refused
 
 DECISIONS = ("approved", "rejected")
@@ -98,6 +98,15 @@ def edit(
         # never attached to: a task approved with no tool closes "done (no tool mapped)" having
         # done nothing, so the condition survives and the agent proposes it again.
         fields = {**executable_fields({**dict(current), **fields}), **fields}
+        # And when nothing can make it executable, say so instead of approving it. The half of
+        # the defect `executable_fields` cannot reach: it maps a role to its default tool, and
+        # for the five roles that had no default — and for the CEO, which has none on purpose —
+        # there was nothing to map, so the task was approved and closed "done (no tool mapped)"
+        # having done nothing. A refusal naming the cause is what stops the agent proposing the
+        # same thing again next cadence.
+        why = unrunnable_reason({**dict(current), **fields})
+        if why:
+            raise Refused(f"this cannot run as approved: {why}")
     if fields:
         store.update_task(ident, **fields)
     if decision:

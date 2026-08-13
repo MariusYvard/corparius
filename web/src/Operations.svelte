@@ -297,6 +297,12 @@
       <h2>{t("ops.backlog")}</h2>
       <p class="desc">{t("ops.backlogDesc")}</p>
     </div>
+    {#if boardEmpty}
+      <!-- No columns at all when there is nothing in any of them. Five headers over five hairlines with
+           a single orphaned "Empty" beneath reads as a board that failed to render rather than as an
+           empty one — and the counts are all zero, so the columns are carrying no information either. -->
+      <Empty text={t("col.empty")} />
+    {:else}
     <div class="kanban">
       {#each COLUMNS as column (column)}
         {@const rows = board.tasks[column] ?? []}
@@ -371,7 +377,7 @@
         </div>
       {/each}
     </div>
-    {#if boardEmpty}<Empty text={t("col.empty")} />{/if}
+    {/if}
   </section>
 
   <!-- 4 and 5, side by side: each was a full-width card holding a paragraph half its own width, so the

@@ -11,10 +11,10 @@
    * previous treatment put a dark navy label on a saturated blue tint, and the *unselected* segment —
    * full-contrast text on the card — read as the active one.
    */
-  let { options = [], value = "", onpick = undefined, label = "" } = $props();
+  let { options = [], value = "", onpick = undefined, label = "", fill = false } = $props();
 </script>
 
-<div class="seg" role="group" aria-label={label}>
+<div class="seg" class:fill role="group" aria-label={label}>
   {#each options as option (option.value)}
     <button
       type="button"
@@ -32,6 +32,10 @@
     overflow: hidden;
     max-width: 100%;
   }
+  /* Each segment takes an equal share when the control is told to fill. Sized to their labels, four
+     segments left 300px of empty track beside them and read as a control that failed to lay out. */
+  .seg.fill { display: flex; width: 100%; }
+  .seg.fill button { flex: 1; }
   .seg button {
     border: 0;
     border-radius: 0;

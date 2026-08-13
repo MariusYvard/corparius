@@ -33,7 +33,7 @@ from ..providers import (
 )
 from ..sitegen import companions as sitegen_companions
 from ..sitegen import head as sitegen_head
-from .spec import ROLE_TOOL, executable_fields
+from .spec import ROLE_TOOL, executable_fields, unrunnable_reason
 
 log = logging.getLogger("corparius.tools")
 
@@ -1486,13 +1486,23 @@ def _review_proposals(ctx) -> str:
     slug = ctx.company.get("slug", "company")
     proposals = store.list_tasks(slug, "proposed")
     cap = cfg.get_int("CORP_CEO_APPROVE_CAP", 3)
-    approved = rejected = modified = 0
+    approved = rejected = modified = unrunnable = 0
     for i, task in enumerate(proposals):
         if i < cap:
             fields: dict[str, object] = {}  # priority is int, tool is str
             if task["priority"] < 2:
                 fields["priority"] = 2  # CEO re-prioritises the suggestion
             fields.update(executable_fields(task))  # make it executable
+            # And if nothing can, reject it saying why. Approving a task no tool will pick up is
+            # how 22 of 24 rows closed "done (no tool mapped)": the work was never done, the
+            # condition survived, and the agent proposed it again next cadence. A rejection with
+            # a cause is the only version of this an operator can act on.
+            why = unrunnable_reason({**dict(task), **fields})
+            if why:
+                store.set_task_status(task["id"], "rejected", f"cannot run: {why}")
+                rejected += 1
+                unrunnable += 1
+                continue
             if fields:
                 store.update_task(task["id"], **fields)
                 modified += 1
@@ -1501,7 +1511,11 @@ def _review_proposals(ctx) -> str:
         else:
             store.set_task_status(task["id"], "rejected", "declined by CEO")
             rejected += 1
-    return f"CEO reviewed {len(proposals)}: {approved} approved ({modified} modified), {rejected} rejected"
+    tail = f", {unrunnable} of them because nothing would run them" if unrunnable else ""
+    return (
+        f"CEO reviewed {len(proposals)}: {approved} approved ({modified} modified), "
+        f"{rejected} rejected{tail}"
+    )
 
 
 def _already_proposing(ctx) -> str:

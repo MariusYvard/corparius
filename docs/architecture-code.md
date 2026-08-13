@@ -1353,6 +1353,41 @@ l'exécuteur dépense un second appel et rejoue l'effet), soit — moins cher et
 prochain tour design. C'est l'argument que le plan tient déjà pour le curateur de compétences : ça
 s'accroche à la frontière de journée qui existe, pas à un fork par tour.
 
+## La moitié du défaut « 22 sur 24 » qui restait ouverte
+
+`executable_fields` a été écrit contre une mesure : **24 tâches pour un rôle sans outil, 22 fermées
+« done (no tool mapped) »** sans rien avoir fait. Il corrige le cas où un rôle a un outil par défaut.
+
+**Cinq rôles sur dix n'en avaient aucun** — ads, coder, competitor, finance et le CEO — donc une
+proposition visant l'un d'eux était approuvée, n'exécutait rien, et se fermait comme faite. La condition
+qui l'avait produite survivait, l'agent la reproposait. Le défaut mesuré était donc encore vivant pour
+la moitié du roster, et rien ne pouvait le voir.
+
+**La table n'est pas dérivable du playbook, et c'est la découverte utile.** Trois des cinq entrées
+existantes *contredisent* le premier pas du playbook de leur rôle : `find_targets`, `review_kpis` et
+`triage_inbox` viennent en tête pour outreach, strategy et support, et les trois ne font que *regarder*.
+Une tâche approuvée sur l'une d'elles finit sans rien produire — le même rien que pas d'outil du tout.
+**La règle est donc : le défaut est un outil qui produit.** Quatre entrées ajoutées sur ce principe, et
+chacune est l'outil produisant que son rôle peut lancer *sans portail* : `adjust_bids` est externe,
+`send_financial_transaction` est de l'argent, `publish_production_code` est du code — les trois
+gareraient la tâche sur le portail humain à l'instant de l'approbation, ce qui n'est pas approuver, c'est
+mettre en file.
+
+**Et une seconde distinction, apprise en écrivant le test qui l'affirmait à l'envers.** J'avais posé
+« le défaut doit figurer dans le playbook du rôle » : c'est faux. `write_note` est le défaut de strategy
+et ne figure pas dans son playbook. Un **playbook est une cadence** — ce que le rôle fait chaque tour,
+sans qu'on le lui demande ; **l'outil d'une tâche est ce qu'une tâche approuvée exécute.** La docstring
+de strategy portait déjà le coût de les confondre : sans `write_note`, une tâche stratégie atteignait un
+agent sans outil pour la porter et restait tenue pour l'exploitant, deux fois.
+
+Le CEO n'a toujours pas de défaut, **volontairement** : il arbitre le backlog, il ne le travaille pas.
+`unrunnable_reason` le dit à voix haute plutôt que de laisser l'omission passer pour un oubli — et les
+deux chemins qui approuvent l'appellent, le bouton de la console via `app.tasks.edit` et le tour du CEO
+via `review_proposals`, parce que la première version de ce correctif n'en avait attrapé qu'un.
+
+Non-vacuité prouvée dans les deux sens : retirer les quatre défauts fait tomber deux tests, retirer le
+refus en fait tomber un troisième.
+
 ## Le cliquet
 
 Chaque règle embarque l'ensemble exact des violations d'aujourd'hui et affirme

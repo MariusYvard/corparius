@@ -401,6 +401,9 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
   box-shadow: var(--shadow);
 }
 [data-theme="light"] header.top, [data-theme="light"] nav.tabs { background: oklch(0.985 0.004 var(--ui-hue)); }
+/* And the preview stops being a black rectangle punched into a white page: the frame gets the page's own
+ * ground behind it, so a dark generated site reads as a picture of a site rather than as a hole. */
+[data-theme="light"] .site-frame { background: var(--bg); }
 .card > * + * { margin-top: 14px; }
 /* The last thing in a card, when it is what you press, sits at the bottom — but only in the bento,
  * where cards are deliberately stretched to a common height. Applied everywhere, this rule stretched a
@@ -584,7 +587,7 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 .kv .v { text-align: right; font-size: 13px; }
 .kv .v.num { font-family: ui-monospace, monospace; font-size: 13px; font-variant-numeric: tabular-nums; }
 
-.bar { height: 8px; border-radius: 999px; background: var(--raised); overflow: hidden; }
+.bar { display: block; width: 100%; height: 8px; border-radius: 999px; background: var(--raised); overflow: hidden; }
 .bar > i {
   display: block;
   height: 100%;

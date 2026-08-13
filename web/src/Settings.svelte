@@ -366,7 +366,23 @@
                 {#if !f.editable}
                   <span class="badge warn" title={t("cfg.envTip")}>{t("cfg.env")}</span>
                 {/if}
-                {#if helpOf(f)}<small class="muted"><Ticked text={helpOf(f)} /></small>{/if}
+                {#if helpOf(f)}
+                  {@const help = helpOf(f)}
+                  {@const cut = help.indexOf(". ")}
+                  {#if cut > 0 && cut < help.length - 2}
+                    <!-- The first sentence, then the rest on request. Every field carried three to six
+                         lines of grey at one weight, so a screen of eighty fields was a document with
+                         inputs in it and the eye had nothing to land on. The first sentence is the one
+                         that says what the field is; the remainder is why, and why can wait. -->
+                    <small class="lead"><Ticked text={help.slice(0, cut + 1)} /></small>
+                    <details class="more">
+                      <summary>{t("ops.more")}</summary>
+                      <small class="muted"><Ticked text={help.slice(cut + 2)} /></small>
+                    </details>
+                  {:else}
+                    <small class="lead"><Ticked text={help} /></small>
+                  {/if}
+                {/if}
                 {#if f.help_url}
                   <a class="link small" href={f.help_url} target="_blank" rel="noreferrer noopener">
                     {t("cfg.stepOpen")}
@@ -466,6 +482,7 @@
            nobody outside `tokens.css` knows what 43% of a chroma is, and four names are what the
            operator is choosing between. -->
       <Segmented
+        fill
         label={t("settings.intensity")}
         value={INTENSITY.find((s) => Math.abs(Number(theme?.chroma ?? 1) - s.chroma) < 0.24)?.key ??
           "medium"}
@@ -512,6 +529,10 @@
      cell and drew on top of each other. */
   .fhelp { display: grid; gap: 5px; justify-items: start; }
   .fhelp small { font-size: 12px; line-height: 1.55; color: var(--muted); }
+  /* The first sentence is a step up in contrast from the rest: it is the one a reader needs. */
+  .fhelp .lead { color: var(--text); opacity: 0.78; }
+  .fhelp .more > summary { cursor: pointer; font-size: 11.5px; color: var(--select); padding: 2px 0; }
+  .fhelp .more[open] > summary { margin-bottom: 3px; }
   fieldset { border: 0; border-top: 1px solid var(--border); margin: 16px 0 0; padding: 14px 0 0; min-width: 0; }
   legend { padding: 0; font-size: 14px; font-weight: 600; color: var(--text); }
   .field > .fname { color: var(--muted); }

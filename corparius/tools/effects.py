@@ -32,6 +32,7 @@ from ..providers import (
     sitecheck,
 )
 from ..sitegen import companions as sitegen_companions
+from ..sitegen import critique
 from ..sitegen import head as sitegen_head
 from .spec import ROLE_TOOL, executable_fields, unrunnable_reason
 
@@ -853,6 +854,148 @@ def _site_text(slug: str) -> tuple[str, list[str]]:
         cut = "" if len(piece) == len(text) else f", {len(piece)} shown"
         chunks.append(f"--- {page.name} ({len(text)} chars{cut}) ---\n{piece}")
     return "\n\n".join(chunks), names
+
+
+def _generated_page(ctx) -> tuple[str, str]:
+    """The generated page's headline and its visible text, or two empty strings.
+
+    Not `_site_text`, which reads the pages a company **owns**. These are different files with
+    different owners: a company that hand-writes its site has no generated page, and reviewing the
+    hand-written one under this tool's name would be the fourth time in this repository that two
+    surfaces claiming the same job turned out to disagree.
+
+    **Why this text needs no fence, checked rather than assumed.** `tests/test_prompt_injection.py`
+    exists because a mail body reaching a prompt is somebody else's instructions arriving inside yours,
+    and `kernel/text.fence` is what a document gets for the same reason. This page is neither: it is
+    built from `company.yaml` — the operator's own file, already in every system prompt — plus a
+    model-written headline and, when `site.faq` lists questions, answers from the company's own app.
+    Operator config and model output, no third party. Feeding a model its own words back is a loop, not
+    an injection; the day this page starts carrying an inbox question, it needs the fence.
+    """
+    slug = ctx.company.get("slug", "company")
+    if paths.owned_site(slug) is not None:
+        return "", ""
+    # `getattr`, like every other effect in this file reads `store`. Two suites render every tool's
+    # draft prompt against a minimal context to prove a prompt can always be built without a model —
+    # `test_prompt_injection` and `test_agent_language` — and a bare `ctx.data_path` made both of them
+    # fail on an attribute rather than on the thing they assert. No data path means no generated page,
+    # which is the honest answer and not an error.
+    data_path = getattr(ctx, "data_path", "")
+    if not data_path:
+        return "", ""
+    page = Path(paths.site_dir(data_path, slug)) / "index.html"
+    if not page.is_file():
+        return "", ""
+    raw = page.read_text(encoding="utf-8", errors="replace")
+    found = re.search(r"<h1[^>]*>(.*?)</h1>", raw, flags=re.S | re.I)
+    headline = " ".join(re.sub(r"<[^>]+>", " ", found.group(1)).split()) if found else ""
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", raw, flags=re.S | re.I)
+    text = " ".join(re.sub(r"<[^>]+>", " ", text).split())
+    return headline, text[:SITE_REVIEW_BUDGET]
+
+
+def _no_generated_page(ctx) -> str:
+    """Why this tool has nothing to do, in the operator's words or "" when it does."""
+    if paths.owned_site(ctx.company.get("slug", "company")) is not None:
+        return "this company writes its own site, so there is no generated page to review"
+    return "" if _generated_page(ctx)[1] else "no generated page yet; build_sales_site makes one"
+
+
+def _last_action(ctx, tool: str) -> dict:
+    """The most recent logged run of `tool` for this company, or {}."""
+    store = getattr(ctx, "store", None)
+    if store is None:
+        return {}
+    for row in store.recent_actions(ctx.company.get("slug", "company"), limit=40):
+        if row.get("tool") == tool:
+            return row
+    return {}
+
+
+def _review_generated_prompt(ctx) -> str:
+    """The page, and what was already measured about it.
+
+    The measurements go **into** the prompt rather than being kept back, for the reason the console's
+    own sixteen review rounds demonstrated: a judge told "the H1 is 214 characters" stops arguing
+    about whether it is long and writes a shorter one. It also stops the model spending its answer on
+    what a rule already caught, which is most of what a second opinion wastes itself on.
+    """
+    headline, body = _generated_page(ctx)
+    if not body:
+        return (
+            f"{_name(ctx)} has no generated page to review. Leave `findings` empty and say so in "
+            "`worst`."
+        )
+    measured = [f.line() for f in critique.copy_findings(headline, body)]
+    already = (
+        "\n\nAlready measured, so do not repeat these — say something they do not cover:\n"
+        + "\n".join(f"- {line}" for line in measured)
+        if measured
+        else ""
+    )
+    return (
+        f"Below is the visible text of the sales page corparius generated for {_name(ctx)}. You did "
+        "not write it. Judge it as the visitor it is aimed at.\n\n"
+        "`findings`: concrete changes, each quoting the words to change — not a category, the actual "
+        "text. `worst`: the single change that matters most, and why in one sentence. Say nothing "
+        "about colour, layout or images: you are reading text, and a judgement about something you "
+        f"cannot see is worth nothing.{already}\n\n{body}"
+    )
+
+
+def _review_generated_site(ctx) -> str:
+    """What is wrong with the generated page: measured first, judged second.
+
+    **This is the loop.** `build_sales_site` writes a headline; this reads the page back and says what
+    to change; the next build's prompt carries the result. The console itself was taken through
+    sixteen rounds of exactly this shape, and what made it work was that each review came back as a
+    list somebody could act on rather than as a score.
+
+    **The judge is another role, which is why this is a separate tool rather than a second call inside
+    the build.** Design writes the page, strategy reviews it. Roles carry their own model pin —
+    `coder` is already pinned to `local:qwen2.5-coder:14b` — so pinning the reviewing role to a
+    different model makes the judge literally a different model. Without a pin the two turns still
+    route independently, which is not a guarantee, so this claims none: it reads `source` off both
+    actions and **says when they were the same**, because schema 18 made that a column rather than a
+    supposition. A second opinion from the same model is one opinion twice.
+    """
+    headline, body = _generated_page(ctx)
+    if not body:
+        return "No generated page to review"
+    result = getattr(ctx, "structured", None)
+    data = result.data if result else {}
+    judged = [" ".join(str(f).split()) for f in (data.get("findings") or []) if str(f).strip()]
+    worst = " ".join(str(data.get("worst", "")).split())
+    lines = [f.line() for f in critique.copy_findings(headline, body)] + judged
+
+    wrote = (_last_action(ctx, "build_sales_site") or {}).get("source") or ""
+    judge = getattr(result, "source", "") if result else ""
+    same = bool(wrote) and wrote == judge
+
+    if not lines and not worst:
+        return "Generated page reviewed: nothing to change"
+    head = worst or lines[0]
+    more = f" (+{len(lines) - 1} more)" if len(lines) > 1 else ""
+    note = f" [{judge} also wrote it; pin another model to the reviewing role]" if same else ""
+    return f"Generated page reviewed: {head}{more}{note}"
+
+
+def _build_site_prompt(ctx) -> str:
+    """Write the headline — against the last review's findings when there was one.
+
+    The half of the loop that closes it. A review nobody reads is a token bill, and the cheapest
+    place for the next draft to read it is the log line the review already wrote: no schema change,
+    no new table, and it survives a restart because the action log does.
+    """
+    base = f"Write one punchy sales headline, under 10 words, for {_name(ctx)}."
+    last = _last_action(ctx, "review_generated_site").get("output") or ""
+    verdict = last.split("Generated page reviewed:", 1)[-1].strip() if "reviewed:" in last else ""
+    if not verdict or verdict.startswith("nothing to change"):
+        return base
+    return (
+        f"{base}\n\nThe last page built for this company was reviewed and this is what came back. "
+        f"Write the headline so it is no longer true:\n{verdict}"
+    )
 
 
 def _review_site_prompt(ctx) -> str:
@@ -2065,8 +2208,13 @@ BEHAVIOUR: dict[str, Behaviour] = {
         effect=lambda c, d: _ok("Mockup produced: landing hero and one ad variant (mock)"),
     ),
     "build_sales_site": Behaviour(
-        prompt=lambda c: f"Write one punchy sales headline, under 10 words, for {_name(c)}.",
+        prompt=_build_site_prompt,
         effect=lambda c, d: _ok(_build_site(c, d)),
+    ),
+    "review_generated_site": Behaviour(
+        prompt=_review_generated_prompt,
+        effect=lambda c, d: _ok(_review_generated_site(c)),
+        skip_when=_no_generated_page,
     ),
     "deploy_site": Behaviour(
         effect=lambda c, d: _deploy_site(c),

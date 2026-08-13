@@ -115,7 +115,12 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         24,
         Difficulty.HARD,
         "You own strategy, pricing, the roadmap and continuous improvement (kaizen).",
-        ["review_kpis", "update_pricing", "kaizen", "remember"],
+        # `review_generated_site` is on strategy and not on design **on purpose**: design writes the
+        # sales page, and a writer reviewing their own work is one opinion twice. Roles carry their own
+        # model pin, so this is also how a different model gets to judge — pin strategy to something
+        # other than design's tier and the separation is real rather than hoped for. The tool itself
+        # reads `source` off both actions and says when they were the same.
+        ["review_kpis", "update_pricing", "kaizen", "review_generated_site", "remember"],
     ),
     AgentRole.COMPETITOR: AgentSpec(
         AgentRole.COMPETITOR,

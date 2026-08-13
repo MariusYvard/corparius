@@ -1388,6 +1388,41 @@ via `review_proposals`, parce que la première version de ce correctif n'en avai
 Non-vacuité prouvée dans les deux sens : retirer les quatre défauts fait tomber deux tests, retirer le
 refus en fait tomber un troisième.
 
+## Le juge, et pourquoi ce n'est pas un second appel dans le build
+
+La moitié modèle de la boucle est écrite, et sa forme a été dictée par une contrainte réelle plutôt que
+par un goût : **un effet d'outil atteint `company`, `data_path`, `leads`, `store` et `structured` — pas
+de poignée de modèle.** L'exécuteur possède le routage, le budget de jetons et la comptabilité. Un tour
+de critique à l'intérieur de `build_sales_site` aurait donc exigé une nouvelle capacité de l'exécuteur.
+
+`review_generated_site` est un **outil séparé sur un autre rôle** : design écrit la page, strategy la
+relit. Rien de nouveau dans l'exécuteur, et la séparation des modèles vient de la machinerie qui existe
+déjà — un rôle porte son propre `model` (coder est déjà épinglé sur `local:qwen2.5-coder:14b`), donc
+épingler le rôle relecteur ailleurs que design fait littéralement juger un autre modèle.
+
+**Et l'outil ne prétend pas que la séparation a eu lieu.** Sans épingle, les deux tours routent
+indépendamment, ce qui n'est pas une garantie. Il lit donc `source` sur les deux actions et **dit quand
+c'était le même fournisseur** — le schéma 18 a fait de « qui a répondu » une colonne et non une
+supposition. Un second avis du même modèle est un avis deux fois.
+
+La boucle se ferme sans nouvelle table : le prochain `build_sales_site` lit le verdict dans **la ligne
+de journal que la revue a déjà écrite**. Pas de migration, pas de champ, et ça survit à un redémarrage
+parce que le journal d'actions y survit.
+
+Trois principes repris du chantier console, parce qu'ils ont été payés cher :
+
+1. **Le mesuré entre dans le prompt.** Un juge à qui l'on dit « le H1 fait 214 caractères » écrit un
+   titre plus court au lieu de discuter de sa longueur — et cesse de dépenser sa réponse sur ce qu'une
+   règle a déjà attrapé, ce qui est l'essentiel de ce qu'un second avis gaspille.
+2. **Le juge ne parle que de ce qu'il voit.** Le prompt lui interdit la couleur, la mise en page et les
+   images : il lit du texte, et un jugement sur ce qu'on ne voit pas ne vaut rien. C'est la même règle
+   que `fixable_by_copy` applique dans l'autre sens.
+3. **Le cas silencieux doit rester silencieux.** « Rien à changer » ne remonte rien au prochain
+   brouillon. Une boucle qui parle à chaque cadence apprend au modèle que les revues sont du bruit.
+
+Non-vacuité prouvée : débrancher la boucle du prochain brouillon fait tomber un test, faire taire la
+comparaison des `source` en fait tomber un autre.
+
 ## Le cliquet
 
 Chaque règle embarque l'ensemble exact des violations d'aujourd'hui et affirme

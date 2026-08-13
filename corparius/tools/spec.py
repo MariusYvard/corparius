@@ -330,6 +330,25 @@ SPEC: dict[str, ToolSpec] = {
         "produce_mockup",
         "Produce a landing or ad mockup",
     ),
+    # The other half of the site loop, and a **separate tool on a different role** rather than a second
+    # model call inside the build. Two reasons, and neither is style. A tool effect reaches `company`,
+    # `data_path`, `leads`, `store` and `structured` — deliberately not a model handle, because the
+    # executor owns routing, the token budget and the accounting; so a critique round inside the build
+    # would have to be a new executor capability. And the judge should not be the writer: roles carry
+    # their own model pin, so design writing and strategy reviewing is how a different model gets to
+    # judge, using machinery the product already has. `_review_generated_site` reads `source` off both
+    # actions and says when they were the same, because a second opinion from the same model is one
+    # opinion twice.
+    "review_generated_site": ToolSpec(
+        "review_generated_site",
+        "Review the generated sales page and say what to change",
+        needs_draft=True,
+        risk=permissions.READ,
+        schema={
+            "findings": {"type": "list", "default": []},
+            "worst": {"type": "str", "default": "", "max_len": 200},
+        },
+    ),
     "build_sales_site": ToolSpec(
         "build_sales_site",
         "Generate the sales landing page",

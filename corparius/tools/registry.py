@@ -94,6 +94,14 @@ class Tool:
     def draft_prompt(self, ctx) -> str:
         return self.behaviour.prompt(ctx) if self.behaviour.prompt else ""
 
+    def refine_prompt(self, ctx, result) -> str:
+        """Extra context for one more round, or "" — see `Behaviour.refine`.
+
+        A tool with no `refine` is every tool that existed before this, and answers "" without being
+        asked twice about it.
+        """
+        return self.behaviour.refine(ctx, result) if self.behaviour.refine else ""
+
     def run(self, ctx, draft: str = "") -> ToolResult:
         return self.behaviour.effect(ctx, draft)
 

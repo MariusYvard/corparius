@@ -419,15 +419,49 @@ class Executor:
                 model=spec.model,
                 **carry,
             )
-            for used in result.usages:  # a repair round is a real call; bill it
-                ctx.budget.record_usage(
-                    used.input_tokens, used.output_tokens, used.cost, spec.role.value
+
+            def _bill(answer) -> None:
+                for used in answer.usages:  # a repair round is a real call; bill it
+                    ctx.budget.record_usage(
+                        used.input_tokens, used.output_tokens, used.cost, spec.role.value
+                    )
+                    ctx.breaker.record(used.total)
+                    self.store.record_usage(
+                        company, spec.role.value, used.input_tokens, used.output_tokens, used.cost
+                    )
+
+            _bill(result)
+
+            # **One extra round, when the tool asks for one.** The first answer says what it needs;
+            # this puts that in front of the model and asks again. `Behaviour.refine` carries why it
+            # is bounded at one and why the capability lives here rather than in the tool: the
+            # executor owns routing, the budget, the breaker, the usage log and the per-role model
+            # pin, and a tool reaching a model itself would escape all five.
+            #
+            # Same router, same schema, same pin, and billed through the same `_bill` — which is the
+            # whole point of it being an executor capability. A second call that did not reach
+            # `ctx.budget` would be spend the operator's ceiling never sees.
+            more = tool.refine_prompt(ctx, result)
+            if more:
+                second = structured.ask(
+                    self.router,
+                    [*_messages(spec, ctx, tool), {"role": "user", "content": more}],
+                    tool.schema,
+                    difficulty=spec.difficulty,
+                    model=spec.model,
+                    **carry,
                 )
-                ctx.breaker.record(used.total)
-                self.store.record_usage(
-                    company, spec.role.value, used.input_tokens, used.output_tokens, used.cost
-                )
+                _bill(second)
+                # Only if it answered. A refused or empty second round leaves the first answer
+                # standing rather than replacing something usable with nothing — the tool asked for
+                # more context, it did not stake the turn on getting it.
+                if second.ok and second.data:
+                    result = second
+
             ctx.structured = result
+            # The loop guard sees the **final** draft only. The first answer is scaffolding — a tool
+            # naming the same three sections on two consecutive turns is not a stutter, it is a tool
+            # working, and counting it would stop a company for being consistent.
             draft = json.dumps(result.data, ensure_ascii=False)
             if loop.observe_output(self.router.embed(draft)):
                 log.warning("[%s] loop stop: semantic stutter", spec.role.value)

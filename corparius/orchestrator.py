@@ -317,7 +317,10 @@ class Runtime:
                     # work than that: it also meant every agent read the same 6 000 characters,
                     # chosen by modification time, whatever it was about to do. The disk is still
                     # touched once; the *selection* is per turn, and selection is arithmetic.
-                    doc_files=documents.load(slug),
+                    # Whole, not cut to 4 000 characters each: these are indexed rather than
+                    # sent, and `documents.load` carries why the cut became the binding
+                    # constraint the moment there was a map in front of them.
+                    doc_files=documents.load(slug, max_chars=0),
                     images=tick_images,
                     images_skipped=tick_skipped,
                 )

@@ -1520,10 +1520,77 @@ def _agent_documents(slug: str) -> list:
     """
     docs = [
         d
-        for d in documents.load(slug)
+        for d in documents.load(slug, max_chars=0)
         if documents.WRITTEN in d.label.split("/") and d.path.stem not in CEO_OWN_DOCUMENTS
     ]
     return sorted(docs, key=lambda d: d.path.stat().st_mtime, reverse=True)
+
+
+def _already_queued(open_titles: list) -> str:
+    """What is already on the backlog, so the model does not propose it again.
+
+    Shared by both rounds: the second round asks for the tasks, and it needs this as much as the
+    first did. Written once because a prompt that says "do not repeat these" in round one and forgets
+    in round two is a prompt that taught the model a rule and then withdrew it.
+    """
+    if not open_titles:
+        return ""
+    return "\n\nAlready on the backlog, so do not repeat them:\n" + "\n".join(
+        f"- {title}" for title in open_titles[:12]
+    )
+
+
+def _plan_from_docs_refine(ctx, result) -> str:
+    """The sections the first round asked for, as the second round's context.
+
+    Returns "" when the first answer named nothing — which is a real answer. A model that looked at
+    the map and wanted none of it should not be charged for a second call to say so again, and the
+    executor leaves the first result standing.
+
+    Section names are matched against what was actually offered rather than trusted: a model naming a
+    heading that does not exist would otherwise produce an empty second round and a turn that spent
+    two calls to do nothing. Unmatched names are dropped silently — the map was in front of it, and
+    the ones it got right are still worth reading.
+    """
+    wanted = [str(s).strip() for s in ((result.data or {}).get("sections") or []) if str(s).strip()]
+    if not wanted:
+        return ""
+    slug = ctx.company.get("slug", "company")
+    sections = documents.sections(_agent_documents(slug)[:PLAN_FROM_DOCS_COUNT])
+    by_title = {s.title: s for s in sections if s.title}
+    chosen = [by_title[name] for name in dict.fromkeys(wanted) if name in by_title]
+    if not chosen:
+        return ""
+
+    spent = 0
+    blocks: list[str] = []
+    for section in chosen:
+        room = PLAN_FROM_DOCS_BUDGET - spent
+        if room <= 200:
+            break
+        body = section.text[:room]
+        spent += len(body)
+        blocks.append(f"--- {section.label} ---\n{body}")
+
+    store = getattr(ctx, "store", None)
+    open_titles = (
+        [
+            row["title"]
+            for row in store.list_tasks(slug)
+            if row["status"] in ("proposed", "approved", "in_progress", "waiting")
+        ]
+        if store is not None
+        else []
+    )
+    return (
+        "Here are the sections you asked for.\n\n"
+        + "\n\n".join(blocks)
+        + _already_queued(open_titles)
+        + "\n\nNow `tasks`: at most four, each as `role|tool|title` with a vertical bar between "
+        "them. The title must name the change, not the category — quote the words to fix when the "
+        "document quotes them. Use only a role from the list you were given and one of that role's "
+        "own tools. `note`: one sentence on what you queued. `sections` is no longer needed."
+    )
 
 
 def _plan_from_docs_prompt(ctx) -> str:
@@ -1544,6 +1611,40 @@ def _plan_from_docs_prompt(ctx) -> str:
         if store is not None
         else []
     )
+    # **The map, not an even slice.** This divided `PLAN_FROM_DOCS_BUDGET` equally across the newest
+    # four documents and sent the first N characters of each — so a two-page note and a thirty-page
+    # review got the same room, and the useful half of the long one was never reached.
+    #
+    # When the documents have headings, the first round sends only the table of contents and asks
+    # which sections matter. `Behaviour.refine` then puts those sections in front of the model for a
+    # second round. That is PageIndex's descend, bounded to two calls by the executor rather than
+    # looped — and the only reason it can be done at all is that the executor now supports it.
+    #
+    # With no headings there is nothing to descend, so the even slice stays. That is the right answer
+    # for a corpus of short unstructured notes, which is what a young company actually has.
+    #
+    # **And the corpus has to be bigger than the budget**, which is the second half and was missing.
+    # Two tests caught it: `# site-review` followed by one line is *a* heading, so the map fired on a
+    # 60-character document — one call spent choosing the only option on offer, then a second call
+    # sending text the first one had room for. Two calls to do one call's work, which is the exact
+    # waste the no-headings branch exists to avoid, arriving through a different door. The map only
+    # pays when something has to be left out.
+    sections = documents.sections(docs)
+    corpus = sum(len(d.text or "") for d in docs)
+    if any(s.title for s in sections) and corpus > PLAN_FROM_DOCS_BUDGET:
+        from .. import docindex
+
+        return (
+            "Your own agents wrote these. Below is what they contain — headings only, so you can say "
+            "what is worth reading before anything is read to you.\n\n"
+            f"Roles and what each can do:\n{_roster_menu(ctx)}\n\n"
+            f"{docindex.toc(sections)}"
+            + _already_queued(open_titles)
+            + "\n\n`sections`: name at most six headings from the list above, exactly as written, "
+            "that you need in order to turn this into work. Leave `tasks` empty for now — you will "
+            "be shown those sections and asked for the tasks next."
+        )
+
     spent = 0
     chunks: list[str] = []
     for doc in docs:
@@ -1978,6 +2079,21 @@ class Behaviour:
     # before its effect can discover there was nothing to do: `draft_support_reply` wrote a
     # reply to nobody every three hours on a company with no mailbox connected.
     skip_when: Callable | None = None
+    # **One extra round, and only one.** Given the first structured answer, this returns text to put
+    # in front of the model for a second call — or "" when one round was enough.
+    #
+    # The capability belongs to the executor rather than to the tool because a tool effect reaches
+    # `company`, `data_path`, `leads`, `store` and `structured` and deliberately **not** a model
+    # handle: the executor owns routing, the token budget, the breaker, the usage log and the
+    # per-role model pin. A tool calling a model itself would escape all five, which is the reason
+    # `review_generated_site` was built as a second tool on another role rather than as a loop inside
+    # the first one.
+    #
+    # Bounded at one on purpose. PageIndex's agentic retrieval spends 2–4 calls per question, and an
+    # open loop is a token bill with no ceiling — this project has already paid 365 026 tokens for a
+    # misread failure once. Two rounds is where structure-then-content lands: the first answer names
+    # what it needs, the second reads it. A third round has unproven value and a certain cost.
+    refine: Callable | None = None
 
 
 BEHAVIOUR: dict[str, Behaviour] = {
@@ -2025,6 +2141,9 @@ BEHAVIOUR: dict[str, Behaviour] = {
             else "the agents have written no documents yet"
         ),
         prompt=lambda c: _plan_from_docs_prompt(c),
+        # The first user of the executor's refine round: round one reads the map and names what it
+        # needs, round two reads those sections and produces the tasks.
+        refine=_plan_from_docs_refine,
         effect=lambda c, d: _ok(_plan_from_docs(c)),
     ),
     "create_tasks": Behaviour(

@@ -120,24 +120,32 @@ def _payload(*docs, **over) -> dict:
     return {**base, **over}
 
 
-def test_a_document_that_was_cut_does_not_look_like_one_that_was_not():
-    """The whole point of the card: two rows that read the same put the operator back where they
-    started. This used to contrast "reaches the agents" with "past the budget" — a state that no
-    longer exists, because every readable file's headings now ride on every prompt. What is left to
-    tell apart is a file read whole against one cut at `MAX_CHARS`, which is a real difference and
-    still a per-file fact rather than a per-turn one."""
+def test_rows_in_different_states_do_not_read_the_same():
+    """The whole point of the card: two rows that read alike put the operator back where they
+    started.
+
+    The contrast has been narrowed twice, and both times because the state stopped existing rather
+    than because the card got worse. It was "reaches the agents" against "past the budget", until
+    every readable file's headings began riding on every prompt. Then it was whole against cut at
+    `MAX_CHARS`, until `load` started reading whole files so the map could be built from all of them.
+    What remains is the honest vocabulary: a file whose text is in the index, a picture that is sent
+    rather than read, and a PDF that has no text to extract — three different answers to "why is this
+    file in this state", and the card has to give three different sentences.
+    """
     out = _render(
         _payload(
-            _entry(path="reaches.md"),
-            _entry(path="huge.md", reason="cut", chars=4000, total=12000),
+            _entry(path="brief.md"),
+            _entry(path="logo.png", kind="image", reason="image", reaches=False),
+            _entry(path="scan.pdf", kind="unreadable", reason="no-text-layer", reaches=False),
         ),
         "en",
     )
-    assert "reaches the agents" in out
-    # The cut row says how much was cut; the whole row says nothing further. `docs.why.cut` opens
-    # with the same three words as `docs.why.prompt` on purpose — both files *do* reach the agents —
-    # so what distinguishes them is the pair of numbers, not the verb.
-    assert "4000" in out and "12000" in out
+    # The state badge, which is the first on each row. The provenance badge beside it repeats on
+    # purpose — three files the operator dropped in *are* three files the operator dropped in — so a
+    # blanket uniqueness check over every badge fails for the one reason that is not a defect.
+    states = re.findall(r'<span class="badge (?:ok|dim|warn|danger)">([^<]+)</span>', out)[::2]
+    assert len(states) == 3 and len(set(states)) == 3, states
+    assert "reaches the agents" in states
 
 
 def test_the_french_card_is_french_including_the_reasons():
@@ -189,14 +197,6 @@ def test_an_os_message_is_the_one_note_the_card_keeps():
     )
     assert "n’a pas pu être ouvert" in out
     assert "Permission denied" in out
-
-
-def test_a_cut_document_says_how_much_of_it_an_agent_reads():
-    out = _render(
-        _payload(_entry(path="big.md", chars=4000, total=12000, reason="cut")),
-        "en",
-    )
-    assert "first 4000 of 12000 characters" in out
 
 
 def test_provenance_is_on_the_row_not_inferred_from_the_name():

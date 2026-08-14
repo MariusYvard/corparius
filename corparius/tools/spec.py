@@ -133,6 +133,11 @@ SPEC: dict[str, ToolSpec] = {
         schema={
             "tasks": {"type": "list", "default": []},
             "note": {"type": "str", "default": "", "max_len": 200},
+            # Round one fills this and leaves `tasks` empty; round two is shown those sections and
+            # fills `tasks`. One schema across both, because the executor sends the same one twice —
+            # a second schema would be a second contract for one tool, and the registry holds exactly
+            # one per name.
+            "sections": {"type": "list", "default": []},
         },
     ),
     "create_tasks": ToolSpec(

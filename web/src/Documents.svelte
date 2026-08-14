@@ -270,14 +270,15 @@
         <div>
           <strong>{doc.path}</strong>
           <span class="badge">{t(doc.written ? "docs.written" : "docs.dropped")}</span>
-          <!-- The one state the product had no way of saying out loud: readable, on file, and past
-               the budget, so no agent ever reads it. `docs.why.cut` carries the two numbers. -->
+          <!-- Every state is a plain lookup now. `docs.why.cut` — "reaches the agents: first {n} of
+               {total} characters" — was the only one that interpolated, and it is gone with the
+               state it described: `load` reads whole files so the index can map them, so no
+               document is truncated on the way to a prompt any more. It is the second string this
+               tab has *lost* rather than gained, after `docs.why.budget`, and both for the same
+               reason — a translated sentence for an unreachable state describes a product that no
+               longer exists. -->
           <p class="why muted small">
-            {#if doc.reason === "cut"}
-              {fill(t("docs.why.cut"), { n: doc.chars ?? 0, total: doc.total ?? 0 })}
-            {:else if doc.reason}
-              {t("docs.why." + doc.reason)}
-            {/if}
+            {#if doc.reason}{t("docs.why." + doc.reason)}{/if}
           </p>
           <!-- The outline, which is the thing an agent actually navigates by. It answers the question
                this tab could not answer before — "what is *in* that file" — without opening it, and

@@ -190,7 +190,6 @@
  "docs.sending": "Sending {name}…",
  "docs.stored": "{name} is on file",
  "docs.title": "What the company has on file",
- "docs.why.cut": "reaches the agents: first {n} of {total} characters",
  "docs.why.empty": "no text in it",
  "docs.why.image": "sent as a picture, to a model that can read one",
  "docs.why.no-extractor": "no extractor for this format",

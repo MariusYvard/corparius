@@ -139,7 +139,15 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # answers wearing one name.
     # 578: `ops.notePlaceholder`. The approval's note field had a label and an empty box, which says
     # what the field is called and not what to put in it.
-    assert result["counts"] == {"en": 578, "fr": 578}, result["counts"]
+    # 577, **down** by one again, and the second string this tab has lost rather than gained.
+    # `docs.why.cut` read "reaches the agents: first {n} of {total} characters" and was the only
+    # interpolated state on the row. `documents.load` now reads whole files, because the map was
+    # being built from the first 4 000 characters — a heading past the cut did not exist, so no
+    # agent could name it and the executor's second round could not ask for it. With the cut gone
+    # from the retrieval path, no document is in that state, `inventory` never sets the code, and a
+    # translated sentence for an unreachable state describes a product that no longer exists.
+    # Exactly the reasoning that removed `docs.why.budget` two commits earlier.
+    assert result["counts"] == {"en": 577, "fr": 577}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

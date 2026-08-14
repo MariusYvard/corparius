@@ -279,8 +279,20 @@ def full_text(slug: str, rel: str) -> Document | None:
     return doc
 
 
-def load(slug: str) -> list[Document]:
-    """Every document a company has dropped, newest first."""
+def load(slug: str, max_chars: int = MAX_CHARS) -> list[Document]:
+    """Every document a company has dropped, newest first.
+
+    `max_chars=0` reads them whole, and that is what every caller that builds an **index** passes.
+    The cut was the right answer while retrieval was "the newest files until the budget is gone" —
+    there was no point extracting a thirty-page review when only the first 4 000 characters could
+    ever be sent. With `docindex` in front, it became the binding constraint on the feature instead:
+    the map was built from the first 4 000 characters, so the sections past the cut had no headings
+    to name, and the second round could not ask for what it could not see.
+
+    It costs memory, not disk. `read` already extracts the whole file and then throws the tail away,
+    so nothing here reads more than it did — and what is *sent* is still bounded, by `budget` in
+    `docindex.select`, which is where a send budget belongs.
+    """
     base = folder(slug)
     if not base.is_dir():
         return []
@@ -299,7 +311,7 @@ def load(slug: str) -> list[Document]:
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     docs = []
     for path in files:
-        doc = read(path)
+        doc = read(path, max_chars=max_chars)
         doc.rel = path.relative_to(base).as_posix()
         docs.append(doc)
     return docs
@@ -401,7 +413,12 @@ def context(
     tick — extraction touches the disk — while ranking is arithmetic over text already in memory, so
     the *selection* can be per turn without a second read.
     """
-    files = [d for d in (load(slug) if docs is None else docs) if d.kind == "text" and d.text]
+    # `max_chars=0`: whole files, because the map is built from them. See `load`.
+    files = [
+        d
+        for d in (load(slug, max_chars=0) if docs is None else docs)
+        if d.kind == "text" and d.text
+    ]
     if not files:
         return ""
     from . import docindex
@@ -631,7 +648,7 @@ def inventory(slug: str, budget: int = CONTEXT_BUDGET) -> dict:
 
     Not for a polled path: it opens and extracts every file it lists.
     """
-    docs = load(slug)
+    docs = load(slug, max_chars=0)
     readable = [d for d in docs if d.kind == "text" and d.text]
     base = folder(slug)
 
@@ -659,7 +676,13 @@ def inventory(slug: str, budget: int = CONTEXT_BUDGET) -> dict:
         # subfolder rather than dropping it in beside the operator's files.
         entry["written"] = WRITTEN in doc.label.split("/")
         entry["reaches"] = doc.label in outlines
-        entry["text"] = doc.text
+        # **Bounded, and separately from the index.** `load` now reads whole files so the map
+        # can see past 4 000 characters, and this field is the shipped page's inline preview —
+        # without the cut here, lifting it for retrieval would have quietly put every document
+        # in full into the one resource on this tab already measured in tens of kilobytes.
+        # Expanding a row fetches the whole file from `/documents/text`, which is where reading
+        # a document in full belongs.
+        entry["text"] = doc.text[:MAX_CHARS]
         # The outline, so the console can show what an agent sees the shape of. Titles and levels
         # only: the bodies are already in `text` and sending them twice would double the payload of
         # the one resource on this tab that is measured in tens of kilobytes.

@@ -190,7 +190,6 @@
  "docs.sending": "Envoi de {name}…",
  "docs.stored": "{name} est au dossier",
  "docs.title": "Ce que la société a sur ses dossiers",
- "docs.why.cut": "atteint les agents : les {n} premiers caractères sur {total}",
  "docs.why.empty": "aucun texte dedans",
  "docs.why.image": "envoyé comme image, à un modèle qui sait la lire",
  "docs.why.no-extractor": "aucun extracteur pour ce format",

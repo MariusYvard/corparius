@@ -170,16 +170,23 @@ def test_each_way_of_being_unreadable_says_which_way_it_was(drop, server):
     assert not any(docs[name]["reaches"] for name in docs), "none of these reach a prompt"
 
 
-def test_a_cut_document_carries_its_real_length_as_a_number(drop, server):
-    """It lived only inside an English note as prose, so anything reading the
-    payload saw 4 000 characters and could not learn the document was three
-    times that."""
+def test_a_long_document_reports_its_real_length_and_previews_the_head(drop, server):
+    """The number and the preview came apart, and the row is where that shows.
+
+    It used to be one thing: the agents got 4 000 characters, so the row showed 4 000 and carried
+    `total` beside it because the real length lived only inside an English note as prose. Now
+    `documents.load` reads whole files for the index — a heading past the cut had no way to exist,
+    so no agent could name it — and `chars` is the document. What is still bounded is `text`, the
+    inline preview on the shipped page: lifting the cut for retrieval without bounding it here
+    would have put every document in full into the one payload on this tab already measured in tens
+    of kilobytes. Expanding the row fetches the file from `/documents/text`.
+    """
     (drop / "big.md").write_text("z" * 12000, encoding="utf-8")
 
     entry = _by_path(_get(server)[1])["big.md"]
-    assert entry["chars"] == documents.MAX_CHARS
-    assert entry["total"] == 12000
-    assert entry["reason"] == "cut" and entry["reaches"] is True
+    assert entry["chars"] == 12000 and entry["total"] == 12000, "the agents get the document"
+    assert len(entry["text"]) == documents.MAX_CHARS, "the preview is still a preview"
+    assert entry["reason"] == "prompt" and entry["reaches"] is True
 
 
 def test_a_capped_list_still_reports_the_real_count(drop, server):
@@ -351,13 +358,14 @@ def test_the_console_can_read_past_the_prompt_budget(drop, server):
     (drop / "big.md").write_text("z" * 12000, encoding="utf-8")
 
     listed = _by_path(_get(server)[1])["big.md"]
-    assert listed["chars"] == documents.MAX_CHARS and listed["total"] == 12000
+    assert len(listed["text"]) == documents.MAX_CHARS, "the row carries a preview"
 
     status, whole = _call(server, "GET", "/api/document/text?company=acme&path=big.md")
     assert status == 200 and whole["ok"]
     assert len(whole["text"]) == 12000, "the reading surface still applied a prompt budget"
     assert whole["path"] == "big.md"
-    # And the prompt itself is untouched: the budget is not a display setting.
+    # And the default read is untouched: `load` lifts the cut by asking for it, which is what keeps
+    # `MAX_CHARS` a real bound on every caller that has not thought about it.
     assert len(documents.load("acme")[0].text) == documents.MAX_CHARS
 
 

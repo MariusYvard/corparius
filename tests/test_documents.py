@@ -101,6 +101,35 @@ def test_a_long_document_is_cut_and_says_that_it_was(drop):
     assert "of" in doc.note and "characters" in doc.note
 
 
+def test_the_index_sees_past_the_cut_that_a_reader_stops_at(drop):
+    """The cut is a *reading* bound, and it had quietly become a **retrieval** bound.
+
+    `load` truncated every file at 4 000 characters, which was the right answer while the block was
+    "the newest files until the budget is gone": there was no point extracting a thirty-page review
+    when only the first 4 000 characters could ever be sent. With a map in front of them it became
+    the constraint on the whole feature — the outline was built from the first 4 000 characters, so a
+    heading past the cut did not exist, no agent could name it, and the second round could not ask
+    for what it could not see.
+
+    Both halves here, because either alone is half a rule: the default still cuts and still says so,
+    and `max_chars=0` reaches the section only a full read can find.
+    """
+    filler = "The reviewer went on at length about margins. " * 120  # ~5 400 characters
+    (drop / "review.md").write_text(
+        f"# Pricing\nThe annual toggle lowered conversion.\n{filler}\n\n"
+        "# Hosting\nThe bucket is static so a deploy cannot break the checkout.\n",
+        encoding="utf-8",
+    )
+    cut = documents.load("acme")[0]
+    assert len(cut.text) <= documents.MAX_CHARS, "the default is still a cut"
+    assert "cannot break the checkout" not in cut.text, "and this is what the cut costs"
+
+    whole = documents.load("acme", max_chars=0)
+    titles = [s.title for s in documents.sections(whole)]
+    assert "Hosting" in titles, f"the map still stops at 4 000 characters: {titles}"
+    assert "cannot break the checkout" in documents.context("acme", query="deploy checkout")
+
+
 def test_the_prompt_block_is_bounded(drop):
     """This rides on every prompt, and an unscoped 3 815-character skill already
     taught this project what that costs."""

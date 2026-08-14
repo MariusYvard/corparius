@@ -180,8 +180,15 @@ def test_the_state_codes_the_inventory_can_report_all_have_strings():
     # nothing can be in that state and `inventory` never sets the code. Both ends struck off together:
     # a code with no string renders a raw key, and a string for no code describes a product that does
     # not exist.
+    #
+    # `cut` followed it one commit later, for a reason that rhymes. `inventory` reads with
+    # `max_chars=0` now — the map was being built from the first 4 000 characters of each file, so a
+    # heading past the cut had no way to exist and the executor's second round could not ask for it.
+    # The code is still produced by a default `read`, which is why `Document.reason` still lists it
+    # and `test_a_long_document_is_cut_and_says_that_it_was` still holds; what it can no longer be is
+    # a **row on this card**, and `docs.why.cut` said "reaches the agents: first {n} of {total}
+    # characters", which is a claim about the agents rather than about a preview.
     for code in (
-        "cut",
         "image",
         "no-text-layer",
         "no-extractor",
@@ -190,7 +197,8 @@ def test_the_state_codes_the_inventory_can_report_all_have_strings():
         "prompt",
     ):
         assert f"docs.why.{code}" in en, f"a row can report {code!r} and nothing can render it"
-    assert "docs.why.budget" not in en, "the retired state must not keep its string"
+    for retired in ("docs.why.budget", "docs.why.cut"):
+        assert retired not in en, f"{retired}: a retired state must not keep its string"
 
 
 def test_a_body_that_is_not_base64_is_the_request_being_wrong(server):
@@ -231,8 +239,8 @@ def test_the_text_endpoint_applies_no_prompt_budget(server):
 
     _status, listed = _call(server, "GET", "/api/v1/documents?company=example")
     row = next(d for d in listed["documents"] if d["path"] == "brief.txt")
-    assert row["chars"] == documents.MAX_CHARS, "the row shows what an agent gets"
-    assert row["total"] > row["chars"], "and says the real length beside it"
+    assert row["chars"] == row["total"] > documents.MAX_CHARS, "the row shows what an agent gets"
+    assert len(row["text"]) == documents.MAX_CHARS, "and the inline preview stays a preview"
 
     status, whole = _call(server, "GET", "/api/v1/documents/text?company=example&path=brief.txt")
     assert status == 200

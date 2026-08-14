@@ -97,10 +97,34 @@ def memory(store, settings, slug: str) -> dict:
     """46 facts, 17.7 KB, and they change almost never — so this is the resource an ETag pays
     for most. `memory_enabled` travels with the list because an empty list and a switched-off
     feature are different answers and a caller must not have to guess which it got.
+
+    **`cap` and `chars` travel with it because this list has a ceiling and nothing said so.**
+    Measured on the real company: 55 facts, 13 933 characters, 16 pinned, written over 6.9 days —
+    about eight a day. `store.remember` caps the *unpinned* rows at `CORP_MEMORY_MAX` (200) and
+    deletes the oldest beyond it, so at that rate the company starts silently forgetting in roughly
+    three weeks. A console that renders an unbounded scroll of 253-character paragraphs and never
+    mentions either number is hiding both the cost and the ceiling.
+
+    `chars` is the honest unit here rather than the row count: these facts are pasted into prompts by
+    `store.recall`, so their length is what the operator actually pays for — the same reasoning as
+    `skills.always_on_chars()`, which already counts the tax an unscoped skill puts on every turn.
     """
+    rows = store.list_memory(slug) if settings.memory_enabled else []
     return {
-        "memory": store.list_memory(slug) if settings.memory_enabled else [],
+        "memory": rows,
         "memory_enabled": settings.memory_enabled,
+        # The cap counts unpinned rows only, and so does this: a pin is the operator saying "this one
+        # stays", which is neither counted against the cap nor dropped by it. Reporting the total
+        # against the cap would tell them they are 16 facts nearer a limit they are not.
+        "unpinned": sum(1 for row in rows if not row.get("pinned")),
+        # `settings.memory_max`, not a `cfg.get_int("CORP_MEMORY_MAX", 200)` of its own. It resolves to
+        # the same value `tools.effects._remember` passes to `store.remember`, which is the point —
+        # a console drawing a ceiling the store does not enforce is this project's recurring defect,
+        # two surfaces claiming one number. The first version of this line did write the literal, and
+        # `test_two_callers_agree` caught it as a status code, which it is not; the objection was
+        # wrong and the rule was still right, because the literal did not belong here either.
+        "cap": settings.memory_max,
+        "chars": sum(len(row.get("fact") or "") + len(row.get("why") or "") for row in rows),
     }
 
 

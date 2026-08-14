@@ -141,7 +141,11 @@ DECLARED = {
         }
     ),
     "tasks": frozenset({"tasks", "done_total"}),
-    "memory": frozenset({"memory", "memory_enabled"}),
+    # `cap`, `chars` and `unpinned` joined it when the console stopped rendering an unbounded
+    # scroll: these facts are pasted into prompts, so their length is the cost, and
+    # `store.remember` drops the oldest unpinned row past the cap whether or not anybody was
+    # told. `unpinned` rather than the total, because a pin is exempt from the cap.
+    "memory": frozenset({"memory", "memory_enabled", "cap", "chars", "unpinned"}),
     "activity": frozenset({"recent_actions"}),
 }
 
@@ -166,7 +170,12 @@ def test_build_is_the_declared_union_and_nothing_more(a_company):
     assert set(whole) == declared, f"build differs by {sorted(set(whole) ^ declared)}"
     # 30 since the onboarding thread joined `summary`. Pinned as a count as well as a set, so a key
     # added to both the payload and the declaration in one commit still has to be a line somebody reads.
-    assert len(declared) == 30, "the payload gained or lost a key; say which in DECLARED"
+    # 33: `cap`, `chars` and `unpinned` joined `memory`, and this is that line. The card rendered every
+    # fact a company had ever learned as one flat list — 55 of them, 13 933 characters, on the real
+    # company — with neither the cost nor the ceiling on screen, and `store.remember` silently drops the
+    # oldest unpinned row past the cap. All three ride the legacy payload too, because `build` is the
+    # union of the parts and a client reading either has to see the same company.
+    assert len(declared) == 33, "the payload gained or lost a key; say which in DECLARED"
 
 
 def test_no_key_lives_in_two_parts(a_company):

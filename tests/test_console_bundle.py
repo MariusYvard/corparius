@@ -113,7 +113,11 @@ def test_the_wheel_and_the_frozen_build_both_declare_the_directory():
     """Two packaging paths, and a resource missing from either is invisible until someone installs
     it. The frozen one is guarded because PyInstaller fails the whole build on a datas entry that
     does not exist, and a binary without the new console is a working product."""
-    import tomllib
+    # `tomllib` is stdlib from 3.11 and this project's floor is **3.10**, which the matrix runs on
+    # purpose. `importorskip` rather than a dependency: nothing at runtime parses TOML — only these
+    # two tests read `pyproject.toml` — so adding a package to satisfy a test would be the test
+    # changing what gets installed.
+    tomllib = pytest.importorskip("tomllib", reason="stdlib from 3.11; the floor is 3.10")
 
     pyproject = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
     artifacts = pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["artifacts"]

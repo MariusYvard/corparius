@@ -110,6 +110,11 @@ jobs:
       - name: Smoke test (offline mock console)
         run: |
           set -euo pipefail
+          # **Say what was checked.** Every assertion below is silent on success and, under `set -e`,
+          # silent on failure too — so a red job showed six seconds, no output and exit 1, and the
+          # only way to learn which check broke was to guess and push again. One line per assertion
+          # turns the log into the answer. Named `checked` because `ok` is already the readiness flag.
+          checked() { echo "  checked · $1"; }
           ./dist/corparius --no-browser &
           pid=$!
           ok=""
@@ -125,10 +130,13 @@ jobs:
           # The `meta` block below was already written this way; these were not.
           companies=$(curl -fsS http://127.0.0.1:8600/api/companies)
           echo "$companies" | grep -q '"example"'
+          checked "the example company is there"
           doctor=$(curl -fsS http://127.0.0.1:8600/api/doctor)
           echo "$doctor" | grep -q 'mock'
+          checked "the doctor reports mock mode"
           update=$(curl -fsS http://127.0.0.1:8600/api/update)
           echo "$update" | grep -q '"enabled": false'
+          checked "self-update is off in a package build"
           # Every sub-package imports in the frozen binary, proved in one request. `capabilities`
           # resolves from `providers` (models, mail), `config` (payments, plugins, secrets) and
           # `store` (the schema stamp the database is actually at), so a lazy import broken by
@@ -148,8 +156,13 @@ jobs:
           test "$code" = "304" || { echo "unchanged summary answered $code, not 304"; kill "$pid" 2>/dev/null; exit 1; }
           # And the v1 envelope, which a second client branches on. No `-f` here on purpose: the
           # response *is* a 404 and `-f` would make curl discard the body we came to read.
-          curl -sS "http://127.0.0.1:8600/api/v1/summary?company=nope" \
-            | grep -q '"code": "unknown_company"'
+          #
+          # **This is the one the sweep missed**, because it matched `curl -fsS` and this line is
+          # `curl -sS`. Same EPIPE race as the rest — and worse to diagnose, because `-s` suppresses
+          # curl's own error too: the job died after six seconds having printed nothing at all.
+          refused=$(curl -sS "http://127.0.0.1:8600/api/v1/summary?company=nope")
+          echo "$refused" | grep -q '"code": "unknown_company"'
+          checked "the v1 error envelope"
           # Durable work, and the header that keeps a retry from doubling it. Two identical POSTs
           # with one Idempotency-Key have to answer with one job — the second saying created:false
           # — which is the promise a client on a bad connection depends on.
@@ -163,12 +176,14 @@ jobs:
             || { echo "one key answered with two jobs"; kill "$pid" 2>/dev/null; exit 1; }
           jobs=$(curl -fsS "http://127.0.0.1:8600/api/v1/jobs?company=example")
           echo "$jobs" | grep -q '"kind": "run"'
+          checked "a durable job survived the POST"
           # The built console, inside the frozen bundle. `paths.console_dir()` resolves under
           # sys._MEIPASS here and nowhere else, so this is the only place that mode is exercised —
           # and a resource missing from a PyInstaller spec is invisible until someone runs the
           # binary.
           app_shell=$(curl -fsS http://127.0.0.1:8600/app/)
           echo "$app_shell" | grep -q '<div id="app">'
+          checked "the built console is inside the binary"
           curl -fsS http://127.0.0.1:8600/app/console.js  > /dev/null
           curl -fsS http://127.0.0.1:8600/app/console.css > /dev/null
           # And `/` is that same shell, because that is what somebody double-clicking the binary
@@ -176,8 +191,10 @@ jobs:
           # the fallback answers 200 with the old page, so a broken switch looks like success.
           root=$(curl -fsS http://127.0.0.1:8600/)
           echo "$root" | grep -q '<div id="app">'
+          checked "/ serves the built console"
           legacy=$(curl -fsS http://127.0.0.1:8600/legacy)
           echo "$legacy" | grep -q 'corparius console'
+          checked "/legacy still serves the single-file page"
           echo "smoke OK: console up, example seeded, mock mode, update-check off, v1 meta + ETag/304, / and /app/ served"
           kill "$pid" 2>/dev/null || true
 
@@ -242,8 +259,10 @@ jobs:
           done
           wheel_app=$(curl -fsS http://127.0.0.1:8611/app/)
           echo "$wheel_app" | grep -q '<div id="app">'
+          checked "the wheel carries the built console"
           curl -fsS http://127.0.0.1:8611/app/console.js > /dev/null
           wheel_root=$(curl -fsS http://127.0.0.1:8611/)
           echo "$wheel_root" | grep -q '<div id="app">'
+          checked "the installed / serves it"
           kill "$pid" 2>/dev/null || true
           echo "wheel smoke OK: installed package runs a day offline and serves the console at /"

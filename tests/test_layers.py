@@ -592,7 +592,11 @@ def test_every_declared_strictness_target_still_exists():
     that stops applying without failing.** That class has now bitten this project twice, so it gets
     a test rather than a resolution to read notes more carefully.
     """
-    import tomllib
+    # `tomllib` is stdlib from 3.11 and this project's floor is **3.10**, which the matrix runs on
+    # purpose. `importorskip` rather than a dependency: nothing at runtime parses TOML — only these
+    # two tests read `pyproject.toml` — so adding a package to satisfy a test would be the test
+    # changing what gets installed.
+    tomllib = pytest.importorskip("tomllib", reason="stdlib from 3.11; the floor is 3.10")
 
     config = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     patterns = [

@@ -15,137 +15,66 @@
 
 # corparius
 
-Describe a business in plain language; corparius runs it as a set of scheduled
-cognitive agents — a CEO plus nine operational roles — that pursue one signal,
-revenue, while a budget and loop firewall stops them running away.
+Describe a business in plain language. corparius runs it as ten scheduled agents —
+a CEO and nine operational roles — that pursue one signal, revenue, behind a budget
+and a loop firewall. **Everything stays on your machine**: the config, the state,
+and the models. Cloud LLMs are an opt-in escalation, never a requirement.
 
-It is the local-first answer to hosted platforms like NanoCorp and Polsia: the
-company config, the runtime state and the models stay on your own machine. Cloud
-LLMs are an opt-in escalation, never a requirement. Ship nothing you cannot audit.
+> **Working MVP.** The orchestrator, the firewall, the approval gate, the console
+> and the ten-agent roster run end to end against a deterministic mock LLM — a full
+> company day, offline, with no keys. Live providers are wired in and selected by
+> config, and `corparius preflight` proves by one real call which of them your
+> account can actually reach.
 
-> Status: working MVP. The orchestrator, the safety firewall, the human-in-the-loop
-> gate, the operator console and the ten-agent roster run end to end against a
-> deterministic mock LLM, so you can watch a full company day with no network and
-> no API keys. Live providers (Ollama, Anthropic, 14 free tiers, Claude Code CLI,
-> any OpenAI-compatible gateway) are wired in and selected by config, and
-> `corparius preflight` proves by one real call which of them your account can
-> actually reach — a catalogue lists models that exist, not models you may call.
-
-## Contents
-
+[Quick start](#quick-start) ·
 [How it works](#how-it-works) ·
 [The roster](#the-roster) ·
-[Quick start](#quick-start) ·
-[Operator console](#operator-console) ·
-[LLM routing](#llm-routing) ·
-[Safety firewall](#safety-firewall) ·
-[Human in the loop](#human-in-the-loop) ·
+[Console](#the-console) ·
+[Routing](#routing) ·
+[Guards](#the-guards) ·
+[Teaching a company](#teaching-a-company) ·
+[Settings](#where-settings-live) ·
+[Structure](#structure) ·
 [Compliance](#compliance-france--eu) ·
-[Project layout](#project-layout) ·
-[Plugins](#plugins) ·
-[Skills](#skills) ·
-[Documents](#documents) ·
-[Company apps](#company-apps) ·
-[Documentation](#documentation) ·
+[Docs](#documentation) ·
 [Support](#support) ·
 [Contributing](#contributing) ·
 [License](#license)
-
-## How it works
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/pipeline-dark.svg">
-    <img src="docs/readme/pipeline.svg" alt="One tick: company.yaml feeds the Scheduler, which picks the agents due; each Agent turn routes through the HybridRouter (local first, cloud on escalation); Tool calls are guarded by TokenBudget, LoopGuard and CircuitBreaker; money and production code wait at the human gate; everything lands in the SQLite store; and the CLI, operator console and MCP server read it back." width="100%">
-  </picture>
-</p>
-
-Each agent runs on its own cadence (the CEO twice a day, outreach every three
-hours, and so on). A tick advances the clock, runs whatever is due, records every
-action and token, and stops the moment a guard trips.
-
-## The roster
-
-Ten roles, each with a fixed cadence and a narrow toolset. Cadences are staggered
-so the company does not spend its whole budget in one burst.
-
-| Agent | Cadence | Does |
-| --- | --- | --- |
-| CEO (orchestrator) | twice a day | Owns the backlog: creates and arbitrates tasks, sets the plan, writes the EOD summary |
-| Social media | every 2h | Drafts and schedules posts for X and LinkedIn |
-| Outreach | every 3h | Finds targets, sends cold email, tracks who replied |
-| Support | every 3h | Triages the inbox, drafts replies |
-| Ads | every 6h | Tracks ad budgets, writes variants, adjusts bids |
-| Finance | every 6h | Reconciles Stripe flows, tracks spend, computes the balance |
-| Strategy | daily | Reads KPIs, adjusts pricing, updates the roadmap |
-| Competitor | daily | Web research, updates competitor profiles |
-| Design | daily | Visual direction, brand consistency, builds the sales site |
-| Coder | on demand | Builds features, fixes bugs, opens pull requests |
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/rule-dark.svg">
-    <img src="docs/readme/rule.svg" alt="" width="100%">
-  </picture>
-</p>
 
 ## Quick start
 
 Runs offline out of the box (mock LLM, SQLite). No keys, no models, no accounts.
 
-**No Python, no terminal, no clone — download one file and open it.** Grab the
-build for your system from the [latest release](https://github.com/MariusYvard/corparius/releases/latest):
+**No Python, no terminal, no clone — download one file and open it.** From the
+[latest release](https://github.com/MariusYvard/corparius/releases/latest):
 
 | System | Download | Then |
 | --- | --- | --- |
 | Windows x64 | `corparius-windows-x64.exe` | double-click (SmartScreen: More info → Run anyway) |
-| macOS (Apple Silicon) | `corparius-macos-arm64.zip` | unzip, then right-click `corparius.app` → Open |
-| macOS (Intel, 15+) | `corparius-macos-x64.zip` | unzip, then right-click `corparius.app` → Open |
+| macOS (Apple Silicon) | `corparius-macos-arm64.zip` | unzip, right-click `corparius.app` → Open |
+| macOS (Intel, 15+) | `corparius-macos-x64.zip` | unzip, right-click `corparius.app` → Open |
 | Linux x64 | `corparius-linux-x64` | `chmod +x corparius-linux-x64 && ./corparius-linux-x64` |
 
 The builds are unsigned, so the OS shows a first-run warning; the steps above get
-past it, and [docs/install.md](docs/install.md) walks through it with the exact
-screens, where your data lives per OS, updating and uninstalling. Your data lives
-in a per-OS folder, so re-downloading a newer build keeps every company and setting.
+past it. Your data lives in a per-OS folder, so a newer build keeps every company
+and setting. [docs/install.md](docs/install.md) has the exact screens.
 
-Prefer to run from source? Download the project, then **double-click the launcher
-for your system** (needs Python 3.10+ installed):
-
-| System | Double-click |
-| --- | --- |
-| Windows | `start-windows.bat` |
-| macOS | `start-macos.command` (first time: right-click, Open) |
-| Linux | `start-linux.sh` |
-
-It sets up a virtualenv, installs the dependencies, prepares the example company,
-opens the console in your browser, and tells you plainly if Python is missing.
-The only prerequisite is Python 3.10+.
-
-Prefer a terminal, or Docker:
+From source instead — double-click `start-windows.bat`, `start-macos.command` or
+`start-linux.sh` (Python 3.10+ is the only prerequisite; it makes the venv,
+installs, prepares the example company and opens the console). Or a terminal:
 
 ```bash
 git clone https://github.com/MariusYvard/corparius.git && cd corparius
-python start.py        # venv, dependencies, .env, example company, console, browser
-```
-
-```bash
-docker compose up -d   # operator console on http://127.0.0.1:8600 + local Ollama
-```
-
-Or pull the published image — no checkout, one command (console on
-`http://127.0.0.1:8600`, offline mock mode, bound to localhost):
-
-```bash
+python start.py                                          # venv, deps, example company, browser
+docker compose up -d                                     # or Docker, console on :8600 + Ollama
 docker run -d -p 127.0.0.1:8600:8600 -v corparius_data:/app/data ghcr.io/mariusyvard/corparius
 ```
 
-The console walks you through creating your first company; `python -m corparius.cli
-doctor` diagnoses the installation and says what to fix. Compose profiles:
-`--profile loop` adds the background company loop, `--profile extras` adds
-Postgres and n8n.
+The console walks you through your first company; `corparius doctor` diagnoses the
+installation and says what to fix.
 
-The CLI covers everything the console does, and `corparius <command> --help`
-explains each one:
+<details>
+<summary><b>The CLI does everything the console does</b> — <code>corparius &lt;command&gt; --help</code> explains each one</summary>
 
 | | |
 | --- | --- |
@@ -157,13 +86,41 @@ explains each one:
 | Keep it running | `doctor` `ui` `set` `mail` `backup` `restore` `update` `secrets` |
 | Let a device in | `pair` `clients` `revoke` |
 
-## Operator console
+</details>
 
-`python -m corparius.cli ui` serves the operator console on `http://127.0.0.1:8600`
-(Python standard library only, no runtime npm dependency, dark and light themes).
-The console is Svelte, built by `start-windows.bat` when Node is present and by CI
-for the wheel and the frozen binary; where neither has run, `/` serves the
-single-file page instead, which is also always at `/legacy`.
+## How it works
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/pipeline-dark.svg">
+    <img src="docs/readme/pipeline.svg" alt="One tick: company.yaml feeds the Scheduler, which picks the agents due; each Agent turn routes through the HybridRouter (local first, cloud on escalation); Tool calls are guarded by TokenBudget, LoopGuard and CircuitBreaker; money and production code wait at the human gate; everything lands in the SQLite store; and the CLI, operator console, MCP server and any paired client read it back." width="100%">
+  </picture>
+</p>
+
+A tick advances the clock, runs whatever is due, records every action and token,
+and stops the moment a guard trips.
+
+## The roster
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/roster-dark.svg">
+    <img src="docs/readme/roster.svg" alt="The ten agents and when each runs across a day: the CEO twice a day, social every two hours, outreach and support every three, ads and finance every six, strategy, competitor and design daily, and the coder on demand." width="100%">
+  </picture>
+</p>
+
+Each role has a narrow toolset and its own cadence. The cadences are **staggered on
+purpose** — a company that woke every agent at once would spend its whole budget in
+one burst.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/rule-dark.svg">
+    <img src="docs/readme/rule.svg" alt="" width="100%">
+  </picture>
+</p>
+
+## The console
 
 <p align="center">
   <picture>
@@ -172,85 +129,49 @@ single-file page instead, which is also always at `/legacy`.
   </picture>
 </p>
 
-The interface leads with what needs you: the approval queue is the first thing on
-the page, warm-bordered and unmissable, and **each request shows what is about to
-happen** — the drafted sentence and the values it will run with — rather than the
-tool's description of itself. Being asked to press Approve on a verb is not
-consent. The day's detail sits below it as a bento of varied cards rather than a
-stack of identical boxes: lean flow metrics with the
-current bottleneck, per-agent spend, the action log, the approval queue with
-inline approve and reject, the CEO-governed backlog as a kanban you can arbitrate
-and edit in place, run control (a burst of ticks or a loop you can stop), the
-sales site with a headline and a publish button, backups, and a chat with the CEO
-agent (given a face and a set of one-click openers) that answers from live company
-state. A Documents tab holds what the company knows in files — drag one in, read
-what the agents actually see of it, take one back out. The console is in English
-and French, both tables carrying the same keys.
+`corparius ui` serves it on `http://127.0.0.1:8600` — Svelte, built in CI, and
+**served with no Node installed anywhere**. English and French, dark and light.
 
-Nothing here needs a text editor. The company editor covers every field of the
-company config; Settings covers everything corparius reads, from provider keys to
-the mail account, Stripe, publishing targets, lead sources and the safety
-ceilings. Connecting a mailbox is three answers: pick your provider, give the
-address and an app password, then press Test and watch it send and read for real.
+It leads with what needs you. The approval queue is first on the page, and each
+request shows **what is about to happen** — the drafted sentence and the values it
+will run with — rather than the tool's description of itself. Being asked to press
+Approve on a verb is not consent.
 
-**And it answers the question an operator cannot type.** "I don't know what to do
-next" has nothing to ask the CEO with, and "ask the agent that holds the plan"
-only helps somebody who already knows what to ask it. The CEO tab now derives the
-next steps from the store — decisions waiting, a question in the inbox, drafts
-nobody has read, what go-live is still missing — and every one of them is a button
-that takes you there, not a sentence telling you where to go.
+Nothing here needs a text editor. Seven tabs cover the backlog as a kanban you can
+arbitrate, run control, per-agent spend, the sales site, documents, every provider
+key, the mail account, Stripe, and a chat with the CEO. And when you do not know
+what to do next, the CEO tab derives it from the store — decisions waiting, a
+question in the inbox, drafts nobody has read — and every one is a button that
+**takes you there** rather than a sentence telling you where to go.
 
-The console binds to localhost. Keys posted from the page are write-only: stored,
-never displayed back, reported only as a `configured` boolean. Set `CORP_UI_TOKEN`
-to require a header on every mutating call if you put it behind a reverse proxy,
-and `corparius pair` issues a credential **per device** — hashed with `scrypt`,
-compared in constant time, shown once, with two scopes (`read` and `act`) and
-`corparius clients` / `revoke` to manage them. A JSON API lives at `/api/v1` with
-one error envelope and an `ETag` on every GET; `GET /api/v1/meta` lets a client
-refuse a core it is too new for instead of discovering a 404. There is **no TLS**:
-`http.server` with a self-signed certificate is a bad answer on a phone, so the
-honest one is to stay on loopback and reach it through a tunnel — and the doctor
-fails if a device credential exists while the listener is off loopback with no
-proof of TLS termination. Details in `docs/console.md`.
+The console binds to localhost, and keys posted from it are write-only: stored,
+never displayed back. `corparius pair` issues a credential per device (`scrypt`,
+constant-time compare, shown once, `read` or `act`). A versioned JSON API lives at
+`/api/v1` with one error envelope and an `ETag` on every GET. There is deliberately
+**no TLS** — the honest answer for a stdlib server is loopback plus a tunnel, and
+the doctor fails if a device credential exists while the listener is off loopback.
+[docs/console.md](docs/console.md).
 
-### Where settings live
+## Routing
 
-Every setting resolves through four layers, first hit wins:
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/routing-dark.svg">
+    <img src="docs/readme/routing.svg" alt="The three difficulty tiers each map to a provider target, and a failed call walks the fallback chain in order until it reaches the local model, which needs no network." width="100%">
+  </picture>
+</p>
 
-| Layer | Source | Set it from |
-| --- | --- | --- |
-| 1 | the real process environment | your shell, systemd, docker `environment:` |
-| 2 | the settings saved from the console | the console |
-| 3 | `.env` | a text editor |
-| 4 | the default in the code | — |
-
-The console can set everything in layer 2, and it says which layer answers for
-each field: a value pinned by the process environment is shown read-only rather
-than accepting an edit that would do nothing. Bootstrap keys (`CORP_DATA_PATH`,
-`CORP_LOG_LEVEL`, `CORP_UI_HOST`, `CORP_UI_PORT`, `CORP_UI_TOKEN`) have to be
-readable before the database opens, so they live in `.env` and apply on restart.
-
-`.env` is read by corparius itself, not injected into the environment — which is
-why `docker-compose.yml` mounts it instead of using `env_file:`.
-
-Keys saved from the console land in `data/corparius.sqlite`, in the clear by
-default (as they were in `.env` before), which the panel and the doctor both say.
-Set a passphrase and they are encrypted at rest:
+Flip a prefix to move a tier between providers; keep any tier fully on-prem.
 
 ```bash
-corparius secrets on      # encrypts the keys already stored, then new ones
-corparius secrets status
+CORP_TRIVIAL_MODEL=local:gemma4:e4b
+CORP_NORMAL_MODEL=groq:llama-3.3-70b-versatile
+CORP_HARD_MODEL=openrouter:deepseek/deepseek-r1-0528:free
+CORP_LLM_FALLBACK=cerebras:gpt-oss-120b,mistral:mistral-small-latest
 ```
 
-`CORP_SECRET_KEY` is the passphrase and is a bootstrap key, so it lives in `.env`
-or the process environment — never in the database it protects. A backup zip never
-carries a plaintext secret either way: encrypted values ride along as ciphertext,
-and unencrypted ones are blanked with `REDACTED.txt` naming what to re-enter.
-
-## LLM routing
-
-Three difficulty tiers, each mapped to a `<target>:<model>` string in `.env`.
-Flip a prefix to move a tier between providers; keep any tier fully on-prem.
+<details>
+<summary><b>Every target, and what each one needs</b></summary>
 
 | Target | Serves | Needs |
 | --- | --- | --- |
@@ -261,36 +182,33 @@ Flip a prefix to move a tier between providers; keep any tier fully on-prem.
 | `openai:` | OpenAI, OpenAI-compatible | `OPENAI_API_KEY` (billed from the first call) |
 | `custom:` | any OpenAI-compatible gateway (OmniRoute, LiteLLM, vLLM, LM Studio) | `CORP_CUSTOM_LLM_URL` |
 
-```bash
-CORP_TRIVIAL_MODEL=local:gemma4:e4b
-CORP_NORMAL_MODEL=groq:llama-3.3-70b-versatile
-CORP_HARD_MODEL=openrouter:deepseek/deepseek-r1-0528:free
-CORP_LLM_FALLBACK=cerebras:gpt-oss-120b,mistral:mistral-small-latest
-```
+Limits, signup links and privacy notes per provider:
+[docs/llm-providers.md](docs/llm-providers.md).
 
-When a remote call fails (rate limit, outage), the router walks the
-`CORP_LLM_FALLBACK` chain in order; local Ollama always ends the chain, so the
-company keeps working offline. A provider that refuses goes to the end of the
-chain rather than being dropped, and comes back once it is rested. Free-tier
-limits, signup links and privacy notes per provider: `docs/llm-providers.md`.
+</details>
 
-### Measured, not declared
-
-A provider's catalogue lists models that exist, not models your account may call,
-and a model card that advertises structured output is not proof that the model can
-produce JSON. `corparius preflight` settles it with one real 8-token call per
-model and stores the verdict:
-
-```bash
-corparius preflight                       # the models your tiers and fallback name
-corparius preflight --provider openrouter # sweep a whole catalogue
-```
-
-Measured on a real key: **10 of 18 sampled NVIDIA catalogue entries answer 404**,
+**Measured, not declared.** A catalogue lists models that exist, not models your
+account may call, and a card advertising structured output is not proof the model
+can produce JSON. `corparius preflight` settles it with one real 8-token call and
+stores the verdict. On a real key: **10 of 18 sampled NVIDIA entries answer 404**,
 and **two of four models in a working fallback chain cannot produce JSON**. The
-recommended routing refuses to pick a model measured dead, verdicts age so a
-provider blocked six months ago gets another chance, and the console has the same
-thing behind a button. `docs/llm-providers.md` carries the per-model table.
+recommended routing refuses a model measured dead, and verdicts age so a provider
+blocked six months ago gets another chance.
+
+## The guards
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/guards-dark.svg">
+    <img src="docs/readme/guards.svg" alt="Three automatic guards in front of every agent turn — a token budget, a loop guard and a circuit breaker — and then the human gate, where money and production code wait for the operator." width="100%">
+  </picture>
+</p>
+
+Any tool named in `CORP_HITL_TOOLS` (`send_financial_transaction`,
+`publish_production_code` and `deploy_site` by default) pauses the run and files an
+approval. Decide from the console, the CLI or the MCP server; a rejection is handed
+back to the agent as a normal, recoverable tool error.
+[docs/securite.md](docs/securite.md) has the thresholds.
 
 <p align="center">
   <picture>
@@ -299,254 +217,135 @@ thing behind a button. `docs/llm-providers.md` carries the per-model table.
   </picture>
 </p>
 
-## Safety firewall
+## Teaching a company
 
-An autonomous agent left alone with an API and a credit card is a runaway-cost
-incident waiting to happen. Three guards sit in front of every turn:
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/teaching-dark.svg">
+    <img src="docs/readme/teaching.svg" alt="Four ways to teach a company: plugins add code, skills add prose, documents are the files it already has, and apps are what it runs for its own visitors." width="100%">
+  </picture>
+</p>
 
-- `TokenBudget` is a hard per-session ceiling, checked before each call and
-  updated after. Once spent, the agent halts and the operator is notified.
-- `LoopGuard` catches semantic stutter. If the cosine similarity between the
-  last outputs stays above the threshold across successive turns, or the same tool
-  is called with identical parameters too many times, the turn is suspended.
-- `CircuitBreaker` watches spend velocity. A sustained burst past the limit trips
-  the breaker into a conservative, then safe, mode; safe mode freezes the session.
+**Plugins** add providers, tools or templates without touching the core. They are
+off by default and curated — verified means listed in the reviewed
+`plugins/registry.json`, and unverified third-party code loads only behind an
+explicit opt-in. `corparius plugin install <name>` downloads at a pinned ref and
+verifies the SHA-256. [docs/plugins.md](docs/plugins.md)
 
-See `docs/securite.md` for the model and thresholds.
+**Skills** are what your company knows in prose: the objection your market raises,
+the price you never discount below. A `SKILL.md` folder with frontmatter, and
+`allowed-tools` decides everything — the body enters a prompt only when the tool
+about to run is one it names, so a turn pays for the skills that apply to it and
+nothing else. [docs/skills.md](docs/skills.md)
 
-## Human in the loop
+**Documents** are the files it already has. A PDF, `.docx`, `.pptx`, `.xlsx`, CSV,
+Markdown and plain text are read **with the standard library** — no new dependency,
+and nothing invented: a scanned PDF says "no text layer this build can read" rather
+than returning noise. A picture is *sent*, not described, and only to a model
+`preflight` has measured can read one. Every readable file is reduced to its
+headings, and that map rides on every prompt; the budget decides which sections get
+quoted, ranked against what the agent is about to do.
+[docs/documents.md](docs/documents.md)
 
-Some actions never run unattended. Any tool named in `CORP_HITL_TOOLS`
-(`send_financial_transaction`, `publish_production_code` and `deploy_site` by
-default) pauses the run and files an approval request with the full tool name and
-parameters. Approve or reject from the console, the CLI or the MCP server. A
-rejection is handed back to the agent as a normal, recoverable tool error.
+**Apps** put the providers you already configured behind something other than the
+roster — a FAQ on the sales site, a form that understands what a visitor wrote.
+A YAML file with its own token ceiling, rate limit and origin list, and its spend
+shows up in the console under `app:<name>`. No second API key.
+[docs/apps.md](docs/apps.md)
+
+## Where settings live
+
+Every setting resolves through four layers, first hit wins:
+
+| Layer | Source | Set it from |
+| --- | --- | --- |
+| 1 | the real process environment | your shell, systemd, docker `environment:` |
+| 2 | the settings saved from the console | the console |
+| 3 | `.env` | a text editor |
+| 4 | the default in the code | — |
+
+The console can set everything in layer 2, and it says which layer answers for each
+field: a value pinned by the process environment is shown read-only rather than
+accepting an edit that would do nothing. Bootstrap keys (`CORP_DATA_PATH`,
+`CORP_LOG_LEVEL`, `CORP_UI_HOST`, `CORP_UI_PORT`, `CORP_UI_TOKEN`) must be readable
+before the database opens, so they live in `.env` and apply on restart.
+
+Keys saved from the console land in `data/corparius.sqlite`, in the clear by
+default, which the panel and the doctor both say. `corparius secrets on` encrypts
+them at rest; `CORP_SECRET_KEY` is the passphrase and is a bootstrap key, so it
+never lives in the database it protects. A backup zip never carries a plaintext
+secret either way.
+
+## Structure
+
+Seven directories, seven ranks, and a rule held by a test rather than by good
+intentions: **a module of rank *n* imports only ranks ≤ *n*** — deferred imports
+included. `tests/test_layers.py` reads the import graph with the AST and fails on a
+new upward edge, and equally on a violation that was fixed and not struck off the
+list.
+
+```text
+kernel/ 0   stdlib only        providers/ 3   the outside world
+config/ 1   settings resolver  domain      4   agents, tools, documents, sitegen
+store/  2   the only sqlite3   app/       5   use cases, no transport
+                               api/ cli/  6   HTTP, CLI, MCP — nothing imports these
+```
+
+Reading a setting no longer loads `requests` or `subprocess`, and the domain cannot
+touch the network, sqlite or a subprocess — a gate rather than an observation.
+[docs/architecture-code.md](docs/architecture-code.md) has the table and the
+measurements; [docs/adr/](docs/adr/) has one decision per file.
 
 ## Compliance (France / EU)
 
-Self-hosting the operations does not exempt the business from the law. `docs/`
-covers the parts that bite: e-invoicing through an approved PDP (Factur-X, the
-2027 B2B mandate), ten-year archival, the choice of legal form, and where the EU
-AI Act classifies an agent as high-risk. Read `docs/conformite-fr.md` before you
-point this at real customers.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/readme/rule-dark.svg">
-    <img src="docs/readme/rule.svg" alt="" width="100%">
-  </picture>
-</p>
-
-## Project layout
-
-The package is **layered by rank**, and the rule is held by a test rather than by
-good intentions: a module of rank *n* imports only ranks ≤ *n*, deferred imports
-included. `tests/test_layers.py` reads the import graph with the AST and fails on a
-new upward edge — and equally on a violation that was fixed and not struck off the
-list. `docs/architecture-code.md` carries the reasoning and the measurements.
-
-```
-corparius/
-  kernel/          rank 0 — the standard library and nothing of corparius:
-                   paths, records, i18n, text, dotenv, crypto, vectors, proc,
-                   httpkit, tokens, clock
-  config/          rank 1 — cfg (environment > console > .env > default),
-                   settings, settings_spec, provider_table, permissions,
-                   secretbox, and the read-only sqlite layer
-  store/           rank 2 — the only place with sqlite3: schema, migrations and
-                   one mixin per table behind a single locked connection
-  providers/       rank 3 — the outside world: llm (HybridRouter + Ollama,
-                   Anthropic, 14 free OpenAI-compatible providers, OpenAI,
-                   Claude Code CLI, Mock), routing, preflight, modelinfo,
-                   hardware, mailbox, deploy, leadsource, enrich, signals,
-                   companyrepo, sitecheck
-  agents.py        rank 4 — the turn executor: routes, budgets, bills, and grants
-                   a tool one bounded second round
-  roster.py        the ten roles, their cadences and their playbooks
-  tools/           spec (declarations, no callable), effects, registry
-  company.py       the company config: one loader, one validator, one writer
-  documents.py     the company's own files: extraction and the prompt block
-  docindex.py      the map: headings out of every document, ranked per turn
-  skills.py        what the company knows, in prose (SKILL.md)
-  curator.py       keeps the skill library from becoming a landfill
-  safety.py        TokenBudget, LoopGuard, CircuitBreaker
-  hitl.py          approval gate and queue
-  structured.py    provider-agnostic output harness: same shape, whatever model
-  orchestrator.py  scheduler (cadences) + runtime (the tick loop)
-  sitegen/         single-file sales-page generator: palette, copy, style,
-                   head, sections, companions, critique, build
-  apps.py          the company's own LLM apps (+ appserver, appexport, appcli)
-  plugins.py       the curated registry, install and load
-  doctor.py        diagnose the installation and say what to fix
-  app/             rank 5 — the use cases, with no transport in them: overview,
-                   runs, chat, companies, tasks, publish, settings, setup,
-                   approvals, directives, drafts, inbox, mail, memory, skills,
-                   onboarding, guidance (what to do next), meta, errors
-  api/             rank 6 — transport: state, contracts, adapters, handlers,
-                   routes, server (stdlib HTTP, versioned JSON API at /api/v1)
-  api/static/      the console served at /, generated by `npm run build` in web/
-  webui.html       the original console (single file, no build step), at /legacy
-  cli/             the command line, one module per command group: lifecycle,
-                   operate, backlog, publish, configure, prove, maintain,
-                   console, access, support
-  mcp_server.py    optional MCP server (drive corparius from an MCP host)
-companies/example/ a sample company config, its skills, apps and documents
-web/               the console's source (Vite + Svelte 5) and the i18n data;
-                   built in CI, never needed at runtime
-docs/              architecture, safety, compliance, the ADRs and the RE dossier
-tests/             guards, routing, backlog, console, settings layering, pipeline
-```
-
-## Plugins
-
-corparius is extensible through plugins that add LLM/deploy/lead/enrich providers,
-tools, company templates, or tweak an agent — without touching the core. They are
-**off by default** and curated: a plugin is verified when it is in the reviewed
-`plugins/registry.json`, and unverified third-party code loads only behind an
-explicit opt-in. Install a verified plugin from the console (Plugins tab) or the
-CLI:
-
-```bash
-corparius plugin list
-corparius plugin install <name>     # downloads at a pinned ref, verifies the SHA-256
-```
-
-Write one from [`packaging/plugin-template/`](packaging/plugin-template/), then
-propose it by opening a PR that adds it to `plugins/registry.json` — CI validates
-and loads it. Full guide: [`docs/plugins.md`](docs/plugins.md).
-
-## Skills
-
-Plugins extend corparius with code. **Skills** extend it with what your company
-knows — the objection your market actually raises, the price you never discount
-below, the two words your founder refuses to see in a post. A skill is a
-`SKILL.md` folder with YAML frontmatter; prose, not code, and nothing in it is
-executed.
-
-```
-companies/<slug>/skills/<name>/SKILL.md   one company
-skills/<name>/SKILL.md                    every company on this machine
-```
-
-`allowed-tools` in the frontmatter decides everything: the body is read into the
-prompt only when the tool about to run is one it names, so a turn pays for the
-skills that apply to it and nothing else. Start from
-[`packaging/skill-template/`](packaging/skill-template/); the example company
-ships one. Full guide: [`docs/skills.md`](docs/skills.md).
-
-## Documents
-
-Skills are what the company knows in prose. **Documents** are what it already has
-in files: the pitch deck, the spec, the price list, a screenshot of a competitor's
-page. Drop them in the Documents tab — or straight into the folder — and the text
-becomes context its agents can use.
-
-```
-companies/<slug>/documents/            what you dropped in
-companies/<slug>/documents/written/    what its agents wrote
-```
-
-**No new dependency.** A PDF, a `.docx`, a `.pptx`, an `.xlsx`, a CSV, a Markdown
-note and a plain text file are all read with the standard library. **And nothing
-is invented**: a scanned PDF answers "no text layer this build can read" rather
-than returning noise, and a format with no extractor is named rather than guessed.
-Nothing is uploaded anywhere — extraction happens in your process, and what
-reaches a provider is what you put there.
-
-**A picture is sent, not described.** No text is invented for an image, because
-describing one needs a model that can see it — so the file itself travels, base64
-in the provider's own dialect, still with no new dependency. It goes only where it
-will be read: the tool has to have asked for it (a design brief and a competitor
-scan do; reconciling Stripe does not) and the model has to be able to read one.
-Which models can is **measured, not believed** — `corparius preflight` sends a
-real two-colour test image and stores the verdict, and that verdict outranks the
-catalogue's claim. Measured on a real key, on the three free models the catalogue
-says take images: **one reads a picture, one claims it and cannot, one gave no
-answer at all** — and that last one is recorded as "never proved", not as "blind".
-
-`CORP_IMAGE_MAX_PER_CALL` bounds it, and **0 sends none, ever**. A document's text
-is extracted on your machine; a picture has to leave it to be read, and a
-screenshot may hold a customer's data. Turning every cloud provider off was the
-only refusal available before — and that gives up the text too.
-
-The agents write here too, which is the half that is easy to miss: a design brief,
-a competitor scan, a pricing note and the end-of-day summary used to be produced,
-logged as 120 characters, and thrown away. They are documents now, so the design
-agent can read on Tuesday what it decided on Monday — and so can you.
-
-**Structure first, then content.** A prompt budget spent on "the newest files
-until it runs out" gave a two-page note and a thirty-page review the same room,
-and a document past the budget was not truncated but *invisible* — nothing said it
-existed, so no agent could ask for it. Every readable file is now reduced to its
-**headings**, and that map rides on every prompt; the budget decides which
-*sections* get quoted, ranked against what the agent is about to do. The console
-shows each file's outline, which is the question the tab could not answer before:
-what is *in* that file, without opening it.
-
-The CEO can go one step further, and this is the one place an agent is granted a
-second model call: it reads the map, names the sections it needs, and gets those
-back — bounded at exactly one extra round by the executor, which owns the routing,
-the budget, the breaker and the usage log for both. Full guide:
-[`docs/documents.md`](docs/documents.md).
-
-## Company apps
-
-The providers corparius already talks to, used for something other than the
-roster: a FAQ on the sales site, a form that understands what a visitor wrote.
-An app is a YAML file in `companies/<slug>/apps/` carrying its own token
-ceiling, rate limit and origin list, and its spend shows up in the console under
-`app:<name>`. No second API key, and none copied into a web page.
-
-It runs in two places from one definition: baked into the static site at build
-time, or on request through `corparius apps serve` (off by default, bound to
-127.0.0.1, published with a tunnel). Full guide: [`docs/apps.md`](docs/apps.md).
+Self-hosting the operations does not exempt the business from the law.
+[docs/conformite-fr.md](docs/conformite-fr.md) covers the parts that bite:
+e-invoicing through an approved PDP (Factur-X, the 2027 B2B mandate), ten-year
+archival, the choice of legal form, and where the EU AI Act classifies an agent as
+high-risk. Read it before you point this at real customers.
 
 ## Documentation
 
 | Doc | Covers |
 | --- | --- |
 | `docs/architecture.md` | orchestration topology, tiered router, durable execution |
-| `docs/architecture-code.md` | the code's own structure: seven directories, five ranks, and the test that enforces the rule |
-| `docs/adr/` | architecture decisions, one per file, each carrying the measurement behind it |
+| `docs/architecture-code.md` | seven directories, seven ranks, and the test that enforces the rule |
+| `docs/adr/` | architecture decisions, one per file, each carrying its measurement |
 | `docs/console.md` | the operator console (API, security model) |
 | `docs/llm-providers.md` | every free LLM provider: limits, keys, privacy notes |
 | `docs/securite.md` | the safety firewall and the Agent SRE mapping |
 | `docs/conformite-fr.md` | e-invoicing (PDP, Factur-X), legal forms, EU AI Act |
-| `docs/backlog.md` | the CEO-governed task backlog |
-| `docs/lean.md` | pull flow, WIP limits, flow metrics, kaizen |
+| `docs/backlog.md` `docs/lean.md` | the CEO-governed backlog; pull flow, WIP limits, kaizen |
 | `docs/integrations.md` | the real-or-mock backend pattern (Stripe, SMTP) |
 | `docs/site.md` `docs/deploiement.md` | sales-site generator and multi-provider publishing |
 | `docs/leads.md` `docs/pipeline.md` | lead research, enrichment, deliverability, signals |
 | `docs/mcp.md` | driving corparius from any MCP host |
-| `docs/plugins.md` | writing, installing and proposing plugins |
-| `docs/skills.md` | teaching a company its trade in prose (SKILL.md) |
-| `docs/documents.md` | the company's own files: what is read, and what reaches a prompt |
-| `docs/apps.md` | the company's own apps on its own providers |
+| `docs/plugins.md` `docs/skills.md` | writing plugins; teaching a company its trade in prose |
+| `docs/documents.md` `docs/apps.md` | the company's own files; its own apps on its own providers |
 | `docs/memoire.md` | yesterday vs what stays true: durable memory |
-| `docs/install.md` | download/run per OS, data locations, updates |
-| `docs/versionnement.md` | how a version is decided, stamped and released |
+| `docs/install.md` `docs/versionnement.md` | download/run per OS; how a version is decided |
 | `docs/roadmap-90j.md` | the 90-day build cycle |
-| `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia, Uclic, OpenWorker and knowledge-work-plugins |
+| `docs/reverse-engineering/` | teardowns of NanoCorp, Polsia, Uclic, OpenWorker and others |
 
 ## Support
 
 corparius is free, MIT-licensed and self-hosted; there is no paid tier and no
-telemetry. If it earns its keep in your homelab, you can support the work
-through [GitHub Sponsors](https://github.com/sponsors/MariusYvard).
+telemetry. If it earns its keep in your homelab, you can support the work through
+[GitHub Sponsors](https://github.com/sponsors/MariusYvard).
 
 ## Contributing
 
 Issues and pull requests are welcome. Keep changes surgical, match the existing
-conventions (dataclass config, provider registries with a local fallback, mock
-mode must keep working offline) and make sure `python -m pytest` stays green.
-New providers belong in the `OPENAI_COMPAT_PROVIDERS` registry with a
-documentation row in `docs/llm-providers.md`.
+conventions (dataclass config, provider registries with a local fallback, mock mode
+must keep working offline) and make sure `python -m pytest` stays green. New
+providers belong in the `OPENAI_COMPAT_PROVIDERS` registry with a documentation row
+in `docs/llm-providers.md`.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
 
 Reference implementation for research and self-hosting. Autonomous outreach,
-billing and publishing carry legal and reputational risk; you are the operator
-and the agent acts on your behalf. Keep the HITL gate on anything that spends
-money or ships code.
+billing and publishing carry legal and reputational risk; you are the operator and
+the agent acts on your behalf. Keep the HITL gate on anything that spends money or
+ships code.

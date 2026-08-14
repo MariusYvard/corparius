@@ -122,9 +122,9 @@ jobs:
           done
           test "${ok:-}" = "1" || { echo "console did not come up"; docker logs corp-smoke; exit 1; }
           img_companies=$(curl -fsS http://127.0.0.1:8600/api/companies)
-          echo "$img_companies" | grep -q '"example"'
+          contains "$img_companies" '"example"' "the image has the example company"
           img_doctor=$(curl -fsS http://127.0.0.1:8600/api/doctor)
-          echo "$img_doctor" | grep -q 'mock'
+          contains "$img_doctor" 'mock' "the image reports mock mode"
           echo "smoke OK: console up, example company present, mock mode reported"
           docker rm -f corp-smoke
 
@@ -201,9 +201,9 @@ jobs:
           # Body first, then grep — `curl | grep -q` closes the pipe at the first match and curl
           # exits 23 under `pipefail`. See the same note in ci.yml's package-smoke.
           companies=$(curl -fsS http://127.0.0.1:8600/api/companies)
-          echo "$companies" | grep -q '"example"'
+          contains "$companies" '"example"' "the example company is there"
           doctor=$(curl -fsS http://127.0.0.1:8600/api/doctor)
-          echo "$doctor" | grep -q 'mock'
+          contains "$doctor" 'mock' "the doctor reports mock mode"
           # The built console is **in** this binary, asserted rather than assumed. `/app/console.js`
           # is served only when `paths.console_built()` is true and 404s otherwise, so this is the
           # one request that can tell the two builds apart — and without it the step above passes
@@ -212,7 +212,7 @@ jobs:
           # And that the shell at `/` is that console rather than the fallback. `/` is the largest
           # response in this step, so it is the one most likely to lose the EPIPE race.
           shell_html=$(curl -fsS http://127.0.0.1:8600/)
-          echo "$shell_html" | grep -q '/app/console.js'
+          contains "$shell_html" '/app/console.js' "/ serves the built console"
           echo "smoke OK: console up, example company present, mock mode reported, Svelte console bundled"
           kill "$pid" 2>/dev/null || true
 

@@ -59,23 +59,30 @@
   // the console; a pull is gigabytes and a sweep is minutes, so five seconds is not a busy loop.
   const POLL_MS = 5000;
 
+  // Three settles, not one. Measured: `/api/v1/providers` answers in 115ms and `/api/v1/ollama` in
+  // 2289ms, because the latter probes for a local daemon that is usually not there. Under a
+  // `Promise.all` the page said "Reading…" for 2.5 seconds to show a table that had been ready for
+  // 2.4 of them — the same defect as Settings loading its eight groups as one block, and the same
+  // fix. Each card already gates on its own state, so nothing but this function had to change.
   async function load() {
-    try {
-      const [p, o, c] = await Promise.all([
-        get("/api/v1/providers", { token }),
-        get("/api/v1/ollama", { token }),
-        get("/api/v1/claude", { token }),
-      ]);
-      providers = p;
-      ollama = o;
-      claude = c;
-      // Only from the server's own view, and only when the operator is not mid-edit: these are text
-      // fields, and clobbering what somebody is typing on a refresh is its own small betrayal.
-      if (!Object.keys(tiers).length) tiers = { ...p.tiers };
-      failure = null;
-    } catch (e) {
-      failure = e instanceof Refused ? e : new Refused(0, { error: { message: String(e) } });
-    }
+    const settle = async (path, apply) => {
+      try {
+        apply(await get(path, { token }));
+      } catch (e) {
+        failure = e instanceof Refused ? e : new Refused(0, { error: { message: String(e) } });
+      }
+    };
+    failure = null;
+    await Promise.all([
+      settle("/api/v1/providers", (p) => {
+        providers = p;
+        // Only from the server's own view, and only when the operator is not mid-edit: these are text
+        // fields, and clobbering what somebody is typing on a refresh is its own small betrayal.
+        if (!Object.keys(tiers).length) tiers = { ...p.tiers };
+      }),
+      settle("/api/v1/ollama", (o) => (ollama = o)),
+      settle("/api/v1/claude", (c) => (claude = c)),
+    ]);
   }
 
   async function loadSetup() {
@@ -566,7 +573,11 @@
   <section class="card">
     <h2>{t("oll.title")}</h2>
     <p class="desc">{t("oll.desc")}</p>
-    {#if ollama}
+    {#if !ollama}
+      <!-- Said rather than left blank: this probe takes ~2.3s looking for a daemon that is usually
+           not installed, and an empty card for two seconds reads as a broken one. -->
+      <p class="muted small">{t("oll.probing")}</p>
+    {:else}
       <p>
         <span class="badge" class:ok={ollama.reachable}>{t(ollama.reachable ? "oll.ready" : "oll.off")}</span>
         {#if ollama.missing?.length}

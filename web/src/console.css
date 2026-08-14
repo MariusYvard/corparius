@@ -432,15 +432,159 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
  * only the measure for the text itself. */
 .card.prose > p, .card.prose > .card-head .desc { max-width: 62ch; }
 
-/* A card with nothing in it collapses to a row: title and the one sentence on one line, no description,
- * no 150px of padding around the word "Empty". Five of those on one page read as a page that failed to
- * load; five short rows read as a quiet day. The card comes back to full size the moment it has rows. */
-.card.hushed { min-height: 52px; padding: 12px 22px; flex-direction: row; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.card.hushed > * + * { margin-top: 0; }
-.card.hushed h2 { font-size: 13px; color: var(--muted); font-weight: 600; }
-.card.hushed .desc, .card.hushed .card-head .desc { display: none; }
-.card.hushed .empty { padding: 0; text-align: left; }
-.card.hushed .empty p { font-size: 12.5px; }
+/* The quiet strip, and what it replaced.
+ *
+ * `.card.hushed` was the second attempt at "a card with nothing in it": collapse it to a row but keep
+ * the border. A blind review named why that still failed — five full-width bordered panels holding one
+ * sentence each, consuming the top 400px, so the page's subject started below the fold. The panel was
+ * the problem, not its height, and a card that has nothing to show should not be a card.
+ *
+ * So the empty facts become one line of label/value pairs and the cards are simply absent. No border,
+ * no background: it reads as a caption on the page rather than as five things that failed to load. */
+/* A band, not loose text. A review read the first version as "undesigned inline label/value text with
+ * no grid, no dividers and no container" — fair: it was five pairs floating under the page dek. Two
+ * hairlines and a little air make it a readout, which is what it is. Still not a card: a card is a
+ * thing with content in it, and the whole point of this row is the things that have none. */
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 30px;
+  align-items: baseline;
+  margin: 2px 0 0;
+  padding: 11px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  max-width: none;
+  font-size: 13px;
+}
+.strip-item { display: inline-flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+/* The label recedes and the value carries the weight, which is the opposite of a form and the right way
+ * round for a readout: an operator scanning this wants `interactive`, not the word "Mode". */
+.strip-key { color: var(--muted); font-size: 12px; }
+.strip-val { color: var(--fg); font-weight: 600; }
+.strip-val.muted { font-weight: 500; }
+/* No separator between items — and that is the second attempt. A `·` between five pairs reads as a
+ * sixth value, and a left hairline on every item but the first leaves an orphaned rule floating at the
+ * left edge of every wrapped line, which a capture showed immediately. CSS cannot ask "am I first on
+ * my line", so the separator has to be something that survives wrapping: the 30px gap, against a 8px
+ * row gap, which reads as grouping without drawing anything. */
+
+/* ── what the company has learned ──────────────────────────────────────────── */
+
+/* Groups, because a flat list of what a company learned is unreadable by day seven. Measured on the
+ * real company: 55 facts, 13 933 characters, mean fact 253 characters, eight new ones a day. The
+ * group header is the whole affordance — a role, its glyph, and a count — so a reader picks the kind
+ * of fact they came for instead of scrolling past four other kinds. */
+.mgroup + .mgroup { margin-top: 10px; }
+.mgroup-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  /* A button, so it resets to the row it is: the shared `button` rule would give it a card-coloured
+     fill and a border, and a full-width filled bar per group is five more panels. */
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 8px;
+  margin: 0 -8px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.mgroup-head:is(div) { cursor: default; }
+.mgroup-head:is(button):hover { background: var(--raised); }
+.mgroup-name { font-weight: 600; font-size: 13.5px; }
+/* The count sits at the far end, so five group headers put five numbers on one axis. */
+.mgroup-head > .muted { margin-left: auto; }
+.mgroup-head svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+/* A collapsed group's rows are indented under its header, or a header and its facts read as peers.
+ * `minmax(0, 1fr)` is the load-bearing half: `.rows` is a grid, a grid track defaults to `auto` =
+ * `minmax(auto, max-content)`, and a row whose `min-width` is `auto` therefore grew the track to its
+ * own max-content — a 518px column holding a 1 564px row, with every fact running off the card. The
+ * same `minmax(0, …)` that broke the readout band fixes this one, because here the content *should*
+ * wrap and there it must not. */
+.mgroup > .rows { padding-left: 25px; grid-template-columns: minmax(0, 1fr); }
+.mgroup > .rows > * { min-width: 0; }
+
+/* One fact is one disclosure. Collapsed it is two lines and nothing else — no reason, no buttons —
+ * because that is what took this card from 3 921px of column to a height somebody reads. */
+.mrow { border-radius: 8px; }
+.mrow + .mrow { border-top: 1px solid var(--border); }
+.mrow.open { background: var(--raised); padding: 4px 8px 10px; margin: 4px -8px; border-top: 0; }
+.mrow.open + .mrow { border-top: 0; }
+.mrow-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 8px 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.mrow-head svg { width: 15px; height: 15px; flex: none; margin-top: 3px; color: var(--muted); }
+.mfact-wrap { flex: 1 1 0; min-width: 0; }
+
+/* Two lines, clipped by arithmetic rather than by `-webkit-line-clamp`.
+ *
+ * The clamp was tried first and does not work here: the row is a `<button>`, Chromium blockifies its
+ * content, and `display: -webkit-box` computes to `flow-root` — measured on the built page, with
+ * `-webkit-box-orient: vertical` and `-webkit-line-clamp: 2` both present and both inert, every
+ * 267-character fact rendering on one line. Wrapping the span in a flex child did not help, because
+ * the button is what blockifies, not the flex.
+ *
+ * So: `line-height` fixed here rather than inherited, and a height of exactly two of them. The
+ * objection to a pixel ceiling was that it cuts a line in half — an `em` multiple of the line box
+ * cannot, which is the whole reason the line-height is pinned on this rule instead of left to the
+ * body. The fade says there is more without an ellipsis, which reads badly mid-paragraph. */
+.mfact {
+  /* `block`, and it is not decoration: this is a `<span>`, and `max-height` and `overflow` do not
+     apply to a non-replaced inline box at all. Without it the rule below is inert and every fact
+     renders on one 18px line — which is exactly what it did, and it looked like the clamp working. */
+  display: block;
+  /* `button, .filebtn { white-space: nowrap }` (line 187) is inherited by everything inside a button,
+     and this is a paragraph inside one. Measured: the span was 470px wide with a 1 541px scroll width
+     and rendered one unwrapped line, which made `max-height` look like it was clamping when nothing
+     was wrapping to clamp. Named rather than just overridden, because that rule is right for the
+     labels it was written for. */
+  white-space: normal;
+  line-height: 1.55;
+  max-height: 3.1em;
+  overflow: hidden;
+  margin: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 2.35em, transparent);
+  mask-image: linear-gradient(to bottom, #000 2.35em, transparent);
+}
+.mfact.open { max-height: none; overflow: visible; -webkit-mask-image: none; mask-image: none; }
+/* No fade on a fact that fits: a one-line fact was being faded as though it were cut off. `:has()` is
+ * not available for "is my text taller than my box", so the signal is length — 120 characters is where
+ * a fact starts needing a second line in the half-width column this card lives in. */
+.mfact[data-short] { -webkit-mask-image: none; mask-image: none; }
+/* The reason is indented under the fact it explains, not stacked flush with it: at the same left edge
+ * the two paragraphs read as one long one. */
+.mwhy { margin: 2px 0 8px 23px; }
+.mrow .actions { padding-left: 23px; }
+
+/* The page's subject. One card per page may claim it, and it is the answer to "no page has a dominant
+ * object" — a heading a size up and a top rule in the accent, so the eye lands here and not on the
+ * first card that happens to be tall. Deliberately not a shadow or a tint: those are already carrying
+ * elevation and `attention`, and a fourth signal in the same channel is noise. */
+.card.subject { padding-top: 22px; }
+.card.subject > h2 { font-size: 19px; letter-spacing: -0.01em; }
+.card.subject::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 2px;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(90deg, var(--accent), transparent 62%);
+}
 /* The last thing in a card, when it is what you press, sits at the bottom — but only in the bento,
  * where cards are deliberately stretched to a common height. Applied everywhere, this rule stretched a
  * two-line panel to the height of an 80-field form and left its button 900px under its own text. */
@@ -531,16 +675,23 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
      reads as a border that failed rather than as a divider. */
   .hero-side { border-left: 1px solid var(--border); padding-left: 32px; margin: -16px 0; padding-top: 16px; padding-bottom: 16px; }
 }
-/* Five equal cells rather than five items pushed apart by `space-between`: the gaps were uneven and the
- * labels did not line up under each other. */
+/* A wrapping flex row, and this is the third attempt — the operator reported overlapping text in
+ * French and this rule was why.
+ *
+ * It was a grid: `repeat(5, minmax(0, auto))` with `space-between`. `minmax(0, auto)` lets a track
+ * shrink **below its own content**, and the labels are `nowrap`, so in French each track came out
+ * 57px against a 95px label (`jetons LLM utilisés`) and the text painted straight over its
+ * neighbour. Measured, not guessed: `clientWidth` 57, `scrollWidth` 95. English hid it because every
+ * English label fits in a fifth of the band.
+ *
+ * A box-only overlap check called that page clean — the boxes did not intersect, the glyphs did. So
+ * the rule is now one that cannot produce it: flex items at their content width, an even `gap`
+ * instead of `space-between` (which was also what left the odd hole on the right of the band), and
+ * `wrap` so five readouts that no longer fit move down instead of on top of each other. */
 .hero-side .pulse-row {
-  display: grid;
-  /* Sized to content, not five equal fifths: "857 260 / 100 000" at 26px is wider than a fifth of the
-     band and was overflowing its neighbour. `auto` lets the long one take what it needs and the four
-     short ones give it back. */
-  grid-template-columns: repeat(5, minmax(0, auto));
-  justify-content: space-between;
-  gap: 12px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 26px;
   align-items: start;
 }
 .hero-side .stat { text-align: left; }
@@ -613,8 +764,14 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 .hero-gate:not(.needs):hover::before { border-color: var(--border); background: var(--raised); }
 .hero-gate:active { transform: translateY(1px); }
 .hero-side { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
-.hero-side .pulse-row { justify-content: space-between; gap: 26px; width: 100%; }
-.hero-side .stat { text-align: right; min-width: 0; }
+/* `space-between` used to live here as well as above, which is how it survived the first fix. It is
+ * gone in both places: it stretched five readouts across the whole band, so the gaps changed with the
+ * language and the right edge left a hole. An even gap does not. */
+.hero-side .pulse-row { width: 100%; }
+/* Left, not right. Right-aligning content-width items in a wrapping row puts each label's last letter
+ * on a different x than the number below it — the alignment only looked deliberate while a grid was
+ * forcing equal tracks. */
+.hero-side .stat { text-align: left; min-width: 0; }
 @media (max-width: 760px) {
   .hero { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .hero-side { align-items: flex-start; }
@@ -624,10 +781,16 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 
 /* ── readouts ─────────────────────────────────────────────────────────────── */
 
-.pulse-row { display: flex; gap: 36px; row-gap: 18px; flex-wrap: wrap; align-items: flex-start; }
-.stat { min-width: 92px; }
+.pulse-row { display: flex; gap: 30px; row-gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+/* `flex: 0 0 auto`, and the bug it fixes was reported in French. `min-width: 92px` with a `nowrap`
+ * label is a contradiction: a flex item shrinks to its min-width and nowrap content then *overflows*
+ * rather than wrapping, so `jetons LLM utilisés` ran straight through `tâches livrées`. English hid it
+ * — every label there is under 92px. A readout is as wide as its widest line and no narrower; when
+ * five of them no longer fit, the row wraps, which is what `flex-wrap` is already for. */
+.stat { flex: 0 0 auto; min-width: 0; }
 /* One line, sentence case. Uppercase at 11px turned "in progress now" into three lines and put the five
- * numbers under it on three different baselines — the labels are what broke the row, not the numbers. */
+ * numbers under it on three different baselines — the labels are what broke the row, not the numbers.
+ * `nowrap` is safe now that nothing squeezes the track below the label. */
 .stat .label {
   font-size: 11.5px;
   color: var(--muted);

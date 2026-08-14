@@ -102,7 +102,17 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # where one sentence had carried four numbers, a sentence for the intensity control, and four names
     # for its steps, and three column headings for the provider list — which used to print "0% 21% 43% 71% 100%", the ramp's arithmetic showing through.
     # Every one exists because a blind design review asked what a number on screen meant.
-    assert result["counts"] == {"en": 553, "fr": 553}, result["counts"]
+    # 556. The three since 553, all from the same review round: `oll.probing`, because the Ollama card
+    # sat empty for the 2.3s that probe takes and an empty card reads as a broken one; and
+    # `ops.stripNone` / `ops.stripNothing`, the short values for Operations' quiet strip — the five
+    # cards it replaced each carried a full sentence, and a strip of five sentences is the wall the
+    # cards already were.
+    # 562. The six since 556 are the memory card's: it was a flat list of every fact a company
+    # had ever learned — 55 of them, 13 933 characters, on the real company — and it now needs to
+    # say what that costs (`mem.budget`), that the store drops the oldest past its cap
+    # (`mem.nearCap`), and how to narrow and read it (`mem.filter`, `mem.noMatch`,
+    # `mem.pinnedGroup`, `mem.groupCount`).
+    assert result["counts"] == {"en": 562, "fr": 562}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

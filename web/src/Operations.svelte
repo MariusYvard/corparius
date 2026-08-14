@@ -28,6 +28,7 @@
    * **The inbox and the approval queue** lead Overview instead, because the human gate is the
    * subject of this product and should not have to be looked for. The full detail is here.
    */
+  import { untrack } from "svelte";
   import { get, post, Refused } from "./api.js";
   import Ticked from "./Ticked.svelte";
   import { fill, translator } from "./i18n.js";
@@ -58,17 +59,93 @@
 
   // Whether the board has anything at all. Said once, under the five columns, rather than five times
   // inside them: "Empty" under a 0 in each of five lanes is five placeholders for one fact.
-  // Quiet in pairs. `hushed` collapses a card with nothing in it, and applying it per card left rows
-  // where one had collapsed and the other had not — which a review called flexbox debris, correctly.
-  let gateQuiet = $derived(
-    Boolean(summary)
-    && !summary.approvals.length
-    && !summary.inbox.length
-    && !(summary.rules ?? []).length,
-  );
-  let writingsQuiet = $derived(
-    !(drafts?.drafts ?? []).length && !(memory?.memory ?? []).length,
-  );
+  // A card with nothing in it stops being a card. `hushed` was the second attempt — collapse it but
+  // keep the border — and a blind review named the result exactly: five full-width bordered panels
+  // holding one sentence each, consuming the top 400px, so the page's actual subject (the log)
+  // started below the fold. The panels were the problem, not their height.
+  //
+  // So the empty ones become one line. `strip` is that line: label and a short value per quiet fact,
+  // and the cards below render only when they have something to show. The mode and the ask-above
+  // threshold are on it unconditionally, because "what the gate is set to" is the one fact an
+  // operator wants without asking, and it is one clause long.
+  let gateOn = $derived(Boolean(summary) && (summary.approvals.length || summary.inbox.length));
+  let rulesOn = $derived(Boolean(summary) && (summary.rules ?? []).length > 0);
+  let draftsOn = $derived((drafts?.drafts ?? []).length > 0);
+  let memoryOn = $derived((memory?.memory ?? []).length > 0);
+
+  // ── what the company has learned, organised ──────────────────────────────────
+  //
+  // Measured on the real company before designing this: **55 facts, 13 933 characters, 16 pinned,
+  // written over 6.9 days** — about eight a day, mean fact 253 characters. Rendered as one flat list
+  // that is a wall of paragraphs on day seven and an unreadable scroll by day thirty, and the store
+  // caps unpinned rows at `CORP_MEMORY_MAX` (200) and drops the oldest past it, so it also starts
+  // forgetting without saying so.
+  //
+  // Two axes were available without a schema change, and the useful one is `agent`. On the real
+  // corpus: ceo 33, strategy 12, outreach 6, design 2, finance 2 — and those are genuinely different
+  // kinds of fact (the CEO's conclusions, strategy's measurements, outreach's notes on named people).
+  // Grouping is exact rather than a clustering heuristic, and every agent already has a glyph.
+  //
+  // Pinned facts come out as their own group and lead, because they are the operator's own selection
+  // and the one group the cap will never touch.
+  let memFilter = $state("");
+  let memOpen = $state({});
+
+  let memFacts = $derived.by(() => {
+    const all = memory?.memory ?? [];
+    const needle = memFilter.trim().toLowerCase();
+    if (!needle) return all;
+    return all.filter((f) =>
+      `${f.fact ?? ""} ${f.why ?? ""} ${f.agent ?? ""}`.toLowerCase().includes(needle),
+    );
+  });
+
+  let memGroups = $derived.by(() => {
+    const pinned = memFacts.filter((f) => f.pinned);
+    const byAgent = new Map();
+    for (const fact of memFacts) {
+      if (fact.pinned) continue;
+      const who = fact.agent || "system";
+      if (!byAgent.has(who)) byAgent.set(who, []);
+      byAgent.get(who).push(fact);
+    }
+    // Biggest group first: on the real corpus the CEO writes 60% of them, and burying the largest
+    // group under two of size 2 is the alphabetical ordering that makes a list feel arbitrary.
+    const groups = [...byAgent.entries()]
+      .sort((one, two) => two[1].length - one[1].length)
+      .map(([who, facts]) => ({ key: who, agent: who, facts }));
+    return pinned.length ? [{ key: "pinned", agent: "", facts: pinned }, ...groups] : groups;
+  });
+
+  // Open by default only while there is little to read, and always when a filter is narrowing it —
+  // a search that makes you click five times to see its own results is not a search. The threshold is
+  // the point where the flat list stopped being readable on the real data.
+  const MEM_FLAT = 12;
+  let memAutoOpen = $derived(memFacts.length <= MEM_FLAT || Boolean(memFilter.trim()));
+  const memShown = (group) => memAutoOpen || memOpen[group.key] || group.key === "pinned";
+  // `SHOWN` per group, not per card. The pinned group is open by default and had sixteen facts in it
+  // on the real company — "always open" and "all of it" are different promises, and only the first one
+  // is worth making.
+  const memRows = (group) =>
+    memOpen[`g:${group.key}`] ? group.facts : group.facts.slice(0, SHOWN);
+
+  // Each quiet fact says something different. A review counted "nothing yet" three times in one row
+  // and it was right — one value repeated is one value, and a strip of it reads as a placeholder
+  // rather than as five readings. So the drafts entry carries its real number (`0 of 5` is a fact and
+  // a cap the operator can hit), the board says `empty`, and the two that genuinely have no count say
+  // `none`. Only "what the company learned" keeps `nothing yet`, where it is literally the state.
+  let strip = $derived.by(() => {
+    if (!summary) return [];
+    const items = [];
+    if (!gateOn) items.push([t("ops.waiting"), t("ops.stripNone")]);
+    if (!rulesOn) items.push([t("ops.rules"), t("ops.stripNone")]);
+    if (boardEmpty) items.push([t("ops.backlog"), t("col.empty")]);
+    if (!draftsOn && drafts) {
+      items.push([t("dft.title"), fill(t("dft.queued"), { n: drafts.queued, cap: drafts.cap })]);
+    }
+    if (!memoryOn) items.push([t("mem.title"), t("ops.stripNothing")]);
+    return items;
+  });
 
   let boardEmpty = $derived(
     Boolean(board) && COLUMNS.every((column) => (board.tasks[column] ?? []).length === 0),
@@ -108,12 +185,25 @@
     }
   }
 
+  // Company, and nothing else. `untrack` is load-bearing, and this is what it cost to find out:
+  // `refresh` is called synchronously from here and reads `summary?.running` to decide whether to
+  // ask for the log — so the effect tracked `summary`, which the same effect writes. Measured on the
+  // built bundle: **105 requests in two seconds**, five resources at ten hertz, for as long as the
+  // tab was open. And because every re-run tore the interval down and made a new one, the five-second
+  // poll this docstring describes never fired once.
+  //
+  // The trap is that the read is not visible from here: it is a frame down a call this line makes,
+  // and an effect's dependencies are whatever it reads before its first await. Nothing static can see
+  // that, so what `tests/test_console_effects.py` pins is this `untrack` and the interval teardown —
+  // narrow, and enough to stop the two lines whose removal brings the loop back.
   $effect(() => {
     // Named so the linter and the reader both see that changing company re-runs both.
     const slug = company;
     if (!slug) return;
-    refresh({ slow: true });
-    refreshQuiet();
+    untrack(() => {
+      refresh({ slow: true });
+      refreshQuiet();
+    });
     const timer = setInterval(() => refresh(), POLL_MS);
     return () => clearInterval(timer);
   });
@@ -212,23 +302,33 @@
 {#if !summary || !board}
   <p class="muted">{t("docs.reading")}</p>
 {:else}
-  <!-- 1. The gate, with the whole explanation rather than two buttons. It is warm-tinted only when
-       something is actually held, so "nothing waits" and "three things wait" are different at a
-       glance rather than the same card with different text in it. -->
+  <!-- 0. Everything that is quiet, on one line. See `strip` above for why this is not five cards. -->
+  <p class="strip">
+    <span class="strip-item">
+      <span class="strip-key">{t("ops.mode")}</span>
+      <span class="strip-val">{summary.permission_mode}</span>
+    </span>
+    <span class="strip-item">
+      <span class="strip-key">{t("ops.askAbove")}</span>
+      <span class="strip-val">{t("risk." + summary.ask_above)}</span>
+    </span>
+    {#each strip as [key, value] (key)}
+      <span class="strip-item">
+        <span class="strip-key">{key}</span>
+        <span class="strip-val muted">{value}</span>
+      </span>
+    {/each}
+  </p>
+
+  <!-- 1. The gate, with the whole explanation rather than two buttons. Rendered only when something
+       is actually held: the "nothing waits" case is a clause on the strip above. -->
   <div class="grid half">
-  <section
-    class="card prose"
-    class:attention={summary.approvals.length > 0}
-    class:hushed={gateQuiet}
-  >
+  {#if gateOn}
+  <section class="card prose" class:attention={summary.approvals.length > 0}>
     <h2>{t("ops.waiting")}</h2>
     <p class="desc">{t("ops.waitingDesc")}</p>
-    <p class="posture muted">
-      <!-- The mode name verbatim: `discuss`, `interactive`, `auto`, `custom` are a closed vocabulary
-           with no keys in the table, and inventing `tier.interactive` would have printed the key. -->
-      {t("ops.mode")}: <strong>{summary.permission_mode}</strong>
-      · {t("ops.askAbove")} <strong>{t("risk." + summary.ask_above)}</strong>
-    </p>
+    <!-- The mode and the threshold used to be repeated here. They are on the strip above now, where
+         they are read whether or not anything is held — which is when an operator wants them. -->
 
     {#each summary.approvals as approval (approval.id)}
       <article class="row block">
@@ -281,13 +381,13 @@
       </article>
     {/each}
 
-    {#if summary.approvals.length === 0 && summary.inbox.length === 0}
-      <Empty text={t("ops.calm")} />
-    {/if}
   </section>
+  {/if}
 
-  <!-- 2. What the operator told the gate to stop asking about. -->
-  <section class="card" class:hushed={gateQuiet}>
+  <!-- 2. What the operator told the gate to stop asking about. Same rule: a card here means there is
+       at least one rule to revoke. "No standing rule" is a clause, not a panel. -->
+  {#if rulesOn}
+  <section class="card">
     <h2>{t("ops.rules")}</h2>
     <p class="desc">{t("ops.rulesDesc")}</p>
     <div class="rows">
@@ -300,15 +400,16 @@
       </div>
     {/each}
     </div>
-    {#if summary.rules.length === 0}<Empty text={t("ops.rulesEmpty")} />{/if}
   </section>
+  {/if}
   </div>
 
   <!-- 3. The board. -->
   <!-- One card: the heading and the five columns it names. It was a card containing a title and a
        sentence, with the columns as siblings *below* it — so the heading looked like a stray paragraph
        and the board looked like five unlabelled slabs. -->
-  <section class="card board" class:hushed={boardEmpty}>
+  {#if !boardEmpty}
+  <section class="card board">
     <div>
       <h2>{t("ops.backlog")}</h2>
       <p class="desc">{t("ops.backlogDesc")}</p>
@@ -395,11 +496,14 @@
     </div>
     {/if}
   </section>
+  {/if}
 
   <!-- 4 and 5, side by side: each was a full-width card holding a paragraph half its own width, so the
-       right half of both was empty. -->
+       right half of both was empty. Both are absent when empty; the strip carries them. -->
+  {#if draftsOn || memoryOn}
   <div class="grid half">
-  <section class="card prose" class:hushed={writingsQuiet}>
+  {#if draftsOn}
+  <section class="card prose">
     <h2>{t("dft.title")}</h2>
     <p class="desc">{t("dft.desc")}</p>
     {#if drafts}
@@ -429,41 +533,130 @@
           </div>
         </article>
       {/each}
-      {#if drafts.drafts.length === 0}<p class="muted">{t("dft.none")}</p>{/if}
     {/if}
   </section>
+  {/if}
 
   <!-- What the company learned, and the operator's veto over it. -->
-  <section class="card prose" class:hushed={writingsQuiet}>
+  {#if memoryOn || memory?.memory_enabled === false}
+  <section class="card prose">
     <h2>{t("mem.title")}</h2>
     <p class="desc">{t("mem.desc")}</p>
     {#if memory && !memory.memory_enabled}
       <p class="muted">{t("mem.off")}</p>
     {:else if memory}
-      {#each memory.memory as fact (fact.id)}
-        <div class="row">
-          <div>
-            {fact.fact}
-            {#if fact.pinned}<span class="badge">{t("mem.pinned")}</span>{/if}
-            {#if fact.why}<p class="muted small">{fact.why}</p>{/if}
-          </div>
-          <div class="actions">
-            <button disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, fact.pinned ? "unpin" : "pin")}>
-              {t(fact.pinned ? "mem.unpin" : "mem.pin")}
+      <!-- The cost, and the ceiling. Both were invisible: these facts are pasted into prompts, so
+           their length is what the operator pays, and the store drops the oldest unpinned row past
+           the cap whether or not anybody was told. -->
+      <p class="strip">
+        <span class="strip-item">
+          <span class="strip-val">{fill(t("mem.budget"), {
+            n: memory.memory.length,
+            chars: (memory.chars ?? 0).toLocaleString(),
+          })}</span>
+        </span>
+      </p>
+      {#if memory.cap && memory.unpinned >= memory.cap * 0.8}
+        <p class="banner warn">{fill(t("mem.nearCap"), { n: memory.unpinned, cap: memory.cap })}</p>
+      {/if}
+
+      <!-- The filter appears only once browsing has stopped working. A search box over eight facts is
+           furniture. -->
+      {#if memory.memory.length > MEM_FLAT}
+        <input type="text" bind:value={memFilter} placeholder={t("mem.filter")} />
+      {/if}
+
+      {#each memGroups as group (group.key)}
+        <section class="mgroup">
+          <!-- The pinned group has no toggle: it is the operator's own list and the one the cap will
+               never touch, so it is always open.
+               Two concrete elements rather than one `<svelte:element this={…}>`. The dynamic form
+               reads better and cost more than it looked: it pulls in Svelte's namespace-resolution
+               code, which carries the literal `http://www.w3.org/2000/svg`, and
+               `tests/test_console_bundle.py` refuses an absolute URL nobody declared — the guarantee
+               being that this bundle fetches nothing from outside itself. An `{#if}` is cheaper than
+               either declaring an exception or weakening that test. -->
+          {#if group.key === "pinned"}
+            <div class="mgroup-head">
+              <span class="mgroup-name">{t("mem.pinnedGroup")}</span>
+              <span class="muted small">{fill(t("mem.groupCount"), { n: group.facts.length })}</span>
+            </div>
+          {:else}
+            <button
+              class="mgroup-head"
+              aria-expanded={memShown(group)}
+              onclick={() => (memOpen[group.key] = !memShown(group))}
+            >
+              <AgentIcon id={group.agent} />
+              <span class="mgroup-name">{group.agent}</span>
+              <span class="muted small">{fill(t("mem.groupCount"), { n: group.facts.length })}</span>
             </button>
-            <button disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, "forget")}>
-              {t("mem.forget")}
-            </button>
-          </div>
-        </div>
+          {/if}
+
+          {#if memShown(group)}
+            <div class="rows">
+            <!-- One fact is one disclosure, and that is what got this card from 3 921px to something
+                 readable. The first version showed, per fact, three clamped lines *plus* its `why`
+                 *plus* a "more" link *plus* two buttons — about 240px each, so sixteen pinned facts
+                 were 3 800px of column. Collapsed a fact is two lines and nothing else; the reason it
+                 was kept and the two irreversible buttons appear when you open it, which is also when
+                 an operator is actually deciding about it. -->
+            {#each memRows(group) as fact (fact.id)}
+              {@const shown = Boolean(memOpen[`f:${fact.id}`])}
+              <div class="mrow" class:open={shown}>
+                <button
+                  class="mrow-head"
+                  aria-expanded={shown}
+                  onclick={() => (memOpen[`f:${fact.id}`] = !shown)}
+                >
+                  <!-- The agent, per fact, only where the group heading is not already saying it.
+                       Ten of the sixteen pinned facts on the real company were written by outreach,
+                       design and finance, and grouping by agent had hidden that inside "Kept by you". -->
+                  {#if group.key === "pinned"}<AgentIcon id={fact.agent || "system"} />{/if}
+                  <span class="mfact-wrap">
+                    <span
+                      class="mfact"
+                      class:open={shown}
+                      data-short={(fact.fact ?? "").length < 120 ? "" : undefined}
+                    >{fact.fact}</span>
+                  </span>
+                </button>
+                {#if shown}
+                  {#if fact.why}<p class="muted small mwhy">{fact.why}</p>{/if}
+                  <div class="actions">
+                    <button disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, fact.pinned ? "unpin" : "pin")}>
+                      {t(fact.pinned ? "mem.unpin" : "mem.pin")}
+                    </button>
+                    <button disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, "forget")}>
+                      {t("mem.forget")}
+                    </button>
+                  </div>
+                {/if}
+              </div>
+            {/each}
+            {#if group.facts.length > SHOWN}
+              <button class="link" onclick={() => (memOpen[`g:${group.key}`] = !memOpen[`g:${group.key}`])}>
+                {memOpen[`g:${group.key}`]
+                  ? t("col.less")
+                  : fill(t("col.more"), { n: group.facts.length - SHOWN })}
+              </button>
+            {/if}
+            </div>
+          {/if}
+        </section>
       {/each}
-      {#if memory.memory.length === 0}<p class="muted">{t("mem.none")}</p>{/if}
+      {#if memFilter.trim() && !memFacts.length}<Empty text={t("mem.noMatch")} />{/if}
     {/if}
   </section>
+  {/if}
   </div>
+  {/if}
 
-  <!-- 6. The audit trail, and the column that cost 365 026 tokens to be missing. -->
-  <section class="card">
+  <!-- 6. The audit trail, and the column that cost 365 026 tokens to be missing.
+       This is the page. It was fifth of six equal panels and started below the fold at y≈520; now
+       everything above it is either a one-line strip or a card that has something in it, so the log
+       is what a reader lands on. `subject` is the treatment that says so. -->
+  <section class="card subject">
     <h2>{t("ops.log")}</h2>
     <p class="desc">{t("ops.logDesc")}</p>
     <div class="scroll">

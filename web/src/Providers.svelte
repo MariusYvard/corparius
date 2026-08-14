@@ -457,7 +457,9 @@
               placeholder="provider:model"
               onkeydown={(e) => e.key === "Enter" && addChain()}
             />
-            <button class="link" disabled={!chainDraft.trim()} onclick={addChain}>
+            <!-- An outline button, not a text link. Greyed-out text beside an empty field reads as a
+                 control that is broken; a bordered one reads as one that is waiting. -->
+            <button disabled={!chainDraft.trim()} onclick={addChain}>
               {t("tier.chainAdd")}
             </button>
           </div>
@@ -664,11 +666,23 @@
            not installed, and an empty card for two seconds reads as a broken one. -->
       <p class="muted small">{t("oll.probing")}</p>
     {:else}
+      <!-- Two halves, because the card has two subjects and was stacking both down the left of a
+           1152px box — measured at 48% used, the worst on the page. What the daemon is doing sits
+           beside what this machine can do: the first is a state you act on, the second is a
+           measurement you read, and they are independent. -->
+      <div class="oll">
+      <div class="oll-state">
       <p>
-        <span class="badge" class:ok={ollama.reachable}>{t(ollama.reachable ? "oll.ready" : "oll.off")}</span>
-        {#if ollama.missing?.length}
-          <span class="chip warn">{t("oll.partial")}</span>
-        {:else if ollama.reachable}
+        <!-- One status, not two. `ready` (the socket answers) sat beside `models missing` (the tiers
+             cannot be served), which are both true and read as a contradiction — a review counted
+             them as "two contradictory statuses for one thing". Reachability is a precondition, not
+             an outcome: a daemon that cannot serve the tiers is not ready, whatever the socket says. -->
+        {#if !ollama.reachable}
+          <span class="badge">{t("oll.off")}</span>
+        {:else if ollama.missing?.length}
+          <span class="badge warn">{t("oll.partial")}</span>
+        {:else}
+          <span class="badge ok">{t("oll.ready")}</span>
           <span class="muted small">{t("oll.allSet")}</span>
         {/if}
       </p>
@@ -695,6 +709,8 @@
           {#if pullJob.result?.done?.length}· {t("oll.done")}{/if}
         </p>
       {/if}
+      </div>
+      <div class="oll-machine">
       <!-- Reachable is not capable. The measurement decides whether local may carry a tier, and its
            absence is stated rather than assumed away. -->
       {#if ollama.machine?.tokens_per_second}
@@ -725,6 +741,8 @@
           <p class="note mono">{ollama.local_reason}</p>
         </details>
       {/if}
+      </div>
+      </div>
     {/if}
   </section>
 {/if}
@@ -790,7 +808,17 @@
     .tiers > .chain { grid-column: 1 / -1; }
   }
 
-  .chain-body { display: grid; gap: 8px; min-width: 0; }
+  /* Bounded, so the reorder controls stay beside the model they move rather than at the far
+     edge of a 1150px card — a review measured the gap at roughly 900px. */
+  .oll { display: grid; gap: 10px 32px; }
+  @media (min-width: 900px) {
+    /* The state half leads because it is the half with a button in it. */
+    .oll { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+    .oll-machine { border-left: 1px solid var(--border); padding-left: 32px; }
+  }
+  .oll-state, .oll-machine { display: grid; gap: 8px; align-content: start; min-width: 0; }
+
+  .chain-body { display: grid; gap: 8px; min-width: 0; max-width: 42rem; }
   .chain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
   .chain-list li {
     display: flex;

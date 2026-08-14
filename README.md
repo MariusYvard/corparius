@@ -168,14 +168,16 @@ single-file page instead, which is also always at `/legacy`.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/console-dark.png">
-    <img src="docs/screenshots/console.png" alt="corparius operator console: the count of decisions waiting on you in display scale, then recent agent activity, spend per agent in tokens, payments, task progress and lean flow metrics" width="100%">
+    <img src="docs/screenshots/console.png" alt="corparius operator console, Overview: the approval queue first, each request showing what it will do and the values it will run with, then the day's pulse — simulated hour, actions taken, tokens used, tasks delivered — the recent agent activity log and the go-live checklist" width="100%">
   </picture>
 </p>
 
-The interface leads with what needs you: a status band puts the count of decisions
-waiting on your approval in display scale, warm and unmissable, above everything
-else, and the daily detail sits below it as a bento of varied cards rather than a
-stack of identical boxes. Below the band, per company: lean flow metrics with the
+The interface leads with what needs you: the approval queue is the first thing on
+the page, warm-bordered and unmissable, and **each request shows what is about to
+happen** — the drafted sentence and the values it will run with — rather than the
+tool's description of itself. Being asked to press Approve on a verb is not
+consent. The day's detail sits below it as a bento of varied cards rather than a
+stack of identical boxes: lean flow metrics with the
 current bottleneck, per-agent spend, the action log, the approval queue with
 inline approve and reject, the CEO-governed backlog as a kanban you can arbitrate
 and edit in place, run control (a burst of ticks or a loop you can stop), the
@@ -191,10 +193,25 @@ the mail account, Stripe, publishing targets, lead sources and the safety
 ceilings. Connecting a mailbox is three answers: pick your provider, give the
 address and an app password, then press Test and watch it send and read for real.
 
+**And it answers the question an operator cannot type.** "I don't know what to do
+next" has nothing to ask the CEO with, and "ask the agent that holds the plan"
+only helps somebody who already knows what to ask it. The CEO tab now derives the
+next steps from the store — decisions waiting, a question in the inbox, drafts
+nobody has read, what go-live is still missing — and every one of them is a button
+that takes you there, not a sentence telling you where to go.
+
 The console binds to localhost. Keys posted from the page are write-only: stored,
 never displayed back, reported only as a `configured` boolean. Set `CORP_UI_TOKEN`
-to require a header on every mutating call if you put it behind a reverse proxy.
-Details in `docs/console.md`.
+to require a header on every mutating call if you put it behind a reverse proxy,
+and `corparius pair` issues a credential **per device** — hashed with `scrypt`,
+compared in constant time, shown once, with two scopes (`read` and `act`) and
+`corparius clients` / `revoke` to manage them. A JSON API lives at `/api/v1` with
+one error envelope and an `ETag` on every GET; `GET /api/v1/meta` lets a client
+refuse a core it is too new for instead of discovering a 404. There is **no TLS**:
+`http.server` with a self-signed certificate is a bad answer on a phone, so the
+honest one is to stay on loopback and reach it through a tunnel — and the doctor
+fails if a device credential exists while the listener is off loopback with no
+proof of TLS termination. Details in `docs/console.md`.
 
 ### Where settings live
 
@@ -322,60 +339,61 @@ point this at real customers.
 
 ## Project layout
 
+The package is **layered by rank**, and the rule is held by a test rather than by
+good intentions: a module of rank *n* imports only ranks ≤ *n*, deferred imports
+included. `tests/test_layers.py` reads the import graph with the AST and fails on a
+new upward edge — and equally on a violation that was fixed and not struck off the
+list. `docs/architecture-code.md` carries the reasoning and the measurements.
+
 ```
 corparius/
-  cfg.py           settings resolver: environment > console > .env > default
-  config.py        env-driven settings (dataclass, CORP_ prefix)
-  settings_spec.py the registry of settings the console may write (one row each)
+  kernel/          rank 0 — the standard library and nothing of corparius:
+                   paths, records, i18n, text, dotenv, crypto, vectors, proc,
+                   httpkit, tokens, clock
+  config/          rank 1 — cfg (environment > console > .env > default),
+                   settings, settings_spec, provider_table, permissions,
+                   secretbox, and the read-only sqlite layer
+  store/           rank 2 — the only place with sqlite3: schema, migrations and
+                   one mixin per table behind a single locked connection
+  providers/       rank 3 — the outside world: llm (HybridRouter + Ollama,
+                   Anthropic, 14 free OpenAI-compatible providers, OpenAI,
+                   Claude Code CLI, Mock), routing, preflight, modelinfo,
+                   hardware, mailbox, deploy, leadsource, enrich, signals,
+                   companyrepo, sitecheck
+  agents.py        rank 4 — the turn executor: routes, budgets, bills, and grants
+                   a tool one bounded second round
+  roster.py        the ten roles, their cadences and their playbooks
+  tools/           spec (declarations, no callable), effects, registry
   company.py       the company config: one loader, one validator, one writer
-  paths.py         where things live on disk
-  models.py        typed records: agents, actions, approvals, LLM results
-  llm.py           HybridRouter + Ollama, Anthropic, 14 free OpenAI-compatible
-                   providers, OpenAI, Claude Code CLI and Mock
-  safety.py        TokenBudget, LoopGuard, CircuitBreaker
-  permissions.py   what a role may call, and what waits for you
-  tools.py         the business toolbox, with HITL flags
-  documents.py     the company's own files: extraction, prompt budget, writing
-  mailbox.py       IMAP reading, read-only: support triage and prospect replies
-  inbox.py         what an agent asks you, and what you answer
-  structured.py    provider-agnostic output harness: same shape, whatever model
-  claudecli.py     one-press Claude subscription setup (claudecode: target)
-  provider_check.py test any provider with one real minimal call
-  preflight.py     prove by a real 8-token call what an account can call
-  modelinfo.py     the provider catalogues, cached; never dialled from a poll
-  hardware.py      what this machine can run locally, measured
-  ollama_setup.py  Ollama status and background model pulls from the console
-  secretbox.py     encrypt the stored keys at rest (CORP_SECRET_KEY)
-  backup.py        zip the store and the company configs
-  selfupdate.py    replace this build with the newest release
-  doctor.py        diagnose the installation and say what to fix
-  i18n.py          the console and the agents in English or French
-  sitegen/         single-file sales-page generator: palette, copy, style,
-                   head, sections, companions, build
-  deploy.py        interchangeable deploy providers (local, Netlify, S3, SSH)
-  leadsource.py    interchangeable lead sources (local dataset, headless browser)
-  enrich.py        lead enrichment providers (local heuristic, API-ready)
-  deliverability.py outreach guard (suppression list, daily cap / warmup)
-  signals.py       buying-signal watcher (local feed, headless browser)
-  agents.py        the ten-agent roster + the turn executor
+  documents.py     the company's own files: extraction and the prompt block
+  docindex.py      the map: headings out of every document, ranked per turn
   skills.py        what the company knows, in prose (SKILL.md)
-  plugins.py       the curated registry, install and load
-  apps.py          the company's own LLM apps (+ appserver, appexport, appcli)
-  companyrepo.py   give a company its own git repository
+  curator.py       keeps the skill library from becoming a landfill
+  safety.py        TokenBudget, LoopGuard, CircuitBreaker
   hitl.py          approval gate and queue
+  structured.py    provider-agnostic output harness: same shape, whatever model
   orchestrator.py  scheduler (cadences) + runtime (the tick loop)
-  store/           SQLite persistence (schema + one mixin per table)
-  api/             the operator console's transport: state, contracts,
-                   adapters, handlers, routes, server (stdlib HTTP, JSON API)
-  webui.html       the original console (single file, no build step), at /legacy
+  sitegen/         single-file sales-page generator: palette, copy, style,
+                   head, sections, companions, critique, build
+  apps.py          the company's own LLM apps (+ appserver, appexport, appcli)
+  plugins.py       the curated registry, install and load
+  doctor.py        diagnose the installation and say what to fix
+  app/             rank 5 — the use cases, with no transport in them: overview,
+                   runs, chat, companies, tasks, publish, settings, setup,
+                   approvals, directives, drafts, inbox, mail, memory, skills,
+                   onboarding, guidance (what to do next), meta, errors
+  api/             rank 6 — transport: state, contracts, adapters, handlers,
+                   routes, server (stdlib HTTP, versioned JSON API at /api/v1)
   api/static/      the console served at /, generated by `npm run build` in web/
+  webui.html       the original console (single file, no build step), at /legacy
   cli/             the command line, one module per command group: lifecycle,
-                   operate, backlog, publish, configure, prove, maintain, console
+                   operate, backlog, publish, configure, prove, maintain,
+                   console, access, support
   mcp_server.py    optional MCP server (drive corparius from an MCP host)
 companies/example/ a sample company config, its skills, apps and documents
 web/               the console's source (Vite + Svelte 5) and the i18n data;
                    built in CI, never needed at runtime
-docs/              architecture, safety, compliance, and the RE dossier
+docs/              architecture, safety, compliance, the ADRs and the RE dossier
 tests/             guards, routing, backlog, console, settings layering, pipeline
 ```
 
@@ -456,11 +474,19 @@ a competitor scan, a pricing note and the end-of-day summary used to be produced
 logged as 120 characters, and thrown away. They are documents now, so the design
 agent can read on Tuesday what it decided on Monday — and so can you.
 
-**The console says which ones an agent actually reads.** The prompt block is
-bounded, so a company holding twelve documents can be feeding two of them to its
-agents. Each row carries its state: reaches the agents, reaches them truncated at
-*n* of *m* characters, or on file and past the budget — that last one being the
-thing nothing used to say out loud. Full guide:
+**Structure first, then content.** A prompt budget spent on "the newest files
+until it runs out" gave a two-page note and a thirty-page review the same room,
+and a document past the budget was not truncated but *invisible* — nothing said it
+existed, so no agent could ask for it. Every readable file is now reduced to its
+**headings**, and that map rides on every prompt; the budget decides which
+*sections* get quoted, ranked against what the agent is about to do. The console
+shows each file's outline, which is the question the tab could not answer before:
+what is *in* that file, without opening it.
+
+The CEO can go one step further, and this is the one place an agent is granted a
+second model call: it reads the map, names the sections it needs, and gets those
+back — bounded at exactly one extra round by the executor, which owns the routing,
+the budget, the breaker and the usage log for both. Full guide:
 [`docs/documents.md`](docs/documents.md).
 
 ## Company apps

@@ -41,22 +41,42 @@ Donc chaque échec porte un nom plutôt qu'un silence:
 | `image` | envoyé comme image à un modèle qui sait la lire |
 | `os-error` | n'a pas pu être ouvert, avec ce que le système a répondu |
 
+`cut` et `budget` ont disparu de cette table, dans cet ordre et pour la même raison : l'inventaire lit désormais les fichiers entiers et la carte annonce tout, donc aucune ligne ne peut porter l'un ou l'autre. Les deux bouts sont rayés ensemble — un code sans phrase affiche une clé brute à l'écran, une phrase sans code décrit un état que le produit ne peut plus atteindre.
+
 Un PDF scanné répond « aucune couche de texte » au lieu de rendre du bruit. Aucun texte n'est inventé pour une image : décrire une image demande un modèle qui la voit, donc c'est le fichier lui-même qui part.
 
 L'état voyage comme un **code**, pas comme une phrase. La console parle deux langues, et la phrase, elle, part dans une invite dont la langue est l'anglais: une seule des deux se traduit.
 
-## Le budget d'invite, et ce qu'il laisse dehors
+## La carte d'abord, le contenu ensuite
 
 Le bloc envoyé aux agents est borné. Il roule sur chaque invite des agents qui le demandent, et ce projet a déjà appris ce qu'une compétence non cadrée de 3 815 caractères coûte par tour.
 
-Deux plafonds, chacun dit à voix haute:
+Ce qui a changé, c'est **ce que le budget choisit**. Il a longtemps choisi des *fichiers*, les plus récents d'abord jusqu'à épuisement — et ce qui dépassait n'était pas tronqué mais **invisible** : rien dans l'invite ne disait que ce document existait, donc aucun agent ne pouvait le demander et aucun exploitant ne pouvait voir qu'il avait été sauté. Mesuré sur neuf fichiers réels : quatre atteignaient les agents, trois cahiers des charges parfaitement lisibles étaient hors budget et rien ne les lisait.
 
-- **4 000 caractères par document.** Au-delà, le document est coupé et l'invite porte « first 4000 of 12345 characters »: un agent qui raisonne sur un document tronqué doit savoir qu'il l'est. La console montre les deux nombres, le réel comme un nombre et non comme une phrase.
-- **6 000 caractères pour le bloc entier.** Le plus récent d'abord, donc un document déposé ce matin déplace celui du mois dernier plutôt que de ne jamais être atteint. Ce qui dépasse n'atteint aucun agent.
+Il choisit maintenant des **sections**.
 
-**C'est ce second plafond qui compte pour l'exploitant.** Une entreprise peut avoir douze documents au dossier et n'en donner que deux à ses agents. Mesuré sur neuf fichiers réels: quatre atteignent les agents, trois specs parfaitement lisibles sont hors budget et rien ne les lit. Rien dans le produit ne le disait avant que la carte existe.
+1. Chaque fichier lisible est réduit à ses **titres** — `docindex.outline` lit les dièses Markdown, les lignes numérotées et les lignes en gras isolées. Un fichier sans aucun titre est une section unique, ce qui est la bonne réponse pour la note de trois lignes qu'un agent vient d'écrire.
+2. La **carte** — tous les titres de tous les documents — part dans chaque invite. Elle coûte quelques centaines de caractères et elle supprime la classe entière du « document invisible » : plus rien ne peut être au dossier sans être annoncé.
+3. Le reste du budget va aux sections classées contre **ce que l'agent s'apprête à faire** (`tool.draft_prompt`), pas contre la date du fichier. La comparaison est le cosinus de `kernel.vectors.hash_embed`, la même arithmétique que la mémoire, en dimension 256 — mesuré : 64 donne 2 bonnes réponses sur 7, 256 en donne 5, et 1 024 comme 4 096 ne font pas mieux. Rappel à 3 : 6 sur 7. La pondération IDF a été essayée et **écartée**, à chiffres identiques.
 
-`context()` et l'inventaire de la console partagent **une seule boucle de sélection**. Écrite deux fois elle aurait dérivé, et une console qui se porte garante d'un document qu'aucun agent n'a jamais vu coûte plus cher que le silence qu'elle remplace.
+**Les fichiers sont lus entiers pour être indexés.** `documents.load()` coupe à 4 000 caractères par défaut, et c'est le bon défaut pour tout appelant qui n'y a pas réfléchi — mais un index construit sur les 4 000 premiers caractères est un index où un titre plus loin dans le fichier **n'existe pas**, donc que personne ne peut nommer. Les quatre appelants qui construisent un index passent `max_chars=0`. Ça coûte de la mémoire, pas du disque : l'extraction lisait déjà le fichier entier avant d'en jeter la fin.
+
+Conséquence directe, et c'est la mesure de la chose : **aucun document ne peut plus être « hors budget »**. Deux phrases traduites ont été *supprimées* de la console pour cette raison — `docs.why.budget` puis `docs.why.cut` — parce qu'une phrase pour un état inatteignable décrit un produit qui n'existe plus.
+
+`context()` et l'inventaire de la console partagent **une seule sélection**. Écrite deux fois elle a dérivé en un seul commit — l'inventaire annonçait la réponse de la carte pendant que l'invite renvoyait encore celle de la récence — et `test_the_console_and_the_prompt_can_never_disagree` l'a tuée dans l'heure. Une console qui se porte garante d'un document qu'aucun agent n'a jamais vu coûte plus cher que le silence qu'elle remplace.
+
+### Le second tour, et pourquoi il appartient à l'exécuteur
+
+Le CEO va un cran plus loin, et c'est le seul endroit du produit où un outil obtient un deuxième appel modèle. `plan_from_documents` reçoit la carte au premier tour et répond par les titres dont il a besoin ; l'exécuteur lui rend ces sections et redemande le travail.
+
+Deux propriétés, et ce sont elles qui en font une capacité plutôt qu'une commodité :
+
+- **les deux appels sont facturés** — budget de jetons, disjoncteur, journal d'usage. Un effet d'outil atteint `company`, `data_path`, `leads`, `store` et `structured`, et délibérément **pas** un modèle : un outil qui appellerait un modèle lui-même échapperait aux cinq (routage, budget, disjoncteur, journal, épinglage par rôle) ;
+- **exactement un tour de plus.** La borne est dans l'exécuteur, pas dans la politesse de l'outil : un `refine` qui redemande toujours obtient un appel et s'arrête là. La récupération agentique de PageIndex dépense 2 à 4 appels par question ; une boucle ouverte est une facture sans plafond.
+
+Un titre inventé est écarté plutôt qu'obéi — la carte était sous les yeux du modèle — et ne rien nommer ne coûte rien : la première réponse tient.
+
+Le premier tour n'est envoyé que si le corpus **dépasse** le budget. Un document dont le seul titre est son propre nom, suivi d'une ligne, a bien un titre : la carte s'y déclenchait pour soixante caractères, soit un appel pour choisir la seule option offerte et un second pour envoyer ce que le premier avait la place de porter.
 
 ## Les images
 
@@ -161,4 +181,4 @@ Le point d'API n'est jamais sur le sondage de 5 secondes: il ouvre et extrait ch
 python -m pytest tests/test_documents.py tests/test_documents_api.py tests/test_documents_render.py -q
 ```
 
-Le troisième fichier extrait le rendu livré de `webui.html` et l'exécute sous node: une pastille « hors budget » ne doit pas ressembler à « atteint les agents », la carte française ne doit pas fuir d'anglais, et un nom de fichier ne doit pas pouvoir fermer la balise qui le contient.
+Le troisième fichier extrait le rendu livré de `webui.html` et l'exécute sous node: deux lignes dans deux états différents ne doivent pas se lire pareil — atteindre les agents, être une image envoyée telle quelle, ou n'avoir aucune couche de texte sont trois réponses et demandent trois phrases —, la carte française ne doit pas fuir d'anglais, et un nom de fichier ne doit pas pouvoir fermer la balise qui le contient.

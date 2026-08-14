@@ -8,6 +8,66 @@ was released.
 
 ## Non publié
 
+- **Changed : la console est réécrite, et c'est la première chose qui se voit.**
+  L'ancienne page était **un seul fichier de 3 617 lignes** : 512 lignes de CSS, 2 264
+  de JavaScript et 516 chaînes × 2 langues, sans étape de construction. Elle est
+  maintenant en Svelte 5, un composant par onglet, construite par Vite — en CI pour le
+  wheel et le binaire gelé, et par le lanceur quand Node est présent. **L'exécution ne
+  gagne aucune dépendance** : le wheel est installé dans un venv neuf et sert la page
+  **sans Node installé**, ce que la CI vérifie. Là où rien n'a construit, `/` sert
+  l'ancienne page, qui reste de toute façon à `/legacy`.
+  Les 578 chaînes sont devenues **de la donnée** (`web/i18n/*.json`) plutôt que du code,
+  et ça supprime par construction la classe de bug qui avait déjà frappé : une collision
+  de préfixe `doc.` / `docs.` affichait « Diagnostics » sur la carte Documents, trouvée
+  seulement par une capture d'écran. Aucun des 43 espaces de noms n'est le préfixe d'un
+  autre, et c'est une assertion.
+
+- **Fixed : les onglets se chargeaient par à-coups, et un exploitant l'a dit avant que
+  la mesure ne le montre.** Mesuré sur la console livrée, la hauteur du panneau dans les
+  images qui suivent le clic : **49 px puis 610 px à 238 ms** (Opérations), **49 px puis
+  1 598 px à 2 173 ms** (Fournisseurs, la sonde Ollama), 49 → 1 380 (Réglages), 49 → 641
+  (Greffons). Quatre onglets sur sept s'ouvraient sur une coquille et grossissaient d'un
+  facteur douze à trente. Pas une requête lente — 61 ms n'est pas lent — mais le panneau
+  détruit et reconstruit à chaque changement, alors que les données dormaient dans le
+  cache HTTP. Les panneaux survivent désormais et c'est l'**intervalle** qui s'arrête
+  quand l'onglet n'est plus devant ; survoler un onglet le construit avant le clic.
+  Après : **zéro changement de hauteur au retour, sur les sept**.
+
+- **Added : une API versionnée, `/api/v1`, et un appairage par appareil.**
+  Les 56 points d'entrée étaient la forme interne de la console : s'y brancher l'aurait
+  gelée. `GET /api/v1/meta` renvoie `{api_version, app_version, schema_version,
+  capabilities}` pour qu'un client puisse **refuser** un cœur trop vieux au lieu de
+  découvrir un 404, et une seule enveloppe d'erreur `{ok: false, error: {code, message,
+  detail}}` remplace des formes variées en anglais humain qu'aucun client ne pouvait
+  analyser. Les ressources sont **étroites** — `summary` fait 2 859 octets contre les
+  48 530 que l'ancienne page interrogeait toutes les 5 s — et portent un `ETag`, donc un
+  client au repos ne transfère rien.
+  `corparius pair` délivre un identifiant par appareil (`scrypt`, comparé en temps
+  constant, affiché une seule fois), avec deux portées seulement, `read` et `act`, et
+  `clients` / `revoke` pour les gérer. **Le palier CSRF se resserre au passage** : « ni
+  `Sec-Fetch-Site` ni `Origin` ⇒ autorisé » était un compromis raisonnable pour curl et
+  les tests, mais une application native n'envoie ni l'un ni l'autre — donc il devient
+  « aucun en-tête navigateur **et** un jeton d'appareil valide », le palier non
+  authentifié restant réservé au loopback.
+
+- **Added : le travail survit au processus.** Un tour lancé depuis la console vivait en
+  mémoire : redémarrer le serveur le faisait disparaître sans un mot. Les travaux et la
+  conversation avec le CEO sont maintenant en base. Un travail `running` dont le
+  propriétaire n'est pas ce processus devient **`interrupted`**, pas repris — « interrompu,
+  relance-le » est honnête, une reprise silencieuse serait un mensonge sur ce qui s'est
+  passé. Une clé d'idempotence évite qu'un téléphone en 4G qui réessaie lance deux tours.
+
+- **Changed : le paquet est en couches, et la règle est tenue par un test.**
+  23 050 lignes sur 53 modules, **à plat**, sans un seul sous-paquet — et cinq cycles
+  d'import invisibles parce qu'ils ne passaient que par des imports différés dans des
+  fonctions. Sept dossiers, sept rangs : un module de rang *n* n'importe que des rangs
+  ≤ *n*, **imports différés compris**, et `tests/test_layers.py` lit le graphe à l'AST.
+  Le cliquet affirme `constaté == connu` : une violation nouvelle échoue, et une violation
+  corrigée mais non retirée de la liste échoue aussi. Trois compteurs sont à zéro.
+  Ce que ça change pour qui installe : lire un réglage ne charge plus `requests` ni
+  `subprocess`, et le domaine ne peut plus toucher au réseau, à sqlite ou à un
+  sous-processus — c'est une porte, plus une observation.
+
 - **Fixed : le dépôt d'une entreprise a cessé d'être une sauvegarde, en silence.**
   **Mesuré sur l'installation du propriétaire : neuf commits locaux, aucun sur le
   distant.** Un commit poussé depuis ailleurs avait fait diverger les historiques, et

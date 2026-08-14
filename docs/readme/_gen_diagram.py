@@ -112,8 +112,14 @@ def diagram(p):
     # interfaces bar
     s += f'<rect x="36" y="{yb}" width="{W - 72}" height="46" rx="12" fill="{p["card"]}" stroke="{p["cardln"]}" stroke-width="1.3"/>'
     s += f'<text x="54" y="{yb + 29}" font-family="\'Segoe UI\',system-ui,sans-serif" font-size="14.5" font-weight="700" fill="{p["text"]}">Interfaces</text>'
-    for i, lab in enumerate(["CLI", "operator console", "MCP server"]):
-        lx = 190 + i * 210
+    # Four now, not three. `/api/v1` is an interface in its own right the moment a credential can be
+    # issued to something that is not this browser — versioned, with one error envelope and an ETag
+    # on every GET, and `corparius pair` hands out a per-device token with a `read` or `act` scope.
+    # 210px apart put the fourth label off the 1200 canvas; 190 fits all four inside the panel.
+    for i, lab in enumerate(
+        ["CLI", "operator console", "MCP server", "any paired client · /api/v1"]
+    ):
+        lx = 190 + i * 190
         s += f'<circle cx="{lx}" cy="{yb + 23}" r="3.5" fill="{p["teal"]}"/>'
         s += f'<text x="{lx + 12}" y="{yb + 28}" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="13" fill="{p["muted"]}">{lab}</text>'
     s += "</svg>\n"

@@ -1,12 +1,51 @@
 """Generate the README hero banners in the console's own visual language:
-blue-tinted dark surface, a masked dot-field, the halo'd pixel logo, a warm
+blue-tinted dark surface, a masked dot-field, the mark on a soft halo, a warm
 human-gate accent used once, and a right-aligned pulse of stats — the same
 composition as the Overview hero. Dark and light stay in lockstep from one source.
+
+**The mark is drawn here, not embedded.** It was a 213×136 PNG in `_logo.b64`, scaled up to 222
+wide — so the first image on the README was an upsampled raster whose baked-in wordmark rendered as
+a few illegible pixels. A blind review called it "a low-res raster sprite … the first pixel a
+stranger sees and it says dev placeholder". `web/src/Mark.svelte` was redrawn as paths for the
+console and this is the same geometry, from the same four fills, so the banner and the running
+product cannot drift apart the way they had.
 """
 
 import pathlib
 
-B64 = pathlib.Path("docs/readme/_logo.b64").read_text(encoding="utf-8").strip()
+# The mark, at the console's own coordinates: one parent, three reports, wired. The four fills are
+# literal here for the reason `Mark.svelte` gives — a brand mark is not a theme — and their lightness
+# spread is 0.12 rather than the 0.256 that made four unrelated primaries read as clip-art.
+MARK_VIEWBOX = 40, 32
+
+
+# The drawn extent, which is not the viewBox: the shapes span 1.4-38.6 across and 1.4-30.6 down, so
+# centring on 40x32 puts the mark low and left of where it looks centred. Measured rather than
+# eyeballed, because the first placement inherited the raster's box and sat 42px below the halo.
+INK_X, INK_Y = (1.4 + 38.6) / 2, (1.4 + 30.6) / 2
+
+
+def mark(cx, cy, scale, wire):
+    """The org chart, centred on (cx, cy). `wire` is the stroke colour, which differs per theme."""
+    x, y = cx - INK_X * scale, cy - INK_Y * scale
+    boxes = "".join(
+        f'<rect x="{bx}" y="{by}" width="{bw}" height="{bh}" rx="2.6" fill="{fill}"/>'
+        for bx, by, bw, bh, fill in (
+            (12.4, 1.4, 15.2, 9.4, "#70bf5c"),
+            (1.4, 19.6, 10, 11, "#e1c333"),
+            (15, 19.6, 10, 11, "#fc8c44"),
+            (28.6, 19.6, 10, 11, "#4aa3f7"),
+        )
+    )
+    return (
+        f'<g transform="translate({x},{y}) scale({scale})">'
+        f'<path d="M20 11.5v4.5M6.4 16h27.2M6.4 16v3.4M20 16v3.4M33.6 16v3.4" '
+        f'stroke="{wire}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" '
+        f'opacity="0.5" fill="none"/>'
+        f'<g stroke="{wire}" stroke-width="0.9" stroke-opacity="0.22" paint-order="stroke fill">'
+        f"{boxes}</g></g>"
+    )
+
 
 # Palette straight from the console tokens (OKLCH -> sRGB).
 DARK = dict(
@@ -22,7 +61,6 @@ DARK = dict(
     border="#254387",
     warmsoft="#2A1F10",
     dotop="0.20",
-    logofx="",
     haloop="0.55",
 )
 LIGHT = dict(
@@ -37,21 +75,18 @@ LIGHT = dict(
     teal="#2E7D96",
     border="#CAD1DF",
     warmsoft="#F3E9D8",
-    logofx='filter="url(#ink)"',
     haloop="0.30",
     dotop="0.55",
 )
 
 
 def svg(p):
-    ink = (
-        ""
-        if p["logofx"] == ""
-        else '<filter id="ink"><feComponentTransfer>'
-        '<feFuncR type="linear" slope="0.34"/><feFuncG type="linear" slope="0.34"/>'
-        '<feFuncB type="linear" slope="0.40"/></feComponentTransfer>'
-        '<feColorMatrix type="saturate" values="1.3"/></filter>'
-    )
+    # `ink` is gone with the raster it existed for: the PNG logo was too light against a white
+    # banner, so the light theme ran it through a darkening filter. The drawn mark needs nothing —
+    # its fills were chosen against both headers and measure 1.8-2.6:1 on white, 6.0-8.8:1 on the
+    # dark surface. A filter kept "just in case" would be the banner quietly disagreeing with the
+    # console about what the brand colour is.
+    ink = ""
     return f'''<svg viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="corparius — self-hosted autonomous AI micro-companies">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
@@ -81,9 +116,10 @@ def svg(p):
   <rect width="1200" height="300" fill="url(#dots)" opacity="{p["dotop"]}" mask="url(#fade)"/>
   <rect width="1200" height="2.5" fill="url(#beam)"/>
 
-  <!-- logo, floated on a soft halo instead of a chip -->
+  <!-- the mark, floated on a soft halo instead of a chip. 40x32 at scale 5.4 is 216x173, which is
+       the space the raster used to occupy — drawn, so it is sharp at any size the README is read at. -->
   <ellipse cx="185" cy="150" rx="150" ry="96" fill="url(#halo)"/>
-  <image x="74" y="80" width="222" height="142" href="data:image/png;base64,{B64}" {p["logofx"]}/>
+  {mark(185, 150, 4.9, p["text"])}
 
   <!-- headline block -->
   <text x="356" y="112" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace" font-size="13" letter-spacing="3.5" fill="{p["kicker"]}">SELF-HOSTED · LOCAL-FIRST · AUDITABLE</text>

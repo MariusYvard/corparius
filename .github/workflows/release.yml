@@ -166,6 +166,20 @@ jobs:
           # cryptography is bundled so binary users (who have no pip) can turn on
           # at-rest secret encryption from the console. It stays opt-in at runtime.
           pip install pyinstaller cryptography
+      # **Before PyInstaller, or the binary ships the old console and nothing says so.**
+      # `packaging/corparius.spec` includes `corparius/api/static/` only *if it is there* — guarded
+      # because PyInstaller fails the whole build on a datas entry that does not exist, and because a
+      # frozen build without it is a worse product rather than a broken one. That guard is right and
+      # it is also silent, and this job never ran the build: every downloadable binary would have
+      # served `webui.html` while the wheel served Svelte. Node is a build tool here and nowhere
+      # else — the smoke below is run against a binary that has no interpreter, let alone Node.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the console
+        run: npm ci --prefix web && npm run build --prefix web
       - name: Build the binary
         run: pyinstaller packaging/corparius.spec --noconfirm
 
@@ -184,7 +198,14 @@ jobs:
           if [ "${ok:-}" != "1" ]; then echo "console did not come up"; kill "$pid" 2>/dev/null || true; exit 1; fi
           curl -fsS http://127.0.0.1:8600/api/companies | grep -q '"example"'
           curl -fsS http://127.0.0.1:8600/api/doctor    | grep -q 'mock'
-          echo "smoke OK: console up, example company present, mock mode reported"
+          # The built console is **in** this binary, asserted rather than assumed. `/app/console.js`
+          # is served only when `paths.console_built()` is true and 404s otherwise, so this is the
+          # one request that can tell the two builds apart — and without it the step above passes
+          # identically on a binary carrying the single-file page.
+          curl -fsS http://127.0.0.1:8600/app/console.js >/dev/null
+          # And that the shell at `/` is that console rather than the fallback.
+          curl -fsS http://127.0.0.1:8600/ | grep -q '/app/console.js'
+          echo "smoke OK: console up, example company present, mock mode reported, Svelte console bundled"
           kill "$pid" 2>/dev/null || true
 
       - name: Package the asset

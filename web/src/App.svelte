@@ -150,6 +150,7 @@
          reason the *unselected* segment read as active in light mode. -->
     <Segmented
       label="language"
+      quiet
       value={lang}
       options={LANGUAGES.map((code) => ({ value: code, label: code }))}
       onpick={choose}

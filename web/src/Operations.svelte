@@ -34,6 +34,7 @@
   import { fill, translator } from "./i18n.js";
   import Empty from "./Empty.svelte";
   import AgentIcon from "./AgentIcon.svelte";
+  import Approval from "./Approval.svelte";
 
   let { lang, company, token = "" } = $props();
   let t = $derived(translator(lang));
@@ -230,13 +231,16 @@
     }
   }
 
-  const decide = (id, decision, remember = "") => {
+  const decide = (id, decision, remember = "", note = "") => {
     // The key is chosen before `t` is called, not inside it. `tests/test_console_tokens.py` scans
     // every string literal in a `t(...)` and treats it as a key, which means a comparison operand
     // sitting in there reads as an invented key — the guard was right and this is clearer anyway.
     const yes = decision === "approved";
     const key = remember ? "toast.remembered" : yes ? "toast.approved" : "toast.rejected";
-    return act(id, "/api/v1/approvals", { id, decision, remember, note: notes[id] ?? "" }, {
+    // The note arrives from `Approval.svelte`, which owns the field. It used to live in a keyed map
+    // here, which is what a parent does when the row is markup it wrote; now the row is a component
+    // and the text belongs to it.
+    return act(id, "/api/v1/approvals", { id, decision, remember, note }, {
       toast: t(key),
     });
   };
@@ -250,9 +254,12 @@
   const setDraft = (id, state) =>
     act(`dft:${id}`, "/api/v1/drafts", { id, state, company }, { quiet: true });
 
-  // Per-approval note text, and per-task edits in flight. Plain objects rather than one `$state`
-  // per row: the rows come and go with every poll and a keyed map survives that.
-  let notes = $state({});
+  // Per-task edits in flight, and which board column is expanded. Plain objects rather than one
+  // `$state` per row: the rows come and go with every poll and a keyed map survives that.
+  //
+  // `notes` used to be here too, one entry per pending approval. It moved into `Approval.svelte` with
+  // the row itself — a parent holding the text of a field it no longer renders is state looking for a
+  // component to belong to.
   let opened = $state({});
   let editing = $state(null);
   let draftEdit = $state({});
@@ -330,55 +337,9 @@
     <!-- The mode and the threshold used to be repeated here. They are on the strip above now, where
          they are read whether or not anything is held — which is when an operator wants them. -->
 
+    <!-- The full instance of the same component Overview renders compact. -->
     {#each summary.approvals as approval (approval.id)}
-      <article class="row block">
-        <header>
-          <strong>{approval.tool}</strong>
-          <span class="badge risk {approval.risk}">{t("risk." + approval.risk)}</span>
-          <span class="muted">· {t("ops.requestedBy")} {approval.agent}</span>
-        </header>
-
-        <button class="link" onclick={() => (opened[approval.id] = !opened[approval.id])}>
-          {t("ops.more")}
-        </button>
-
-        {#if opened[approval.id]}
-          <dl class="detail">
-            <dt>{t("ops.whatItDoes")}</dt><dd>{approval.detail.does}</dd>
-            {#if approval.detail.why}
-              <dt>{t("ops.whyStopped")}</dt><dd>{approval.detail.why}</dd>
-            {/if}
-            <dt>{t("ops.riskMeans")}</dt><dd>{approval.detail.risk_means}</dd>
-            <dt>{t("ops.ifYes")}</dt><dd>{approval.detail.on_approve}</dd>
-            <dt>{t("ops.ifNo")}</dt><dd>{approval.detail.on_reject}</dd>
-          </dl>
-          {#if approval.detail.draft}
-            <details>
-              <summary>{t("ops.fullDraft")}</summary>
-              <pre>{approval.detail.draft}</pre>
-            </details>
-          {/if}
-        {/if}
-
-        <label class="note">
-          <span class="muted">{t("ops.note")}</span>
-          <input value={notes[approval.id] ?? ""} oninput={(e) => (notes[approval.id] = e.currentTarget.value)} />
-        </label>
-
-        <div class="actions">
-          <button class="primary" disabled={busy === approval.id} onclick={() => decide(approval.id, "approved")}>
-            {t("btn.approve")}
-          </button>
-          {#if approval.can_remember}
-            <button disabled={busy === approval.id} onclick={() => decide(approval.id, "approved", "always")}>
-              {t("ops.always")}
-            </button>
-          {/if}
-          <button disabled={busy === approval.id} onclick={() => decide(approval.id, "rejected")}>
-            {t("btn.reject")}
-          </button>
-        </div>
-      </article>
+      <Approval {approval} {lang} {busy} onDecide={decide} />
     {/each}
 
   </section>
@@ -394,7 +355,7 @@
     {#each summary.rules as rule (rule.tool)}
       <div class="row">
         <div><strong>{rule.tool}</strong> <span class="muted">· {rule.scope}</span></div>
-        <button disabled={busy === `rule:${rule.tool}`} onclick={() => revoke(rule.tool)}>
+        <button class="danger-quiet" disabled={busy === `rule:${rule.tool}`} onclick={() => revoke(rule.tool)}>
           {t("ops.revoke")}
         </button>
       </div>
@@ -438,11 +399,11 @@
           </h3>
 
           {#each rows.slice(0, opened[`col:${column}`] ? rows.length : SHOWN) as task (task.id)}
-            <article class="kcard" class:untooled={!task.tool}>
+            <article class="kcard">
               <p class="title">{task.title}</p>
               <p class="meta">
                 {task.target}
-                · {task.tool || t("task.noTool")}
+                · {#if task.tool}{task.tool}{:else}<span class="chip warn">{t("task.noTool")}</span>{/if}
                 {#if task.priority}· p{task.priority}{/if}
               </p>
 
@@ -469,10 +430,15 @@
                 <div class="actions">
                   <button class="link" onclick={() => startEdit(task)}>{t("task.edit")}</button>
                   {#if task.status === "proposed"}
-                    <button class="primary" disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task, "approved")}>
+                    <!-- Outline, not filled. A review counted the cost: with a filled primary on
+                         every proposed card, one screen showed **five** of them, which destroys the
+                         hierarchy the approvals card above establishes so carefully. The board is a
+                         queue view — the decision surface is the gate, and the filled blue belongs
+                         to it alone. Approving from here still works; it simply stops shouting. -->
+                    <button disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task, "approved")}>
                       {t("btn.approve")}
                     </button>
-                    <button disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task, "rejected")}>
+                    <button class="danger-quiet" disabled={busy === `task:${task.id}`} onclick={() => saveEdit(task, "rejected")}>
                       {t("btn.reject")}
                     </button>
                   {/if}
@@ -515,18 +481,21 @@
             <span class="badge">{t("dft.state." + draft.state)}</span>
             <span class="muted">· {draft.kind ?? ""} {draft.channel ?? ""}</span>
           </header>
-          <pre>{draft.body ?? ""}</pre>
+          <p class="draft-body">{draft.body ?? ""}</p>
           <div class="actions">
             <button onclick={() => copy(draft.body ?? "", draft.id)}>
               {copied === draft.id ? t("dft.copied") : t("dft.copy")}
             </button>
             {#if draft.state !== "published"}
+              <!-- Outline. Publishing a draft matters, and it is still not the gate: two filled buttons
+                   here beside the gate's two made four blue buttons on one page, and only one card on
+                   this page is the decision surface. -->
               <button disabled={busy === `dft:${draft.id}`} onclick={() => setDraft(draft.id, "published")}>
                 {t("dft.published")}
               </button>
             {/if}
             {#if draft.state !== "discarded"}
-              <button disabled={busy === `dft:${draft.id}`} onclick={() => setDraft(draft.id, "discarded")}>
+              <button class="danger-quiet" disabled={busy === `dft:${draft.id}`} onclick={() => setDraft(draft.id, "discarded")}>
                 {t("dft.discard")}
               </button>
             {/if}
@@ -627,7 +596,7 @@
                     <button disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, fact.pinned ? "unpin" : "pin")}>
                       {t(fact.pinned ? "mem.unpin" : "mem.pin")}
                     </button>
-                    <button disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, "forget")}>
+                    <button class="danger-quiet" disabled={busy === `mem:${fact.id}`} onclick={() => remember(fact.id, "forget")}>
                       {t("mem.forget")}
                     </button>
                   </div>
@@ -706,22 +675,41 @@
      tables are the console's language and live in `console.css` — including the kanban, which the
      Overview does not use but which belongs to the language rather than to this file. */
   .board { gap: 16px; }
-  /* Inside a card, a column needs no surface of its own: the card is the surface. A border and a
-     header rule are enough to say "column", and boxing each one again inside a box is the drift that
-     made every tab look like a stack of the same rectangle. */
-  .board :global(.kcol) { background: none; border: 0; border-radius: 0; padding: 0; }
-  .board :global(.kcol h3) { padding: 2px 0 10px; }
-  .board :global(.kcard) { padding: 11px 0; }
+  /* Lanes, and cards in them — which is the opposite of what this said before.
+     The old rule stripped the columns of any surface, reasoning that a box inside a box is the drift
+     that made every tab look like the same rectangle. The reasoning was right and the conclusion was
+     wrong: with no lane and no card, five columns of work became, in a review's words, "a table
+     pretending to be a board — the one screen that reads as raw data rendered by a developer".
+     A box inside a box is only drift when both boxes are the *same* box. `--sunken` is a step below
+     the card and the items are a step above the lane, so the nesting reads as depth rather than as
+     repetition — and it is the second surface tier the whole console was missing. */
+  .board :global(.kcol) {
+    background: var(--sunken);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 8px 4px;
+  }
+  .board :global(.kcol h3) { padding: 0 4px 9px; }
+  /* Each item is an object you can count and act on, not a line in a list. */
+  .board :global(.kcard) {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 10px;
+    margin-bottom: 6px;
+  }
+  .board :global(.kcard:hover) { border-color: var(--border-ui); background: var(--surface); }
+  /* A lane is about 200px, and Edit + Approve + Reject at full size is 230 — so `Reject` wrapped
+     onto a line of its own and the three actions read as two groups. Compacted, they hold one
+     row. The tiers are unchanged: primary, text, destructive text. */
+  .board :global(.kcard .actions) { gap: 6px; margin-top: 8px; }
+  .board :global(.kcard .actions button) { padding: 4px 9px; font-size: 12px; }
+  .board :global(.kcard .actions button.link) { padding: 4px 4px; }
   .posture { font-size: 13.5px; margin: 0; color: var(--muted); }
   .row.block { display: block; }
   .row.block header { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
 
-  /* The five risk tiers, and the ramp is the point: read is furniture, money is the one an operator
-     must never approve by reflex. */
-  .badge.risk.read, .badge.risk.write_local { color: var(--muted); }
-  .badge.risk.external { color: var(--warn); background: var(--warn-soft); }
-  .badge.risk.code, .badge.risk.money { color: var(--danger); background: var(--danger-soft); }
 
   .count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 400; }
   .detail { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 16px; margin: 10px 0; font-size: 13.5px; }
@@ -742,7 +730,6 @@
   }
   /* A task with no tool completes having done nothing — 22 of 24 on one company — so it is marked
      rather than left looking like the others. */
-  .kcard.untooled { border-left: 2px solid var(--warn); padding-left: 10px; }
   .kcard .title { margin: 0; font-size: 13.5px; }
   .kcard .meta { margin: 3px 0 0; }
   .edit { display: grid; gap: 6px; margin-top: 8px; }

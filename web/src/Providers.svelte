@@ -55,6 +55,36 @@
   let setup = $state(null);
   let estimate = $state(null);
 
+  // The fallback chain, as the ordered list it is. `tiers.fallback_chain` stays the single source of
+  // truth — these read it and write it back — because two editors for one value is the shape of defect
+  // this project keeps finding, and the save path already knows how to send a comma string.
+  let chainDraft = $state("");
+  let chain = $derived(
+    (tiers.fallback_chain ?? "")
+      .split(",")
+      .map((step) => step.trim())
+      .filter(Boolean),
+  );
+
+  const writeChain = (steps) => (tiers.fallback_chain = steps.join(","));
+
+  function moveChain(index, by) {
+    const steps = [...chain];
+    const [step] = steps.splice(index, 1);
+    steps.splice(index + by, 0, step);
+    writeChain(steps);
+  }
+
+  const dropChain = (index) => writeChain(chain.filter((_step, at) => at !== index));
+
+  function addChain() {
+    const step = chainDraft.trim();
+    // Silently ignoring a duplicate is wrong twice over: the chain is an order, and the same provider
+    // twice means "try it, and if it fails try it again", which is never what anybody meant.
+    if (step && !chain.includes(step)) writeChain([...chain, step]);
+    chainDraft = "";
+  }
+
   // The one interval on this tab, and it exists only while work does. `POLL_MS` matches the rest of
   // the console; a pull is gigabytes and a sweep is minutes, so five seconds is not a busy loop.
   const POLL_MS = 5000;
@@ -371,7 +401,7 @@
          five left edges on a diagonal — and each was too narrow to show its own value, truncating
          `groq:llama-3.3-70b-versatile` mid-token. -->
     <div class="tiers">
-      {#each [["trivial", "tier.trivial"], ["normal", "tier.normal"], ["hard", "tier.hard"], ["local_fallback", "tier.local"], ["fallback_chain", "tier.chain"]] as [field, label] (field)}
+      {#each [["trivial", "tier.trivial"], ["normal", "tier.normal"], ["hard", "tier.hard"], ["local_fallback", "tier.local"]] as [field, label] (field)}
         <label class="tier">
           <span>{t(label)}</span>
           <input
@@ -381,13 +411,66 @@
           />
         </label>
       {/each}
+
+      <!-- The chain is an ordered list, so it is edited as one.
+           It was a single input holding
+           `cerebras:gpt-oss-120b,mistral:mistral-small-latest,ovh:gpt-oss-120b,…` — 100 characters
+           overflowing their own field, which a review called unparseable at a glance and
+           unreorderable. Both true, and the second is the point: this value *is* an order, the order
+           is what it means, and a comma string is the one shape that hides it. One editor, not two —
+           the chips write the same string the field held. -->
+      <div class="tier chain">
+        <span>{t("tier.chain")}</span>
+        <div class="chain-body">
+          <ol class="chain-list">
+            {#each chain as step, index (step + index)}
+              <li>
+                <span class="chain-rank">{index + 1}</span>
+                <code>{step}</code>
+                <button
+                  class="icon link"
+                  disabled={index === 0}
+                  title={t("tier.chainUp")}
+                  aria-label={t("tier.chainUp")}
+                  onclick={() => moveChain(index, -1)}
+                >↑</button>
+                <button
+                  class="icon link"
+                  disabled={index === chain.length - 1}
+                  title={t("tier.chainDown")}
+                  aria-label={t("tier.chainDown")}
+                  onclick={() => moveChain(index, 1)}
+                >↓</button>
+                <button
+                  class="icon link danger-quiet"
+                  title={t("tier.chainDrop")}
+                  aria-label={t("tier.chainDrop")}
+                  onclick={() => dropChain(index)}
+                >×</button>
+              </li>
+            {/each}
+          </ol>
+          <div class="chain-add">
+            <input
+              class="mono"
+              bind:value={chainDraft}
+              placeholder="provider:model"
+              onkeydown={(e) => e.key === "Enter" && addChain()}
+            />
+            <button class="link" disabled={!chainDraft.trim()} onclick={addChain}>
+              {t("tier.chainAdd")}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
     <!-- One row, primary first. It was three rows — "use recommended" alone, then save and prove, then
          check every model alone — which buries the primary in the middle of the stack. -->
     <div class="actions tight">
       <button class="primary" disabled={busy === "tiers"} onclick={saveTiers}>{t("prov.saveTiers")}</button>
       <button disabled={busy === "routing"} onclick={recommend}>{t("prov.useRouting")}</button>
-      <button disabled={busy === "preflight" || mockOn} onclick={runPreflight}>
+      <!-- A `link`, not a pill: this reads the providers back and changes nothing. -->
+      <button class="link" disabled={busy === "preflight" || mockOn} onclick={runPreflight}>
         {busy === "preflight" ? t("prov.preflightRunning") : t("prov.preflight")}
       </button>
     </div>
@@ -432,22 +515,25 @@
             p: Object.keys(estimate.providers ?? {}).length,
           })}
         </p>
-        <button disabled={busy === "sweep"} onclick={startSweep}>{t("prov.sweepAll")}</button>
+        <button class="link" disabled={busy === "sweep"} onclick={startSweep}>{t("prov.sweepAll")}</button>
         <button class="link" onclick={() => (estimate = null)}>{t("task.cancel")}</button>
       {:else}
-        <button disabled={busy === "sweep" || mockOn} onclick={priceSweep}>
+        <button class="link" disabled={busy === "sweep" || mockOn} onclick={priceSweep}>
           {t("prov.sweepAll")}
         </button>
       {/if}
     </div>
 
     {#if setup}
-      <p class="small muted">
-        {fill(t("prov.sweepDone"), { n: setup.known ?? 0 })}
+      <!-- A caption and a row of counts, not nine badges trailing a sentence. The numbers are the
+           content here and the sentence is their label; a review read the old shape as an
+           unformatted data dump presented as body copy, which is exactly what it was. -->
+      <p class="small muted counts-head">{fill(t("prov.sweepDone"), { n: setup.known ?? 0 })}</p>
+      <div class="counts">
         {#each Object.entries(setup.usable_by_provider ?? {}) as [name, count] (name)}
-          <span class="badge">{name} {count}</span>
+          <span class="count-cell"><span class="muted">{name}</span> <strong>{count}</strong></span>
         {/each}
-      </p>
+      </div>
       <!-- A verdict is a measurement and measurements age. Said out loud so nobody reads a
            six-month-old `blocked` as current fact. -->
       {#if setup.worth_rechecking}
@@ -644,6 +730,13 @@
 {/if}
 
 <style>
+  /* The per-provider counts as a measured row rather than a wrapping line of pills: nine of them read
+     as a table of measurements, which is what they are, and the ragged second row a chip cloud
+     produced is what made this corner look like debug output. */
+  .counts-head { margin-bottom: 6px; }
+  .counts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; }
+  .count-cell { display: inline-flex; gap: 6px; align-items: baseline; white-space: nowrap; }
+  .count-cell strong { font-variant-numeric: tabular-nums; }
   /* Only what Providers has. The card, the badges, the buttons, the inputs, the provider row and the
      tier grid are the console's language and live in `console.css`. */
 
@@ -693,10 +786,44 @@
   .tiers { display: grid; gap: 10px 28px; }
   @media (min-width: 900px) {
     .tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    /* The fallback chain is a comma-separated list and the one field that wants the whole row. */
-    .tiers > .tier:last-child { grid-column: 1 / -1; }
-    .tiers > .tier:last-child input { max-width: none; }
+    /* The chain is the one row that wants the whole width: it is a list, not a value. */
+    .tiers > .chain { grid-column: 1 / -1; }
   }
+
+  .chain-body { display: grid; gap: 8px; min-width: 0; }
+  .chain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .chain-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--raised);
+    min-width: 0;
+  }
+  /* The position, said as a number. The order is the whole meaning of this field and a stack of
+     look-alike rows does not carry it — "third thing tried" is the fact an operator is here for. */
+  .chain-rank {
+    flex: none;
+    width: 19px;
+    height: 19px;
+    display: grid;
+    place-content: center;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .chain-list code { flex: 1 1 auto; min-width: 0; background: none; padding: 0; }
+  /* The three controls sit at the end and stay put, so five rows have one column of buttons rather
+     than five ragged ones. */
+  .chain-list button { flex: none; padding: 2px 6px; font-size: 13px; line-height: 1.2; }
+  .chain-list button:disabled { opacity: 0.3; }
+  .chain-add { display: flex; gap: 8px; align-items: center; }
+  .chain-add input { flex: 1 1 auto; min-width: 0; }
   .tier { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; align-items: center; }
   .tier > span { color: var(--muted); font-size: 13.5px; }
   .tier input { width: 100%; }

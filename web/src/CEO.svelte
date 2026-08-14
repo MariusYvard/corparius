@@ -36,7 +36,15 @@
   import { translator } from "./i18n.js";
   import AgentIcon from "./AgentIcon.svelte";
 
-  let { lang, company, token = "" } = $props();
+  // `onTab` is what makes a next step a redirect rather than an instruction. Optional, like
+  // Overview's: a caller that does not pass it gets steps that read as advice instead of crashing.
+  let { lang, company, token = "", onTab = undefined } = $props();
+
+  // A step names either a tab or an action. The one action is `run`, and rather than start a run from
+  // here this sends the operator to the tab that owns the control — one place starts a run, and a
+  // second entry point would be the "two surfaces, one job" defect this codebase keeps finding. The
+  // redirect is still the redirect: they land on the button with nothing left to look for.
+  const goto = (step) => onTab?.(step.tab || "overview");
   let t = $derived(translator(lang));
 
   let history = $state([]);
@@ -155,6 +163,40 @@
     <!-- Suggestion chips rather than an empty box: the first move is a thing to click, and a dead
          rectangle with a placeholder in it tells an operator nothing about what to ask. -->
     <div class="chat-log is-empty">
+      <!-- The answer to the question an operator who does not know what to do cannot type.
+           Derived from the store by `app.guidance`, never generated: a model asked "what should I
+           do?" produces a plausible list, and a plausible list is the worst answer here — it can
+           name a tab that does not apply or miss the two approvals actually holding the company up.
+           Each one is a button because being told to go to Operations and having to find it is two
+           steps where the operator asked for one. -->
+      {#if (summary?.next_steps ?? []).length}
+        <div class="next">
+          <p class="next-head">{t("next.title")}</p>
+          <p class="muted small centred">{t("next.desc")}</p>
+          <ol class="next-list">
+            {#each summary.next_steps as step, i (step.key)}
+              <li>
+                <button
+                  class="next-go"
+                  onclick={() => goto(step)}
+                >
+                  <span class="next-rank">{i + 1}</span>
+                  <span class="next-what">
+                    {step.key.startsWith("ob.") ? t(step.key) : t("next." + step.key)}
+                    {#if step.detail}<span class="muted small">· {step.detail}</span>{/if}
+                  </span>
+                  <span class="next-arrow" aria-hidden="true">→</span>
+                </button>
+              </li>
+            {/each}
+          </ol>
+        </div>
+      {:else}
+        <p class="muted centred">{t("next.none")}</p>
+      {/if}
+
+      <!-- Suggestion chips rather than an empty box: the first move is a thing to click, and a dead
+           rectangle with a placeholder in it tells an operator nothing about what to ask. -->
       <p class="muted centred">{t("ceo.empty")}</p>
       <div class="suggest">
         {#each SUGGESTIONS as key (key)}
@@ -218,6 +260,39 @@
 </section>
 
 <style>
+  /* The next steps: a numbered list of destinations, not a paragraph of advice. The rank, the thing,
+     and an arrow — the arrow is what says "this moves you" rather than "this is true". */
+  .next { display: grid; gap: 4px; justify-items: center; width: 100%; max-width: 46rem; }
+  .next-head { margin: 0; font-weight: 650; font-size: 15px; }
+  .next-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; width: 100%; }
+  .next-go {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    text-align: left;
+    padding: 9px 12px;
+    border-radius: 9px;
+  }
+  .next-go:hover:not(:disabled) { border-color: var(--border-ui); background: var(--raised); }
+  .next-rank {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-content: center;
+    border-radius: 999px;
+    background: var(--sunken);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .next-what { flex: 1 1 auto; min-width: 0; }
+  /* The arrow sits at the far end and only moves on hover, so a column of them is a column rather
+     than five arrows at five different x. */
+  .next-arrow { flex: none; color: var(--muted); transition: transform var(--t-feedback) var(--ease); }
+  .next-go:hover:not(:disabled) .next-arrow { transform: translateX(2px); color: var(--text); }
   /* Only the CEO's own. The card, the chat frame, the bubbles, the chips, the composer and the
      buttons are in `console.css`, because a conversation panel that styles its own buttons is how
      seven tabs came to have seven slightly different ones. */
@@ -244,9 +319,16 @@
      of background is a page that stops halfway. What made a tall panel read as a void the first time was
      the invitation floating in the middle of it; it is anchored to the composer now (`align-content: end`
      in `console.css`), so the height is a frame rather than a hole. */
-  /* 280px when there is nothing to read, the window when there is. A transcript reserving 400px above a
-     centred paragraph is a void; the same height once there are messages in it is a frame. */
-  .chat { min-height: 0; }
-  .chat.talking { min-height: calc(100dvh - 330px); }
-  .chat:not(.talking) .chat-log { min-height: 220px; }
+  /* The height is in `console.css` now, one rule for both states, and this comment is what two reviews
+     disagreeing looks like when both were right.
+     The first said an empty transcript reserving 400px above a centred paragraph is a void, so this
+     collapsed the card when there was nothing to read. The second said the collapsed card leaves the
+     *page* ending in 300px of background above a floating footer — the most unfinished route in the
+     product. Both are true, and the fix neither of them named is to stop the empty state floating:
+     the invitation is anchored to the composer (`align-content: end`), so a tall card is a frame
+     around a conversation that has not started rather than a hole above one. The note above claimed
+     that anchoring was already done. It was not — `.chat-log.is-empty` still centred. */
+  /* The empty log no longer needs a floor: the card is sized to the page now, so this row is
+     whatever is left between the identity strip and the composer. A fixed 220px on top of that
+     was what pushed the composer down and left the suggestions floating in the middle. */
 </style>

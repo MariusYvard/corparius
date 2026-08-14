@@ -37,6 +37,10 @@
   let reading = $state(null);
   let outcomes = $state([]);
   let sending = $state("");
+  // Which file has its full outline open. One at a time: five headings is enough to say
+  // what a file is, and a page of every heading of every file is the wall the index was
+  // built to replace.
+  let openDoc = $state("");
   let over = $state(false);
   let copied = $state(false);
 
@@ -232,6 +236,13 @@
         <div class="label">{t("docs.reaching")}</div>
         <div class="value">{inventory.reaching}</div>
       </div>
+      <!-- What the index found. "Reach the agents" used to be a smaller number than "on file",
+           because the block was the newest files that fit; every readable file reaches them now, so
+           the number that carries information is how many *parts* they were resolved into. -->
+      <div class="stat">
+        <div class="label">{t("docs.sections")}</div>
+        <div class="value">{inventory.sections ?? 0}</div>
+      </div>
       <div class="stat budget">
         <div class="label">{t("docs.budget")}</div>
         <div class="value">
@@ -268,6 +279,30 @@
               {t("docs.why." + doc.reason)}
             {/if}
           </p>
+          <!-- The outline, which is the thing an agent actually navigates by. It answers the question
+               this tab could not answer before — "what is *in* that file" — without opening it, and
+               it is the same list the index puts in front of every prompt. -->
+          {#if doc.kind === "text"}
+            {#if (doc.sections ?? []).length}
+              <ol class="outline">
+                {#each doc.sections.slice(0, openDoc === doc.path ? doc.sections.length : 5) as part (part.line)}
+                  <li style="padding-left: {Math.min(part.level - 1, 3) * 12}px">
+                    <span class="o-title">{part.title}</span>
+                    <span class="o-size muted">{part.chars.toLocaleString(lang)}</span>
+                  </li>
+                {/each}
+              </ol>
+              {#if doc.sections.length > 5}
+                <button class="link" onclick={() => (openDoc = openDoc === doc.path ? "" : doc.path)}>
+                  {openDoc === doc.path
+                    ? t("col.less")
+                    : fill(t("col.more"), { n: doc.sections.length - 5 })}
+                </button>
+              {/if}
+            {:else}
+              <p class="muted small">{t("docs.noHeadings")}</p>
+            {/if}
+          {/if}
         </div>
         <div class="actions">
           <button class="link" onclick={() => read(doc.path)}>{t("docs.read")}</button>
@@ -314,6 +349,21 @@
 {/if}
 
 <style>
+  /* The outline. Indented by heading level, with each section's size at the end — an operator judging
+     whether a file is worth keeping wants "how big is the pricing part", not "how big is the file".
+     A list rather than chips: these are ordered, and the order is the document. */
+  .outline { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 1px; }
+  .outline li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 12.5px;
+    padding: 2px 0;
+    min-width: 0;
+  }
+  .o-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The count sits at the far end so a column of them reads as a column. */
+  .o-size { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 11.5px; flex: none; }
   /* Only what Documents has. The dropzone, the card, the rows, the badges and the buttons are the
      console's language and live in `console.css`. */
   .outcome { font-size: 13px; color: var(--ok); margin: 0; }

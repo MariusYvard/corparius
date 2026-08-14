@@ -61,8 +61,13 @@ def test_there_are_tokens_to_check():
     # Measured: 26 in the dark block, 24 in the light one, 4 motion durations in `:root`. Both gained
     # `--well`, the surface a form field sits on — darker than the card in dark, lighter in light, which
     # is the one token that has to move in opposite directions between the themes.
+    # 27 and 25: `--sunken`, a step *below* the card. A review named the missing tier — every page was
+    # one card idiom repeated, so the board's five columns had nowhere to be except flat, and it read
+    # as "a table pretending to be a board". A lane needs a surface the card can sit *in*, and `--well`
+    # could not be it: in light that resolves to pure white, so the lane would vanish on the white card
+    # it is recessed into.
     assert sorted(themes) == ["dark", "light", "root"], sorted(themes)
-    assert len(themes["dark"]) == 26 and len(themes["light"]) == 24, {
+    assert len(themes["dark"]) == 27 and len(themes["light"]) == 25, {
         k: len(v) for k, v in themes.items()
     }
 
@@ -95,12 +100,31 @@ def test_both_themes_came_across():
 @pytest.mark.parametrize("path", COMPONENTS, ids=lambda p: p.name)
 def test_no_component_hard_codes_a_colour(path):
     """Tokens or nothing. A literal colour is fine in whichever theme it was chosen against and
-    wrong in the other one, and this console ships both."""
-    style = path.read_text(encoding="utf-8")
-    style = style[style.index("<style>") :] if "<style>" in style else ""
-    literals = re.findall(r":\s*(#[0-9a-fA-F]{3,8}|rgb\(|rgba\(|hsl\(|oklch\()", style)
-    assert not literals, (
-        f"{path.name} writes colours directly: {sorted(set(literals))}. Every colour is a token; "
+    wrong in the other one, and this console ships both.
+
+    **Markup as well as style**, which this missed until the mark was redrawn: it only read the
+    `<style>` block, so a `fill="#51b436"` in an SVG attribute — a hard-coded colour by any
+    definition — passed without comment. Widening it exposed exactly one file, which is the one that
+    should have it.
+    """
+    source = path.read_text(encoding="utf-8")
+    literal = r"#[0-9a-fA-F]{3,8}|rgb\(|rgba\(|hsl\(|oklch\("
+    style = source[source.index("<style>") :] if "<style>" in source else ""
+    found = set(re.findall(rf":\s*({literal})", style))
+    # Attributes: `fill="#70bf5c"`, `stroke='#fff'`.
+    found |= set(re.findall(rf'(?:fill|stroke|stop-color)\s*=\s*"({literal})', source))
+
+    if path.name == "Mark.svelte":
+        # The one exception, and it is a real one: a brand mark is not a theme. The four fills are
+        # sampled from `docs/icons/logo-corparius-mark.png` and their hues are the logo's identity —
+        # re-tinting them with `--ui-hue` would mean the operator's accent choice rewrote the company's
+        # own logo. What *is* checked is that it stays four, so the exception cannot quietly grow into
+        # a component that paints itself.
+        assert len(found) == 4, f"the mark should carry exactly its four brand fills, found {found}"
+        return
+
+    assert not found, (
+        f"{path.name} writes colours directly: {sorted(found)}. Every colour is a token; "
         "see web/src/tokens.css."
     )
 

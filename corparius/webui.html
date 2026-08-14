@@ -29,9 +29,17 @@
   /* The field, recessed. A control that is lighter than the card it sits on reads as another
      card; sixteen of them down a list read as sixteen. 1.178:1 below the surface, text in it
      15.9:1, its outline 4.4:1. Light mode wants the opposite and gets it below. */
+  /* The tier the surface language was missing, and a review named the gap precisely: the whole app was
+     one card idiom repeated, so the board — five columns of work inside one card — had nowhere to be
+     except flat. `--sunken` is a step *below* the card: a lane a card can sit in. Measured, card on
+     lane 1.203:1 in dark and 1.211:1 in light, the same order as the other steps in this ladder, with
+     `--muted` still at 7.5:1 on it.
+     Not the field fill, which resolves to pure white in light — a lane painted with that would be
+     invisible on the white card it is recessed into. */
+  --sunken: oklch(0.235 calc(0.060 * var(--ui-chroma)) var(--ui-hue));
   --well: oklch(0.215 calc(0.075 * var(--ui-chroma)) var(--ui-hue));
   --border: oklch(0.455 calc(0.075 * var(--ui-chroma)) var(--ui-hue));
-  --border-ui: oklch(0.64 calc(0.115 * var(--ui-chroma)) var(--ui-hue));    /* >=3:1 on surface and raised */
+  --border-ui: oklch(0.64 calc(0.045 * var(--ui-chroma)) var(--ui-hue));    /* >=3:1 on surface and raised */
   --select: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue));       /* focus and selection */
   --select-soft: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue) / 0.20);
   --text: oklch(0.965 calc(0.012 * var(--ui-chroma)) var(--ui-hue)); --muted: oklch(0.75 calc(0.035 * var(--ui-chroma)) var(--ui-hue));
@@ -61,6 +69,7 @@
   --border: oklch(0.80 calc(0.028 * var(--ui-chroma)) var(--ui-hue)); --border-ui: oklch(0.44 calc(0.11 * var(--ui-chroma)) var(--ui-hue));
   /* In light the field is the lightest thing on the page, not the darkest: white on a tinted
      card, which is the convention a sunken tinted input gets backwards. */
+  --sunken: oklch(0.938 calc(0.013 * var(--ui-chroma)) var(--ui-hue));
   --well: oklch(1 0 0);
   --select: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue)); --select-soft: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue) / 0.12);
   --text: oklch(0.283 calc(0.083 * var(--ui-chroma)) var(--ui-hue)); --muted: oklch(0.45 calc(0.05 * var(--ui-chroma)) var(--ui-hue));
@@ -951,6 +960,15 @@ en: {
  "run.button": "Run",
  "run.title": "Runs the scheduled agents for the selected simulated time, in the background",
  "nav.overview": "Overview",
+ "next.title": "What to do next",
+ "next.desc": "Read off your company as it stands. Press one and it takes you there.",
+ "next.none": "Nothing is waiting on you. Run a day, or ask the CEO anything below.",
+ "next.approvals": "Decide what the gate is holding",
+ "next.inbox": "Answer what an agent asked you",
+ "next.drafts": "Send or discard what was written",
+ "next.golive.payment": "Wire a checkout link",
+ "next.golive.email": "Connect a mail account",
+ "next.golive.hosting": "Publish the site somewhere public",
  "nav.operations": "Operations",
  "nav.ceo": "CEO",
  "nav.documents": "Documents",
@@ -1246,6 +1264,10 @@ en: {
  "tier.hard": "hard",
  "tier.local": "local fallback",
  "tier.chain": "fallback chain",
+ "tier.chainAdd": "Add to the chain",
+ "tier.chainUp": "Try this one earlier",
+ "tier.chainDown": "Try this one later",
+ "tier.chainDrop": "Remove from the chain",
  "prov.free": "Free-tier providers",
  "prov.keysOpen": "Keys",
  "prov.keysSet": "{n} of {total} keys set",
@@ -1438,7 +1460,7 @@ en: {
  "dft.state.published": "published",
  "dft.state.discarded": "discarded",
  "docs.title": "What the company has on file",
- "docs.desc": "Files you dropped in, and files its agents wrote. Only what fits the prompt budget reaches a turn — anything past it is on disk and nothing reads it.",
+ "docs.desc": "Files you dropped in, and files its agents wrote. Every heading reaches every turn; the prompt budget buys the sections a turn actually needs.",
  "docs.none": "Nothing on file yet. Drop a PDF, a deck, a spreadsheet or a note into the folder below and its text becomes context the agents can use.",
  "docs.folder": "Folder",
  "docs.reload": "Read the folder again",
@@ -1447,6 +1469,9 @@ en: {
  "docs.budget": "Prompt budget",
  "docs.onFile": "On file",
  "docs.reaching": "Reach the agents",
+ "docs.sections": "Sections indexed",
+ "docs.mapDesc": "Every heading of every file rides on every prompt. The budget below buys the sections a turn actually needs.",
+ "docs.noHeadings": "No headings — the whole file is one section.",
  "docs.more": "{n} more on file, not listed here.",
  "docs.read": "Read what the agents see",
  "docs.copy": "Copy",
@@ -1460,7 +1485,6 @@ en: {
  "docs.dropped": "you dropped it in",
  "docs.why.prompt": "reaches the agents",
  "docs.why.cut": "reaches the agents: first {n} of {total} characters",
- "docs.why.budget": "on file, past the budget — no agent reads it",
  "docs.why.image": "sent as a picture, to a model that can read one",
  "docs.why.no-text-layer": "scanned or compressed: no text layer to read",
  "docs.why.no-extractor": "no extractor for this format",
@@ -1515,6 +1539,15 @@ fr: {
  "run.button": "Lancer",
  "run.title": "Exécute les agents planifiés pour la durée simulée choisie, en arrière-plan",
  "nav.overview": "Vue d'ensemble",
+ "next.title": "Quoi faire ensuite",
+ "next.desc": "Lu sur votre société telle qu'elle est. Appuyez et vous y êtes.",
+ "next.none": "Rien n'attend de vous. Lancez une journée, ou posez une question au CEO ci-dessous.",
+ "next.approvals": "Décidez ce que la garde retient",
+ "next.inbox": "Répondez à ce qu'un agent vous a demandé",
+ "next.drafts": "Envoyez ou jetez ce qui a été écrit",
+ "next.golive.payment": "Branchez un lien de paiement",
+ "next.golive.email": "Connectez un compte mail",
+ "next.golive.hosting": "Publiez le site publiquement",
  "nav.operations": "Opérations",
  "nav.ceo": "CEO",
  "nav.documents": "Documents",
@@ -1810,6 +1843,10 @@ fr: {
  "tier.hard": "difficile",
  "tier.local": "repli local",
  "tier.chain": "chaîne de repli",
+ "tier.chainAdd": "Ajouter à la chaîne",
+ "tier.chainUp": "Essayer celui-ci plus tôt",
+ "tier.chainDown": "Essayer celui-ci plus tard",
+ "tier.chainDrop": "Retirer de la chaîne",
  "prov.free": "Fournisseurs gratuits",
  "prov.keysOpen": "Clés",
  "prov.keysSet": "{n} clés sur {total} enregistrées",
@@ -1946,7 +1983,7 @@ fr: {
  "dft.state.published": "publié",
  "dft.state.discarded": "jeté",
  "docs.title": "Ce que la société a sur ses dossiers",
- "docs.desc": "Les fichiers que vous déposez, et ceux que ses agents écrivent. Seul ce qui tient dans le budget d’invite atteint un tour : au-delà, c’est sur le disque et rien ne le lit.",
+ "docs.desc": "Les fichiers que vous avez déposés, et ceux que ses agents ont écrits. Chaque titre accompagne chaque tour ; le budget achète les sections dont le tour a besoin.",
  "docs.none": "Rien pour l’instant. Déposez un PDF, une présentation, un tableur ou une note dans le dossier ci-dessous et son texte devient du contexte pour les agents.",
  "docs.folder": "Dossier",
  "docs.reload": "Relire le dossier",
@@ -1955,6 +1992,9 @@ fr: {
  "docs.budget": "Budget d'invite",
  "docs.onFile": "Au dossier",
  "docs.reaching": "Atteignent les agents",
+ "docs.sections": "Sections indexées",
+ "docs.mapDesc": "Chaque titre de chaque fichier accompagne chaque prompt. Le budget ci-dessous achète les sections dont un tour a besoin.",
+ "docs.noHeadings": "Aucun titre — le fichier est une seule section.",
  "docs.more": "{n} autres au dossier, non listés ici.",
  "docs.read": "Lire ce que voient les agents",
  "docs.copy": "Copier",
@@ -1968,7 +2008,6 @@ fr: {
  "docs.dropped": "déposé par vous",
  "docs.why.prompt": "atteint les agents",
  "docs.why.cut": "atteint les agents : les {n} premiers caractères sur {total}",
- "docs.why.budget": "au dossier, hors budget — aucun agent ne le lit",
  "docs.why.image": "envoyé comme image, à un modèle qui sait la lire",
  "docs.why.no-text-layer": "scanné ou compressé : aucune couche de texte à lire",
  "docs.why.no-extractor": "aucun extracteur pour ce format",

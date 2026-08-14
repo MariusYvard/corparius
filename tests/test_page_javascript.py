@@ -112,7 +112,32 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # say what that costs (`mem.budget`), that the store drops the oldest past its cap
     # (`mem.nearCap`), and how to narrow and read it (`mem.filter`, `mem.noMatch`,
     # `mem.pinnedGroup`, `mem.groupCount`).
-    assert result["counts"] == {"en": 562, "fr": 562}, result["counts"]
+    # 566. The four since 562 are the fallback chain's controls — `tier.chainAdd`, `tier.chainUp`,
+    # `tier.chainDown`, `tier.chainDrop`. The chain was one input holding a 100-character comma string,
+    # which a review called unparseable at a glance and unreorderable; both true, and the second is the
+    # point, because that value *is* an order. Reordering needs named controls, and an icon button with
+    # no accessible name is a control only a sighted mouse user has.
+    # 569. The three since 566 belong to the document index: `docs.sections` (how many titled parts
+    # the files resolved into — the number that carries information now that every readable file
+    # reaches the agents), `docs.mapDesc`, and `docs.noHeadings` for a file that is one long section.
+    # Two existing strings were *rewritten* in the same commit rather than added, and that is the more
+    # important half: `docs.desc` and `docs.why.budget` described the recency block — "anything past
+    # it is on disk and nothing reads it" — which the index makes false.
+    # 568, and it went **down** by one, which is rarer than it going up and worth the sentence:
+    # `docs.why.budget` is gone. It read "on file, past the budget — no agent reads it" and was the
+    # most useful thing this card said while retrieval was the newest 6 000 characters. No document
+    # can be in that state now, so `inventory` never sets the code, and a translated string for an
+    # unreachable state describes a product that no longer exists.
+    # 577. The nine since 568 are the CEO tab learning to answer the one question it could not: an
+    # operator who does not know what to do has nothing to type, and "ask the agent that holds the
+    # plan" only helps somebody who already knows what to ask it. `next.title`, `next.desc`,
+    # `next.none`, and one label per rule `app.guidance` can fire — `next.approvals`, `next.inbox`,
+    # `next.drafts` and the three `next.golive.*`.
+    #
+    # The onboarding steps deliberately have **no** strings here: they reuse the `ob.*` labels the
+    # Overview card already uses, because two vocabularies for the same three steps would be two
+    # answers wearing one name.
+    assert result["counts"] == {"en": 577, "fr": 577}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

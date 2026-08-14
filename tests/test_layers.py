@@ -142,6 +142,13 @@ RANKS: dict[str, int] = {
     "tools/registry": 4,
     "company": 4,
     "documents": 4,
+    # Rank 5, with the other services: it reads the store and the settings and answers "what
+    # should the operator do next", which is a use case rather than a domain rule.
+    "app/guidance": 5,
+    # Rank 4 and pure: text in, text out. It reads the `kernel.vectors` cosine and nothing
+    # else, which is what lets its ranking be measured in a unit test rather than behind a
+    # store fixture.
+    "docindex": 4,
     "skills": 4,
     "skillimport": 4,
     "structured": 4,

@@ -39,8 +39,19 @@ code {
 }
 /* A path is the one string long enough to push a card through its own border. */
 code, .mono { overflow-wrap: anywhere; min-width: 0; }
-/* A path is shown by its tail: the end names the file, the start names a machine. Clipped from the
- * left with the useful half kept, and the whole thing on the element's `title`. */
+/* A path is shown by its tail: the end names the file, the start names a machine.
+ *
+ * The comment used to say "clipped from the left with the useful half kept" and the rule did the
+ * opposite — `text-overflow: ellipsis` clips the **end**, so what survived was the operator's temp
+ * directory and what was cut was the filename. A review put it plainly: nobody should be looking at
+ * their own temp directory in a product UI. They were looking at nothing else.
+ *
+ * `direction: rtl` is what moves the ellipsis to the front — the overflow is taken from whichever end
+ * the inline direction starts at — with `text-align: left` putting the glyphs back where a reader
+ * expects them. `unicode-bidi: plaintext` was tried alongside and **undoes the fix**: it makes the
+ * paragraph direction follow the first strong character, which for a path is the drive letter, so the
+ * ellipsis went straight back to the end. Verified by screenshotting the element rather than reading
+ * `innerText`, which returns the whole string whatever the clipping does. */
 .path {
   display: inline-block;
   max-width: 100%;
@@ -48,6 +59,8 @@ code, .mono { overflow-wrap: anywhere; min-width: 0; }
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
+  direction: rtl;
+  text-align: left;
 }
 
 /* A scale, which is what the first pass did not have. Every card title was 0.82rem uppercase muted,
@@ -57,7 +70,9 @@ code, .mono { overflow-wrap: anywhere; min-width: 0; }
  * rule below picks one of them — there is no 13.5 or 14.5 any more, which is what "no scale" looked
  * like in a screenshot. */
 h1, h2, h3 { margin: 0; font-weight: 600; }
-h2 { font-size: 17px; letter-spacing: -0.008em; }
+/* 33 / 16 / 13.5 / 11, and the gap between the first two is the point: at 28 and 17 a page title
+ * and a card title were one step apart on a page with a dozen card titles, so the page had no top. */
+h2 { font-size: 16px; letter-spacing: -0.006em; }
 h3 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
 .desc { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
 /* One measure for prose, because a 1200px shell does not mean a 157-character line. Anything that is
@@ -215,6 +230,11 @@ button.link:hover:not(:disabled) { text-decoration: underline; background: none;
  * colour this console uses for "this wants you", because the claim is the same one. */
 button.real { border-color: var(--warm-line); color: var(--warm); }
 button.real:hover:not(:disabled) { background: var(--warm-soft); border-color: var(--warm); }
+/* A text button that is nevertheless consequential: it grants a standing rule and the gate stops
+ * asking. Warm, because that is this console's colour for the human gate, and it is the gate that
+ * is being given away. Not bigger than `Approve` — the permanence is the point, not the size. */
+button.standing { color: var(--warm); font-weight: 600; }
+button.standing:hover:not(:disabled) { background: var(--warm-soft); text-decoration: none; }
 button.danger-quiet { color: var(--danger); }
 button.danger-quiet:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
 button.icon { padding: 7px 9px; line-height: 0; }
@@ -334,7 +354,7 @@ nav.tabs .wrap::-webkit-scrollbar { display: none; }
  * vertical rhythm now, which is why it is a grid rather than a plain block. */
 main { padding: 24px 0 56px; }
 .page-head { margin: 0 0 20px; }
-.page-head h1 { font-size: 28px; font-weight: 650; letter-spacing: -0.022em; }
+.page-head h1 { font-size: 33px; font-weight: 650; letter-spacing: -0.026em; }
 .page-head .desc { font-size: 14.5px; margin-top: 5px; }
 /* Between the page title and a card title: the level a page of five cards had no way to say. */
 .group-label {
@@ -632,15 +652,39 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 /* Six readouts on one baseline grid, the first of them the hero. `align-items: start` and a shared
  * label row are what put the caption, the value and the hint of all six in line — the gate's label used
  * to sit 20px above the other five and its number shared no baseline with anything. */
+/* Two rows, not three columns, and the reason is the sharpest finding any review has produced here:
+ * "the most consequential number in the product is a table cell". The gate and the five day metrics
+ * shared one line, so one 58px numeral competed with five 26px ones spread across 450px — and the
+ * five never fit, wrapping 3 + 2 and leaving a ~400px hole under the run buttons.
+ *
+ * Now the gate and the run control own the top line, and the metrics are a flush five-up row beneath
+ * them at full width, where five fit easily and read as what they are: the day, not the decision. */
 .hero {
   position: relative;
   overflow: hidden;
-  padding: 16px 28px;
+  padding: 18px 28px 20px;
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content);
-  gap: 36px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+  grid-template-areas:
+    "gate act"
+    "stats stats";
+  column-gap: 36px;
+  row-gap: 18px;
   align-items: start;
 }
+.hero > .hero-gate { grid-area: gate; }
+/* With the gate absent — because the requests it would have counted are open above — the band is the
+   day and the run control, on one line. Leaving the empty column in place would be a hole where a
+   card used to be, which is the failure this whole round is about. */
+.hero.no-gate {
+  grid-template-areas: "stats act";
+  align-items: center;
+}
+.hero.no-gate > .pulse-row { padding-top: 0; border-top: 0; }
+.hero > .hero-act { grid-area: act; }
+.hero > .pulse-row { grid-area: stats; }
+/* The badges sit with the run control rather than on a row of their own. */
+.hero > .hero-state { grid-area: act; align-self: end; }
 /* The act, at the end of the band. A column of its own rather than a row under the readouts: the run
  * choice is three buttons and the band is 1150px wide, so there is room for the decision beside the
  * numbers it is made from. */
@@ -668,13 +712,9 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
   .hero-act { grid-column: 1 / -1; }
   .hero-act .run-choice { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-/* The rule between the hero number and the rest, which is what says "this one is different" now that
-   the dots are not there to say it. */
-@media (min-width: 900px) {
-  /* The rule runs the full height of the band. On a padded column it stopped short at both ends, which
-     reads as a border that failed rather than as a divider. */
-  .hero-side { border-left: 1px solid var(--border); padding-left: 32px; margin: -16px 0; padding-top: 16px; padding-bottom: 16px; }
-}
+/* The rule that separated the gate from the readouts was a vertical border on `.hero-side`. With the
+   readouts on their own row it is a horizontal one on `.pulse-row`, which is where the division
+   actually is now — decision above, day below. */
 /* A wrapping flex row, and this is the third attempt — the operator reported overlapping text in
  * French and this rule was why.
  *
@@ -688,13 +728,26 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
  * the rule is now one that cannot produce it: flex items at their content width, an even `gap`
  * instead of `space-between` (which was also what left the odd hole on the right of the band), and
  * `wrap` so five readouts that no longer fit move down instead of on top of each other. */
-.hero-side .pulse-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px 26px;
+/* Three columns, so five readouts land 3 + 2 and line up under each other.
+ *
+ * Free wrapping put four on the first line and orphaned `in progress now` on the second beside a
+ * ~150px dead gutter — measured, the five need about 620px and the band gives them 450, so they were
+ * never going to fit and the wrap only looked accidental. Three columns makes it deliberate and
+ * aligns the numbers vertically, which a flex wrap cannot.
+ *
+ * `minmax(max-content, 1fr)`, and the first half is load-bearing: a plain `auto` or `minmax(0, …)`
+ * track shrinks below its own content, which is exactly how the French labels came to overlap in the
+ * first place. `max-content` is the floor, so a longer translation widens the track instead of
+ * painting over its neighbour. */
+.hero .pulse-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(max-content, 1fr));
+  gap: 16px 26px;
   align-items: start;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
-.hero-side .stat { text-align: left; }
+
 /* The dot field is gone. It ran behind the headline's own glyphs — a stray dot immediately after the
  * final letter — and two reviews read it as a print or compression artefact rather than as texture. A
  * decoration that has to be explained is not decoration. */
@@ -752,6 +805,37 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 }
 .hero-gate .g-hint { font-size: 13.5px; color: var(--muted); font-weight: 600; }
 .hero-gate.needs .g-num, .hero-gate.needs .g-hint, .hero-gate.needs .g-label { color: var(--warm); }
+/* "Decide in Operations" was orange body text in the one band whose whole job is to be acted on — a
+ * review called it out as the weakest thing in the product's answer to "what do I need to do". The
+ * cell has always been the control; this makes it look like one. Not a real `<button>`: nesting one
+ * inside a clickable cell gives two hit targets for one action and a tab stop that goes nowhere new. */
+.hero-gate.needs .g-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 5px 11px;
+  border: 1px solid var(--warm-line);
+  border-radius: 999px;
+  font-size: 13px;
+}
+.hero-gate.needs .g-hint::after { content: "→"; font-size: 14px; line-height: 1; }
+.hero-gate.needs:hover .g-hint { background: var(--warm-soft); border-color: var(--warm); }
+
+/* A draft is prose somebody will send under their own name. It was a `<pre>`, so it rendered 13px
+ * monospace in a code block and read as a log line rather than as copy — monospace is for what the
+ * machine said, and this is what the machine wrote *for a person to send*. */
+.draft-body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 62ch;
+  padding: 10px 14px;
+  border-left: 2px solid var(--border-ui);
+  background: var(--raised);
+  border-radius: 0 8px 8px 0;
+}
 .hero-gate::before {
   content: "";
   position: absolute;
@@ -763,20 +847,20 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 .hero-gate:hover::before { border-color: var(--warm-line); background: var(--warm-soft); }
 .hero-gate:not(.needs):hover::before { border-color: var(--border); background: var(--raised); }
 .hero-gate:active { transform: translateY(1px); }
-.hero-side { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
+
 /* `space-between` used to live here as well as above, which is how it survived the first fix. It is
  * gone in both places: it stretched five readouts across the whole band, so the gaps changed with the
  * language and the right edge left a hole. An even gap does not. */
-.hero-side .pulse-row { width: 100%; }
+
 /* Left, not right. Right-aligning content-width items in a wrapping row puts each label's last letter
  * on a different x than the number below it — the alignment only looked deliberate while a grid was
  * forcing equal tracks. */
-.hero-side .stat { text-align: left; min-width: 0; }
+.hero .stat { text-align: left; min-width: 0; }
 @media (max-width: 760px) {
-  .hero { grid-template-columns: minmax(0, 1fr); gap: 18px; }
-  .hero-side { align-items: flex-start; }
-  .hero-side .pulse-row { justify-content: flex-start; gap: 22px; }
-  .hero-side .stat { text-align: left; }
+  /* One column, and the five metrics fall to two per line rather than five squeezed into 340px. */
+  .hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: "gate" "act" "stats"; gap: 18px; }
+  .hero .pulse-row { grid-template-columns: repeat(2, minmax(max-content, 1fr)); }
+  .hero > .hero-state { grid-area: act; align-self: start; }
 }
 
 /* ── readouts ─────────────────────────────────────────────────────────────── */
@@ -791,18 +875,29 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 /* One line, sentence case. Uppercase at 11px turned "in progress now" into three lines and put the five
  * numbers under it on three different baselines — the labels are what broke the row, not the numbers.
  * `nowrap` is safe now that nothing squeezes the track below the label. */
+/* The caps tier. Lowercase 11.5px sat too close to body text to read as a label, which is half of why
+ * the strip had no internal hierarchy. Uppercase at 10.5 with real tracking is a different rank, and it
+ * only works now that the strip has the band to itself — at the old width these wrapped to three lines
+ * and put five numbers on three baselines. */
 .stat .label {
-  font-size: 11.5px;
+  font-size: 10.5px;
   color: var(--muted);
-  margin-bottom: 3px;
+  margin-bottom: 5px;
   white-space: nowrap;
-  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
 }
 .stat .value {
   /* The number does not break; the denominator below it does. `nowrap` on the pair is what pushed
      "/ 100 000" out of the cell instead of onto its own line. */
   white-space: nowrap;
-  font-size: 26px;
+  /* 30. It was 26, then 22 to stop it competing with the gate's numeral — and then the gate stopped
+     sharing the band, because when something is waiting the requests themselves lead the page. With
+     nothing to compete with, this strip *is* the day's vital signs and gets the display size a review
+     asked for: "the numbers that are the entire point of the Overview are set barely larger than the
+     sentence above them". */
+  font-size: 30px;
   font-weight: 600;
   font-variant-numeric: tabular-nums lining;
   font-feature-settings: "zero" 0;
@@ -816,7 +911,15 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 .kv .v { text-align: right; font-size: 13px; }
 .kv .v.num { font-family: ui-monospace, monospace; font-size: 13px; font-variant-numeric: tabular-nums; }
 
-.bar { display: block; width: 100%; height: 8px; border-radius: 999px; background: var(--raised); overflow: hidden; }
+.bar {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--border);
+  overflow: hidden;
+}
 .bar > i {
   display: block;
   height: 100%;
@@ -889,6 +992,18 @@ a.badge:hover { text-decoration: underline; }
   color: var(--text);
 }
 .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+/* A chip that is a warning rather than a value. The board marks a task no tool can run with
+ * one, and without this rule it rendered as a neutral pill — the warning read as a label. */
+.chip.warn { border-color: var(--warm-line); color: var(--warm); background: var(--warm-soft); font-weight: 600; }
+
+/* The five risk tiers, and the ramp is the point: read is furniture, money is the one an operator
+ * must never approve by reflex. Global rather than scoped to Operations, because the Overview
+ * shows the same requests — and a review caught the consequence of that split: the short form was
+ * dropping the one chip that tells a spend from a read. A vocabulary two pages speak belongs to
+ * the language, which is what this file is. */
+.badge.risk.read, .badge.risk.write_local { color: var(--muted); }
+.badge.risk.external { color: var(--warn); background: var(--warn-soft); }
+.badge.risk.code, .badge.risk.money { color: var(--danger); background: var(--danger-soft); }
 
 /* A list of rows inside a card: separators, not nine nested boxes. Boxing a child inside a surface
  * that already has a border and a radius is the drift that made every tab look the same. */
@@ -977,9 +1092,9 @@ a.badge:hover { text-decoration: underline; }
 @media (min-width: 900px) {
   /* Five, because there are five statuses. Four tracks left `done` alone on a second row with three
      empty cells beside it. */
-  .kanban { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .kanban { grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: start; }
 }
-.kcol { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 4px 4px; }
+.kcol { background: var(--sunken); border: 1px solid var(--border); border-radius: 10px; padding: 10px 8px 4px; }
 /* Two lines' worth of room whether the label needs it or not: three of five French headers wrap and
  * the columns that did not were starting their first row 18px higher. */
 .kcol h3 {
@@ -991,8 +1106,9 @@ a.badge:hover { text-decoration: underline; }
   min-height: 4.4em;
   align-items: flex-start;
 }
-.kcard { padding: 11px 12px; font-size: 13.5px; display: grid; gap: 6px; border-bottom: 1px solid var(--border); transition: background-color var(--t-feedback) var(--ease); }
-.kcol .kcard:last-child { border-bottom: 0; }
+/* A card in a lane, so the separator is the gap between cards rather than a rule under each one. The
+ * hairline was what made five columns read as five lists. */
+.kcard { padding: 11px 12px; font-size: 13.5px; display: grid; gap: 6px; transition: border-color var(--t-feedback) var(--ease), background-color var(--t-feedback) var(--ease); }
 .kcard:hover { background: var(--raised); }
 .kcard .meta { display: flex; gap: 8px; color: var(--muted); font-size: 12px; align-items: center; flex-wrap: wrap; }
 
@@ -1152,14 +1268,35 @@ a.badge:hover { text-decoration: underline; }
 /* A floor, not the window. `calc(100dvh - 260px)` gave a first-time operator 500px of empty panel with
  * four suggestion chips floating in the middle of it; 360px is enough to look like a conversation and
  * small enough that nothing has to be filled. It grows with the transcript. */
-.chat { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; min-height: 360px; }
+/* The chat owns the viewport it is drawn in.
+ *
+ * It was `min-height: 360px`, so the card ended around 490px on a 900px screen and the page finished
+ * with ~180px of empty background above a floating footer — a review called CEO the most unfinished
+ * route in the product and it was right. A conversation has a natural shape: the transcript grows
+ * from the top, the composer stays at the bottom, and the space between them belongs to the
+ * transcript whether or not anything is in it yet.
+ *
+ * `100dvh` rather than `100vh`: on a phone the browser chrome retracts, and `vh` measures the tall
+ * viewport, so the composer would sit below the fold exactly when somebody wants to type. The
+ * subtraction is the shell — header, tab bar, the page heading and the wrap's own padding — and it is
+ * generous rather than exact, because being 20px short of the fold is invisible and being 20px over
+ * puts a scrollbar on a page that has nothing to scroll. */
+.chat {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  min-height: min(640px, calc(100dvh - 290px));
+}
 .chat-id { display: flex; align-items: center; gap: 13px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
 .chat-log { display: grid; gap: 12px; align-content: start; overflow-y: auto; min-height: 0; }
 /* At the bottom, next to the thing it is inviting you to use. Centred, it floated in 500px of empty
  * panel with four chips adrift in the middle of it. */
 /* Centred, now that the panel no longer reserves a screen: the invitation was pushed to the bottom to
  * escape 400px of nothing above it, and with the nothing gone the middle is where it belongs. */
-.chat-log.is-empty { align-content: center; justify-items: center; gap: 18px; }
+/* Anchored to the composer, not floating in the middle. This is what makes a full-height empty
+ * chat read as a frame rather than a void — the invitation sits with the box you type into,
+ * which is where somebody's attention already is. */
+.chat-log.is-empty { align-content: end; justify-items: center; gap: 18px; padding-bottom: 6px; }
 .msg { max-width: 76ch; padding: 11px 14px; border-radius: 12px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .msg.user { justify-self: end; background: var(--accent-soft); border: 1px solid transparent; }
 .msg.ceo { justify-self: start; background: var(--raised); border: 1px solid var(--border); }

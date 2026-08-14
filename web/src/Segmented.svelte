@@ -11,10 +11,26 @@
    * previous treatment put a dark navy label on a saturated blue tint, and the *unselected* segment —
    * full-contrast text on the card — read as the active one.
    */
-  let { options = [], value = "", onpick = undefined, label = "", fill = false } = $props();
+  /**
+   * `quiet` is for the one of these that lives in the chrome rather than in a card.
+   *
+   * A review, unprompted, named the header's language pair as "the highest-contrast element on every
+   * page — a saturated blue block louder than the primary nav and louder than '2 waiting on you'".
+   * That is what an accent fill does when it sits above every page instead of inside one: the accent
+   * is supposed to mean "the choice you just made here", and the language is a standing state that
+   * nobody came to this page to change. Same control, same seam, no shout.
+   */
+  let {
+    options = [],
+    value = "",
+    onpick = undefined,
+    label = "",
+    fill = false,
+    quiet = false,
+  } = $props();
 </script>
 
-<div class="seg" class:fill role="group" aria-label={label}>
+<div class="seg" class:fill class:quiet role="group" aria-label={label}>
   {#each options as option (option.value)}
     <button
       type="button"
@@ -48,4 +64,12 @@
   .seg button + button { border-left: 1px solid var(--border-ui); }
   .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
   .seg button[aria-pressed="true"]:hover { background: var(--accent); }
+  /* Chrome, not content: a raised surface and full-contrast text instead of the accent fill. Still
+     unmistakably the selected one — it is the only segment that is not muted — without being the
+     loudest thing on a page it does not belong to. */
+  .seg.quiet { border-color: var(--border); }
+  .seg.quiet button + button { border-left-color: var(--border); }
+  .seg.quiet button[aria-pressed="true"] { background: var(--raised); color: var(--text); }
+  .seg.quiet button[aria-pressed="true"]:hover { background: var(--raised); }
+  .seg.quiet button:not([aria-pressed="true"]):hover { color: var(--text); }
 </style>

@@ -129,6 +129,85 @@
        a 20%-alpha tint, so the dots showed *through* them and read as a rendering fault. A texture that
        fights the content in front of it is worse than a plain surface. -->
   <div class="grid cols">
+  <!-- Skills first, and it is a layout decision rather than a reordering of importance.
+       `.grid cols` is a subject and a rail, 2:1 — and the short card was in the wide slot while the
+       long one was in the narrow one, so the left column ended at ~610px against a right column
+       running to ~1035px and the page grew an L-shaped hole in its bottom-left quadrant. The long
+       card belongs in the wide slot; that it is also the more interesting one is a bonus. -->
+  <section class="card">
+    <h2>{t("sk.title")}</h2>
+    <p class="desc">{t("sk.intro")}</p>
+    {#if !data.skills_enabled}
+      <p class="banner warn small">{t("sk.off")}</p>
+    {:else}
+      <!-- The bill, in front of the list. This is the whole reason the panel exists: the cost of an
+           unscoped skill was measurable and invisible. -->
+      {#if data.skills_always_on_chars}
+        <p class="banner warn small">
+          {fill(t("sk.alwaysOn"), { n: data.skills_always_on_chars })}
+        </p>
+      {/if}
+
+      {#each skills as skill (skill.name)}
+        <article class="row block" class:wide={skill.unscoped}>
+          <header>
+            <strong>{skill.name}</strong>
+            <span class="badge">{skill.scope}</span>
+            <span class="badge">{skill.chars} {t("sk.chars")}</span>
+            {#if skill.always}
+              <!-- Declared, so badged as a statement rather than a warning. -->
+              <span class="badge">{t("sk.alwaysDeclared")}</span>
+            {:else if skill.unscoped}
+              <span class="badge warn">{t("sk.unscoped")}</span>
+            {/if}
+            {#if skill.truncated}<span class="badge danger">{t("sk.truncated")}</span>{/if}
+          </header>
+          {#if skill.description}<p class="muted small">{skill.description}</p>{/if}
+          <p class="small muted">
+            {t("sk.applies")}: {skill.tools?.length ? skill.tools.join(", ") : t("sk.everyTool")}
+          </p>
+          {#if skill.unknown_tools?.length}
+            <!-- A skill naming a tool that does not exist is a skill quietly doing less than its
+                 author wrote down — the same "both ends" defect as a playbook naming a missing tool. -->
+            <p class="small bad">{fill(t("sk.unknown"), { n: skill.unknown_tools.join(", ") })}</p>
+          {/if}
+
+          {#if scoping === skill.name}
+            <div class="picker">
+              <p class="small muted">{fill(t("sk.scopeHelp"), { n: skill.chars })}</p>
+              <div class="tools">
+                {#each data.tool_names as tool (tool)}
+                  <label class="tool">
+                    <input
+                      type="checkbox"
+                      checked={ticked.includes(tool)}
+                      onchange={() => toggle(tool)}
+                    />
+                    <span>{tool}</span>
+                  </label>
+                {/each}
+              </div>
+              <div class="actions">
+                <button class="primary" disabled={busy === `scope:${skill.name}`} onclick={() => saveScope(skill.name)}>
+                  {t("sk.scopeSave")}
+                </button>
+                <button class="link" onclick={() => (scoping = "")}>{t("task.cancel")}</button>
+              </div>
+            </div>
+          {:else}
+            <div class="actions">
+              <button onclick={() => openScope(skill)}>{t("sk.scopeIt")}</button>
+              <!-- The path, not an editor. A skill is a file the operator wrote, and this console is
+                   not going to be a second, worse text editor for it. -->
+              <code class="path small muted" title={skill.path}>{skill.path}</code>
+            </div>
+          {/if}
+        </article>
+      {/each}
+      {#if skills.length === 0}<Empty text={t("sk.none")} />{/if}
+    {/if}
+  </section>
+
   <section class="card">
     <div>
     <h2>{t("pl.title")}</h2>
@@ -203,80 +282,6 @@
     </div>
     {#if offers.length === 0}<Empty text={t("pl.regEmpty")} />{/if}
     </div>
-  </section>
-
-  <section class="card">
-    <h2>{t("sk.title")}</h2>
-    <p class="desc">{t("sk.intro")}</p>
-    {#if !data.skills_enabled}
-      <p class="banner warn small">{t("sk.off")}</p>
-    {:else}
-      <!-- The bill, in front of the list. This is the whole reason the panel exists: the cost of an
-           unscoped skill was measurable and invisible. -->
-      {#if data.skills_always_on_chars}
-        <p class="banner warn small">
-          {fill(t("sk.alwaysOn"), { n: data.skills_always_on_chars })}
-        </p>
-      {/if}
-
-      {#each skills as skill (skill.name)}
-        <article class="row block" class:wide={skill.unscoped}>
-          <header>
-            <strong>{skill.name}</strong>
-            <span class="badge">{skill.scope}</span>
-            <span class="badge">{skill.chars} {t("sk.chars")}</span>
-            {#if skill.always}
-              <!-- Declared, so badged as a statement rather than a warning. -->
-              <span class="badge">{t("sk.alwaysDeclared")}</span>
-            {:else if skill.unscoped}
-              <span class="badge warn">{t("sk.unscoped")}</span>
-            {/if}
-            {#if skill.truncated}<span class="badge danger">{t("sk.truncated")}</span>{/if}
-          </header>
-          {#if skill.description}<p class="muted small">{skill.description}</p>{/if}
-          <p class="small muted">
-            {t("sk.applies")}: {skill.tools?.length ? skill.tools.join(", ") : t("sk.everyTool")}
-          </p>
-          {#if skill.unknown_tools?.length}
-            <!-- A skill naming a tool that does not exist is a skill quietly doing less than its
-                 author wrote down — the same "both ends" defect as a playbook naming a missing tool. -->
-            <p class="small bad">{fill(t("sk.unknown"), { n: skill.unknown_tools.join(", ") })}</p>
-          {/if}
-
-          {#if scoping === skill.name}
-            <div class="picker">
-              <p class="small muted">{fill(t("sk.scopeHelp"), { n: skill.chars })}</p>
-              <div class="tools">
-                {#each data.tool_names as tool (tool)}
-                  <label class="tool">
-                    <input
-                      type="checkbox"
-                      checked={ticked.includes(tool)}
-                      onchange={() => toggle(tool)}
-                    />
-                    <span>{tool}</span>
-                  </label>
-                {/each}
-              </div>
-              <div class="actions">
-                <button class="primary" disabled={busy === `scope:${skill.name}`} onclick={() => saveScope(skill.name)}>
-                  {t("sk.scopeSave")}
-                </button>
-                <button class="link" onclick={() => (scoping = "")}>{t("task.cancel")}</button>
-              </div>
-            </div>
-          {:else}
-            <div class="actions">
-              <button onclick={() => openScope(skill)}>{t("sk.scopeIt")}</button>
-              <!-- The path, not an editor. A skill is a file the operator wrote, and this console is
-                   not going to be a second, worse text editor for it. -->
-              <code class="path small muted" title={skill.path}>{skill.path}</code>
-            </div>
-          {/if}
-        </article>
-      {/each}
-      {#if skills.length === 0}<Empty text={t("sk.none")} />{/if}
-    {/if}
   </section>
   </div>
 {/if}

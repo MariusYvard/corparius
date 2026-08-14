@@ -372,10 +372,17 @@ def v1_drafts_post(ctx):
 def v1_documents(ctx):
     """What the company has on file, and what of it an agent actually reads.
 
-    The number that matters is not how many files exist, it is how many reach a prompt: `reaching`
-    against `total`, and `used` against `budget`. A company holding twelve documents can be feeding
-    two of them to its agents while the other ten sit there looking like knowledge, and nothing in
-    the product said so before this resource existed.
+    The number that matters is not how many files exist, it is what reaches a prompt — and what that
+    means changed when `documents.context` learned to build a map. It used to be "the newest files
+    that fit 6 000 characters", so a company holding twelve documents could be feeding two of them to
+    its agents while the other ten sat there looking like knowledge.
+
+    Now **every readable document's headings ride on every prompt**, and the budget buys the sections
+    a given turn should quote. So `reaching` is every readable file, `sections` is how many titled
+    parts they add up to, and `used` is what the map costs on each prompt — the part that is always
+    spent. There is deliberately no single number for "how much of the body reaches a prompt": that
+    is decided per turn against what the agent is about to do, and inventing an average here would be
+    this card describing a retrieval nobody runs.
     """
     _company, refusal = adapters.for_company(ctx.slug)
     if refusal:

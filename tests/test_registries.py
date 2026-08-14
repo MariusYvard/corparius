@@ -72,7 +72,13 @@ ALL_SRC = "\n".join(SRC.values())
 # forbid the primitive everywhere else — the same argument `kernel/proc.py` makes.
 # +1 for `sitegen/critique.py`: the generated page's own review pass, measured rather than judged —
 # contrast on the pairs the page paints, and the copy defects a redraft can actually fix.
-MODULE_COUNT = 141
+# 142: `docindex`, the table of contents over the company's files. The shape is PageIndex's —
+# structure first, content second — and its code is deliberately not vendored; `docindex`'s own
+# docstring carries the reasoning.
+# 143: `app/guidance`, what the operator should do next and where. The CEO tab could answer
+# questions and could not answer *the* question — somebody who does not know what to do has
+# nothing to type.
+MODULE_COUNT = 143
 
 
 def test_every_source_file_is_scanned():

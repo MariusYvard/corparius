@@ -45,12 +45,26 @@
   /* The field, recessed. A control that is lighter than the card it sits on reads as another
      card; sixteen of them down a list read as sixteen. 1.178:1 below the surface, text in it
      15.9:1, its outline 4.4:1. Light mode wants the opposite and gets it below. */
+  /* The tier the surface language was missing, and a review named the gap precisely: the whole app was
+     one card idiom repeated, so the board — five columns of work inside one card — had nowhere to be
+     except flat. `--sunken` is a step *below* the card: a lane a card can sit in. Measured, card on
+     lane 1.203:1 in dark and 1.211:1 in light, the same order as the other steps in this ladder, with
+     `--muted` still at 7.5:1 on it.
+     Not the field fill, which resolves to pure white in light — a lane painted with that would be
+     invisible on the white card it is recessed into. */
+  --sunken: oklch(0.235 calc(0.060 * var(--ui-chroma)) var(--ui-hue));
   --well: oklch(0.215 calc(0.075 * var(--ui-chroma)) var(--ui-hue));
   --border: oklch(0.455 calc(0.075 * var(--ui-chroma)) var(--ui-hue));
   /* Lifted to 0.64 with the ladder. At the candidate's first values this landed at 2.842:1 on
      `--raised` — under the 3:1 a control outline needs — which is the kind of thing a redesign takes
-     with it silently, so the ratio is a test now and not a claim in a comment. */
-  --border-ui: oklch(0.64 calc(0.115 * var(--ui-chroma)) var(--ui-hue));    /* >=3:1 on surface and raised */
+     with it silently, so the ratio is a test now and not a claim in a comment.
+     Chroma dropped 0.115 → 0.045 after a review read every text field as focused: a saturated blue
+     border plus a fill darker than the card *is* a focus treatment, and twelve of them on the Settings
+     form looked like a form with every field focused at once, leaving no headroom for real focus. The
+     lightness carries the contrast, so this costs nothing — measured 4.14:1 on the card, 3.17:1 on
+     raised, 5.24:1 on the field fill, against 4.10 / 3.14 / 5.20 before. `#688ad2` becomes `#7e8ca8`:
+     the same outline, no longer an accent. Focus keeps `--select`, which is now the only blue edge. */
+  --border-ui: oklch(0.64 calc(0.045 * var(--ui-chroma)) var(--ui-hue));    /* >=3:1 on surface and raised */
   --select: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue));       /* focus and selection */
   --select-soft: oklch(0.635 calc(0.18 * var(--ui-chroma)) var(--ui-hue) / 0.20);
   /* `--muted` lifted 0.72 → 0.75 with the ladder, and the test is why: on the new `--raised` it
@@ -84,6 +98,7 @@
   --border: oklch(0.80 calc(0.028 * var(--ui-chroma)) var(--ui-hue)); --border-ui: oklch(0.44 calc(0.11 * var(--ui-chroma)) var(--ui-hue));
   /* In light the field is the lightest thing on the page, not the darkest: white on a tinted
      card, which is the convention a sunken tinted input gets backwards. */
+--sunken: oklch(0.938 calc(0.013 * var(--ui-chroma)) var(--ui-hue));
   --well: oklch(1 0 0);
   --select: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue)); --select-soft: oklch(0.44 calc(0.20 * var(--ui-chroma)) var(--ui-hue) / 0.12);
   --text: oklch(0.283 calc(0.083 * var(--ui-chroma)) var(--ui-hue)); --muted: oklch(0.45 calc(0.05 * var(--ui-chroma)) var(--ui-hue));

@@ -64,6 +64,9 @@
   // Per-field refusals, so each sentence lands next to the input that caused it rather than in one
   // banner. `detail.errors` carries them apart for exactly this.
   let refusals = $state({});
+  // Which fields have their second sentence showing. Per field, so opening one does not
+  // open eighty.
+  let openHelp = $state({});
 
   async function load() {
     try {
@@ -374,11 +377,30 @@
                          lines of grey at one weight, so a screen of eighty fields was a document with
                          inputs in it and the eye had nothing to land on. The first sentence is the one
                          that says what the field is; the remainder is why, and why can wait. -->
-                    <small class="lead"><Ticked text={help.slice(0, cut + 1)} /></small>
-                    <details class="more">
-                      <summary>{t("ops.more")}</summary>
+                    <!-- The first sentence, then the rest behind a mark rather than behind the words
+                         "Learn more". Eight of those on one screen is what a review called visual
+                         static, and it was right: eight identical blue links under eight fields are a
+                         repeating pattern the eye has to filter out on every row. The content did not
+                         need to go — only its label, which was the same eight times and said nothing a
+                         disclosure triangle does not already say. -->
+                    <small class="lead">
+                      <Ticked text={help.slice(0, cut + 1)} />
+                      <!-- A button, not a `<details>`. `<details>` is flow content and `<small>` is
+                           phrasing, so nesting them let the parser hoist the element out of its
+                           sentence — measured, it collided the "Data directory" label with the Save
+                           button 58px wide. A button is valid here, carries `aria-expanded` for free,
+                           and takes the styling the summary marker fought. -->
+                      <button
+                        class="qmark"
+                        aria-expanded={Boolean(openHelp[f.key])}
+                        title={t("ops.more")}
+                        aria-label={t("ops.more")}
+                        onclick={() => (openHelp[f.key] = !openHelp[f.key])}
+                      >?</button>
+                    </small>
+                    {#if openHelp[f.key]}
                       <small class="muted"><Ticked text={help.slice(cut + 2)} /></small>
-                    </details>
+                    {/if}
                   {:else}
                     <small class="lead"><Ticked text={help} /></small>
                   {/if}
@@ -531,8 +553,28 @@
   .fhelp small { font-size: 12px; line-height: 1.55; color: var(--muted); }
   /* The first sentence is a step up in contrast from the rest: it is the one a reader needs. */
   .fhelp .lead { color: var(--text); opacity: 0.78; }
-  .fhelp .more > summary { cursor: pointer; font-size: 11.5px; color: var(--select); padding: 2px 0; }
-  .fhelp .more[open] > summary { margin-bottom: 3px; }
+  /* A question mark on the baseline of the sentence it extends, not a blue "Learn more" on a line of
+     its own. Eight of those on one screen is what a review called visual static — the content was
+     never the problem, the eight identical labels were. */
+  .fhelp .qmark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    margin-left: 5px;
+    padding: 0;
+    vertical-align: -3px;
+    border: 1px solid var(--border-ui);
+    border-radius: 999px;
+    background: none;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .fhelp .qmark:hover { color: var(--text); border-color: var(--muted); background: none; }
+  .fhelp .qmark[aria-expanded="true"] { background: var(--raised); color: var(--text); }
   fieldset { border: 0; border-top: 1px solid var(--border); margin: 16px 0 0; padding: 14px 0 0; min-width: 0; }
   legend { padding: 0; font-size: 14px; font-weight: 600; color: var(--text); }
   .field > .fname { color: var(--muted); }

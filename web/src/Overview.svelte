@@ -23,6 +23,7 @@
   import { fill, translator } from "./i18n.js";
   import Empty from "./Empty.svelte";
   import AgentIcon from "./AgentIcon.svelte";
+  import Approval from "./Approval.svelte";
 
   // `onTab` is how a card whose call to action is "Open Providers" can actually open it. Optional, so
   // a caller that does not pass it gets a card whose tab buttons do nothing rather than a crash.
@@ -265,18 +266,63 @@
     </section>
   {/if}
 
+  <!-- Decisions first, above the day.
+       A review counted this page saying "you have 2 decisions" three times, in three stacked cards
+       of near-equal weight: the onboarding step, the gate's own number, and then the requests
+       themselves — so the product's whole reason to exist was the third-most prominent thing on its
+       home page. The requests lead now, and the gate below speaks only when there is nothing to
+       decide, which is the one case where a count is news. -->
+  {#if needsYou > 0}
+    <section class="card attention">
+      <div class="card-head">
+        <div>
+          <h2>{t("ops.waiting")} <span class="badge warm">{needsYou}</span></h2>
+          <p class="desc">{t("ops.waitingDesc")}</p>
+        </div>
+      </div>
+      <div class="rows">
+        <!-- One component, two instances. The short form was dropping the risk chip — the only
+             thing that tells a spend from a read — so the surface an operator meets first could
+             not say whether Approve sends an email or reads a file. `Approval.svelte` carries the
+             reasoning. -->
+        {#each summary.approvals as approval (approval.id)}
+          <Approval {approval} {lang} {busy} compact onDecide={decide} />
+        {/each}
+
+        {#each summary.inbox as item (item.id)}
+          <article class="row">
+            <div class="grow">
+              <strong>{item.title}</strong>
+              <span class="muted small">· {t("ib." + item.kind)}</span>
+              {#if item.body}<p class="desc">{item.body}</p>{/if}
+            </div>
+            <div class="actions">
+              <button disabled={busy === item.id} onclick={() => answer(item.id)}>
+                {t("ib.dismiss")}
+              </button>
+            </div>
+          </article>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
   <!-- The status band. The human gate is the subject of this product and sits in display scale on the
        left; the day's numbers read across from it. One band with presence, rather than the two
        equal-weight cards this page had, where "0 waiting" and "253 simulated hours" were the same
        size and neither was the answer to "does this need me". -->
-  <section class="card hero" class:is-running={summary.running}>
-    <button class="hero-gate" class:needs={needsYou > 0} onclick={() => onTab?.("operations")}>
-      <span class="g-label">{t("stat.waiting")}</span>
-      <span class="g-num">{needsYou}</span>
-      <span class="g-hint">{needsYou ? t("stat.waitingGo") : t("stat.waitingClear")}</span>
-    </button>
-    <div class="hero-side">
-      <div class="pulse-row">
+  <section class="card hero" class:is-running={summary.running} class:no-gate={needsYou > 0}>
+    <!-- The gate speaks when there is nothing waiting. When something is, the requests are already
+         open above it and a second card counting them is the third telling of one fact. "Nothing held
+         up" is genuinely news and has nowhere else to be said; "2 waiting" has. -->
+    {#if needsYou === 0}
+      <button class="hero-gate" onclick={() => onTab?.("operations")}>
+        <span class="g-label">{t("stat.waiting")}</span>
+        <span class="g-num">{needsYou}</span>
+        <span class="g-hint">{t("stat.waitingClear")}</span>
+      </button>
+    {/if}
+    <div class="pulse-row">
         <div class="stat">
           <div class="label">{t("stat.hour")}</div>
           <div class="value">{summary.tick}</div>
@@ -299,21 +345,20 @@
           <div class="label">{t("flow.delivered")}</div>
           <div class="value">{summary.flow.throughput ?? 0}</div>
         </div>
-        <div class="stat">
-          <div class="label">{t("flow.wip")}</div>
-          <div class="value">{summary.flow.wip ?? 0}</div>
-        </div>
+      <div class="stat">
+        <div class="label">{t("flow.wip")}</div>
+        <div class="value">{summary.flow.wip ?? 0}</div>
       </div>
-      <div class="hero-state">
+    </div>
+    <div class="hero-state">
         {#if summary.running}
           <span class="badge ok">{t("badge.running")}</span>
           {#if summary.loop}<span class="badge">{t("badge.looping")}</span>{/if}
           {#if summary.stopping}<span class="badge warn">{t("badge.stopping")}</span>{/if}
         {/if}
-        {#if summary.freezes > 0}
-          <span class="badge warn">{t("badge.frozen")} · {summary.freezes}</span>
-        {/if}
-      </div>
+      {#if summary.freezes > 0}
+        <span class="badge warn">{t("badge.frozen")} · {summary.freezes}</span>
+      {/if}
     </div>
 
     <!-- The run control, inside the band. Seeing what needs you and starting a day are the two things an
@@ -360,63 +405,6 @@
     </div>
   </section>
 
-  <!-- Only when there is something. A card whose whole content is "nothing waits" repeats the
-       sentence the hero already carries, and printing it twice on one screen is how a page reads as
-       filler rather than as a state. -->
-  {#if needsYou > 0}
-    <section class="card attention">
-      <div class="card-head">
-        <div>
-          <h2>{t("ops.waiting")} <span class="badge warm">{needsYou}</span></h2>
-          <p class="desc">{t("ops.waitingDesc")}</p>
-        </div>
-      </div>
-      <div class="rows">
-        {#each summary.approvals as approval (approval.id)}
-          <article class="row">
-            <div class="grow">
-              <strong>{approval.tool}</strong>
-              <span class="muted small">· {t("ops.requestedBy")} {approval.agent}</span>
-              {#if approval.detail?.does}<p class="desc">{approval.detail.does}</p>{/if}
-            </div>
-            <div class="actions">
-              <button
-                class="primary"
-                disabled={busy === approval.id}
-                onclick={() => decide(approval.id, "approved")}
-              >{t("btn.approve")}</button>
-              {#if approval.can_remember}
-                <button
-                  disabled={busy === approval.id}
-                  onclick={() => decide(approval.id, "approved", "always")}
-                >{t("ops.always")}</button>
-              {/if}
-              <button
-                class="danger-quiet"
-                disabled={busy === approval.id}
-                onclick={() => decide(approval.id, "rejected")}
-              >{t("btn.reject")}</button>
-            </div>
-          </article>
-        {/each}
-
-        {#each summary.inbox as item (item.id)}
-          <article class="row">
-            <div class="grow">
-              <strong>{item.title}</strong>
-              <span class="muted small">· {t("ib." + item.kind)}</span>
-              {#if item.body}<p class="desc">{item.body}</p>{/if}
-            </div>
-            <div class="actions">
-              <button disabled={busy === item.id} onclick={() => answer(item.id)}>
-                {t("ib.dismiss")}
-              </button>
-            </div>
-          </article>
-        {/each}
-      </div>
-    </section>
-  {/if}
 
   <!-- Varied cells rather than a stack of identical ones: the log is wide because it is read, the
        meters are narrow because they are glanced at. -->

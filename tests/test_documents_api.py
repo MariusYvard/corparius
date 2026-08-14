@@ -88,19 +88,29 @@ def test_the_operators_files_and_the_companys_files_are_told_apart(drop, server)
     assert docs["written/weekly-review.md"]["written"] is True
 
 
-def test_a_document_past_the_budget_is_marked_rather_than_quietly_listed(drop, server):
-    """The failure this surface exists to end. Four documents on file, two in the
-    prompt, and nothing anywhere saying which — so ten files an agent has never
-    read look precisely like ten files it has."""
+def test_no_document_is_invisible_any_more(drop, server):
+    """This test used to assert the opposite, and the change is the point.
+
+    It read: four documents on file, **two** in the prompt, and the other two marked `budget` — the
+    failure being that ten files an agent had never read looked exactly like ten it had. That was the
+    right assertion for a retrieval that took the newest documents whole until 6 000 characters were
+    gone, and it is the wrong one now: `documents.context` builds a **map** first, so every readable
+    file contributes its headings to every prompt and none of them is absent.
+
+    The state this replaces — "on file, past the budget, no agent reads it" — no longer exists, so
+    asserting it would be pinning behaviour the product deliberately retired. What is still true, and
+    is what this now holds, is the honest half: the budget is real, and the console reports what it
+    actually spends rather than a number it wishes were true.
+    """
     for i in range(4):
-        (drop / f"d{i}.md").write_text("x" * 2000, encoding="utf-8")
+        (drop / f"d{i}.md").write_text(f"# Note {i}\n" + "x" * 2000, encoding="utf-8")
 
     payload = _get(server)[1]
     assert payload["total"] == 4
-    assert payload["reaching"] == 2, "the budget fits two 2 000-character files"
+    assert payload["reaching"] == 4, "every readable file reaches the prompt through the map"
+    assert payload["sections"] >= 4, "and each one was resolved into at least its own heading"
     assert payload["used"] <= payload["budget"]
-    reasons = sorted(d["reason"] for d in payload["documents"])
-    assert reasons == ["budget", "budget", "prompt", "prompt"]
+    assert {d["reason"] for d in payload["documents"]} == {"prompt"}
 
 
 def test_the_console_and_the_prompt_can_never_disagree(drop, server):
@@ -113,10 +123,19 @@ def test_the_console_and_the_prompt_can_never_disagree(drop, server):
     payload = _get(server)[1]
     block = documents.context("acme")
     for entry in payload["documents"]:
-        # The full relative path, which is what the prompt now names a document
-        # by. The card and the prompt read a document's identity out of the same
-        # field, so there is nothing left for them to disagree about.
-        assert (f"--- {entry['path']}" in block) is entry["reaches"], f"{entry['path']}"
+        # The full relative path, which is what the prompt names a document by. The card and the
+        # prompt read a document's identity out of the same field, so there is nothing left for them
+        # to disagree about.
+        #
+        # **Named, not quoted**, and the distinction is the whole change: `reaches` used to mean "its
+        # text is in the prompt" and now means "the prompt knows it exists", because every readable
+        # file contributes its headings to the map whatever the budget. Whether a given section's
+        # *body* is quoted is decided per turn against what the agent is doing, so asserting it here
+        # would pin one turn's ranking as though it were the contract.
+        assert (entry["path"] in block) is entry["reaches"], entry["path"]
+    # And the budget still bites: four 2 000-character files do not all fit, so this is not passing
+    # by quoting everything.
+    assert len(block) <= documents.CONTEXT_BUDGET + len(documents.UNTRUSTED) + 64
 
 
 def test_two_files_of_the_same_name_are_two_things_in_the_prompt(drop, server):
@@ -128,8 +147,11 @@ def test_two_files_of_the_same_name_are_two_things_in_the_prompt(drop, server):
     documents.write("acme", "Design brief", "What the design agent decided.")
 
     block = documents.context("acme")
-    assert "--- design-brief.md" in block
-    assert "--- written/design-brief.md" in block
+    # Both, by their full paths. The requirement is unchanged — a model must be able to tell the two
+    # apart — but it is the map that carries identity now rather than a per-file header, so the paths
+    # are asserted rather than the `--- header ---` that used to introduce each body.
+    assert "design-brief.md" in block
+    assert "written/design-brief.md" in block
     paths_seen = {d["path"] for d in _get(server)[1]["documents"]}
     assert paths_seen == {"design-brief.md", "written/design-brief.md"}
 

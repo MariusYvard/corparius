@@ -44,6 +44,13 @@ class RunContext:
     # a price list: knowledge that had no way into a prompt at all before —
     # only the config, a hand-written skill, or nothing.
     documents: str = ""
+    # The same files unrendered, so a turn can rank them against its own prompt. The rendered block
+    # above is the fallback and stays the answer for every caller that does not fill this — the
+    # console's one-off reads, a plugin's, a test's minimal context.
+    #
+    # `object`, not `list[Document]`, for the reason the rest of this dataclass is loose: a tool
+    # effect receives this context and the type it declares is the surface a plugin can rely on.
+    doc_files: list = field(default_factory=list)
     # The pictures among them, read and ready to send. The product said an image
     # was "offered to the models that accept images" for two releases while
     # `documents.images()` had no caller at all and nothing here could have sent
@@ -305,6 +312,12 @@ class Runtime:
                     # touches the disk, and every agent in a tick sees the
                     # same files.
                     documents=documents.context(slug),
+                    # The same files, unrendered, so each turn can rank them against its own prompt.
+                    # "Every agent in a tick sees the same files" is true and was quietly doing more
+                    # work than that: it also meant every agent read the same 6 000 characters,
+                    # chosen by modification time, whatever it was about to do. The disk is still
+                    # touched once; the *selection* is per turn, and selection is arithmetic.
+                    doc_files=documents.load(slug),
                     images=tick_images,
                     images_skipped=tick_skipped,
                 )

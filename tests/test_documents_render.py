@@ -120,21 +120,24 @@ def _payload(*docs, **over) -> dict:
     return {**base, **over}
 
 
-def test_a_document_past_the_budget_does_not_look_like_one_that_reaches():
-    """The whole point of the card. Two rows that read the same would put the
-    operator back where they started, which is believing twelve files are
-    feeding their agents when two are."""
+def test_a_document_that_was_cut_does_not_look_like_one_that_was_not():
+    """The whole point of the card: two rows that read the same put the operator back where they
+    started. This used to contrast "reaches the agents" with "past the budget" — a state that no
+    longer exists, because every readable file's headings now ride on every prompt. What is left to
+    tell apart is a file read whole against one cut at `MAX_CHARS`, which is a real difference and
+    still a per-file fact rather than a per-turn one."""
     out = _render(
         _payload(
             _entry(path="reaches.md"),
-            _entry(path="ignored.md", reaches=False, reason="budget"),
+            _entry(path="huge.md", reason="cut", chars=4000, total=12000),
         ),
         "en",
     )
     assert "reaches the agents" in out
-    assert "past the budget" in out
-    # Colour carries it too, for anyone scanning rather than reading.
-    assert 'class="badge ok"' in out and 'class="badge warn"' in out
+    # The cut row says how much was cut; the whole row says nothing further. `docs.why.cut` opens
+    # with the same three words as `docs.why.prompt` on purpose — both files *do* reach the agents —
+    # so what distinguishes them is the pair of numbers, not the verb.
+    assert "4000" in out and "12000" in out
 
 
 def test_the_french_card_is_french_including_the_reasons():
@@ -143,7 +146,6 @@ def test_the_french_card_is_french_including_the_reasons():
     out = _render(
         _payload(
             _entry(path="reaches.md"),
-            _entry(path="ignored.md", reaches=False, reason="budget"),
             # The real note this document carries. It is English on purpose —
             # that sentence rides into a prompt — so the card has to translate
             # the state and drop the sentence, not print both.
@@ -161,9 +163,8 @@ def test_the_french_card_is_french_including_the_reasons():
         "fr",
     )
     assert "atteint les agents" in out
-    assert "aucun agent ne le lit" in out
     assert "aucune couche de texte" in out
-    for english in ("reaches the agents", "past the budget", "no text layer"):
+    for english in ("reaches the agents", "no text layer"):
         assert english not in out, f"{english!r} leaked into the French card"
 
 

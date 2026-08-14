@@ -181,3 +181,37 @@ def test_written_and_dropped_files_live_apart_but_both_count(drop):
 def test_an_empty_draft_writes_nothing(drop):
     documents.write("acme", "Nothing", "   ")
     assert documents.load("acme") == []
+
+
+# --- structure survives extraction ------------------------------------------------
+
+
+def test_reading_a_document_keeps_its_line_structure(tmp_path):
+    """The defect this pins, and it was silent: `read` ended in `" ".join(text.split())`, so **every
+    newline in every file was destroyed at read time**. A model received a contract as one unbroken
+    line, and `docindex` could not find a heading in a single real document — it worked perfectly on
+    strings in its own unit tests and returned one giant section on anything loaded from disk.
+
+    The collapse was written for PDF and OOXML, whose extraction is a mess of ragged spacing. But both
+    of those extractors already flatten their own output, so the only files this changed were the ones
+    whose structure was worth keeping: the agents' markdown, the operator's notes, and CSV rows that
+    `_from_csv` had deliberately joined with newlines.
+    """
+    doc = tmp_path / "notes.md"
+    doc.write_text(
+        "# Pricing\nSingle seat is 19 a month.\n\n\n\n## Discounts\nNone given.\n", encoding="utf-8"
+    )
+    text = documents.read(doc).text
+    assert "# Pricing" in text.split("\n"), "a heading has to survive on its own line"
+    assert "## Discounts" in text.split("\n")
+    assert "\n\n\n" not in text, "runs of blank lines are still collapsed"
+    assert "  " not in text, "runs of spaces are still squeezed"
+
+
+def test_csv_rows_are_still_rows(tmp_path):
+    """`_from_csv` joins rows with newlines on purpose. The global collapse glued them back into one
+    run of comma-separated cells, which is the same table with its shape removed."""
+    doc = tmp_path / "leads.csv"
+    doc.write_text("name,city\nAda,Paris\nGrace,Lyon\n", encoding="utf-8")
+    lines = documents.read(doc).text.split("\n")
+    assert len(lines) >= 3, f"a three-row csv came back as {len(lines)} line(s)"

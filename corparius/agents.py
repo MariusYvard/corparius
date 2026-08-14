@@ -48,8 +48,9 @@ def _messages(spec: AgentSpec, ctx, tool) -> list[dict]:
     # The company's own files. Bounded in documents.context, because this
     # rides on every prompt and an unscoped block already cost this project
     # 3 815 characters a turn.
-    if getattr(ctx, "documents", ""):
-        system = f"{system}\n\n{ctx.documents}"
+    files = _files(ctx, tool)
+    if files:
+        system = f"{system}\n\n{files}"
     # The company's language, in the one place every drafting tool passes
     # through. A French company was drafting `Reply drafted: "Thank you for
     # contacting us…"` to its French customers, because nothing in the prompt
@@ -86,6 +87,38 @@ LANGUAGE_NAMES = {
     "pt": "Portuguese",
     "nl": "Dutch",
 }
+
+
+def _files(ctx, tool) -> str:
+    """The company's own documents, ranked against the prompt about to be sent.
+
+    The same shape as `_recall` directly below, and that is the point: memory has been ranked against
+    `tool.draft_prompt(ctx)` for a long time while the document block four lines away ignored it
+    entirely. One function held both, so the inconsistency was visible on one screen and still went
+    unnoticed — a design agent building a sales page and a finance agent reviewing spend received the
+    same 6 000 characters, picked by modification time.
+
+    Falls back to `ctx.documents`, the pre-rendered recency block, whenever there are no files to rank
+    or no prompt to rank them against. Every context that never carried `doc_files` — the console's
+    one-off calls, a plugin's, the tests that build a minimal ctx — keeps exactly what it had.
+    """
+    files = getattr(ctx, "doc_files", None)
+    if not files:
+        return getattr(ctx, "documents", "") or ""
+    try:
+        query = tool.draft_prompt(ctx)
+    except Exception:
+        # A tool whose prompt needs something this context lacks still gets its documents. The block
+        # is worth more than the ranking, and an exception here would take down a turn over the
+        # ordering of a paragraph.
+        query = ""
+    from . import documents as documents_mod
+
+    return documents_mod.context(
+        ctx.company.get("slug", ""),
+        query=query,
+        docs=files,
+    ) or (getattr(ctx, "documents", "") or "")
 
 
 def _recall(ctx, tool) -> str:

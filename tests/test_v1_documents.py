@@ -171,8 +171,15 @@ def test_the_state_codes_the_inventory_can_report_all_have_strings():
     import pathlib
 
     en = json.loads(pathlib.Path("web/i18n/en.json").read_text(encoding="utf-8"))
-    # The vocabulary is written down in `Document.reason`'s own comment, plus the two `inventory`
+    # The vocabulary is written down in `Document.reason`'s own comment, plus the one `inventory`
     # assigns. Read from the docstring would be cute and fragile; this is the list, asserted.
+    #
+    # `budget` was here and is gone with its string. It meant "readable, on file, and past the prompt
+    # budget — no agent reads it", which was the most useful thing this card said while retrieval took
+    # the newest 6 000 characters whole. Every readable file's headings now ride on every prompt, so
+    # nothing can be in that state and `inventory` never sets the code. Both ends struck off together:
+    # a code with no string renders a raw key, and a string for no code describes a product that does
+    # not exist.
     for code in (
         "cut",
         "image",
@@ -180,10 +187,10 @@ def test_the_state_codes_the_inventory_can_report_all_have_strings():
         "no-extractor",
         "empty",
         "os-error",
-        "budget",
         "prompt",
     ):
         assert f"docs.why.{code}" in en, f"a row can report {code!r} and nothing can render it"
+    assert "docs.why.budget" not in en, "the retired state must not keep its string"
 
 
 def test_a_body_that_is_not_base64_is_the_request_being_wrong(server):

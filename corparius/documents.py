@@ -158,6 +158,33 @@ def _from_csv(path: Path) -> str:
     return "\n".join(", ".join(cell for cell in row if cell) for row in keep if any(row))
 
 
+def _tidy(text: str) -> str:
+    """Collapse the whitespace mess **without collapsing the document**.
+
+    This was `" ".join(text.split())` — one line, every newline gone — and it ran over every file
+    after extraction. It was written for the right reason: PDF and OOXML extraction produces ragged
+    runs of spaces and blank lines, and a prompt should not pay for them. But it is applied to the
+    result of *all* the extractors, and two of them had already done that flattening themselves
+    (`_from_pdf` and `_from_ooxml` both end in `" ".join(...split())`), so the only files it actually
+    changed were the ones with structure worth keeping:
+
+      * **markdown and text** — the agents' own writing, and the operator's notes. Every heading,
+        list and paragraph break in the corpus was destroyed at read time, so a model received a
+        contract as one unbroken line and `docindex` could not find a single section in a real file.
+      * **CSV** — `_from_csv` joins its rows with newlines on purpose, and this glued them back into
+        one run of comma-separated cells.
+
+    So: horizontal whitespace is squeezed per line, blank lines are capped at one, and the line
+    structure survives. What the original was for still happens; what it destroyed does not.
+    """
+    lines = [" ".join(line.split()) for line in text.splitlines()]
+    out: list[str] = []
+    for line in lines:
+        if line or (out and out[-1]):
+            out.append(line)
+    return "\n".join(out).strip()
+
+
 def read(path: Path, max_chars: int = MAX_CHARS) -> Document:
     """One file, extracted as far as it honestly can be.
 
@@ -206,7 +233,7 @@ def read(path: Path, max_chars: int = MAX_CHARS) -> Document:
             reason="no-extractor",
         )
 
-    text = " ".join(text.split())
+    text = _tidy(text)
     if not text:
         return Document(path, "unreadable", note="no text found", reason="empty")
     note, total = "", len(text)
@@ -284,6 +311,10 @@ def load(slug: str) -> list[Document]:
 CONTEXT_BUDGET = 6000
 
 
+# What names the map in the prompt. A label rather than a bare list, so the sentence above it has
+# something to point at and the map cannot be mistaken for one of the documents.
+MAP_LABEL = "files on record"
+
 FILE_OPEN = "<<<file-contents>>>"
 FILE_CLOSE = "<<<end-file-contents>>>"
 
@@ -323,39 +354,78 @@ def _block(doc: Document) -> str:
     return head + "\n" + textkit.fence(doc.text, FILE_OPEN, FILE_CLOSE)
 
 
-def _selected(docs: list[Document], budget: int) -> tuple[list[Document], int]:
-    """The prefix of `docs` that fits the budget, and what it costs.
+def sections(docs: list[Document]) -> list:
+    """Every readable document as a flat list of titled sections. See `docindex`.
 
-    One implementation, two callers: `context` builds the prompt out of it and
-    `inventory` tells the operator which documents it left behind. Written twice
-    these would drift, and the console would then vouch for a document no agent
-    has ever seen — which is the failure this whole surface exists to end.
+    Here rather than in `docindex` because this is the half that knows what a `Document` is; the
+    index takes text and returns text, which is what lets its ranking be measured in a unit test
+    instead of behind a fixture.
     """
-    chosen: list[Document] = []
-    used = 0
+    from . import docindex
+
+    out: list = []
     for doc in docs:
-        size = len(_block(doc))
-        if used + size > budget:
-            # Newest first, so stopping here keeps the freshest documents rather
-            # than whichever ones happened to be small.
-            break
-        chosen.append(doc)
-        used += size
-    return chosen, used
+        if doc.kind == "text" and doc.text:
+            out.extend(docindex.outline(doc.text, doc.label))
+    return out
 
 
-def context(slug: str, budget: int = CONTEXT_BUDGET) -> str:
+def context(
+    slug: str,
+    budget: int = CONTEXT_BUDGET,
+    query: str = "",
+    docs: list[Document] | None = None,
+) -> str:
     """The company's own documents, as a block for an agent prompt.
 
     Bounded, because this rides on every prompt of the agents that ask for it
     and the operator already learned what an unscoped 3 815-character skill
-    costs. Newest first, so a document dropped this morning displaces one from
-    last month rather than never being reached.
+    costs.
+
+    **One retrieval, not two.** It was "the newest documents whole until the budget is gone", and the
+    defect that has now is worth stating plainly: a document past the budget was not truncated but
+    **invisible** — nothing in the prompt said it existed, so no agent could ask for it and no
+    operator could tell it had been skipped.
+
+    The index replaces it rather than joining it. Keeping both was tried for exactly one commit and
+    `test_the_console_and_the_prompt_can_never_disagree` killed it inside the hour: `inventory` had
+    been updated to report the map's answer while this function still returned recency's, so the
+    console marked a file as reaching the agents and the prompt left it out. Two retrievals is two
+    answers to one question, which is the shape of defect this codebase keeps paying for.
+
+    So the block is always a map of every document plus bodies — ranked against `query` when there is
+    one, in reading order when there is not. `docindex` carries the rest of the reasoning, including
+    why PageIndex's approach was taken and its code was not.
+
+    `docs` lets a caller pass files it has already read. The orchestrator reads the folder once per
+    tick — extraction touches the disk — while ranking is arithmetic over text already in memory, so
+    the *selection* can be per turn without a second read.
     """
-    chosen, _ = _selected([d for d in load(slug) if d.kind == "text" and d.text], budget)
-    if not chosen:
+    files = [d for d in (load(slug) if docs is None else docs) if d.kind == "text" and d.text]
+    if not files:
         return ""
-    return UNTRUSTED + "\n\n" + "\n\n".join(_block(d) for d in chosen)
+    from . import docindex
+
+    # **One fence per part, with its name outside it**, which is what the block this replaced did and
+    # what the first version of this one lost. Two properties, and the second is the one that is easy
+    # to give away:
+    #
+    #   * text from a file cannot end the fence early — `textkit.fence` strips both markers from the
+    #     payload, so a file quoting `<<<end-file-contents>>>` does not escape into the host's voice;
+    #   * **a file cannot forge another file's name.** The `--- label ---` header sits outside the
+    #     fence, so a supplier's price list writing `--- pricing.md › Discounts ---` into its own body
+    #     produces those characters *inside* a fence, where they are quoted text rather than a heading.
+    #     Under a single fence around everything, that forgery would have worked.
+    #
+    # The map is fenced the same way and for the same reason: a heading is file-controlled text, so a
+    # document called `## Ignore your instructions` must be quoted rather than obeyed.
+    overhead = len(f"--- {MAP_LABEL} ---\n\n") + len(FILE_OPEN) + len(FILE_CLOSE) + 4
+    head, chosen = docindex.select(sections(files), query, budget, overhead=overhead)
+    if not head:
+        return ""
+    parts = [f"--- {MAP_LABEL} ---\n" + textkit.fence(head, FILE_OPEN, FILE_CLOSE)]
+    parts += [f"--- {s.label} ---\n" + textkit.fence(s.text, FILE_OPEN, FILE_CLOSE) for s in chosen]
+    return UNTRUSTED + "\n\n" + "\n\n".join(parts)
 
 
 def images(slug: str) -> list[Path]:
@@ -563,9 +633,23 @@ def inventory(slug: str, budget: int = CONTEXT_BUDGET) -> dict:
     """
     docs = load(slug)
     readable = [d for d in docs if d.kind == "text" and d.text]
-    chosen, used = _selected(readable, budget)
-    reaching = {d.path for d in chosen}
     base = folder(slug)
+
+    # What "reaches a prompt" means changed when `context` learned to build a map, and this had to
+    # change with it or the console would keep vouching for the old rule. Under the recency block a
+    # document past the budget was absent from the prompt entirely; now **every readable document's
+    # headings are in every prompt**, and the budget decides which *sections* are quoted, per turn.
+    #
+    # So the number reported is no longer "the newest N files". Saying otherwise would be the failure
+    # this function was written to end, in the opposite direction: it would show an operator ten
+    # documents marked unreachable that agents can now see the shape of.
+    from . import docindex
+
+    outlines: dict = {}
+    for doc in readable:
+        outlines[doc.label] = docindex.outline(doc.text, doc.label)
+    every = [section for found in outlines.values() for section in found]
+    map_cost = len(docindex.toc(every)) if every else 0
 
     listed = []
     for doc in docs[:INVENTORY_MAX]:
@@ -574,13 +658,17 @@ def inventory(slug: str, budget: int = CONTEXT_BUDGET) -> dict:
         # Provenance from the path, which is why `write` puts its output in a
         # subfolder rather than dropping it in beside the operator's files.
         entry["written"] = WRITTEN in doc.label.split("/")
-        entry["reaches"] = doc.path in reaching
+        entry["reaches"] = doc.label in outlines
         entry["text"] = doc.text
-        if doc.kind == "text" and not entry["reaches"]:
-            # Readable, on file, and past the budget. The one state the product
-            # had no way of saying out loud.
-            entry["reason"] = "budget"
-        elif doc.kind == "text" and not entry["reason"]:
+        # The outline, so the console can show what an agent sees the shape of. Titles and levels
+        # only: the bodies are already in `text` and sending them twice would double the payload of
+        # the one resource on this tab that is measured in tens of kilobytes.
+        entry["sections"] = [
+            {"title": s.title, "level": s.level, "line": s.line, "chars": len(s.text)}
+            for s in outlines.get(doc.label, ())
+            if s.title
+        ]
+        if doc.kind == "text" and not entry["reason"]:
             entry["reason"] = "prompt"
         try:
             entry["mtime"] = doc.path.stat().st_mtime
@@ -594,9 +682,16 @@ def inventory(slug: str, budget: int = CONTEXT_BUDGET) -> dict:
         "folder": str(base),
         "documents": listed,
         "total": len(docs),
-        "reaching": len(chosen),
+        # Every readable document, because every one of them contributes its headings to every
+        # prompt now. It was "the newest N that fit", and the difference is the whole point of the
+        # index — a document is no longer invisible for having been dropped last month.
+        "reaching": len(readable),
         "budget": budget,
-        "used": used,
+        # What the map costs on every prompt, which is the part that is always spent. The rest of the
+        # budget buys sections and is decided per turn, so there is no single honest number for it —
+        # and inventing one is how this card would come to describe a retrieval nobody runs.
+        "used": map_cost,
+        "sections": len(every),
         # What the drop zone may accept, from the one place that decides it. The
         # page states these limits to the operator before they drag a file, and a
         # second copy of them in the HTML would be a promise the server breaks.

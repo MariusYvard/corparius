@@ -36,7 +36,7 @@
   import { fill, translator } from "./i18n.js";
   import Empty from "./Empty.svelte";
 
-  let { lang, company, token = "" } = $props();
+  let { lang, company, token = "", active = true } = $props();
   let t = $derived(translator(lang));
 
   let data = $state(null);
@@ -57,8 +57,9 @@
   }
 
   // Loaded, not polled: a plugin list changes when the operator changes it, and a restart is needed
-  // for any of it to take effect anyway.
+  // for any of it to take effect anyway. On `active` because the panel is kept between visits.
   $effect(() => {
+    active;
     load();
   });
 

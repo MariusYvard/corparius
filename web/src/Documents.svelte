@@ -29,7 +29,7 @@
   import { fill, translator } from "./i18n.js";
   import Empty from "./Empty.svelte";
 
-  let { lang, company, token = "" } = $props();
+  let { lang, company, token = "", active = true } = $props();
   let t = $derived(translator(lang));
 
   let inventory = $state(null);
@@ -55,7 +55,11 @@
     }
   }
 
+  // `active` is **read**, not required. Read, so coming back to a kept panel reloads rather than
+  // showing an inventory from an hour ago. Not required, because `App.svelte` builds a panel on
+  // hover — a fetch that waited for the click would leave the prefetch prefetching nothing.
   $effect(() => {
+    active;
     if (company) load();
   });
 

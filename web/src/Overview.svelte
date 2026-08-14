@@ -19,6 +19,10 @@
    * `web/i18n/en.json` before writing, which is the eleventh time in this restructuring that
    * writing the assertion before reading the product would have shipped something wrong.
    */
+  // `untrack` for the reason `Operations.svelte` spells out at length: `refresh` reads state this
+  // effect also writes, a frame down, and an effect's dependencies are whatever it reads before its
+  // first await. Operations made 105 requests in two seconds before this was understood.
+  import { untrack } from "svelte";
   import { get, post, Refused } from "./api.js";
   import { fill, translator } from "./i18n.js";
   import Empty from "./Empty.svelte";
@@ -27,7 +31,7 @@
 
   // `onTab` is how a card whose call to action is "Open Providers" can actually open it. Optional, so
   // a caller that does not pass it gets a card whose tab buttons do nothing rather than a crash.
-  let { lang, company, token = "", onTab = undefined } = $props();
+  let { lang, company, token = "", active = true, onTab = undefined } = $props();
   let t = $derived(translator(lang));
 
   let summary = $state(null);
@@ -135,9 +139,18 @@
     localStorage.setItem("corparius-onboard-hidden", "1");
   }
 
+  // **`active` is what lets this panel survive being left.** It is built once and never torn down
+  // now — `App.svelte` carries the measurements — so the interval, not the component, is what has to
+  // stop when the operator is looking at another tab. Reading `active` first makes this effect re-run
+  // on the way back in, which is also the refresh: the view is on screen from the first frame with
+  // the data it already had, and the answer replaces it in place.
   $effect(() => {
-    refresh({ first: true });
-    loadOnce();
+    const live = active;
+    untrack(() => {
+      refresh({ first: true });
+      loadOnce();
+    });
+    if (!live) return; // built but not in front: loaded once, no interval
     const timer = setInterval(() => refresh(), POLL_MS);
     return () => clearInterval(timer);
   });

@@ -35,7 +35,7 @@
   import Toggle from "./Toggle.svelte";
   import { fill, translator } from "./i18n.js";
 
-  let { lang, token = "" } = $props();
+  let { lang, token = "", active = true } = $props();
   let t = $derived(translator(lang));
 
   let registry = $state(null);
@@ -82,8 +82,11 @@
     }
   }
 
-  // Loaded, not polled: a settings registry does not change under the operator's hands.
+  // Loaded, not polled: a settings registry does not change under the operator's hands. Gated on
+  // `active` because the panel is kept between visits — a saved setting made on another tab would
+  // otherwise never reach this one.
   $effect(() => {
+    active;
     load();
   });
 

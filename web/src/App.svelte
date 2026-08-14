@@ -71,7 +71,43 @@
   let tab = $state(localStorage.getItem("corparius-tab") || "overview");
   let shown = $derived(TABS.find((entry) => entry.id === tab) ?? TABS[0]);
 
+  /**
+   * Which panels exist in the document. A panel is built the first time it is *wanted* and is never
+   * torn down again.
+   *
+   * ## Why this replaced `{#key shown.id}`
+   *
+   * Keying on the tab id remounted the component on every switch, which threw away its data and left
+   * an empty frame on screen until the fetch came back. Measured on the real console, panel height in
+   * the frames after a click:
+   *
+   * ```text
+   *   operations   49px → 578px at 146ms → 610px at 238ms
+   *   providers    49px → 1479px at 149ms → 1598px at 2173ms   (the Ollama probe)
+   *   settings     49px → 1380px at 119ms
+   *   plugins      49px → 641px at 61ms
+   * ```
+   *
+   * Four of seven tabs opened as a 49-pixel shell and then grew by a factor of twelve to thirty. That
+   * is what "loading in fits and starts" is, mechanically: not a slow request — 61ms is not slow —
+   * but a layout that starts at nothing and jumps to its real size after it. And the data was already
+   * in `api.js`'s cache, so most of those refetches answered 304 and rebuilt a view that had been
+   * thrown away for nothing.
+   *
+   * The remount was there for a real reason, stated in the comment it replaces: two tabs poll
+   * different resources on different cadences, and a component left mounted would keep polling the
+   * wrong endpoints. That is answered directly instead — every tab takes `active`, and a poller that
+   * is not the current tab is torn down while its state stays. The interval is what must stop; the
+   * rendered view is what must not.
+   */
+  let built = $state([tab]);
+
+  function want(id) {
+    if (!built.includes(id)) built = [...built, id];
+  }
+
   function pickTab(id) {
+    want(id);
     tab = id;
     localStorage.setItem("corparius-tab", id);
   }
@@ -176,6 +212,8 @@
           aria-controls={`panel-${entry.id}`}
           aria-selected={tab === entry.id}
           onclick={() => pickTab(entry.id)}
+          onpointerenter={() => want(entry.id)}
+          onfocus={() => want(entry.id)}
         >
           <TabIcon id={entry.id} />{t("nav." + entry.id)}
         </button>
@@ -227,29 +265,43 @@
   {:else if !company}
     <p class="muted">{t("wiz.title")}</p>
   {:else}
-    <!-- Keyed on the tab id so switching tabs remounts rather than reusing state. Two tabs poll
-         different resources on different cadences; a reused component would keep the other one's
-         interval running against the wrong endpoints. -->
-    {#key shown.id}
-      <!-- The page's own top. Every tab went from a 76px header straight into a card, so the largest
-           text on any screen was a 16.5px card title and nothing said where you were but a 2px tab
-           underline. The subtitle is a key per tab rather than a reused sentence: seven tabs that all
-           describe themselves the same way describe none of themselves. -->
-      <header class="page-head">
-        <h1>{t("nav." + shown.id)}</h1>
-        <p class="desc">{t("sub." + shown.id)}</p>
-      </header>
-      <div
-        class="enter"
-        role="tabpanel"
-        id={`panel-${shown.id}`}
-        aria-labelledby={`tab-${shown.id}`}
-      >
-        <!-- `onTab` lets a card whose call to action is "Open Providers" actually open it. Only
-             Overview reads it; the others ignore an extra prop. -->
-        <shown.component {lang} {company} {token} onTab={pickTab} />
-      </div>
-    {/key}
+    <!-- The heading is `shown`, the panels are `built`. Only one is ever visible; the others keep
+         their scroll position, their open rows and their filter text, which is the second half of
+         what "instant" means to somebody clicking back and forth. -->
+    <!-- The page's own top. Every tab went from a 76px header straight into a card, so the largest
+         text on any screen was a 16.5px card title and nothing said where you were but a 2px tab
+         underline. The subtitle is a key per tab rather than a reused sentence: seven tabs that all
+         describe themselves the same way describe none of themselves. -->
+    <header class="page-head">
+      <h1>{t("nav." + shown.id)}</h1>
+      <p class="desc">{t("sub." + shown.id)}</p>
+    </header>
+    {#each TABS as entry (entry.id)}
+      {#if built.includes(entry.id)}
+        <!-- `enter` plays once, when the panel is built, because that is the only time there is
+             anything to cover: a return visit has its content already and an animation on it would
+             be 440ms of theatre in front of a view that was ready. -->
+        <div
+          class="enter"
+          role="tabpanel"
+          id={`panel-${entry.id}`}
+          aria-labelledby={`tab-${entry.id}`}
+          hidden={entry.id !== tab}
+        >
+          <!-- `onTab` lets a card whose call to action is "Open Providers" actually open it. Only
+               Overview reads it; the others ignore an extra prop.
+               `active` is the half that lets a panel survive being left: it says whether this is the
+               tab in front of the operator, and every poller in here is torn down when it is not. -->
+          <entry.component
+            {lang}
+            {company}
+            {token}
+            active={entry.id === tab}
+            onTab={pickTab}
+          />
+        </div>
+      {/if}
+    {/each}
   {/if}
 </main>
 

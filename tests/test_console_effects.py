@@ -33,6 +33,18 @@ def _components() -> dict[str, str]:
     return found
 
 
+def _code(source: str) -> str:
+    """The source with its comments removed.
+
+    Written because the first version of `test_the_panel_is_kept_rather_than_rebuilt_on_every_switch`
+    failed on the docstring that explains why the construct was removed — a rule that cannot tell
+    code from the prose about code is a rule that punishes writing the prose.
+    """
+    without_block = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
+    without_markup = re.sub(r"<!--.*?-->", "", without_block, flags=re.S)
+    return re.sub(r"^\s*//.*$", "", without_markup, flags=re.M)
+
+
 def _effects(source: str) -> list[str]:
     """Every `$effect(() => { ... })` body, by brace matching.
 
@@ -129,3 +141,132 @@ def test_providers_does_not_make_its_table_wait_for_the_ollama_probe():
     )
     assert load.count("settle(") >= 3, "each resource has to settle on its own"
     assert "oll.probing" in source, "a card that is empty for two seconds reads as a broken one"
+
+
+# --- panels that survive being left ----------------------------------------------
+#
+# Measured on the built console, panel height in the frames after a click, before this rule existed:
+#
+#     operations   49px → 578px at 146ms → 610px at 238ms
+#     providers    49px → 1479px at 149ms → 1598px at 2173ms   (the Ollama probe)
+#     settings     49px → 1380px at 119ms
+#     plugins      49px → 641px at 61ms
+#
+# Four of seven tabs opened as a 49-pixel shell and grew by a factor of twelve to thirty. `App.svelte`
+# keyed the panel on the tab id, so every switch destroyed the component and rebuilt it from nothing —
+# and the data was in `api.js`'s cache, so most of those refetches answered 304 and rebuilt a view
+# that had been thrown away for free. After: **zero height changes on every tab, on every return**.
+#
+# The keying was there for a real reason — a component left mounted keeps polling — so these two tests
+# are the pair. The first says panels are kept; the second says a kept panel stops polling.
+
+
+def test_the_panel_is_kept_rather_than_rebuilt_on_every_switch():
+    """The measurement above, as a rule. `{#key shown.id}` around the panel is what made a tab switch
+    cost a full remount, so this pins the two halves of what replaced it: panels are rendered from a
+    list of everything built so far, and the one that is not current is `hidden` rather than gone."""
+    app = _code(_components()["App.svelte"])
+    assert not re.search(r"\{#key\s+shown\.id\s*\}", app), (
+        "the panel is keyed on the tab again: every switch throws the component and its data away"
+    )
+    assert "built.includes(entry.id)" in app, (
+        "panels are no longer rendered from what has been built"
+    )
+    assert re.search(r"hidden=\{entry\.id\s*!==\s*tab\}", app), (
+        "a panel that is not the current tab has to be hidden, not unmounted"
+    )
+    assert re.search(r"active=\{entry\.id\s*===\s*tab\}", app), (
+        "a kept panel must be told whether it is the one in front of the operator"
+    )
+
+
+def test_a_kept_panel_stops_polling_when_it_is_not_the_one_in_front():
+    """The other half, and the reason the remount existed in the first place. Keeping seven panels
+    mounted is only affordable if six of them are quiet: without this, leaving Operations for
+    Settings would leave five resources polling every five seconds against a view nobody is looking
+    at, which is worse than the remount it replaced.
+
+    The rule is mechanical — an effect that starts an interval must read `active` in its own body, so
+    Svelte re-runs it on the way out and the teardown above clears the timer.
+    """
+    for name, source in _components().items():
+        if name == "App.svelte":
+            continue
+        for body in _effects(source):
+            if "setInterval" not in body:
+                continue
+            assert re.search(r"\bactive\b", body), (
+                f"{name}: an effect polls without reading `active`, so the interval keeps running "
+                "on a panel the operator has left"
+            )
+
+
+def test_every_tab_component_accepts_active():
+    """Both ends. A component that never declares the prop reads `active` as undefined, which is
+    falsy — so the test above would pass while the poller silently never started at all."""
+    app = _components()["App.svelte"]
+    tabs = re.findall(r"\{\s*id:\s*\"[a-z]+\",\s*component:\s*(\w+)\s*\}", app)
+    assert len(tabs) >= 7, f"the TABS table stopped matching: {tabs}"
+    for component in tabs:
+        source = _components()[f"{component}.svelte"]
+        props = source.split("$props()", 1)[0].rsplit("let {", 1)[-1]
+        assert re.search(r"\bactive\b", props), f"{component}.svelte does not accept `active`"
+
+
+def test_a_hovered_tab_is_built_before_it_is_clicked():
+    """The half that covers the *first* visit, which persistence cannot.
+
+    Measured with a 250ms hover before the click — what a mouse actually does — six of seven tabs
+    then render at their full height in the first frame. Without it a cold click still opened on the
+    49-pixel shell. `onfocus` as well as `onpointerenter`, or the keyboard path keeps the old
+    behaviour and only mouse users get the fix.
+    """
+    app = _components()["App.svelte"]
+    for handler in ("onpointerenter", "onfocus"):
+        assert re.search(rf"{handler}=\{{\(\)\s*=>\s*want\(entry\.id\)\}}", app), (
+            f"the tab button has no {handler} that builds its panel ahead of the click"
+        )
+    # And the load must not wait for `active`, or the prefetch prefetches nothing: a panel built on
+    # hover is built *inactive*, and an effect that returns early on that fetches on the click after
+    # all. This is the line that made the difference between 0 and 1 jumps on six tabs.
+    for name in ("Documents.svelte", "Settings.svelte", "Plugins.svelte", "Providers.svelte"):
+        source = _components()[name]
+        loaders = [b for b in _effects(source) if "load(" in b and "setInterval" not in b]
+        assert loaders, f"{name} has no load effect"
+        for body in loaders:
+            assert not re.search(r"if\s*\(\s*!?\s*active\s*\)\s*return", body), (
+                f"{name}: the load effect gates on `active`, so hovering the tab loads nothing"
+            )
+
+
+def test_hidden_beats_the_display_rule_the_panel_also_carries():
+    """**The defect this pair shipped, found by an operator in about a minute.**
+
+    Panels stopped being unmounted and started being `hidden` — and `hidden` is a *user-agent* rule,
+    so any author rule that sets `display` beats it. `main [role="tabpanel"]` sets `display: grid`,
+    which is exactly that rule. Every panel rendered at once, stacked, and since Overview is built
+    first and listed first, every tab showed Overview. The shipped page had
+    `section[role="tabpanel"][hidden] { display: none }` for this reason and it did not come across
+    with the markup.
+
+    Worth saying why the measurement missed it: the probe asked each panel for its height *by id*, so
+    seven panels each reported their own correct height and nothing asked how many were on screen at
+    once. A measurement that queries what it expects to find cannot report what it did not think of —
+    the browser check that replaced it counts visible panels.
+
+    Same lesson as the scoped `.chat { min-height: 0 }` that beat a global rule, and the reason it is
+    written as a rule rather than remembered: the winner has to be written where the loser lives.
+    """
+    # Through `_code`, because the comment above the rule *quotes the rule* — so the first version of
+    # this test passed with the declaration deleted. That is the second time in one commit that an
+    # assertion matched the prose explaining the code instead of the code, which is what `_code`
+    # exists for and why it is used on every source this file reads.
+    css = _code((SRC / "console.css").read_text(encoding="utf-8"))
+    setter = re.search(r"^main \[role=\"tabpanel\"\][^\[].*display:\s*(\w+)", css, re.M)
+    assert setter, "the panel no longer gets a display from CSS — this test is guarding nothing"
+    assert setter.group(1) != "none"
+    assert re.search(r"\[role=\"tabpanel\"\]\[hidden\]\s*\{[^}]*display:\s*none", css), (
+        f"CSS gives every panel `display: {setter.group(1)}`, which beats the `hidden` attribute "
+        "App.svelte uses to show one tab at a time: without a matching [hidden] rule every panel "
+        "renders at once and every tab shows Overview"
+    )

@@ -36,7 +36,7 @@
   import { fill, translator } from "./i18n.js";
   import Toggle from "./Toggle.svelte";
 
-  let { lang, token = "" } = $props();
+  let { lang, token = "", active = true } = $props();
   let t = $derived(translator(lang));
 
   let providers = $state(null);
@@ -125,13 +125,19 @@
 
   // Loaded, not polled — except while a job is live. `busyJob` is what turns the interval on, so a
   // tab sitting on a finished pull makes no requests at all.
+  // Read, not required. Hovering the tab is what makes the 2.1s Ollama probe finish before the
+  // panel is ever looked at — measured: providers settled 2142ms after a cold click, and that second
+  // jump is the one an operator reads as the machine card being broken.
   $effect(() => {
+    active;
     load();
     loadSetup();
   });
 
   $effect(() => {
-    if (!busyJob) return;
+    // The pull's progress, and only while one is running *and* being watched. A background panel
+    // polling a job the operator cannot see is the request this tab was careful not to make.
+    if (!busyJob || !active) return;
     const timer = setInterval(loadSetup, POLL_MS);
     return () => clearInterval(timer);
   });

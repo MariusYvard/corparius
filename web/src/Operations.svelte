@@ -36,7 +36,7 @@
   import AgentIcon from "./AgentIcon.svelte";
   import Approval from "./Approval.svelte";
 
-  let { lang, company, token = "" } = $props();
+  let { lang, company, token = "", active = true } = $props();
   let t = $derived(translator(lang));
 
   let summary = $state(null);
@@ -201,10 +201,14 @@
     // Named so the linter and the reader both see that changing company re-runs both.
     const slug = company;
     if (!slug) return;
+    // See `App.svelte`: the panel is kept, so the interval is what stops. Read before the `untrack`
+    // so coming back re-runs this — which loads, on top of a view that never went away.
+    const live = active;
     untrack(() => {
       refresh({ slow: true });
       refreshQuiet();
     });
+    if (!live) return;
     const timer = setInterval(() => refresh(), POLL_MS);
     return () => clearInterval(timer);
   });

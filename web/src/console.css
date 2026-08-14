@@ -379,6 +379,14 @@ main { padding: 24px 0 56px; }
   margin: 4px 0 -8px;
 }
 main [role="tabpanel"] { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+/* **And the winner has to be written where the loser lives.** `hidden` is a user-agent rule, so any
+   author rule that sets `display` beats it — the line above is exactly that rule, and the moment
+   panels stopped being unmounted and started being hidden, every tab rendered at once and every
+   click showed Overview, because Overview is the first panel in the stack.
+   The shipped page had `section[role="tabpanel"][hidden] { display: none }` for this reason and it
+   did not come across with the markup. It is the same lesson as the scoped `.chat { min-height: 0 }`
+   that beat a global rule: specificity is not where you would like the answer to be decided. */
+main [role="tabpanel"][hidden] { display: none; }
 .bento, .grid { gap: 24px; }
 /* The rule is drawn inside the padding, not across it: the footer used to carry `border-top` on the
  * element that also owns the 24px gutter, so the line ran 24px past the cards on each side and

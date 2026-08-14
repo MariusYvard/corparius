@@ -38,7 +38,7 @@
 
   // `onTab` is what makes a next step a redirect rather than an instruction. Optional, like
   // Overview's: a caller that does not pass it gets steps that read as advice instead of crashing.
-  let { lang, company, token = "", onTab = undefined } = $props();
+  let { lang, company, token = "", active = true, onTab = undefined } = $props();
 
   // A step names either a tab or an action. The one action is `run`, and rather than start a run from
   // here this sends the operator to the tab that owns the control — one place starts a run, and a
@@ -71,7 +71,10 @@
     }
   }
 
+  // Read, not required — see `Documents.svelte`. Coming back reloads the conversation; hovering the
+  // tab loads it before the click.
   $effect(() => {
+    active;
     if (company) load();
   });
 

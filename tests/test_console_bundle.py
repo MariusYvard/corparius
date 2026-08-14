@@ -128,12 +128,42 @@ def test_the_wheel_and_the_frozen_build_both_declare_the_directory():
 
 def test_the_directory_resolves_through_the_same_resolver_as_the_page():
     """Not a second mechanism. `console_dir()` is `_resource("corparius", "api", "static")`, which
-    is `page_file()`'s path with a different tail — so a mode that finds one finds the other."""
-    assert paths.console_dir() == paths.resource_dir() / "corparius" / "api" / "static" or (
-        paths.console_dir().parts[-4:] == ("corparius", "api", "static")[-3:] + ()
-    )
+    is `page_file()`'s path with a different tail.
+
+    **Both branches of `_resource`, constructed rather than inherited.** The first version asserted
+    the *primary* location unconditionally, which is only true on a machine where `npm run build` has
+    already run: `_resource` falls back to `_data/` when the primary is absent, exactly as it does
+    for `companies/` and `plugins/`, so the assertion held on my checkout and failed on six of eight
+    CI runners. A test whose outcome depends on whether an artefact happens to be lying around
+    describes the machine it was written on.
+    """
     assert paths.console_dir().name == "static"
     assert paths.console_dir().parent.name == "api"
+    assert paths.console_dir() == paths._resource("corparius", "api", "static")
+
+
+def test_the_fallback_is_the_one_the_other_shipped_resources_use(tmp_path, monkeypatch):
+    """The half the previous test cannot see from where it runs, so it is built here.
+
+    Beside the package when the build has run; inside it, under `_data/`, when it has not — which is
+    the wheel's layout. Getting this wrong is invisible from a checkout and shows up as a 404 on
+    somebody's installed console, which is the failure mode `_resource` exists to prevent.
+    """
+    monkeypatch.setattr(paths, "resource_dir", lambda: tmp_path)
+    monkeypatch.setattr(paths, "_PACKAGE_DIR", tmp_path / "pkg")
+
+    assert paths.console_dir() == tmp_path / "pkg" / "_data" / "corparius" / "api" / "static", (
+        "with no primary location it must fall back inside the package, as companies/ does"
+    )
+
+    built = tmp_path / "corparius" / "api" / "static"
+    built.mkdir(parents=True)
+    assert paths.console_dir() == built, (
+        "with the build present it must be found beside the package"
+    )
+    # And the page resolves the same way from the same root, which is the property the pair exists
+    # for: a mode that finds one finds the other.
+    (tmp_path / "corparius" / "webui.html").write_text("<!doctype html>", encoding="utf-8")
     assert paths.console_dir().parent.parent == paths.page_file().parent
 
 

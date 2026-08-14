@@ -121,8 +121,10 @@ jobs:
             sleep 1
           done
           test "${ok:-}" = "1" || { echo "console did not come up"; docker logs corp-smoke; exit 1; }
-          curl -fsS http://127.0.0.1:8600/api/companies | grep -q '"example"'
-          curl -fsS http://127.0.0.1:8600/api/doctor   | grep -q 'mock'
+          img_companies=$(curl -fsS http://127.0.0.1:8600/api/companies)
+          echo "$img_companies" | grep -q '"example"'
+          img_doctor=$(curl -fsS http://127.0.0.1:8600/api/doctor)
+          echo "$img_doctor" | grep -q 'mock'
           echo "smoke OK: console up, example company present, mock mode reported"
           docker rm -f corp-smoke
 
@@ -196,15 +198,21 @@ jobs:
             sleep 1
           done
           if [ "${ok:-}" != "1" ]; then echo "console did not come up"; kill "$pid" 2>/dev/null || true; exit 1; fi
-          curl -fsS http://127.0.0.1:8600/api/companies | grep -q '"example"'
-          curl -fsS http://127.0.0.1:8600/api/doctor    | grep -q 'mock'
+          # Body first, then grep — `curl | grep -q` closes the pipe at the first match and curl
+          # exits 23 under `pipefail`. See the same note in ci.yml's package-smoke.
+          companies=$(curl -fsS http://127.0.0.1:8600/api/companies)
+          echo "$companies" | grep -q '"example"'
+          doctor=$(curl -fsS http://127.0.0.1:8600/api/doctor)
+          echo "$doctor" | grep -q 'mock'
           # The built console is **in** this binary, asserted rather than assumed. `/app/console.js`
           # is served only when `paths.console_built()` is true and 404s otherwise, so this is the
           # one request that can tell the two builds apart — and without it the step above passes
           # identically on a binary carrying the single-file page.
           curl -fsS http://127.0.0.1:8600/app/console.js >/dev/null
-          # And that the shell at `/` is that console rather than the fallback.
-          curl -fsS http://127.0.0.1:8600/ | grep -q '/app/console.js'
+          # And that the shell at `/` is that console rather than the fallback. `/` is the largest
+          # response in this step, so it is the one most likely to lose the EPIPE race.
+          shell_html=$(curl -fsS http://127.0.0.1:8600/)
+          echo "$shell_html" | grep -q '/app/console.js'
           echo "smoke OK: console up, example company present, mock mode reported, Svelte console bundled"
           kill "$pid" 2>/dev/null || true
 

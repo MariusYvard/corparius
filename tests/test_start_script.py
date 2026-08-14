@@ -284,9 +284,18 @@ def test_the_node_version_it_names_is_the_one_npm_enforces():
         f"start.py advises Node {start.NODE_ADVICE} and engines does not accept it"
     )
 
-    installed = jsonlib.loads(
-        (ROOT / "web" / "node_modules" / "vite" / "package.json").read_text(encoding="utf-8")
-    )
+    # The rest reads the **installed** Vite, so it only means something where `npm ci` has run. That
+    # is a developer machine and the two CI jobs that build the console — and it is *not* the test
+    # matrix, which installs Python and nothing else. Asserted where it can be, skipped where it
+    # cannot, rather than passing everywhere by reading a file that happens to exist here:
+    # `FileNotFoundError` on six of eight runners is a test describing my laptop.
+    vite = ROOT / "web" / "node_modules" / "vite" / "package.json"
+    if not vite.is_file():
+        pytest.skip(
+            "web/node_modules is absent; `npm ci --prefix web` is what makes this checkable"
+        )
+
+    installed = jsonlib.loads(vite.read_text(encoding="utf-8"))
     for floor in ("20.19", "22.12"):
         assert floor in installed["engines"]["node"], (
             f"vite no longer requires {floor}; package.json's engines is now a guess"

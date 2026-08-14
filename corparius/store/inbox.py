@@ -81,7 +81,7 @@ class InboxMixin(Connected):
 
         row = self.db.execute(
             "SELECT * FROM inbox WHERE company=? AND kind=? AND title=? AND state=?"
-            " ORDER BY resolved_at DESC LIMIT 1",
+            " ORDER BY resolved_at DESC, rowid DESC LIMIT 1",  # see store/jobs.py on the tie
             (company, kind, title, RESOLVED),
         ).fetchone()
         return dict(row) if row else None

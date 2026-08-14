@@ -588,3 +588,35 @@ def test_finishing_with_a_state_that_is_not_an_ending_is_refused(home):
             store.finish_job(job, "finito", {})
     finally:
         store.close()
+
+
+def test_two_jobs_in_one_clock_tick_still_have_a_later_one(home):
+    """**The tie, forced.** `time.time()` has a ~15.6ms floor on Windows, so two rows written inside
+    one tick carry the same `started_at` and `ORDER BY started_at DESC` alone lets SQLite return
+    either. It did: a run finished, a second started and failed within one tick, and `app_runs.view`
+    reported the first one's result — green on seven runners, `KeyError: 'state'` on windows-latest.
+
+    Here the timestamps are made **equal on purpose** rather than left to a fast machine, because a
+    test that reproduces this only on a coarse clock is a test that reports the runner it ran on.
+    `rowid` is the second key: insertion order is exactly "which came later" when the clock cannot
+    say so.
+    """
+    from corparius.app import runs as app_runs
+
+    store = _a_store(home)
+    try:
+        first = store.start_job("run", "c")["id"]
+        store.finish_job(first, jobs_store.DONE, {"ticks_run": 4})
+        second = store.start_job("run", "c")["id"]
+        store.finish_job(second, jobs_store.FAILED, {"error": "it broke"})
+        # One tick, both rows. Written through the connection because no clock is coarse enough to
+        # guarantee it and no sleep is fine enough to prevent it.
+        store.db.execute("UPDATE jobs SET started_at = 1000.0")
+        store.db.commit()
+
+        assert store.list_jobs(company="c", limit=1)[0]["id"] == second
+        view = app_runs.view(store, "c")
+        assert view["job"] == second, "the tie went to the older job"
+        assert view["result"]["state"] == jobs_store.FAILED
+    finally:
+        store.close()

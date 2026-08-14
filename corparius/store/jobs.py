@@ -149,7 +149,13 @@ class JobsMixin(Connected):
         sql = "SELECT * FROM jobs"
         if where:
             sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY started_at DESC LIMIT ?"
+        # **`rowid` breaks the tie, and the tie is real.** `time.time()` has a ~15.6ms floor on
+        # Windows, so two rows written in the same tick carry the *same* `ts` and SQLite is free to
+        # return them in any order. Measured: a run finished, a second run started and failed inside
+        # one tick, and the console reported the first one's result — `KeyError: 'state'` on
+        # windows-latest, green on every other runner. Insertion order is exactly "which came later"
+        # when the clock cannot say, so it is the honest second key rather than a coin toss.
+        sql += " ORDER BY started_at DESC, rowid DESC LIMIT ?"
         params.append(int(limit))
         return [_as_dict(r) for r in self.db.execute(sql, params).fetchall()]
 
@@ -200,7 +206,8 @@ class JobsMixin(Connected):
         to the next one and a second run would start on top of it.
         """
         row = self.db.execute(
-            "SELECT * FROM jobs WHERE kind=? AND company=? AND state=? ORDER BY started_at DESC",
+            "SELECT * FROM jobs WHERE kind=? AND company=? AND state=?"
+            " ORDER BY started_at DESC, rowid DESC",  # see list_jobs on the tie
             (kind, company, RUNNING),
         ).fetchone()
         return _as_dict(row) if row else None

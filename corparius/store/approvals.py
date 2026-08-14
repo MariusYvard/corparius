@@ -35,7 +35,9 @@ class ApprovalsMixin(Connected):
         if status:
             q += " AND status=?"
             args.append(status)
-        q += " ORDER BY ts DESC LIMIT 1"
+        # The tie matters here too: two identical requests in one clock tick and this picks
+        # which one a decision lands on. See `store/jobs.py:list_jobs`.
+        q += " ORDER BY ts DESC, rowid DESC LIMIT 1"
         row = self.db.execute(q, args).fetchone()
         return dict(row) if row else None
 

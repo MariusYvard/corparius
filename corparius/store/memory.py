@@ -47,7 +47,8 @@ class MemoryMixin(Connected):
         self.db.execute(
             "DELETE FROM memory WHERE id IN ("
             " SELECT id FROM memory WHERE company=? AND pinned=0"
-            " ORDER BY ts DESC LIMIT -1 OFFSET ?)",
+            # Which fact is evicted, so a tie deletes the wrong one — and this is a delete.
+            " ORDER BY ts DESC, rowid DESC LIMIT -1 OFFSET ?)",
             (company, max(0, int(max_rows))),
         )
         self.db.commit()

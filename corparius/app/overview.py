@@ -46,7 +46,7 @@ from .. import inbox as inbox_mod
 from ..config import permissions
 from ..roster import ROSTER
 from ..tools.spec import ROLE_TOOL, SPEC
-from . import onboarding
+from . import guidance, onboarding
 
 # Completed tasks sent to a caller. They accumulate for the life of a company and this payload is
 # polled; the store keeps all of them, and `done_total` reports the true count.
@@ -243,6 +243,15 @@ def summary(
         # resource the Overview tab already polls, and the whole card is three booleans plus which step
         # leads — a second request for that would cost more than it carries. One extra COUNT.
         "onboarding": onboarding.steps(store, s, slug, run=run),
+        # What the operator should do next, and where. Here for the same reason the onboarding thread
+        # is: `summary` is already polled by both tabs that need it, and the list is four short rows.
+        #
+        # `golive` is not passed. It reads the company file, the Stripe link and a `.published` marker
+        # — three disk touches — and this resource is polled every five seconds by two tabs. So the
+        # go-live rule simply does not fire here, which is honest rather than convenient: the Overview
+        # already has a whole card for those three, and a step telling somebody to wire Stripe while
+        # they are looking at the card that says so is a duplicate, not guidance.
+        "next_steps": guidance.next_steps(store, s, slug, run=run),
         "running": bool(run.get("running")),
         "last_run": run.get("result"),
         "loop": bool(run.get("loop")),

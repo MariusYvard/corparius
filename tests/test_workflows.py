@@ -132,3 +132,91 @@ def test_the_frozen_smoke_asserts_the_console_is_in_the_bundle():
     smoke = chr(10).join(_steps("package-smoke"))
     assert "/app/" in smoke
     assert "console.js" in smoke, "the shell alone would not prove the assets came along"
+
+
+# --- the shell, and the class of defect that cost three red pushes ----------------
+
+
+def _code(script: str) -> str:
+    """A `run:` block with its comment lines removed.
+
+    **Third time in one session that a rule matched the prose explaining the rule** — a comment
+    quoting `{#key shown.id}`, a comment quoting a CSS declaration, and now the comment above
+    `contains` that quotes `curl | grep -q` in order to forbid it. A rule that cannot tell code from
+    writing about code punishes the writing, and the writing is where the measurements live.
+
+    Whole-line comments only: a trailing `#` may be inside a string or a URL fragment, and dropping
+    the rest of the line would make this a parser it has no need to be.
+    """
+    kept = [line for line in script.splitlines() if not line.lstrip().startswith("#")]
+    return "\n".join(kept)
+
+
+def _scripts() -> dict[str, str]:
+    """Every `run:` block in every workflow, keyed by file, job and step name.
+
+    Wider than `_steps`, which reads one job of `ci.yml`: the two rules below apply to release.yml
+    too, and the release job is exactly where a defect is most expensive — it runs on a tag, after
+    six builds, in front of whoever is downloading.
+    """
+    import yaml
+
+    found: dict[str, str] = {}
+    for path in WORKFLOWS:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job_name, job in (doc.get("jobs") or {}).items():
+            for i, step in enumerate(job.get("steps") or []):
+                if "run" in step:
+                    found[f"{path.name}::{job_name}::{step.get('name', f'step {i}')}"] = step["run"]
+    return found
+
+
+def test_there_are_scripts_to_check():
+    """The guard on the guard, again, and for the same reason as the one at the top of this file."""
+    scripts = _scripts()
+    assert len(scripts) >= 15, f"only {len(scripts)} run blocks found — the walk is wrong"
+
+
+def test_a_helper_is_defined_in_every_block_that_calls_it():
+    """**Measured, at the cost of a build.** `contains` was written once and called from four `run:`
+    blocks across two workflows — and each block is its own shell, so a function defined in one is
+    not defined in the next. The push failed with `contains: command not found`, exit 127, after a
+    PyInstaller build had already run.
+
+    A `run:` block is a script, and a script calling a function it does not define is broken in a way
+    that reading the diff does not catch, because the definition *is* right there — in another step.
+    """
+    for key, script in _scripts().items():
+        code = _code(script)
+        called = set(re.findall(r"^\s*([a-z_][a-z0-9_]*) [\"']", code, re.M))
+        defined = set(re.findall(r"^\s*([a-z_][a-z0-9_]*)\(\)\s*\{", code, re.M))
+        # Only the names this file knows are helpers. Every other bare word is a real command.
+        for helper in ("contains", "checked"):
+            assert not (helper in called and helper not in defined), (
+                f"{key} calls `{helper}` and no step-local definition exists"
+            )
+
+
+def test_nothing_is_piped_into_a_quiet_grep():
+    """The defect that cost three red pushes. `grep -q` exits at the **first match** and closes the
+    pipe, so whatever is still writing takes EPIPE — and under `set -o pipefail` that fails the job.
+
+    It is timing-dependent on how much is still in flight, which is why these passed for weeks and
+    then failed on a run where nothing about them had changed: `curl: (23) Failure writing output to
+    destination`. **Fixing the producer does not fix it** — capturing each body first moved the race
+    from `curl` to `echo`, which then failed on `/legacy`, the largest body in the step, with
+    `echo: write error: Broken pipe`.
+
+    So the rule is about the consumer: nothing is piped into `grep -q` at all. A `case` over a
+    variable already in memory has no pipe to break, and it can say what was missing, which `grep -q`
+    never could.
+
+    `grep -o` is deliberately allowed: it prints every match and reads to EOF, so it never closes a
+    pipe early and cannot produce this failure.
+    """
+    for key, script in _scripts().items():
+        for line in _code(script).splitlines():
+            assert not ("|" in line and re.search(r"\|\s*grep\s+-\w*q", line)), (
+                f"{key}: `{line.strip()}` — grep -q closes the pipe at the first match and the "
+                "writer takes EPIPE. Capture the body and use `contains`."
+            )

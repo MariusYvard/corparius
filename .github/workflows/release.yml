@@ -121,6 +121,13 @@ jobs:
             sleep 1
           done
           test "${ok:-}" = "1" || { echo "console did not come up"; docker logs corp-smoke; exit 1; }
+          # See ci.yml's package-smoke for why this is a `case` and not a pipe into `grep -q`.
+          contains() {  # contains "$body" 'needle' 'what this proves'
+            case "$1" in
+              *"$2"*) echo "  checked · $3" ;;
+              *) echo "FAILED · $3 — no match for: $2"; docker logs corp-smoke; exit 1 ;;
+            esac
+          }
           img_companies=$(curl -fsS http://127.0.0.1:8600/api/companies)
           contains "$img_companies" '"example"' "the image has the example company"
           img_doctor=$(curl -fsS http://127.0.0.1:8600/api/doctor)
@@ -198,6 +205,23 @@ jobs:
             sleep 1
           done
           if [ "${ok:-}" != "1" ]; then echo "console did not come up"; kill "$pid" 2>/dev/null || true; exit 1; fi
+          # **No pipe at all.** `curl | grep -q` raced, so the bodies were captured first — and the
+          # race simply moved to `echo`: grep exits at the first match, closes the pipe, and now
+          # `echo` is the one taking EPIPE. It failed on `/legacy`, the largest body in the step,
+          # with `echo: write error: Broken pipe`. Any producer piped into `grep -q` has this bug;
+          # the fix is not a different producer, it is not piping. `case` is a builtin over a
+          # variable already in memory, so there is nothing to break — and it says **what was
+          # missing**, which `grep -q` never could.
+          #
+          # It also narrates. Every assertion here used to be silent on success and, under `set -e`,
+          # silent on failure too: a red job showed six seconds, no output and exit 1, and the only
+          # way to learn which check broke was to guess and push again.
+          contains() {  # contains "$body" 'needle' 'what this proves'
+            case "$1" in
+              *"$2"*) echo "  checked · $3" ;;
+              *) echo "FAILED · $3 — no match for: $2"; kill "${pid:-0}" 2>/dev/null || true; exit 1 ;;
+            esac
+          }
           # Body first, then grep — `curl | grep -q` closes the pipe at the first match and curl
           # exits 23 under `pipefail`. See the same note in ci.yml's package-smoke.
           companies=$(curl -fsS http://127.0.0.1:8600/api/companies)

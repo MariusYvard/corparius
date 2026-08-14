@@ -110,11 +110,23 @@ jobs:
       - name: Smoke test (offline mock console)
         run: |
           set -euo pipefail
-          # **Say what was checked.** Every assertion below is silent on success and, under `set -e`,
-          # silent on failure too — so a red job showed six seconds, no output and exit 1, and the
-          # only way to learn which check broke was to guess and push again. One line per assertion
-          # turns the log into the answer. Named `checked` because `ok` is already the readiness flag.
-          checked() { echo "  checked · $1"; }
+          # **No pipe at all.** `curl | grep -q` raced, so the bodies were captured first — and the
+          # race simply moved to `echo`: grep exits at the first match, closes the pipe, and now
+          # `echo` is the one taking EPIPE. It failed on `/legacy`, the largest body in the step,
+          # with `echo: write error: Broken pipe`. Any producer piped into `grep -q` has this bug;
+          # the fix is not a different producer, it is not piping. `case` is a builtin over a
+          # variable already in memory, so there is nothing to break — and it says **what was
+          # missing**, which `grep -q` never could.
+          #
+          # It also narrates. Every assertion here used to be silent on success and, under `set -e`,
+          # silent on failure too: a red job showed six seconds, no output and exit 1, and the only
+          # way to learn which check broke was to guess and push again.
+          contains() {  # contains "$body" 'needle' 'what this proves'
+            case "$1" in
+              *"$2"*) echo "  checked · $3" ;;
+              *) echo "FAILED · $3 — no match for: $2"; kill "${pid:-0}" 2>/dev/null || true; exit 1 ;;
+            esac
+          }
           ./dist/corparius --no-browser &
           pid=$!
           ok=""
@@ -217,6 +229,23 @@ jobs:
           python -m venv /tmp/venv
           /tmp/venv/bin/pip install --quiet dist/*.whl
           cd /tmp   # neutral cwd: the checkout's corparius/ must not shadow the install
+          # **No pipe at all.** `curl | grep -q` raced, so the bodies were captured first — and the
+          # race simply moved to `echo`: grep exits at the first match, closes the pipe, and now
+          # `echo` is the one taking EPIPE. It failed on `/legacy`, the largest body in the step,
+          # with `echo: write error: Broken pipe`. Any producer piped into `grep -q` has this bug;
+          # the fix is not a different producer, it is not piping. `case` is a builtin over a
+          # variable already in memory, so there is nothing to break — and it says **what was
+          # missing**, which `grep -q` never could.
+          #
+          # It also narrates. Every assertion here used to be silent on success and, under `set -e`,
+          # silent on failure too: a red job showed six seconds, no output and exit 1, and the only
+          # way to learn which check broke was to guess and push again.
+          contains() {  # contains "$body" 'needle' 'what this proves'
+            case "$1" in
+              *"$2"*) echo "  checked · $3" ;;
+              *) echo "FAILED · $3 — no match for: $2"; kill "${pid:-0}" 2>/dev/null || true; exit 1 ;;
+            esac
+          }
           export CORP_HOME=/tmp/corp-home CORP_LLM_MOCK=true
           /tmp/venv/bin/python - <<'PY'
           from corparius.kernel import paths

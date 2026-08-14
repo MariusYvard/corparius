@@ -325,6 +325,7 @@
  "ops.mode": "Mode",
  "ops.more": "En savoir plus",
  "ops.note": "Note facultative",
+ "ops.notePlaceholder": "Pourquoi, pour l'historique",
  "ops.pending": "en attente",
  "ops.requestedBy": "demandé par",
  "ops.revoke": "Révoquer",

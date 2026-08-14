@@ -50,7 +50,7 @@
     onDecide?.(approval.id, decision, remember, note);
 </script>
 
-<article class="row" class:block={!compact}>
+<article class="ap" class:ap-full={!compact}>
   <div class="grow">
     <header class="ap-head">
       <strong>{approval.tool}</strong>
@@ -92,9 +92,9 @@
         </dl>
       {/if}
 
-      <label class="note">
-        <span class="muted">{t("ops.note")}</span>
-        <input bind:value={note} />
+      <label class="ap-note">
+        <span class="muted small">{t("ops.note")}</span>
+        <input bind:value={note} placeholder={t("ops.notePlaceholder")} />
       </label>
     {/if}
   </div>
@@ -117,9 +117,36 @@
 </article>
 
 <style>
+  /* Two columns: the payload on the left, the decision on the right.
+     Measured, which is why this changed: giving the gate the page width without composing for it left
+     the card **45% used of 1152px** — the content simply stacked down the left of a wider box, which
+     is the "cards 50-60% empty to the right" four reviews kept naming. Width is only hierarchy if
+     something occupies it.
+     `align-items: start` so the buttons sit level with the tool name rather than floating against a
+     four-line draft, and `minmax(0, 1fr)` so a long message wraps instead of pushing the decision
+     column off the card. */
+  .ap { display: grid; gap: 10px 28px; padding: 12px 0; }
+  .ap + :global(.ap) { border-top: 1px solid var(--border); }
+  @media (min-width: 900px) {
+    /* **Both** forms, not just the full one. Scoping this to `.ap-full` left the compact instance as a
+       one-column grid, and the measurement caught it immediately: Overview's card fell to 45% used
+       while Operations' rose above 75%. Two instances of one component that compose differently is
+       the drift this component was extracted to end — the difference between them is how much is
+       explained, never where anything sits. */
+    .ap { grid-template-columns: minmax(0, 1fr) minmax(0, max-content); align-items: start; }
+  }
   /* The header wraps as a unit: tool, risk and requester are one clause, and a risk chip that wrapped
      away from the tool name it qualifies is the one thing here that must not happen. */
   .ap-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  /* The decision column: one action per line, so `Approve` is not shoulder-to-shoulder with the
+     control that rejects and the one that disables the gate for good. */
+  .ap-full .actions { gap: 7px; min-width: 190px; justify-content: flex-end; }
+  /* The note gets its own line and a real label above the field. `.note` used to be styled in
+     Operations' scoped block, which cannot reach this component now that the row is one — so the
+     label sat inline and "Learn more" landed immediately left of it, reading as part of the field's
+     name. Scoping is why: a style that belongs to a component has to live in it. */
+  .ap-note { display: grid; gap: 3px; margin-top: 10px; max-width: 34rem; }
+  .ap-full :global(.link) { align-self: start; }
   /* What is about to happen, at reading size. This is the sentence somebody is consenting to, so it
      outranks the tool's own description of itself, which is now the small grey line under it. */
   .ap-draft { margin: 6px 0 0; font-size: 14px; line-height: 1.55; max-width: 68ch; }

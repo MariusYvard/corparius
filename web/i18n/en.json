@@ -325,6 +325,7 @@
  "ops.mode": "Mode",
  "ops.more": "Learn more",
  "ops.note": "Optional note",
+ "ops.notePlaceholder": "Why, for the record",
  "ops.pending": "pending",
  "ops.requestedBy": "requested by",
  "ops.revoke": "Revoke",

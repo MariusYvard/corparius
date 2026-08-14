@@ -137,7 +137,9 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # The onboarding steps deliberately have **no** strings here: they reuse the `ob.*` labels the
     # Overview card already uses, because two vocabularies for the same three steps would be two
     # answers wearing one name.
-    assert result["counts"] == {"en": 577, "fr": 577}, result["counts"]
+    # 578: `ops.notePlaceholder`. The approval's note field had a label and an empty box, which says
+    # what the field is called and not what to put in it.
+    assert result["counts"] == {"en": 578, "fr": 578}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

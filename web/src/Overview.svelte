@@ -273,7 +273,7 @@
        home page. The requests lead now, and the gate below speaks only when there is nothing to
        decide, which is the one case where a count is news. -->
   {#if needsYou > 0}
-    <section class="card attention">
+    <section class="card attention subject">
       <div class="card-head">
         <div>
           <h2>{t("ops.waiting")} <span class="badge warm">{needsYou}</span></h2>
@@ -511,7 +511,7 @@
 
     <!-- The rail: three small readings, each a fact about the day rather than a place to work. -->
     <div class="stack">
-    <section class="card">
+    <section class="card ambient">
       <h2>{t("live.title")}</h2>
       <p class="desc">{t("live.desc")}</p>
       {#if golive}
@@ -547,7 +547,7 @@
       {/if}
     </section>
 
-    <section class="card">
+    <section class="card ambient">
       <h2>{t("pay.title")}</h2>
       <p class="desc">{t("pay.desc")}</p>
       {#if payments?.error}
@@ -580,7 +580,7 @@
       {/if}
     </section>
 
-    <section class="card">
+    <section class="card ambient">
       <h2>{t("spend.title")}</h2>
       <p class="desc">{t("spend.desc")}</p>
       {#if spend.length === 0}

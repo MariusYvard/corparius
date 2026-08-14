@@ -327,11 +327,14 @@
     {/each}
   </p>
 
-  <!-- 1. The gate, with the whole explanation rather than two buttons. Rendered only when something
-       is actually held: the "nothing waits" case is a clause on the strip above. -->
-  <div class="grid half">
+  <!-- 1. The gate, full width and first.
+       It shared a `.grid half` with the standing rules, so the one action this product exists for was
+       the narrowest element on the page — its title wrapped, its buttons stacked — while the board of
+       work a human never has to touch spanned the full 1440. A review called that out as the single
+       biggest thing holding the page back and it was right: width is hierarchy, and the gate had none.
+       `subject` is the treatment that says which card a page is for. -->
   {#if gateOn}
-  <section class="card prose" class:attention={summary.approvals.length > 0}>
+  <section class="card prose subject" class:attention={summary.approvals.length > 0}>
     <h2>{t("ops.waiting")}</h2>
     <p class="desc">{t("ops.waitingDesc")}</p>
     <!-- The mode and the threshold used to be repeated here. They are on the strip above now, where
@@ -363,7 +366,6 @@
     </div>
   </section>
   {/if}
-  </div>
 
   <!-- 3. The board. -->
   <!-- One card: the heading and the five columns it names. It was a card containing a title and a

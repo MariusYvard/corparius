@@ -230,11 +230,24 @@ button.link:hover:not(:disabled) { text-decoration: underline; background: none;
  * colour this console uses for "this wants you", because the claim is the same one. */
 button.real { border-color: var(--warm-line); color: var(--warm); }
 button.real:hover:not(:disabled) { background: var(--warm-soft); border-color: var(--warm); }
-/* A text button that is nevertheless consequential: it grants a standing rule and the gate stops
- * asking. Warm, because that is this console's colour for the human gate, and it is the gate that
- * is being given away. Not bigger than `Approve` — the permanence is the point, not the size. */
-button.standing { color: var(--warm); font-weight: 600; }
-button.standing:hover:not(:disabled) { background: var(--warm-soft); text-decoration: none; }
+/* Consequential, and bordered — which is the third answer to a question two reviews disagreed about.
+ * As an outline pill 40% wider than `Approve` it made the permanent answer the loudest thing in the
+ * row; as bare text it made the control that **permanently disables a safety gate** the quietest of
+ * the three. Neither objection reaches a bordered warm button: it is no wider than `Approve`, and it
+ * is not a footnote. Warm because that is this console's colour for the human gate, and the gate is
+ * what is being given away. */
+button.standing {
+  color: var(--warm);
+  font-weight: 600;
+  border: 1px solid var(--warm-line);
+  border-radius: 8px;
+  padding: 7px 12px;
+}
+button.standing:hover:not(:disabled) {
+  background: var(--warm-soft);
+  border-color: var(--warm);
+  text-decoration: none;
+}
 button.danger-quiet { color: var(--danger); }
 button.danger-quiet:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
 button.icon { padding: 7px 9px; line-height: 0; }
@@ -589,6 +602,38 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
  * the two paragraphs read as one long one. */
 .mwhy { margin: 2px 0 8px 23px; }
 .mrow .actions { padding-left: 23px; }
+
+/* Three container tiers, because two was the whole problem.
+ *
+ * A review put it exactly: "seven containers with the same border, same radius, same background delta
+ * and same padding, stacked down one column — the eye has nowhere to land, so the page reads as a
+ * list of boxes rather than a screen with a subject." Everything was a card, so nothing was.
+ *
+ *   `subject`   the one thing a page is for. Wider type, a rule in the accent, more room.
+ *   (default)   a card: something you read or act on.
+ *   `ambient`   a readout you glance at. No border, no fill — a ruled block, so it recedes to what
+ *               it is: a number that is true rather than a thing to do.
+ *
+ * **Applied per region, not per card.** The first pass boxed "Go live" and unboxed the two readouts
+ * under it, and the very next review called that out — "one rail, two containment models, no reason
+ * for the switch; it reads as a column someone stopped styling halfway down". Fair, and the lesson is
+ * that a tier is a property of a *place* on the page rather than of an individual card: the rail is
+ * quiet, so everything in the rail is quiet. Mixing them inside one column reads as unfinished, which
+ * is the opposite of what a hierarchy is for.
+ *
+ * `ambient` is the tier that was missing. "Payments 0.00" and "Spend by agent" were drawn with the
+ * same chrome as the human gate, which is the visual claim that they matter equally. They do not. */
+.card.ambient {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding: 16px 2px 4px;
+}
+.card.ambient > h2 { font-size: 13px; color: var(--muted); font-weight: 600; }
+/* No hover lift either: an ambient block is not a target. */
+.card.ambient::after { content: none; }
 
 /* The page's subject. One card per page may claim it, and it is the answer to "no page has a dominant
  * object" — a heading a size up and a top rule in the accent, so the eye lands here and not on the

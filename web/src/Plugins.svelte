@@ -198,8 +198,11 @@
             <div class="actions">
               <button onclick={() => openScope(skill)}>{t("sk.scopeIt")}</button>
               <!-- The path, not an editor. A skill is a file the operator wrote, and this console is
-                   not going to be a second, worse text editor for it. -->
-              <code class="path small muted" title={skill.path}>{skill.path}</code>
+                   not going to be a second, worse text editor for it.
+                   `where` rather than `path`: relative to the skills root, so it reads
+                   `ads-restraint/SKILL.md` instead of sixty characters of the machine's directory
+                   layout. The absolute one is still on the `title` for anyone who needs to open it. -->
+              <code class="path small muted" title={skill.path}>{skill.where ?? skill.path}</code>
             </div>
           {/if}
         </article>

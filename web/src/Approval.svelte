@@ -57,6 +57,24 @@
       <span class="badge risk {approval.risk}">{t("risk." + approval.risk)}</span>
       <span class="muted small">· {t("ops.requestedBy")} {approval.agent}</span>
     </header>
+    <!-- **The payload, not the verb.** A review named this as the single biggest thing holding the
+         product back and it was right about the product, not the styling: the card led with
+         `detail.does` — "Sends the drafted messages to the selected targets" — which is what the tool
+         does *in general*. What is about to happen was one disclosure away. Being asked to press
+         Approve on a verb is not consent.
+         The core already computed all of it. `detail.draft` is the concrete thing ("Replace the
+         two-tier page with one single-seat plan at 19 a month") and `parameters` are the values it
+         will run with. The console was reading the wrong field. -->
+    {#if approval.detail?.draft}
+      <p class="ap-draft">{approval.detail.draft}</p>
+    {/if}
+    {#if Object.keys(approval.parameters ?? {}).length}
+      <p class="ap-params">
+        {#each Object.entries(approval.parameters) as [name, value] (name)}
+          <span class="ap-param"><span class="muted">{name}</span> <strong>{value}</strong></span>
+        {/each}
+      </p>
+    {/if}
     {#if approval.detail?.does}<p class="desc">{approval.detail.does}</p>{/if}
 
     {#if !compact}
@@ -72,11 +90,6 @@
           <dt>{t("ops.ifYes")}</dt><dd>{approval.detail?.on_approve}</dd>
           <dt>{t("ops.ifNo")}</dt><dd>{approval.detail?.on_reject}</dd>
         </dl>
-        {#if approval.detail?.draft}
-          <!-- The draft as prose, not as a log line: it is what an agent wrote for a person to send,
-               and monospace is for what the machine said. -->
-          <p class="draft-body">{approval.detail.draft}</p>
-        {/if}
       {/if}
 
       <label class="note">
@@ -107,4 +120,12 @@
   /* The header wraps as a unit: tool, risk and requester are one clause, and a risk chip that wrapped
      away from the tool name it qualifies is the one thing here that must not happen. */
   .ap-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  /* What is about to happen, at reading size. This is the sentence somebody is consenting to, so it
+     outranks the tool's own description of itself, which is now the small grey line under it. */
+  .ap-draft { margin: 6px 0 0; font-size: 14px; line-height: 1.55; max-width: 68ch; }
+  /* The values it will run with, as pairs. `price 19` is the fact an operator checks before pressing
+     Approve, and it was inside a JSON blob nothing rendered. */
+  .ap-params { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0 0; font-size: 12.5px; }
+  .ap-param { display: inline-flex; gap: 6px; align-items: baseline; white-space: nowrap; }
+  .ap-param strong { font-variant-numeric: tabular-nums; }
 </style>

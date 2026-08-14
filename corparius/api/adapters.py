@@ -180,7 +180,13 @@ def plugins_payload(slug: str) -> dict:
                 "unscoped": sk.unscoped,
                 "always": sk.always,
                 "truncated": len(sk.instructions) > s.skill_max_chars,
+                # Where the file is, said the way a person refers to it. It was the absolute path,
+                # so on a machine whose skills live under a session temp directory the console showed
+                # 60 characters of GUID and clipped the part that names the skill. `where` is relative
+                # to whichever root it sits under; `path` stays absolute for the `title` and for
+                # anyone who genuinely needs to open it.
                 "path": str(sk.path),
+                "where": _skill_where(sk.path),
             }
             for sk in loader.skills
         ]
@@ -567,6 +573,23 @@ def deploy(ui: UiState, slug: str) -> tuple[int, dict]:
         return 404, {"ok": False, "error": str(exc)}
     # The envelope succeeded; whether anything published is the payload's news.
     return 200, {"ok": True, **{k: v for k, v in out.items() if k != "folder"}}
+
+
+def _skill_where(path) -> str:
+    """A skill's path relative to the skills root it lives under, or its last two segments.
+
+    Two roots exist — the shared one and the company's — and a skill may sit under either, so this
+    tries both rather than assuming. The fallback is the tail rather than the whole string, because a
+    path this cannot place is still better shown as `ads-restraint/SKILL.md` than as a machine's
+    directory layout.
+    """
+    candidate = Path(str(path))
+    for root in (paths.skills_dir(), paths.companies_dir()):
+        try:
+            return candidate.relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return "/".join(candidate.parts[-2:])
 
 
 def golive_status(slug: str) -> dict:

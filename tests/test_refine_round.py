@@ -360,3 +360,81 @@ def test_it_is_one_extra_round_and_not_a_loop(home):
     calls: list[list[str]] = []
     _turn(home, lambda ctx, result: "and again", calls)
     assert _asking(calls, "and again") == 1, f"asked {_asking(calls, 'and again')} times, not once"
+
+
+def test_a_second_round_that_answers_nothing_leaves_the_first_answer_standing(home):
+    """The branch the coverage ratchet found had never been taken.
+
+    `if second.ok and second.data` had only ever been true in a test, so the sentence above it — "a
+    refused or empty second round leaves the first answer standing" — was a promise nothing checked.
+    It is the difference between a tool that asked for more context and a tool that staked the turn
+    on getting it: replacing a usable draft with nothing because the second call rate-limited would
+    be strictly worse than never having asked.
+    """
+    import types
+
+    from corparius.agents import Executor
+    from corparius.config.permissions import PermissionEngine
+    from corparius.hitl import ApprovalGate
+    from corparius.kernel.records import AgentRole, LLMResult
+    from corparius.kernel.records import Usage as LLMUsage
+    from corparius.roster import ROSTER
+    from corparius.safety import CircuitBreaker, TokenBudget
+    from corparius.store import Store
+    from corparius.tools.registry import TOOLS
+
+    store = Store(str(home / "data"))
+    calls: list[int] = []
+
+    class Router:
+        def generate(self, messages, *a, **kw):
+            calls.append(1)
+            # The first answer is usable; the second is the shape a refusal takes here — the harness
+            # got no structure out of the model at all.
+            text = '{"headline": "the first answer", "body": "b"}' if len(calls) == 1 else "sorry"
+            return LLMResult(
+                text=text, usage=LLMUsage(10, 10, 0.0), model="m", provider="openrouter"
+            )
+
+        def embed(self, text):
+            return [0.0, 1.0]
+
+    class Settings:
+        loop_similarity_threshold = 0.95
+        max_identical_tool_calls = 99
+
+    spec = ROSTER[AgentRole.SOCIAL]
+    name = spec.playbook[0]
+    original = TOOLS[name].behaviour
+    TOOLS[name].behaviour = type(original)(
+        effect=original.effect,
+        prompt=original.prompt,
+        skip_when=None,
+        refine=lambda ctx, result: "read this as well",
+    )
+    ctx = types.SimpleNamespace(
+        company={"slug": "t", "name": "T", "offer": {}},
+        tick=0,
+        budget=TokenBudget(1_000_000),
+        breaker=CircuitBreaker(1_000_000),
+        data_path=str(home),
+        memory=[],
+        leads=[],
+        store=store,
+        role="",
+        structured=None,
+    )
+    try:
+        gate = ApprovalGate(store, PermissionEngine(store=store))
+        done = Executor(Router(), gate, store, Settings()).run_turn("t", spec, ctx)
+    finally:
+        TOOLS[name].behaviour = original
+        store.close()
+
+    assert len(calls) > 1, "the refine round has to have been attempted for this to mean anything"
+    # On what the turn *reported*, not on `ctx.structured`: the executor clears that for each tool in
+    # the playbook, so by the end of the turn it belongs to `schedule_post`. The line an operator
+    # reads is the one that has to carry the first answer.
+    assert done and any("the first answer" in line for line in done), (
+        f"an empty second round replaced a usable first one: {done}"
+    )

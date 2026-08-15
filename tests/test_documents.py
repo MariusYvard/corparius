@@ -244,3 +244,23 @@ def test_csv_rows_are_still_rows(tmp_path):
     doc.write_text("name,city\nAda,Paris\nGrace,Lyon\n", encoding="utf-8")
     lines = documents.read(doc).text.split("\n")
     assert len(lines) >= 3, f"a three-row csv came back as {len(lines)} line(s)"
+
+
+def test_a_picture_among_the_files_is_skipped_by_the_index_rather_than_indexed(drop):
+    """The branch the coverage ratchet found unentered: `sections()` walking a document that is not
+    text.
+
+    It matters because the mixed folder is the normal one — an operator drops a deck, a price list
+    and a screenshot of a competitor's page in together. An image has no text by design (nothing is
+    invented for one; the file itself travels to a model that can see it), so it must contribute no
+    headings at all rather than an empty section that would take a line in every prompt's map.
+    """
+    (drop / "brief.md").write_text("# Pricing\nThe annual toggle lowered conversion.\n", "utf-8")
+    (drop / "shot.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 40)
+
+    docs = documents.load("acme", max_chars=0)
+    assert {d.kind for d in docs} == {"text", "image"}, "the fixture has to hold both kinds"
+
+    parts = documents.sections(docs)
+    assert [s.title for s in parts] == ["Pricing"]
+    assert all("shot.png" not in s.label for s in parts), "an image reached the map"

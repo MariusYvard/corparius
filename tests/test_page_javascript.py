@@ -153,7 +153,14 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # `.env`, so a typo keeps working here and makes their password manager wrong somewhere else.
     # Every other destructive path in the product is recoverable by construction; this is the one
     # where the guarantee cannot come afterwards.
-    assert result["counts"] == {"en": 579, "fr": 579}, result["counts"]
+    # 593. The fourteen since 579 are the company editor learning two things it could not say.
+    # `company.siteExternal`: a site the operator runs outside corparius, which nothing builds,
+    # reviews or publishes and which the roles waiting on a public address now count as one.
+    # And the legal notice, ten fields plus a heading and a help line: France requires a site
+    # that sells to name who publishes it, corparius can invent none of those identifiers, and
+    # until now the only place to write them was `company.yaml` by hand — which this product
+    # refuses to ask for, and which a save from the editor would then have destroyed.
+    assert result["counts"] == {"en": 593, "fr": 593}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

@@ -262,7 +262,11 @@ def test_the_untranslated_strings_are_the_ones_that_should_be():
     # then back to 20 for `site.pages` — "{n} pages", which is the same word in both languages and is the
     # kind of entry this list exists to hold. A number that only ever goes up has stopped meaning
     # anything; so has one that is never allowed to.
-    assert len(same) == 20, (
+    # 22, for the two the legal notice adds. `company.legalEmail` is *Contact* in both, and
+    # `company.legalReg` is "RCS / SIREN": the names of French commercial registers, which an English
+    # legal notice for a French company also has to print, because they are what the identifier is
+    # called and not a description of it.
+    assert len(same) == 22, (
         f"{len(same)} keys are identical in both languages: {same}. If that is a word that does "
         "not translate, raise the number here and say which; if it is a forgotten string, "
         "translate it."

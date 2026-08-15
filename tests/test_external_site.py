@@ -227,3 +227,14 @@ def test_the_doctor_notices_a_company_that_sells_without_one(tmp_path, monkeypat
         yaml.safe_dump({**sells, "legal": {"publisher": "Acme SAS"}}), encoding="utf-8"
     )
     assert _check_legal_notice(settings)[0] == "ok"
+
+
+def test_a_legal_block_that_is_not_a_block_renders_nothing():
+    """`company.yaml` is a file an operator edits by hand, so `legal: mentions legales` is one
+    forgotten colon away. YAML hands that over as a string, and asking a string for `.get` is a
+    `TypeError` in the middle of building a page. The notice is skipped, and the site still ships."""
+    from corparius.sitegen.copy import strings
+    from corparius.sitegen.sections import legal_html
+
+    for wrong in ("mentions legales", ["publisher: Acme"], 42):
+        assert legal_html({"legal": wrong}, strings("fr")) == ""

@@ -87,6 +87,24 @@ DEFAULT_RULES: list[Rule] = [
         # second half explains the first, and brackets when it is an aside. Only the sentence knows.
     ),
     Rule(
+        "invisible",
+        # Zero-width space, non-joiner, joiner, word joiner, the byte order mark, the bidi
+        # embedding/override/isolate family, and the Unicode tag block. Every one of them is a
+        # character a reader cannot see and a machine can.
+        "[​-‏‪-‮⁠-⁤⁦-⁩﻿󠀀-󠁿]",
+        "an invisible character",
+        # **Deleted, and this is the one deletion that needs no reading.** A zero-width space carries
+        # no meaning to a reader by construction: removing it cannot change what a sentence says,
+        # which is the test every fix in this module has to pass.
+        #
+        # Two reasons it is worth a rule rather than a shrug. Models emit them, and they end up in a
+        # published page and a sent email where nobody sees them, breaking search and copy-paste for
+        # the reader who does. And the bidi controls are the Trojan Source vector: a character that
+        # makes text render in a different order than it is stored is exactly the confusion this
+        # codebase fences documents against.
+        fix="",
+    ),
+    Rule(
         "curly-quote",
         r"[“”‘’]",
         "a curly quotation mark: use straight ones",
@@ -147,7 +165,11 @@ def check(text: str, style: Style | None = None) -> list[dict]:
                     "at": where,
                     "text": what,
                     "why": rule.why,
-                    "fixable": bool(rule.fix),
+                    # `is not None`, for the same reason `apply` uses it: `fix=""` is a deletion
+                    # somebody chose and `fix=None` is the absence of a choice. `bool` collapsed
+                    # them and reported every deleting rule as something a human still had to
+                    # answer for, which is a report that asks for work already done.
+                    "fixable": rule.fix is not None,
                 }
             )
     return sorted(found, key=lambda hit: hit["at"])
@@ -163,11 +185,14 @@ def apply(text: str, style: Style | None = None) -> tuple[str, list[dict]]:
     style = style or DEFAULT
     out = text or ""
     for rule in style.rules:
-        if not rule.fix:
+        if rule.fix is None:
             continue
         if rule.fix == "STRAIGHT":
             out = "".join(_STRAIGHT.get(ch, ch) for ch in out)
         else:
+            # `fix=""` is a deletion and `fix=None` is "no fix": the first is a decision the rule
+            # author made and the second is the absence of one. `if not rule.fix` above would have
+            # collapsed them and silently skipped every deleting rule.
             out = re.sub(rule.find, rule.fix, out)
     return out, check(out, style)
 

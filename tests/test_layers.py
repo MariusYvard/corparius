@@ -158,6 +158,10 @@ RANKS: dict[str, int] = {
     # be measured in a unit test rather than behind a store fixture. It reads `kernel.paths` and
     # `yaml` to load a company's own charter and nothing else.
     "housestyle": 4,
+    # Rank 4 and pure: bytes in, bytes out, `struct` and nothing else. A PNG is a chunk stream and a
+    # JPEG a segment stream, so what is *about* the file can be dropped without decoding what the
+    # file is, which is what keeps this in the domain and out of the providers.
+    "scrub": 4,
     # Rank 3 with the other providers: it reaches the outside world over HTTP. Read-only, and in
     # its own file rather than in `integrations.py`, which the restructuring plan names untouchable
     # because it holds 213 statements of protocol that no test exercises.

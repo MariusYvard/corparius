@@ -21,6 +21,8 @@ import logging
 import threading
 from pathlib import Path
 
+import yaml
+
 from .. import company as company_mod
 from .. import readiness
 from ..app import chat as app_chat
@@ -500,9 +502,32 @@ def company_payload(slug: str) -> dict:
 
 
 def save_company(ui: UiState, slug: str, body: dict) -> dict:
+    """Save what the editor sent, **over** what is stored rather than instead of it.
+
+    This replaced the whole file with the form's own fields, and the form renders seven of them.
+    Measured on a real config: one save from the company editor destroyed the entire `site:` block
+    (the address, the privacy points, the FAQ, the theme), the `legal:` block, and reset
+    `language: fr` to `en` — so a French company's agents began drafting in English, which is the
+    exact defect `agents.language_line` exists to prevent, arriving through a different door.
+
+    Merged one level deep. A nested mapping the form owns completely (`agents`, `icp`) is replaced
+    key by key, so unticking a role still unticks it; a key the form never sends (`site.privacy`,
+    `offer.includes`) keeps what the operator wrote. Clearing something the form *does* render still
+    works, because it sends the empty value.
+    """
     if slug not in state.companies():
         return {"ok": False, "error": f"unknown company '{slug}'"}
-    incoming = dict(body or {})
+    try:
+        stored = company_mod.load(company_mod.path_for(slug), slug)
+    except (OSError, ValueError, yaml.YAMLError):
+        # Unreadable or not yet valid. The save still goes through on what was sent: refusing to
+        # edit a company because its file is broken is the one moment an operator most needs to.
+        #
+        # `yaml.YAMLError` explicitly: it descends from `Exception` and not from `ValueError`, so
+        # the first version of this line let a `ParserError` through and locked the operator out of
+        # the only surface that could repair the file. Caught by the test below.
+        stored = {}
+    incoming = _merged(stored, dict(body or {}))
     incoming["slug"] = slug  # the slug is the directory; renaming is a move, not an edit
     cfg, errors, warnings = company_mod.validate(incoming)
     if errors:
@@ -510,6 +535,21 @@ def save_company(ui: UiState, slug: str, body: dict) -> dict:
     company_mod.dump(cfg, company_mod.path_for(slug))
     log.info("company edited from the console: %s", slug)
     return {**company_payload(slug), "warnings": warnings, "saved": True}
+
+
+def _merged(stored: dict, sent: dict) -> dict:
+    """`sent` over `stored`, one level into nested mappings.
+
+    Deliberately one level. Two would start merging the *contents* of a list of pains with an older
+    list of pains, and a form that renders a list renders all of it: what is sent is what there is.
+    """
+    out = dict(stored or {})
+    for key, value in (sent or {}).items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = {**out[key], **value}
+        else:
+            out[key] = value
+    return out
 
 
 def delete_company(ui: UiState, slug: str, confirm: str, purge: bool) -> dict:

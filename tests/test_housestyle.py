@@ -518,3 +518,34 @@ def test_the_narrow_reader_skips_a_row_it_cannot_decode(home):
         store.close()
 
     assert rows == [{"wording": ["good"]}], rows
+
+
+def test_an_invisible_character_is_deleted_and_the_sentence_is_untouched():
+    """**The one deletion that needs no reading**, and the reason `fix=""` had to be told apart from
+    `fix=None`. A zero-width space carries no meaning to a reader by construction, so removing it
+    cannot change what a sentence says, which is the test every fix in this module has to pass.
+
+    Two reasons it is worth a rule. Models emit them, and they land in a published page and a sent
+    email where nobody sees them and where they break search and copy-paste for the reader who does.
+    And the bidi controls are the Trojan Source vector: a character that makes text render in a
+    different order than it is stored is the confusion this codebase already fences documents
+    against.
+    """
+    dirty = "Bonjour\u200b, voici\u2060 le \u202edevis\u202c final\ufeff."
+    fixed, left = hs.apply(dirty)
+
+    assert fixed == "Bonjour, voici le devis final."
+    assert not [v for v in left if v["rule"] == "invisible"], "reported instead of removed"
+    assert "invisible" in {v["rule"] for v in hs.check(dirty)}
+    # Reported as fixable, which `bool(rule.fix)` got wrong: it read an empty replacement as no
+    # replacement and asked a human to answer for work already done.
+    assert all(v["fixable"] for v in hs.check(dirty) if v["rule"] == "invisible")
+
+
+def test_ordinary_spacing_is_not_invisible(tmp_path):
+    """The rule matches a closed set of code points, not "anything unusual". A normal space, a
+    newline and a tab are how text is written, and a charter that ate them would be one nobody could
+    leave switched on."""
+    plain = "Two words.\n\tIndented, and spaced normally."
+    fixed, _ = hs.apply(plain)
+    assert fixed == plain

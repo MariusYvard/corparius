@@ -75,6 +75,11 @@ ALL_SRC = "\n".join(SRC.values())
 # 142: `docindex`, the table of contents over the company's files. The shape is PageIndex's —
 # structure first, content second — and its code is deliberately not vendored; `docindex`'s own
 # docstring carries the reasoning.
+# 147: `scrub`, metadata out of a file on the way in. A screenshot dropped into a documents
+# folder carries where it was taken and often at what coordinates, and that folder is read
+# into prompts and sent to models that are not on this machine. Stripped on the way in
+# because there is no single way out: the same file reaches a prompt, a published page and a
+# backup zip. Pixels, colour profile and resolution are kept.
 # 146: `providers/qonto`, the other way a French company is paid. Stripe is a checkout link a
 # stranger clicks; Qonto is a business account a client transfers to against an invoice, which
 # is how business-to-business selling actually works here. Read-only: it proves the
@@ -93,7 +98,7 @@ ALL_SRC = "\n".join(SRC.values())
 # 143: `app/guidance`, what the operator should do next and where. The CEO tab could answer
 # questions and could not answer *the* question — somebody who does not know what to do has
 # nothing to type.
-MODULE_COUNT = 146
+MODULE_COUNT = 147
 
 
 def test_every_source_file_is_scanned():

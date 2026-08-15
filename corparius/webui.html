@@ -1078,6 +1078,20 @@ en: {
  "company.tokens": "Session token budget",
  "company.tokensHelp": "Overrides the global budget for this company.",
  "company.tpm": "Tokens per minute",
+ "company.siteExternal": "This site is mine, corparius does not touch it",
+ "company.siteExternalHelp": "Nothing is built, reviewed or published. The address above is what the agents link to.",
+ "company.legal": "Legal notice",
+ "company.legalHelp": "Rendered at the foot of the site. Only the lines you fill appear; France requires this of a site that sells.",
+ "company.legalPublisher": "Publisher",
+ "company.legalForm": "Legal form",
+ "company.legalCapital": "Share capital",
+ "company.legalAddress": "Registered address",
+ "company.legalEmail": "Contact",
+ "company.legalPhone": "Telephone",
+ "company.legalReg": "RCS / SIREN",
+ "company.legalVat": "VAT number",
+ "company.legalDirector": "Publication director",
+ "company.legalHost": "Host",
  "conn.error": "Cannot reach the corparius server:",
  "conn.hint": "The server is not answering on this address. It may be restarting, or it may not be running: start it with `corparius ui`, or double-click start-windows.bat.",
  "conn.retry": "Try again",
@@ -1659,6 +1673,20 @@ fr: {
  "company.tokens": "Budget de jetons par session",
  "company.tokensHelp": "Prime sur le budget global pour cette société.",
  "company.tpm": "Jetons par minute",
+ "company.siteExternal": "Ce site est le mien, corparius n'y touche pas",
+ "company.siteExternalHelp": "Rien n'est construit, relu ni publié. L'adresse ci-dessus est celle vers laquelle les agents renvoient.",
+ "company.legal": "Mentions légales",
+ "company.legalHelp": "Rendues en bas du site. Seules les lignes remplies s'affichent ; la France l'exige d'un site qui vend.",
+ "company.legalPublisher": "Éditeur",
+ "company.legalForm": "Forme juridique",
+ "company.legalCapital": "Capital social",
+ "company.legalAddress": "Siège social",
+ "company.legalEmail": "Contact",
+ "company.legalPhone": "Téléphone",
+ "company.legalReg": "RCS / SIREN",
+ "company.legalVat": "TVA intracommunautaire",
+ "company.legalDirector": "Directeur de la publication",
+ "company.legalHost": "Hébergeur",
  "conn.error": "Impossible de joindre le serveur corparius :",
  "conn.hint": "Le serveur ne répond pas à cette adresse. Il redémarre peut-être, ou il ne tourne pas : lancez-le avec `corparius ui`, ou double-cliquez sur start-windows.bat.",
  "conn.retry": "Réessayer",
@@ -4205,6 +4233,10 @@ function renderCompany(d) {
       </span>
     </div>
     ${coField("payment_link", L("payLink"), o.payment_link, {help: L("payLinkHelp")})}
+    <label style="display:flex; gap:8px; align-items:center; font-weight:400">
+      <input type="checkbox" id="co-site_external" style="accent-color:var(--select)"${(c.site || {}).external ? " checked" : ""}>
+      ${esc(L("siteExternal"))}</label>
+    <span class="note" style="font-size:12px">${esc(L("siteExternalHelp"))}</span>
     ${coField("segment", L("segment"), i.segment, {help: L("segmentHelp")})}
     <div class="stack" style="gap:6px">
       <span>${esc(L("channels"))}</span>
@@ -4236,6 +4268,16 @@ function renderCompany(d) {
       <span class="note" style="font-size:12px">${esc(L("hitlHelp"))}</span>
     </div>
     <span style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:4px">
+    <details class="stack" style="gap:8px">
+      <summary style="cursor:pointer">${esc(L("legal"))}</summary>
+      <span class="note" style="font-size:12px">${esc(L("legalHelp"))}</span>
+      ${[["publisher","legalPublisher"],["legal_form","legalForm"],["capital","legalCapital"],
+         ["address","legalAddress"],["email","legalEmail"],["phone","legalPhone"],
+         ["registration","legalReg"],["vat","legalVat"],["director","legalDirector"],
+         ["host","legalHost"]]
+        .map(([key, label]) => coField("legal_" + key, L(label), (c.legal || {})[key]))
+        .join("")}
+    </details>
       <button class="primary" id="co-save">${esc(L("save"))}</button>
       <span class="note mono" style="font-size:12px">${esc(d.path)}</span>
     </span>
@@ -4274,6 +4316,13 @@ function collectCompany() {
     budgets: {session_tokens: +v("tokens") || 0, tokens_per_minute: +v("tpm") || 0,
               daily_ad_spend_eur: +v("ads") || 0},
     hitl_tools: $$("[data-hitl]").filter(x => x.checked).map(x => x.dataset.hitl),
+    // `site` and `legal` are sent as partial objects on purpose. The save merges one level deep, so
+    // `site.privacy`, `site.faq` and everything else this form does not render survives — which it
+    // did not until a save stopped replacing the whole file with the seven fields above it.
+    site: {external: $("#co-site_external").checked},
+    legal: Object.fromEntries(["publisher","legal_form","capital","address","email","phone",
+                               "registration","vat","director","host"]
+      .map(k => [k, v("legal_" + k)])),
   };
 }
 

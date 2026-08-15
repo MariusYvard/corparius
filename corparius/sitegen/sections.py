@@ -11,7 +11,6 @@ import logging
 
 from ..kernel import text
 from .base import esc
-from .copy import strings
 
 log = logging.getLogger("corparius.sitegen.sections")
 
@@ -58,9 +57,9 @@ def faq_pairs(company: dict, store) -> list[tuple[str, str]]:
 def faq_html_from(pairs: list[tuple[str, str]], txt: dict[str, str]) -> str:
     """The rendered section, from questions already asked.
 
-    Split out from `faq_html` because the answers now feed two places — the
-    visible section and the FAQPage structured data — and asking a model the
-    same questions twice to build one page would be paying twice for one answer.
+    Takes the pairs rather than fetching them, because the answers feed two places (the visible
+    section and the FAQPage structured data) and asking a model the same questions twice to build
+    one page would be paying twice for one answer.
     """
     if not pairs:
         return ""
@@ -68,11 +67,6 @@ def faq_html_from(pairs: list[tuple[str, str]], txt: dict[str, str]) -> str:
         f"<details><summary>{esc(q)}</summary><p>{esc(a)}</p></details>" for q, a in pairs
     )
     return f'<section id="faq"><h2>{esc(txt["faq"])}</h2><div class="faq">{items}</div></section>'
-
-
-def faq_html(company: dict, store) -> str:
-    """Kept for callers that want the fragment on its own."""
-    return faq_html_from(faq_pairs(company, store), strings(company.get("language", "en")))
 
 
 def steps_html(company: dict, txt: dict) -> str:

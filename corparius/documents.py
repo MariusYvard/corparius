@@ -37,6 +37,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import scrub
 from .kernel import paths
 
 # Aliased: `text` is a parameter name in this module, so a plain `from .kernel import text`
@@ -576,6 +577,18 @@ def save(slug: str, name: str, data: bytes) -> tuple[Path, bool]:
         raise Refused("empty-file")
     if len(data) > MAX_UPLOAD:
         raise Refused("too-large", str(len(data)))
+
+    # **What is in the file that is not the file.** A screenshot carries where it was taken, on what
+    # and often at what coordinates; an export from a design tool carries the licence holder's name.
+    # None of that is the picture, and this folder is read into prompts and sent to models that are
+    # not on this machine.
+    #
+    # Stripped on the way in rather than on the way out, because there is no single way out: the
+    # same file reaches a prompt, a published page and a backup zip. The pixels, the colour profile
+    # and the resolution are kept; see `scrub`, which touches nothing it cannot walk exactly.
+    data, dropped = scrub.image(data)
+    if dropped:
+        log.info("%s: %d bytes of metadata removed from %s on the way in", slug, dropped, clean)
 
     base = folder(slug)
     path = base / clean

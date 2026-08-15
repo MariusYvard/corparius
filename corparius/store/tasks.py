@@ -66,6 +66,22 @@ class TasksMixin(Connected):
         return dict(row)
 
     @_locked
+    def roles_with_approved_work(self, company) -> set:
+        """Which roles have an approved task waiting, without claiming any of it.
+
+        The scheduler's counterpart to `claim_next_task`. A role can be *held* because the company
+        has nothing for it yet — no published page for outreach, no mailbox for support — and a
+        filed task is the one thing that outranks that: it is a decision somebody took, and a
+        decision that silently never runs is the failure this whole gate exists to avoid, arriving
+        from the other side. Read-only on purpose, because deciding who runs must not consume the
+        work it is deciding about.
+        """
+        rows = self.db.execute(
+            "SELECT DISTINCT target FROM tasks WHERE company=? AND status='approved'", (company,)
+        ).fetchall()
+        return {r["target"] for r in rows if r["target"]}
+
+    @_locked
     def complete_task(self, task_id, note="") -> None:
         self.db.execute("UPDATE tasks SET status='done', note=? WHERE id=?", (note, task_id))
         self.db.commit()

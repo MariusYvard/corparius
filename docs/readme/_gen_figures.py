@@ -14,6 +14,12 @@ Dark and light from one source, so both themes match the interface exactly.
 """
 
 import pathlib
+import sys
+
+# Run as `python docs/readme/_gen_figures.py` from the repo root, so `sys.path[0]` is this folder
+# and the package is not on it. The roster is the source of the numbers below and importing it is
+# the whole point: a figure that restates a table is a second copy of it.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 DARK = dict(
     bg0="#081A3E",
@@ -109,18 +115,34 @@ def chip(x, y, label, p, colour="cardln", ink="muted"):
 # purpose**, so the company does not spend its whole budget in one burst. That is a shape, so it is
 # drawn as one — a 24-hour rail with a tick wherever a role actually runs.
 
-ROSTER = [
-    ("CEO", "orchestrator · owns the backlog", 12, "warm"),
-    ("Social", "drafts and schedules posts", 2, "accent"),
-    ("Outreach", "finds targets, sends, tracks replies", 3, "accent"),
-    ("Support", "triages the inbox, drafts replies", 3, "accent"),
-    ("Ads", "budgets, variants, bids", 6, "accent"),
-    ("Finance", "reconciles Stripe, tracks spend", 6, "accent"),
-    ("Strategy", "reads KPIs, prices, roadmap", 24, "teal"),
-    ("Competitor", "researches, updates profiles", 24, "teal"),
-    ("Design", "visual direction, builds the site", 24, "teal"),
-    ("Coder", "features, fixes, pull requests", 0, "green"),
-]
+
+# Read from the roster itself rather than typed here: a figure that restates a table is a second
+# copy of it, and the first thing this drawing was ever used for was noticing that the old
+# arithmetic put every dot on the 00h line.
+def _rows():
+    from corparius.kernel.records import AgentRole
+    from corparius.roster import ROSTER as SPECS
+
+    says = {
+        AgentRole.CEO: ("CEO", "orchestrator · owns the backlog", "warm"),
+        AgentRole.SOCIAL: ("Social", "drafts and schedules posts", "accent"),
+        AgentRole.OUTREACH: ("Outreach", "finds targets, sends, tracks replies", "accent"),
+        AgentRole.SUPPORT: ("Support", "triages the inbox, drafts replies", "accent"),
+        AgentRole.ADS: ("Ads", "budgets, variants, bids", "accent"),
+        AgentRole.FINANCE: ("Finance", "reconciles Stripe, tracks spend", "accent"),
+        AgentRole.STRATEGY: ("Strategy", "reads KPIs, prices, roadmap", "teal"),
+        AgentRole.COMPETITOR: ("Competitor", "researches, updates profiles", "teal"),
+        AgentRole.DESIGN: ("Design", "visual direction, builds the site", "teal"),
+        AgentRole.CODER: ("Coder", "features, fixes, pull requests", "green"),
+    }
+    out = []
+    for role, (name, does, colour) in says.items():
+        spec = SPECS[role]
+        out.append((name, does, spec.cadence_hours or 0, spec.offset_hours, colour, spec.needs))
+    return out
+
+
+ROSTER = _rows()
 
 
 def roster(p):
@@ -132,11 +154,18 @@ def roster(p):
         H,
         p,
         "THE ROSTER · TEN ROLES, STAGGERED",
-        "the ten agents and when each runs across a day: the CEO twice a day, social every two "
-        "hours, outreach and support every three, ads and finance every six, strategy, competitor "
-        "and design daily, and the coder on demand",
+        "the ten agents and when each runs across a day. "
+        + "; ".join(
+            f"{name} every {every}h from {offset:02d}h"
+            + (f", held until the company has {' and '.join(needs)}" if needs else "")
+            if every
+            else f"{name} on demand"
+            for name, _does, every, offset, _c, needs in ROSTER
+        ),
     )
-    rail_x, rail_w = 470, W - 470 - 60
+    # 430/540 rather than 470/670: the right column is where a held role says what it needs,
+    # and `needs site + payment` at the old width ran 88px past the edge of the figure.
+    rail_x, rail_w = 430, 540
 
     # The hour scale, once, above the rail.
     for hour in (0, 6, 12, 18, 24):
@@ -144,10 +173,10 @@ def roster(p):
         s += text(x, top - 26, f"{hour:02d}h", p, size=11, fill="muted", mono=True, anchor="middle")
         s += f'<line x1="{x:.1f}" y1="{top - 18}" x2="{x:.1f}" y2="{H - 30}" stroke="{p["cardln"]}" stroke-width="1" opacity="0.45"/>'
 
-    for i, (name, does, every, colour) in enumerate(ROSTER):
+    for i, (name, does, every, offset, colour, needs) in enumerate(ROSTER):
         y = top + i * ROW
         s += text(60, y + 22, name, p, size=15, weight=700)
-        s += text(172, y + 22, does, p, size=12.5, fill="muted", mono=True)
+        s += text(160, y + 22, does, p, size=12.5, fill="muted", mono=True)
         # No rail for the role that has no cadence — a hairline with a sentence lying across it
         # reads as a struck-through line, and the one role that is *not* on the clock is exactly
         # the one that must not look cancelled.
@@ -164,11 +193,23 @@ def roster(p):
             continue
         # The rail: a hairline for the day, a mark at each hour the role is due.
         s += f'<line x1="{rail_x}" y1="{y + 17}" x2="{rail_x + rail_w}" y2="{y + 17}" stroke="{p["cardln"]}" stroke-width="1"/>'
-        hour = 0
+        hour = offset
         while hour < 24:
             x = rail_x + rail_w * hour / 24
             s += f'<circle cx="{x:.1f}" cy="{y + 17}" r="4.5" fill="{p[colour]}"/>'
             hour += every
+        # What the role waits for, where its dots would be if it were running. A row that is empty
+        # for a new company has to say why, or the figure claims the agent does nothing.
+        if needs:
+            s += text(
+                rail_x + rail_w + 24,
+                y + 22,
+                "needs " + " + ".join(needs),
+                p,
+                size=11.5,
+                fill="warm",
+                mono=True,
+            )
     return s + "</svg>\n"
 
 

@@ -10,7 +10,7 @@ import logging
 import time
 from dataclasses import dataclass, field, replace
 
-from . import curator, documents, inbox
+from . import curator, documents, inbox, readiness
 from .agents import Executor
 from .config.permissions import PermissionEngine
 from .config.settings import Settings
@@ -99,6 +99,8 @@ def due_roles(
     paused: set[str] | None = None,
     overrides: dict[str, int] | None = None,
     session_start: bool = False,
+    ready: set[str] | None = None,
+    has_work: set[str] | None = None,
 ) -> list[AgentSpec]:
     """Which roles run this tick.
 
@@ -109,6 +111,13 @@ def due_roles(
     the second, and until this argument existed the runtime could not hear it:
     the CEO replied that it would pause the campaigns and the next tick drafted
     another one.
+
+    `ready` is the third question, and it is the company's own state rather than anybody's opinion:
+    the set of `readiness.FACTS` that hold today. A role declaring `needs` is not scheduled until
+    they do. The example config had been answering this by hand for as long as it has existed —
+    `ads: false  # off until there is budget to spend` — which is an operator maintaining a fact the
+    runtime could have read. Passing `None` means "do not gate", which is what every caller that
+    only wants to reason about the clock passes.
     """
     paused = paused or set()
     overrides = overrides or {}
@@ -129,12 +138,56 @@ def due_roles(
         if session_start and role is AgentRole.CEO:
             specs.append(spec)
             continue
+        # Nothing to do yet. Not an error and not a pause: a company with no published page has
+        # no use for an outreach turn, and spending one is how a run produces motion instead of
+        # work. `held_roles` below is what says so out loud.
+        #
+        # **A filed task outranks the gate**, which is the other half and not a softening of it. The
+        # gate answers "is this role idle"; an approved task is somebody having decided otherwise,
+        # and a decision that silently never runs is the same defect seen from the other side. The
+        # role is scheduled, claims its task, and its playbook still skips what it cannot do.
+        held = ready is not None and spec.needs and not set(spec.needs) <= ready
+        if held and role.value not in (has_work or set()):
+            continue
         # "social once a day, not every two hours" is a sentence, not a YAML
         # edit. The operator's own period wins over the roster's default.
         every = overrides.get(role.value) or spec.cadence_hours
-        if tick % every == 0:
+        # The offset is what makes the stagger real. `tick % every` put every role on hour 0 —
+        # Python's modulo stays non-negative for a positive divisor, so a role with an offset
+        # larger than the tick simply has not started yet, which is the intent.
+        if (tick - spec.offset_hours) % every == 0:
             specs.append(spec)
     return specs
+
+
+def held_roles(
+    enabled: dict,
+    ready: set[str],
+    paused: set[str] | None = None,
+    has_work: set[str] | None = None,
+) -> dict[str, list]:
+    """Roles that are on, not paused, and waiting on the company rather than on the clock.
+
+    Returned as `{role: [facts it is missing]}` because "held" alone is a bug report and "held until
+    you publish a site" is something to act on. A capability that is silently never reached is the
+    failure mode this project keeps finding in its own product; a gate with no explanation would be
+    a new one.
+    """
+    paused = paused or set()
+    waiting: dict[str, list] = {}
+    for role, spec in ROSTER.items():
+        if spec.cadence_hours is None or not enabled.get(role.value, False):
+            continue
+        if role.value in paused or not spec.needs:
+            continue
+        # A role with an approved task is not waiting on the company; it runs. Saying otherwise
+        # would put a fix in front of an operator whose work is already scheduled.
+        if role.value in (has_work or set()):
+            continue
+        lacking = [need for need in spec.needs if need not in ready]
+        if lacking:
+            waiting[role.value] = lacking
+    return waiting
 
 
 def cadence_overrides(store, slug: str) -> dict[str, int]:
@@ -324,11 +377,24 @@ class Runtime:
                     images=tick_images,
                     images_skipped=tick_skipped,
                 )
+                # The company's own state, read once per tick like the documents: four booleans off
+                # one file test and three settings, and every role's gate answers from the same read.
+                ready = {
+                    fact
+                    for fact, held in readiness.facts(
+                        company, self.settings.data_path, slug
+                    ).items()
+                    if held
+                }
                 for spec in due_roles(
                     tick,
                     enabled,
                     paused_roles(self.store, slug),
                     cadence_overrides(self.store, slug),
+                    ready=ready,
+                    # Read fresh each tick, like the pauses: a task filed by the CEO three ticks ago
+                    # has to reach its role on this one.
+                    has_work=self.store.roles_with_approved_work(slug),
                     #  counts turns already taken in this session, so this is true
                     # exactly once per launch.
                     session_start=(ran == 0 and offset == 0),
@@ -442,6 +508,22 @@ class Runtime:
             "days": days,
             "stopped": stopped,
             "repo": repo,
+            # **Roles that did not run because the company has nothing for them yet**, with what
+            # each is waiting on. A gate that is silent is indistinguishable from a role that is
+            # broken, and "reachable and never reached" is the failure this codebase keeps finding
+            # in its own product — so the run says it, once, where the operator already looks.
+            "held": held_roles(
+                company.get("agents", {}) or {},
+                {
+                    fact
+                    for fact, have in readiness.facts(
+                        company, self.settings.data_path, slug
+                    ).items()
+                    if have
+                },
+                paused_roles(self.store, slug),
+                self.store.roles_with_approved_work(slug),
+            ),
             **last,
         }
 

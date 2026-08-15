@@ -120,7 +120,14 @@ def test_backlog_task_runs_the_real_tool(tmp_path):
         "budgets": {"session_tokens": 100000, "tokens_per_minute": 100000},
         "hitl_tools": [],
     }
-    Runtime(s, store).run(cfg, ticks=1)
+    # Far enough to reach outreach's own hour. Read off the roster rather than written here: each
+    # role now starts from its own offset, and a literal would be this test re-encoding a number
+    # that lives somewhere else. A filed task outranks the readiness gate — this company has no
+    # published site — but it does not outrank the clock, which is what paces the whole roster.
+    from corparius.kernel.records import AgentRole
+    from corparius.roster import ROSTER
+
+    Runtime(s, store).run(cfg, ticks=ROSTER[AgentRole.OUTREACH].offset_hours + 1)
     done = store.list_tasks("t", "done")
     assert done and done[0]["tool"] == "send_outreach"  # task carried a tool
     assert store.status("t")["by_agent"].get("outreach", 0) >= 1  # the tool ran

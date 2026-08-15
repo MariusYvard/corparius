@@ -8,6 +8,38 @@ was released.
 
 ## 0.4.0 — sept dossiers, sept rangs, et une console qui n'est plus un fichier
 
+- **Changed : les cadences des agents, refondues, et quatre rôles qui attendent d'être utiles.**
+  L'agent social tournait **toutes les 2 h**, soit douze brouillons par jour dans une file que
+  personne ne publie et qu'un exploitant doit lire ; le CEO passait deux fois par jour, trop peu pour
+  qu'on obtienne une décision de lui quand on en veut une ; et le design, qui construit la page vers
+  laquelle tout le reste pointe, tournait **une fois par jour**. Nouvelles périodes : CEO 6 h, design
+  et social 8 h, prospection 6 h, finance 12 h, publicité 24 h, support inchangé à 3 h.
+
+  **Et le décalage de phase, qui manquait.** `tick % cadence == 0` mettait *tous* les rôles sur
+  l'heure 0, puis sur chaque multiple de 24 — alors que la docstring du roster promettait des
+  cadences échelonnées « pour que l'entreprise ne dépense pas tout son budget d'un coup ». La figure
+  des cadences du README dessine la contradiction : une colonne de points sur la ligne 00h. Chaque
+  rôle part maintenant de sa propre heure, et la journée a une forme : le CEO l'ouvre seul, le design
+  suit chacune de ses revues, les deux lecteurs quotidiens sont l'après-midi.
+
+  **Quatre rôles ne servent à rien avant qu'il y ait quelque chose**, et c'était déjà écrit à la main
+  dans la config d'exemple : `ads: false  # off until there is budget to spend`. La publicité ajuste
+  des enchères sur une campagne qui n'existe pas, la prospection envoie un lien vers rien, le support
+  rédige une réponse à personne — chacun est un vrai appel modèle et une vraie ligne de journal qui
+  ressemble à du travail. `corparius/readiness.py` répond à quatre faits (une offre, un site publié,
+  un compte mail, un moyen d'être payé) et chaque rôle déclare ceux dont il a besoin. La publicité en
+  demande deux.
+
+  Le fait est calculé **une seule fois** : la carte « Passer en ligne » de la console en calculait
+  trois et le planificateur aucun, donc le produit pouvait dire « vous ne pouvez pas encaisser » d'un
+  côté pendant que l'agent publicité ajustait des enchères de l'autre. `golive_status` en est
+  désormais une présentation.
+
+  Et un rôle retenu **dit ce qu'il attend** : `corparius run` renvoie `held`, par rôle, avec les faits
+  manquants. « Retenu » tout seul est un rapport de bug ; « retenu jusqu'à ce que vous publiiez un
+  site » est quelque chose sur quoi agir. La figure du roster est générée depuis le roster lui-même,
+  parce qu'une figure qui recopie une table est une seconde copie de cette table.
+
 Le chantier de restructuration, livré. 23 050 lignes sur 53 modules **à plat** deviennent sept
 dossiers et sept rangs, tenus par un test qui lit le graphe d'imports à l'AST — imports différés
 compris, parce que c'est par eux que les cinq cycles étaient invisibles. La console de 3 617 lignes

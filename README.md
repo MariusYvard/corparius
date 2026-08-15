@@ -110,13 +110,22 @@ and stops the moment a guard trips.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme/roster-dark.svg">
-    <img src="docs/readme/roster.svg" alt="The ten agents and when each runs across a day: the CEO twice a day, social every two hours, outreach and support every three, ads and finance every six, strategy, competitor and design daily, and the coder on demand." width="100%">
+    <img src="docs/readme/roster.svg" alt="The ten agents and when each runs across a day, each from its own starting hour: the CEO every six hours from midnight, design and social every eight, support every three, outreach every six, ads and the two daily readers once a day, and the coder on demand. Ads, outreach, support and finance are held until the company has a published site, a mailbox or a way to be paid." width="100%">
   </picture>
 </p>
 
-Each role has a narrow toolset and its own cadence. The cadences are **staggered on
-purpose**: a company that woke every agent at once would spend its whole budget in
-one burst.
+Each role has a narrow toolset, its own cadence, and its own hour to start from. The
+day has a shape: the CEO opens it alone and returns every six hours, design lands
+right after each of its reviews, and the two daily readers sit in the afternoon where
+nothing else is. Nothing shares hour 0, because a company that woke every agent at
+once would spend its whole budget in one burst.
+
+**And four of them wait.** Ads, outreach, support and finance are worth nothing until
+the company has something: a page to send people to, a mailbox to answer, a way to be
+paid. They are not scheduled until it does, and `corparius run` reports which ones it
+held and what each is waiting for. Before this, the shipped example config carried
+`ads: false  # off until there is budget to spend`, which was an operator maintaining
+by hand a fact the runtime could read.
 
 <p align="center">
   <picture>

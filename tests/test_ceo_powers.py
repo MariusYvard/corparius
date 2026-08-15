@@ -28,10 +28,22 @@ def store():
     s.close()
 
 
-def _due(store, tick=0):
+def _due(store, tick=None):
+    """Which roles run: over a whole day by default, or at one named hour.
+
+    A day rather than an hour, because these tests are about **pausing and cadence overrides**, not
+    about the clock. They asked for hour 0 back when hour 0 was a stampede that fired every role at
+    once; each role now starts from its own hour, so "social runs" is a question about the day.
+    """
+    hours = range(24) if tick is None else [tick]
     return sorted(
-        s.role.value
-        for s in due_roles(tick, ENABLED, paused_roles(store, SLUG), cadence_overrides(store, SLUG))
+        {
+            s.role.value
+            for hour in hours
+            for s in due_roles(
+                hour, ENABLED, paused_roles(store, SLUG), cadence_overrides(store, SLUG)
+            )
+        }
     )
 
 
@@ -79,9 +91,12 @@ def test_clearing_the_priority_brings_the_baseline_back(store):
 def test_a_cadence_is_a_sentence_not_a_yaml_edit(store):
     app_directives.apply(store, SLUG, {"cadence": {"support": 24}}, "en")
     assert cadence_overrides(store, SLUG) == {"support": 24}
-    assert "support" in _due(store, 0)
-    assert "support" not in _due(store, 3), "the roster default still applied"
-    assert "support" in _due(store, 24)
+    # Support starts from hour 2 and the operator asked for once a day, so 2 and 26 are its hours.
+    # The roster default of every three hours would also put it on 5, which is the assertion that
+    # says the override actually replaced it rather than joining it.
+    assert "support" in _due(store, 2)
+    assert "support" not in _due(store, 5), "the roster default still applied"
+    assert "support" in _due(store, 26)
 
 
 @pytest.mark.parametrize("hours", [0, -1, 10_000, "soon", None])

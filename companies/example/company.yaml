@@ -30,12 +30,21 @@ icp:
 
 # Which agents are active for this company. Cadence is defined in code; this
 # just toggles roles on or off.
+#
+# `ads: false  # off until there is budget to spend` used to live here, and it was an operator
+# maintaining by hand a fact the runtime could read. Roles that are useless before a company has
+# anything now wait on their own: ads until there is a published page *and* a way to be paid,
+# outreach until there is a page, support until a mailbox is connected, finance until payment is
+# wired. See `corparius/readiness.py`, and `corparius run` reports what it held and why.
+#
+# So these switches mean what they say again: "this role is not part of this company", rather than
+# "not yet".
 agents:
   ceo: true
   social: true
   outreach: true
   support: true
-  ads: false        # off until there is budget to spend
+  ads: true
   finance: true
   strategy: true
   competitor: true

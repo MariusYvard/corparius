@@ -68,7 +68,10 @@ def test_the_three_gates_are_reported_as_booleans_plus_the_url(server):
     assert set(data) >= {"payment", "mail", "hosting"}
     assert data["payment"]["wired"] is False and data["payment"]["link"] == ""
     assert data["mail"]["wired"] is False
-    assert data["hosting"] == {"token_set": False, "published_url": ""}
+    # `published` and `published_url` are two facts, not one. A `local:` deploy is a real publish
+    # with no address to click, and the roster waits on the first while a person uses the second —
+    # see `corparius/readiness.py`, which both this card and the scheduler now read.
+    assert data["hosting"] == {"token_set": False, "published": False, "published_url": ""}
 
 
 def test_hosting_has_three_states_and_not_two(server, tmp_path):

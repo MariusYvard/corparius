@@ -79,10 +79,18 @@ def test_a_running_loop_reads_the_summaries_it_writes(tmp_path, monkeypatch):
             "SELECT output FROM actions WHERE company='m' AND tool='set_daily_plan' ORDER BY ts"
         )
     ]
-    assert len(plans) > 2, "the loop should have planned on several days"
+    # How many plans a day holds is the CEO's cadence, not a constant: it went from two to four when
+    # the cadences were reworked, and `plans[2:]` silently became "the second half of day one" —
+    # which has no summary to carry because the day has not ended. Derived, so the next change to
+    # that number does not quietly re-point this slice at the wrong thing.
+    from corparius.kernel.records import AgentRole
+    from corparius.roster import ROSTER
+
+    per_day = 24 // ROSTER[AgentRole.CEO].cadence_hours
+    assert len(plans) > per_day, "the loop should have planned on several days"
     # Day one is blind for real: nothing had happened yet.
     assert "no prior summary" in plans[0]
-    # Every later day must carry yesterday in.
-    assert all("EOD summary" in p for p in plans[2:]), (
+    # Every plan after the first day must carry yesterday in.
+    assert all("EOD summary" in p for p in plans[per_day:]), (
         "a day after the first planned with no memory of the day before"
     )

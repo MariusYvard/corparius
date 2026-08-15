@@ -4,6 +4,7 @@ money-moving tool at the human gate until it is approved."""
 from corparius.config.settings import Settings
 from corparius.kernel.records import AgentRole
 from corparius.orchestrator import Runtime, due_roles
+from corparius.roster import ROSTER
 from corparius.store import Store
 
 
@@ -11,7 +12,10 @@ def _cfg() -> dict:
     return {
         "slug": "t",
         "name": "T",
-        "offer": {"product": "p"},
+        # A payment link, because finance is gated on one now and these two tests are about the
+        # human gate rather than about the roster. A company that cannot be paid has no use for a
+        # finance turn, which is the point of the gate — so the company under test is one that can.
+        "offer": {"product": "p", "payment_link": "https://buy.example/x"},
         "agents": {
             "ceo": True,
             "social": True,
@@ -36,12 +40,28 @@ def _settings(tmp) -> Settings:
 
 
 def test_cadences_are_staggered():
+    """**The promise the arithmetic could not keep.** The roster has always said the cadences are
+    staggered so a company does not spend its whole budget in one burst, and `tick % cadence == 0`
+    put *every* role on hour 0 — and on every multiple of 24 after it. The README's cadence figure
+    shows it: a column of dots straight down the 00h line.
+
+    An offset per role is what makes the sentence true. Asserted as the property rather than as two
+    named roles, because the previous version of this test passed on the day of the stampede.
+    """
     enabled = {r.value: True for r in AgentRole}
-    due0 = {s.role for s in due_roles(0, enabled)}
-    assert AgentRole.CEO in due0 and AgentRole.SOCIAL in due0
-    assert due_roles(1, enabled) == []  # nothing divides hour 1
-    due2 = {s.role for s in due_roles(2, enabled)}
-    assert AgentRole.SOCIAL in due2 and AgentRole.CEO not in due2
+    by_hour = {hour: {s.role for s in due_roles(hour, enabled)} for hour in range(24)}
+    scheduled = sum(1 for r, s in ROSTER.items() if s.cadence_hours is not None)
+
+    busiest = max(len(roles) for roles in by_hour.values())
+    assert busiest < scheduled, (
+        f"{busiest} of {scheduled} roles share an hour: that is the burst the offsets exist to stop"
+    )
+    # The CEO opens the day on its own. Everything else is arranged around its reviews.
+    assert by_hour[0] == {AgentRole.CEO}
+    # And no hour is wasted: over a day every scheduled role runs at least once.
+    assert {role for roles in by_hour.values() for role in roles} == {
+        r for r, s in ROSTER.items() if s.cadence_hours is not None
+    }
 
 
 def test_day_runs_and_records_actions(tmp_path):

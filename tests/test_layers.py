@@ -149,6 +149,11 @@ RANKS: dict[str, int] = {
     # else, which is what lets its ranking be measured in a unit test rather than behind a
     # store fixture.
     "docindex": 4,
+    # Rank 4, and the reason it is not in `app/`: the **scheduler** asks it, every tick, whether a
+    # role has anything to do yet. `api/adapters.golive_status` computed three of these four and the
+    # orchestrator computed none, so the console could say "you cannot take money" while the ads
+    # agent adjusted bids. One computation, two callers, and the lower rank is the one that decides.
+    "readiness": 4,
     "skills": 4,
     "skillimport": 4,
     "structured": 4,

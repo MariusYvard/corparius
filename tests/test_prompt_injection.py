@@ -162,7 +162,11 @@ def test_a_run_where_every_model_reply_is_an_attack_still_only_runs_playbooks(
     company = {
         "slug": "t",
         "name": "T",
-        "offer": {"product": "p", "price_eur": 9},
+        # A payment link, so finance is not held: this test needs a gated tool to actually reach the
+        # gate, and `send_financial_transaction` lives on a role that now waits for a company able
+        # to be paid. Proving the roster cannot be talked into running something is only proof on a
+        # company where the something would otherwise run.
+        "offer": {"product": "p", "price_eur": 9, "payment_link": "https://buy.example/x"},
         "icp": {"segment": "s", "channels": ["linkedin"], "pains": ["p"]},
         "agents": dict.fromkeys(ROSTER, True) | {"ceo": True},
         "budgets": {"session_tokens": 200000, "tokens_per_minute": 200000},

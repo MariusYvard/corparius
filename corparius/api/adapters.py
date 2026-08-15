@@ -22,6 +22,7 @@ import threading
 from pathlib import Path
 
 from .. import company as company_mod
+from .. import readiness
 from ..app import chat as app_chat
 from ..app import companies as app_companies
 from ..app import errors as app_errors
@@ -595,27 +596,31 @@ def _skill_where(path) -> str:
 def golive_status(slug: str) -> dict:
     """The three things between a mock company and one that can take money: a
     checkout link, a mail account, and a public host. Reported as booleans plus
-    the live URL, so one card can guide the operator from A to Z."""
+    the live URL, so one card can guide the operator from A to Z.
+
+    **The booleans come from `readiness`, and this is a presentation of them.** They were computed
+    here and nowhere else, so the scheduler had no way to know any of it — the product could tell an
+    operator "you cannot take money yet" on this card while the ads agent spent a turn adjusting
+    bids behind it. Now one function answers, and the roster's `needs` and this card cannot drift.
+    """
     company = state.load_company(slug) or {}
+    data_path = state.fresh_settings().data_path
+    have = readiness.facts(company, data_path, slug)
     offer = company.get("offer", {}) or {}
     pay = (
         str(offer.get("payment_link") or "").strip()
         or cfg.get("CORP_STRIPE_PAYMENT_LINK", "").strip()
     )
-    published_url = ""
-    marker = paths.site_dir(state.fresh_settings().data_path, slug) / ".published"
-    if marker.is_file():
-        target = marker.read_text(encoding="utf-8").strip()
-        if target.startswith("netlify:") and "http" in target:
-            published_url = target.split("netlify:", 1)[1]
-    smtp_ok = bool(cfg.get("CORP_SMTP_HOST", "").strip() and cfg.get("CORP_SMTP_USER", "").strip())
     return {
         "ok": True,
-        "payment": {"wired": pay.startswith("http"), "link": pay},
-        "mail": {"wired": smtp_ok},
+        "payment": {"wired": have["payment"], "link": pay},
+        "mail": {"wired": have["mail"]},
         "hosting": {
             "token_set": bool(cfg.get("NETLIFY_AUTH_TOKEN", "").strip()),
-            "published_url": published_url,
+            # Published *somewhere* is the fact a role waits on; a public URL is what a person can
+            # click, and a local copy has the first without the second.
+            "published": have["site"],
+            "published_url": readiness.published_url(data_path, slug),
         },
     }
 

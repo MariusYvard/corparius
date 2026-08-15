@@ -42,7 +42,12 @@ def test_design_agent_builds_the_site(tmp_path):
     s = _settings(tmp_path)
     store = Store(s.data_path)
     store.save_state("d", {"tick": 0})
-    Runtime(s, store).run(_cfg(), ticks=1)  # design (daily) runs at tick 0
+    # Design starts from its own hour now, so "tick 0" was only ever true when every role fired
+    # together. From the roster, so the number is not written down twice.
+    from corparius.kernel.records import AgentRole
+    from corparius.roster import ROSTER
+
+    Runtime(s, store).run(_cfg(), ticks=ROSTER[AgentRole.DESIGN].offset_hours + 1)
     status = store.status("d")
     assert status["by_agent"].get("design", 0) >= 1
     assert os.path.isfile(os.path.join(str(tmp_path), "sites", "d", "index.html"))

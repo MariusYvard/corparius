@@ -270,3 +270,58 @@ def test_hidden_beats_the_display_rule_the_panel_also_carries():
         "App.svelte uses to show one tab at a time: without a matching [hidden] rule every panel "
         "renders at once and every tab shows Overview"
     )
+
+
+# --- the one value whose backup is somebody's memory ------------------------------
+
+
+def test_the_passphrase_is_typed_twice_and_nothing_else_is():
+    """**Why this field and not the other thirteen secrets.**
+
+    Setting `CORP_SECRET_KEY` from the console re-encrypts every stored secret *immediately* and
+    writes what was typed to `.env`. So a typo is not a failure an operator meets: the machine keeps
+    working, on the typo, and their password manager is quietly wrong. They find out when they
+    restore a backup somewhere else, which is the day nothing in the product can help them — the
+    CLI's own warning says it plainly: "this is the only copy that opens your encrypted secrets".
+
+    Every other destructive thing here is recoverable by construction and was already designed that
+    way: a deleted company is moved to a trash folder and needs its slug typed, a document goes to
+    `.trash/`, `restore` snapshots what it is about to overwrite *before* touching it, a plugin
+    reinstalls at a pinned ref, and `secrets off` exists "so turning it on was never a trap". The
+    passphrase is the one case where the guarantee cannot come afterwards, because the damage is not
+    to the data.
+
+    So exactly one field carries `confirm`. A second box on the thirteen pasted API keys would be
+    friction that teaches an operator to click through the mechanism.
+    """
+    from corparius.config.settings_spec import BY_KEY
+
+    confirmed = {key for key, spec in BY_KEY.items() if getattr(spec, "confirm", False)}
+    assert confirmed == {"CORP_SECRET_KEY"}, confirmed
+
+    source = _code(_components()["Settings.svelte"])
+    assert "{#if f.confirm}" in source, "the flag is declared and the field does not read it"
+    # The second box's contents must never reach the request. `edited` is what is sent; the
+    # confirmation lives apart precisely so it cannot be.
+    assert "repeated = $state({})" in source
+    # The confirmation must never reach the request. The payload is built by walking `edited`, and
+    # the only way the second box could join it is by being walked too — so that is what is
+    # forbidden, rather than a window of characters around the call, which is what the first
+    # version of this line measured and why it matched the *cleanup* on the line after.
+    assert "Object.entries(edited)" in source
+    assert "Object.entries(repeated)" not in source
+    assert "{ values, unset }" in source, "the body is more than the two things built from `edited`"
+
+
+def test_a_mismatch_refuses_the_whole_save_rather_than_dropping_the_field():
+    """Dropping the one field would leave the operator looking at a saved settings page with no
+    passphrase on it — indistinguishable from one where it worked, which is worse than the typo.
+
+    And the confirmation is cleared with `edited`: a leftover would silently match the *next*
+    passphrase typed into an empty box, which is the guard defeating itself.
+    """
+    source = _code(_components()["Settings.svelte"])
+    body = source.split("async function save()", 1)[1][:400]
+    assert re.search(r"if \(mismatched\.length\)", body), "save does not check the confirmation"
+    assert "return;" in body.split("mismatched.length")[1][:120], "it checks and carries on anyway"
+    assert "repeated = {};" in source, "a stale confirmation would match the next passphrase"

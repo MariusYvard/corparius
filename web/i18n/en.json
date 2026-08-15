@@ -84,6 +84,8 @@
  "cfg.testing": "Testing…",
  "cfg.title": "Configuration",
  "cfg.unsaved": "unsaved",
+ "cfg.confirm": "Type it again",
+ "cfg.mismatch": "The two do not match, so it was not saved.",
  "col.approved": "Approved",
  "col.done": "Done",
  "col.empty": "Empty",

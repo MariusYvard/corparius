@@ -147,7 +147,13 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # from the retrieval path, no document is in that state, `inventory` never sets the code, and a
     # translated sentence for an unreachable state describes a product that no longer exists.
     # Exactly the reasoning that removed `docs.why.budget` two commits earlier.
-    assert result["counts"] == {"en": 577, "fr": 577}, result["counts"]
+    # 579. The two since 577 are the passphrase's second box: `cfg.confirm` and `cfg.mismatch`.
+    # `CORP_SECRET_KEY` is the one field in the registry whose only backup is what the operator
+    # wrote down — setting it re-encrypts the store immediately and writes what was typed to
+    # `.env`, so a typo keeps working here and makes their password manager wrong somewhere else.
+    # Every other destructive path in the product is recoverable by construction; this is the one
+    # where the guarantee cannot come afterwards.
+    assert result["counts"] == {"en": 579, "fr": 579}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

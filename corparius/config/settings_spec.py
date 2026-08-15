@@ -449,6 +449,15 @@ class FieldSpec:
     # and folded away: an operator connecting Gmail should answer three
     # questions, not thirteen.
     advanced: bool = False
+    # **Typed twice, because a typo here is not recoverable from what the operator remembers.**
+    # Only for a value whose *only* copy is the one they wrote down: the passphrase is written to
+    # `.env` and the store is re-encrypted with it immediately, so a mistyped one keeps working on
+    # this machine and quietly makes their password manager wrong. It shows up the day they restore
+    # a backup somewhere else, which is the day they cannot fix it.
+    #
+    # Not on API keys and tokens: those are pasted rather than typed, they can be reissued, and a
+    # second box on thirteen fields is friction that teaches an operator to ignore the mechanism.
+    confirm: bool = False
 
     @property
     def bootstrap(self) -> bool:
@@ -555,6 +564,7 @@ SPEC: list[FieldSpec] = [
         "access",
         type="password",
         secret=True,
+        confirm=True,
         label_en="Encrypt secrets at rest",
         label_fr="Chiffrer les secrets au repos",
         help_en="Off by default. A passphrase here encrypts the secret settings (API "
@@ -1362,6 +1372,7 @@ def describe(key: str, lang_fields: bool = True) -> dict:
         "editable": src != "env",
         "restart_required": spec.bootstrap,
         "advanced": spec.advanced,
+        "confirm": spec.confirm,
     }
     out["value"] = None if spec.secret else value
     if spec.help_url:

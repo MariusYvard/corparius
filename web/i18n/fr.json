@@ -84,6 +84,8 @@
  "cfg.testing": "Test en cours…",
  "cfg.title": "Configuration",
  "cfg.unsaved": "non enregistrés",
+ "cfg.confirm": "Retapez-la",
+ "cfg.mismatch": "Les deux ne correspondent pas : rien n'a été enregistré.",
  "col.approved": "Approuvées",
  "col.done": "Terminées",
  "col.empty": "Vide",

@@ -8,6 +8,27 @@ was released.
 
 ## 0.4.0 — sept dossiers, sept rangs, et une console qui n'est plus un fichier
 
+- **Added : la phrase secrète de chiffrement se tape deux fois.**
+  C'est le seul champ du registre dont **la seule copie est ce que vous avez noté**. La poser depuis
+  la console rechiffre immédiatement tout ce qui est stocké *et* écrit ce que vous avez tapé dans
+  `.env` : une faute de frappe continue donc de marcher sur cette machine, et rend silencieusement
+  faux ce que vous avez mis dans votre gestionnaire de mots de passe. Vous le découvrez le jour où
+  vous restaurez une sauvegarde ailleurs, c'est-à-dire le jour où plus rien ne peut vous aider —
+  l'avertissement du CLI le dit déjà : « this is the only copy that opens your encrypted secrets ».
+
+  Une seule case de confirmation, sur un seul champ. Tout le reste de ce que la console peut détruire
+  est récupérable par construction, et l'était déjà : une entreprise supprimée part à la corbeille et
+  exige qu'on tape son slug, un document part dans `.trash/`, `restore` sauvegarde ce qu'il va écraser
+  **avant** d'y toucher, un greffon se réinstalle à un ref épinglé, et `secrets off` existe « so
+  turning it on was never a trap ». La phrase secrète est le seul cas où la garantie ne peut pas venir
+  après, parce que le dégât n'est pas dans les données. Une seconde case sur les treize clés d'API
+  collées serait de la friction qui apprend à cliquer sans lire.
+
+  Un désaccord refuse **toute** la sauvegarde plutôt que d'écarter le champ : une phrase secrète
+  silencieusement omise ressemblerait exactement à une phrase secrète enregistrée, ce qui est pire que
+  la faute de frappe qu'on voulait éviter. Et la confirmation est effacée avec le reste, sinon elle
+  correspondrait à la *prochaine* phrase tapée dans une case vide.
+
 - **Changed : les cadences des agents, refondues, et quatre rôles qui attendent d'être utiles.**
   L'agent social tournait **toutes les 2 h**, soit douze brouillons par jour dans une file que
   personne ne publie et qu'un exploitant doit lire ; le CEO passait deux fois par jour, trop peu pour

@@ -61,6 +61,20 @@
   // Edits in flight, keyed by field. Not seeded from the payload: a refresh must never overwrite what
   // somebody is halfway through typing, and an untouched field simply is not submitted.
   let edited = $state({});
+  // The second box's contents, kept apart from `edited` so it can never be sent: it is a check on
+  // what the operator typed, not a setting.
+  let repeated = $state({});
+  // Which confirmed fields do not match yet. Derived rather than computed on save, because the
+  // message has to appear while they are typing, not after they have pressed a button that did
+  // nothing.
+  let mismatched = $derived(
+    Object.keys(edited).filter(
+      (key) =>
+        (registry?.fields ?? []).find((f) => f.key === key)?.confirm &&
+        String(edited[key] ?? "") !== "" &&
+        String(edited[key] ?? "") !== String(repeated[key] ?? ""),
+    ),
+  );
   // Per-field refusals, so each sentence lands next to the input that caused it rather than in one
   // banner. `detail.errors` carries them apart for exactly this.
   let refusals = $state({});
@@ -103,6 +117,13 @@
   const groupHelp = (g) => (lang === "fr" ? g.help_fr : g.help_en) || "";
 
   async function save() {
+    // **Nothing is sent while a confirmed field disagrees with itself.** Refusing the whole save
+    // rather than dropping the one field: a passphrase silently left out would look exactly like a
+    // passphrase that was set, which is worse than the typo it was guarding against.
+    if (mismatched.length) {
+      said = t("cfg.mismatch");
+      return;
+    }
     busy = "save";
     said = "";
     refusals = {};
@@ -123,6 +144,9 @@
       const done = await post("/api/v1/settings", { values, unset }, { token });
       registry = done;
       edited = {};
+      // Cleared with `edited`: a leftover confirmation would silently match the *next* passphrase
+      // typed into an empty box, which is the guard defeating itself.
+      repeated = {};
       said = t("cfg.saved");
       if (done.restart_required?.length) said = `${said} ${t("cfg.restartNote")}`;
       // Stored, and still overridden. The environment belongs to whoever started the process, so
@@ -353,6 +377,25 @@
                   value={edited[f.key] ?? ""}
                   oninput={(e) => (edited[f.key] = e.currentTarget.value)}
                 />
+                <!-- **Typed twice, for the one value whose only backup is the operator's memory of
+                     it.** Setting the passphrase re-encrypts the store immediately *and* writes what
+                     was typed to `.env`, so a typo keeps working here and quietly makes their
+                     password manager wrong. They find out the day they restore a backup on another
+                     machine, which is the day nothing can help them.
+                     `f.confirm` is declared on the field in `settings_spec`, not decided here: one
+                     field wants this and thirteen pasted API keys do not, and a second box on all of
+                     them teaches an operator to ignore the mechanism. -->
+                {#if f.confirm}
+                  <input
+                    type="password"
+                    autocomplete="off"
+                    class="confirm"
+                    disabled={!f.editable}
+                    placeholder={t("cfg.confirm")}
+                    value={repeated[f.key] ?? ""}
+                    oninput={(e) => (repeated[f.key] = e.currentTarget.value)}
+                  />
+                {/if}
               {:else}
                 <input
                   type={f.type === "int" || f.type === "float" ? "number" : "text"}

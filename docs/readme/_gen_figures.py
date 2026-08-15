@@ -155,7 +155,7 @@ def roster(p):
             s += text(
                 rail_x,
                 y + 22,
-                "on demand — when the CEO files a task",
+                "on demand, when the CEO files a task",
                 p,
                 size=12.5,
                 fill="muted",
@@ -206,8 +206,8 @@ def guards(p):
         H,
         p,
         "EVERY TURN PASSES THREE GUARDS, THEN STOPS AT YOU",
-        "three automatic guards in front of every agent turn — a token budget, a loop guard and a "
-        "circuit breaker — and then the human gate, where money and production code wait for the "
+        "three automatic guards in front of every agent turn (a token budget, a loop guard and a "
+        "circuit breaker), and then the human gate, where money and production code wait for the "
         "operator",
     )
     CW, CH, y = 268, 150, 84
@@ -326,7 +326,7 @@ WAYS = [
     (
         "Plugins",
         "code",
-        "providers, tools, templates —\nwithout touching the core",
+        "providers, tools, templates,\nwithout touching the core",
         "plugins/registry.json",
         "accent",
     ),
@@ -340,7 +340,7 @@ WAYS = [
     (
         "Documents",
         "files",
-        "the deck, the spec, the price list —\nread with the standard library",
+        "the deck, the spec, the price list:\nread with the standard library",
         "documents/",
         "green",
     ),

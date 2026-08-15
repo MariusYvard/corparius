@@ -87,7 +87,7 @@ def svg(p):
     # dark surface. A filter kept "just in case" would be the banner quietly disagreeing with the
     # console about what the brand colour is.
     ink = ""
-    return f'''<svg viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="corparius — self-hosted autonomous AI micro-companies">
+    return f'''<svg viewBox="0 0 1200 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="corparius: self-hosted autonomous AI micro-companies">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
       <stop offset="0" stop-color="{p["bg0"]}"/><stop offset="1" stop-color="{p["bg1"]}"/>
@@ -117,7 +117,7 @@ def svg(p):
   <rect width="1200" height="2.5" fill="url(#beam)"/>
 
   <!-- the mark, floated on a soft halo instead of a chip. 40x32 at scale 5.4 is 216x173, which is
-       the space the raster used to occupy — drawn, so it is sharp at any size the README is read at. -->
+       the space the raster used to occupy, drawn, so it is sharp at any size the README is read at. -->
   <ellipse cx="185" cy="150" rx="150" ry="96" fill="url(#halo)"/>
   {mark(185, 150, 4.9, p["text"])}
 
@@ -125,13 +125,13 @@ def svg(p):
   <text x="356" y="112" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace" font-size="13" letter-spacing="3.5" fill="{p["kicker"]}">SELF-HOSTED · LOCAL-FIRST · AUDITABLE</text>
   <text x="355" y="158" font-family="'Segoe UI',system-ui,-apple-system,sans-serif" font-size="35" font-weight="700" fill="{p["text"]}">Autonomous AI micro-companies</text>
   <text x="355" y="199" font-family="'Segoe UI',system-ui,-apple-system,sans-serif" font-size="35" font-weight="700" fill="{p["text"]}">you run yourself.</text>
-  <text x="357" y="235" font-family="'Segoe UI',system-ui,-apple-system,sans-serif" font-size="14.5" fill="{p["muted"]}">A CEO and nine agents pursue one signal — revenue — behind a budget and loop firewall.</text>
+  <text x="357" y="235" font-family="'Segoe UI',system-ui,-apple-system,sans-serif" font-size="14.5" fill="{p["muted"]}">A CEO and nine agents pursue one signal, revenue, behind a budget and loop firewall.</text>
   <text x="357" y="257" font-family="'Segoe UI',system-ui,-apple-system,sans-serif" font-size="14.5" fill="{p["muted"]}">Cloud LLMs are opt-in, never required. Ship nothing you cannot audit.</text>
 
   <!-- the one warm accent: the human gate, echoing the console's rule -->
   <g transform="translate(357,272)">
     <circle cx="6" cy="0" r="4.5" fill="{p["warm"]}"/>
-    <text x="20" y="4.5" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace" font-size="12.5" letter-spacing="0.4" fill="{p["warm"]}">the human gate is the point — money and prod code wait for you</text>
+    <text x="20" y="4.5" font-family="ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace" font-size="12.5" letter-spacing="0.4" fill="{p["warm"]}">the human gate is the point: money and prod code wait for you</text>
   </g>
 
   <!-- right-aligned pulse, the way the Overview hero carries its stats -->

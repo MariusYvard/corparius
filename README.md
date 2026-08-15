@@ -1,13 +1,14 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg">
-    <img src="docs/banner.svg" alt="corparius — self-hosted autonomous AI micro-companies you run yourself" width="100%">
+    <img src="docs/banner.svg" alt="corparius: self-hosted autonomous AI micro-companies you run yourself" width="100%">
   </picture>
 </p>
 
 <p align="center">
   <a href="https://github.com/MariusYvard/corparius/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/MariusYvard/corparius/ci.yml?branch=main&style=flat-square&label=CI&labelColor=0A1D48" alt="CI"></a>
   <img src="https://img.shields.io/badge/python-3.10+-2456D3?style=flat-square&labelColor=0A1D48&logo=python&logoColor=white" alt="Python 3.10+">
+  <a href="https://pypi.org/project/corparius/"><img src="https://img.shields.io/pypi/v/corparius?style=flat-square&labelColor=0A1D48&color=2456D3&label=pypi" alt="PyPI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2456D3?style=flat-square&labelColor=0A1D48" alt="MIT"></a>
   <img src="https://img.shields.io/badge/self--hosted-first-537CD6?style=flat-square&labelColor=0A1D48" alt="Self-hosted first">
   <img src="https://img.shields.io/badge/runs-offline%2C%20no%20keys-64B8D2?style=flat-square&labelColor=0A1D48" alt="Runs offline, no keys">
@@ -15,13 +16,13 @@
 
 # corparius
 
-Describe a business in plain language. corparius runs it as ten scheduled agents —
-a CEO and nine operational roles — that pursue one signal, revenue, behind a budget
+Describe a business in plain language. corparius runs it as ten scheduled agents
+(a CEO and nine operational roles) that pursue one signal, revenue, behind a budget
 and a loop firewall. **Everything stays on your machine**: the config, the state,
 and the models. Cloud LLMs are an opt-in escalation, never a requirement.
 
 > **Working MVP.** The orchestrator, the firewall, the approval gate, the console
-> and the ten-agent roster run end to end against a deterministic mock LLM — a full
+> and the ten-agent roster run end to end against a deterministic mock LLM: a full
 > company day, offline, with no keys. Live providers are wired in and selected by
 > config, and `corparius preflight` proves by one real call which of them your
 > account can actually reach.
@@ -45,7 +46,7 @@ and the models. Cloud LLMs are an opt-in escalation, never a requirement.
 
 Runs offline out of the box (mock LLM, SQLite). No keys, no models, no accounts.
 
-**No Python, no terminal, no clone — download one file and open it.** From the
+**No Python, no terminal, no clone. Download one file and open it.** From the
 [latest release](https://github.com/MariusYvard/corparius/releases/latest):
 
 | System | Download | Then |
@@ -59,22 +60,26 @@ The builds are unsigned, so the OS shows a first-run warning; the steps above ge
 past it. Your data lives in a per-OS folder, so a newer build keeps every company
 and setting. [docs/install.md](docs/install.md) has the exact screens.
 
-From source instead — double-click `start-windows.bat`, `start-macos.command` or
+From source instead, double-click `start-windows.bat`, `start-macos.command` or
 `start-linux.sh` (Python 3.10+ is the only prerequisite; it makes the venv,
 installs, prepares the example company and opens the console). Or a terminal:
 
 ```bash
+pip install corparius && corparius ui                    # the console on :8600, no clone
 git clone https://github.com/MariusYvard/corparius.git && cd corparius
 python start.py                                          # venv, deps, example company, browser
 docker compose up -d                                     # or Docker, console on :8600 + Ollama
 docker run -d -p 127.0.0.1:8600:8600 -v corparius_data:/app/data ghcr.io/mariusyvard/corparius
 ```
 
+The wheel carries the built console, so `pip install` needs no Node, and that is
+asserted on every release rather than assumed. Two runtime dependencies, `requests` and `PyYAML`; everything else is stdlib.
+
 The console walks you through your first company; `corparius doctor` diagnoses the
 installation and says what to fix.
 
 <details>
-<summary><b>The CLI does everything the console does</b> — <code>corparius &lt;command&gt; --help</code> explains each one</summary>
+<summary><b>The CLI does everything the console does</b>: <code>corparius &lt;command&gt; --help</code> explains each one</summary>
 
 | | |
 | --- | --- |
@@ -110,7 +115,7 @@ and stops the moment a guard trips.
 </p>
 
 Each role has a narrow toolset and its own cadence. The cadences are **staggered on
-purpose** — a company that woke every agent at once would spend its whole budget in
+purpose**: a company that woke every agent at once would spend its whole budget in
 one burst.
 
 <p align="center">
@@ -125,30 +130,30 @@ one burst.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/console-dark.png">
-    <img src="docs/screenshots/console.png" alt="corparius operator console, Overview: the approval queue first, each request showing what it will do and the values it will run with, then the day's pulse — simulated hour, actions taken, tokens used, tasks delivered — the recent agent activity log and the go-live checklist" width="100%">
+    <img src="docs/screenshots/console.png" alt="corparius operator console, Overview: the approval queue first, each request showing what it will do and the values it will run with, then the day's pulse (simulated hour, actions taken, tokens used, tasks delivered), the recent agent activity log and the go-live checklist" width="100%">
   </picture>
 </p>
 
-`corparius ui` serves it on `http://127.0.0.1:8600` — Svelte, built in CI, and
+`corparius ui` serves it on `http://127.0.0.1:8600`. Svelte, built in CI, and
 **served with no Node installed anywhere**. English and French, dark and light.
 
 It leads with what needs you. The approval queue is first on the page, and each
-request shows **what is about to happen** — the drafted sentence and the values it
-will run with — rather than the tool's description of itself. Being asked to press
+request shows **what is about to happen**, the drafted sentence and the values it
+will run with, rather than the tool's description of itself. Being asked to press
 Approve on a verb is not consent.
 
 Nothing here needs a text editor. Seven tabs cover the backlog as a kanban you can
 arbitrate, run control, per-agent spend, the sales site, documents, every provider
 key, the mail account, Stripe, and a chat with the CEO. And when you do not know
-what to do next, the CEO tab derives it from the store — decisions waiting, a
-question in the inbox, drafts nobody has read — and every one is a button that
+what to do next, the CEO tab derives it from the store: decisions waiting, a
+question in the inbox, drafts nobody has read. Every one of them is a button that
 **takes you there** rather than a sentence telling you where to go.
 
 The console binds to localhost, and keys posted from it are write-only: stored,
 never displayed back. `corparius pair` issues a credential per device (`scrypt`,
 constant-time compare, shown once, `read` or `act`). A versioned JSON API lives at
 `/api/v1` with one error envelope and an `ETag` on every GET. There is deliberately
-**no TLS** — the honest answer for a stdlib server is loopback plus a tunnel, and
+**no TLS**. The honest answer for a stdlib server is loopback plus a tunnel, and
 the doctor fails if a device credential exists while the listener is off loopback.
 [docs/console.md](docs/console.md).
 
@@ -200,7 +205,7 @@ blocked six months ago gets another chance.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme/guards-dark.svg">
-    <img src="docs/readme/guards.svg" alt="Three automatic guards in front of every agent turn — a token budget, a loop guard and a circuit breaker — and then the human gate, where money and production code wait for the operator." width="100%">
+    <img src="docs/readme/guards.svg" alt="Three automatic guards in front of every agent turn (a token budget, a loop guard and a circuit breaker), and then the human gate, where money and production code wait for the operator." width="100%">
   </picture>
 </p>
 
@@ -227,19 +232,19 @@ back to the agent as a normal, recoverable tool error.
 </p>
 
 **Plugins** add providers, tools or templates without touching the core. They are
-off by default and curated — verified means listed in the reviewed
+off by default and curated: verified means listed in the reviewed
 `plugins/registry.json`, and unverified third-party code loads only behind an
 explicit opt-in. `corparius plugin install <name>` downloads at a pinned ref and
 verifies the SHA-256. [docs/plugins.md](docs/plugins.md)
 
 **Skills** are what your company knows in prose: the objection your market raises,
 the price you never discount below. A `SKILL.md` folder with frontmatter, and
-`allowed-tools` decides everything — the body enters a prompt only when the tool
+`allowed-tools` decides everything: the body enters a prompt only when the tool
 about to run is one it names, so a turn pays for the skills that apply to it and
 nothing else. [docs/skills.md](docs/skills.md)
 
 **Documents** are the files it already has. A PDF, `.docx`, `.pptx`, `.xlsx`, CSV,
-Markdown and plain text are read **with the standard library** — no new dependency,
+Markdown and plain text are read **with the standard library**. No new dependency,
 and nothing invented: a scanned PDF says "no text layer this build can read" rather
 than returning noise. A picture is *sent*, not described, and only to a model
 `preflight` has measured can read one. Every readable file is reduced to its
@@ -248,7 +253,7 @@ quoted, ranked against what the agent is about to do.
 [docs/documents.md](docs/documents.md)
 
 **Apps** put the providers you already configured behind something other than the
-roster — a FAQ on the sales site, a form that understands what a visitor wrote.
+roster: a FAQ on the sales site, a form that understands what a visitor wrote.
 A YAML file with its own token ceiling, rate limit and origin list, and its spend
 shows up in the console under `app:<name>`. No second API key.
 [docs/apps.md](docs/apps.md)
@@ -262,7 +267,7 @@ Every setting resolves through four layers, first hit wins:
 | 1 | the real process environment | your shell, systemd, docker `environment:` |
 | 2 | the settings saved from the console | the console |
 | 3 | `.env` | a text editor |
-| 4 | the default in the code | — |
+| 4 | the default in the code | *(nothing to set)* |
 
 The console can set everything in layer 2, and it says which layer answers for each
 field: a value pinned by the process environment is shown read-only rather than
@@ -279,7 +284,7 @@ secret either way.
 ## Structure
 
 Seven directories, seven ranks, and a rule held by a test rather than by good
-intentions: **a module of rank *n* imports only ranks ≤ *n*** — deferred imports
+intentions: **a module of rank *n* imports only ranks ≤ *n***, deferred imports
 included. `tests/test_layers.py` reads the import graph with the AST and fails on a
 new upward edge, and equally on a violation that was fixed and not struck off the
 list.
@@ -288,11 +293,11 @@ list.
 kernel/ 0   stdlib only        providers/ 3   the outside world
 config/ 1   settings resolver  domain      4   agents, tools, documents, sitegen
 store/  2   the only sqlite3   app/       5   use cases, no transport
-                               api/ cli/  6   HTTP, CLI, MCP — nothing imports these
+                               api/ cli/  6   HTTP, CLI, MCP. Nothing imports these
 ```
 
 Reading a setting no longer loads `requests` or `subprocess`, and the domain cannot
-touch the network, sqlite or a subprocess — a gate rather than an observation.
+touch the network, sqlite or a subprocess: a gate rather than an observation.
 [docs/architecture-code.md](docs/architecture-code.md) has the table and the
 measurements; [docs/adr/](docs/adr/) has one decision per file.
 

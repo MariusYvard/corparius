@@ -1,4 +1,4 @@
-<svg viewBox="0 0 1200 356" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="three automatic guards in front of every agent turn — a token budget, a loop guard and a circuit breaker — and then the human gate, where money and production code wait for the operator">
+<svg viewBox="0 0 1200 356" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="three automatic guards in front of every agent turn (a token budget, a loop guard and a circuit breaker), and then the human gate, where money and production code wait for the operator">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EEF2F9"/></linearGradient>
     <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" fill="#B7C2D8"/></pattern>

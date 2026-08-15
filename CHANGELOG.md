@@ -6,7 +6,17 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
-## Non publié
+## 0.4.0 — sept dossiers, sept rangs, et une console qui n'est plus un fichier
+
+Le chantier de restructuration, livré. 23 050 lignes sur 53 modules **à plat** deviennent sept
+dossiers et sept rangs, tenus par un test qui lit le graphe d'imports à l'AST — imports différés
+compris, parce que c'est par eux que les cinq cycles étaient invisibles. La console de 3 617 lignes
+en un fichier devient du Svelte construit en CI, servi **sans Node installé nulle part**. Et il y a
+désormais une API versionnée avec un identifiant par appareil, ce qui rend un second client possible
+sans geler la forme interne de la console.
+
+Mineure et non majeure, délibérément : l'API v1 est jeune, l'appairage n'a encore servi aucun vrai
+second client, et 1.0 est une promesse qu'on ne reprend pas.
 
 - **Changed : la console est réécrite, et c'est la première chose qui se voit.**
   L'ancienne page était **un seul fichier de 3 617 lignes** : 512 lignes de CSS, 2 264

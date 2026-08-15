@@ -265,6 +265,63 @@ jobs:
 
   # Publish the GitHub Release with every binary, a consolidated SHA256SUMS and
   # auto-generated notes. The Docker image is published by the docker job above.
+  # `pip install corparius`. The wheel has been built and smoke-tested in CI since the console moved
+  # to Svelte — installed into a clean venv, asked for its shipped resources, and made to serve the
+  # built page **with no Node present**. It was simply never published anywhere, so the one install
+  # path a Python user reaches for first did not exist.
+  #
+  # **After the release, not before it.** The binaries and the image are the paths the README sends
+  # people to; a PyPI account not yet configured must not be able to take them down with it. This
+  # job needs `github-release` to have finished, and it fails loudly on its own if it cannot publish.
+  #
+  # **Trusted Publishing, so there is no token to leak or rotate.** PyPI mints a short-lived
+  # credential from this workflow's OIDC identity, which is why `id-token: write` is here and no
+  # secret is. It has to be configured once, on PyPI, before the first release — including for a
+  # project that does not exist yet, which PyPI calls a *pending* publisher:
+  #
+  #   https://pypi.org/manage/account/publishing/  →  PyPI Project Name: corparius
+  #   Owner: MariusYvard · Repository: corparius · Workflow: release.yml · Environment: (blank)
+  #
+  # Without that, this job fails with an OIDC error and the release above it is already published.
+  pypi:
+    needs: github-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write     # the whole authentication; there is deliberately no password here
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # The console, before the wheel — `pyproject.toml` lists `corparius/api/static/**` as an
+      # artifact, and hatchling ships what is on disk. Building without this step produces a wheel
+      # that installs fine and serves the old single-file page, which is the failure the frozen
+      # build already had and nothing said so.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the console
+        run: npm ci --prefix web && npm run build --prefix web
+      - name: Build the wheel and the sdist
+        run: pip install build && python -m build
+      - name: The wheel carries the built console
+        run: |
+          set -euo pipefail
+          contains() {  # contains "$body" 'needle' 'what this proves'
+            case "$1" in
+              *"$2"*) echo "  checked · $3" ;;
+              *) echo "FAILED · $3 — no match for: $2"; exit 1 ;;
+            esac
+          }
+          listing=$(python -c "import zipfile,glob; print('\n'.join(zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist()))")
+          contains "$listing" 'corparius/api/static/index.html' "the built console is in the wheel"
+          contains "$listing" 'corparius/webui.html' "and the single-file fallback with it"
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
   github-release:
     needs: [docker, native]
     if: startsWith(github.ref, 'refs/tags/v')

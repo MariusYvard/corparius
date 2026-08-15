@@ -99,6 +99,22 @@ SPEC: dict[str, ToolSpec] = {
             "instructions": {"type": "str", "required": True, "max_len": 2000},
         },
     ),
+    "write_style_rule": ToolSpec(
+        "write_style_rule",
+        "Turn a wording this company keeps correcting into a permanent rule",
+        needs_draft=True,
+        # WRITE_LOCAL for the same reason as `write_skill`: it puts a line in a file under the
+        # company's folder, and that line is then checked on every draft the company ever makes.
+        risk=permissions.WRITE_LOCAL,
+        schema={
+            # A **phrase**, never a pattern. The effect escapes it and builds the regular expression
+            # itself, exactly as `write_skill` sets its own scope: a model-authored regex is a model
+            # authoring code that runs on every draft forever, and one nested quantifier is a check
+            # that hangs the company.
+            "phrase": {"type": "str", "required": True, "max_len": 80},
+            "why": {"type": "str", "default": "", "max_len": 120},
+        },
+    ),
     "write_note": ToolSpec(
         "write_note",
         "Write the internal document a task asks for",

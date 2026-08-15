@@ -166,7 +166,19 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         # model pin, so this is also how a different model gets to judge — pin strategy to something
         # other than design's tier and the separation is real rather than hoped for. The tool itself
         # reads `source` off both actions and says when they were the same.
-        ["review_kpis", "update_pricing", "kaizen", "review_generated_site", "remember"],
+        [
+            "review_kpis",
+            "update_pricing",
+            "kaizen",
+            "review_generated_site",
+            # On strategy and not on the CEO, which is where `write_skill` sits. Two reasons, and
+            # the second is the one that decided it: this is kaizen (a standing improvement to how
+            # the company writes, which is this role's stated job), and the CEO's playbook is
+            # already fifteen tools running four times a day, which is 60 of the 130 model calls a
+            # day can hold. Strategy runs once, on the tier that reasons best about a pattern.
+            "write_style_rule",
+            "remember",
+        ],
         # Hour 7, on its own: the most expensive tier in the roster should not share a tick.
         offset_hours=7,
     ),

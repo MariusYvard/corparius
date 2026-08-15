@@ -11,6 +11,7 @@ import logging
 import os
 import re
 
+from .. import housestyle
 from ..config import cfg
 from .base import esc, norm
 from .companions import companions
@@ -31,6 +32,46 @@ from .style import css
 log = logging.getLogger("corparius.sitegen.build")
 
 
+def _styled(company: dict, headline: str | None):
+    """The company's text fields through its charter. Returns (company, headline, what is left).
+
+    A copy, never the caller's dict: `build_site` is handed the live company config by the
+    orchestrator and by the console, and quietly editing it would make a page build change what the
+    next agent turn reads.
+
+    Only the fields that become page text. `slug`, `payment_link` and the rest are identifiers and
+    URLs, and running an editorial rule over a URL is how a checker earns its way into being turned
+    off.
+    """
+    style = housestyle.load(str(company.get("slug") or ""))
+    left: list[dict] = []
+
+    def walk(value):
+        if isinstance(value, str):
+            fixed, hits = housestyle.apply(value, style)
+            left.extend(hits)
+            return fixed
+        if isinstance(value, list):
+            return [walk(item) for item in value]
+        return value
+
+    out = dict(company)
+    for key in ("name", "one_liner"):
+        if isinstance(out.get(key), str):
+            out[key] = walk(out[key])
+    offer = dict(out.get("offer") or {})
+    for key in ("product", "description", "pitch", "includes"):
+        if key in offer:
+            offer[key] = walk(offer[key])
+    out["offer"] = offer
+    icp = dict(out.get("icp") or {})
+    for key in ("segment", "pains"):
+        if key in icp:
+            icp[key] = walk(icp[key])
+    out["icp"] = icp
+    return out, (walk(headline) if isinstance(headline, str) else headline), left
+
+
 def build_site(company: dict, out_dir: str, headline: str | None = None, store=None) -> str:
     """Render a single-file sales page for `company` into out_dir/index.html.
 
@@ -38,6 +79,25 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
     the page is exactly what it was before, which is what every caller that has
     no store should get.
     """
+    # **The company's own words, through its charter, before anything derives from them.**
+    #
+    # The page has two sources of prose and only one of them was ever checked. A drafted headline
+    # passes the executor's styling on its way out of the model; `company.yaml` does not pass
+    # anything, and its text is most of what a visitor reads. Curly quotation marks are straightened
+    # (a word processor puts them there and nobody chose them); everything else is reported and left
+    # exactly as written, because an operator's own sentence is theirs and a charter is an
+    # instruction to their agents rather than a licence to rewrite them.
+    #
+    # Here rather than at each use: `head`, `lede`, `story`, the pains and the includes are all
+    # slices of these fields, and fixing a slice leaves the original wrong.
+    company, headline, unfixed = _styled(company, headline)
+    if unfixed:
+        log.info(
+            "site: %d style violation(s) in this company's own copy: %s",
+            len(unfixed),
+            ", ".join(sorted({v["rule"] for v in unfixed})),
+        )
+
     name = company.get("name", "Your product")
     offer = company.get("offer", {}) or {}
     icp = company.get("icp", {}) or {}

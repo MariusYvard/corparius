@@ -61,6 +61,29 @@ class ActionsMixin(Connected):
         return [dict(r) for r in rows]
 
     @_locked
+    def recent_parameters(self, company, tool: str, limit: int = 200) -> list[dict]:
+        """The `parameters` of the last `limit` rows for one tool, decoded.
+
+        `recent_actions` deliberately does not select this column: it feeds the console's activity
+        list, where a JSON blob per row would be payload nobody reads. This is the narrow reader for
+        the one caller that wants the structure back, which is how a pattern is found in what the
+        company has already recorded rather than in a table built to notice it.
+        """
+        rows = self.db.execute(
+            "SELECT parameters FROM actions WHERE company=? AND tool=? ORDER BY id DESC LIMIT ?",
+            (company, tool, int(limit)),
+        ).fetchall()
+        out = []
+        for row in rows:
+            try:
+                value = json.loads(row["parameters"] or "{}")
+            except (TypeError, ValueError):
+                continue
+            if isinstance(value, dict):
+                out.append(value)
+        return out
+
+    @_locked
     def routing_health(self, company, limit=200) -> dict:
         """Which providers answered the last drafted turns, and how often the chain fell back.
 

@@ -503,14 +503,35 @@ class Executor:
                 # Recorded beside the action rather than raised. The draft is usable and the
                 # violation is a fact about it, and a turn that failed over punctuation would be
                 # the charter costing more than it saves.
+                rules = sorted({v["rule"] for v in left})
                 log.info(
                     "[%s] %s: %d style violation(s): %s",
                     spec.role.value,
                     tool_name,
                     len(left),
-                    ", ".join(sorted({v["rule"] for v in left})),
+                    ", ".join(rules),
                 )
                 ctx.style_violations = left
+                # **Recorded, not only logged.** A log line is invisible to the product: the operator
+                # does not read it and no agent can. The action log is the history this codebase
+                # already uses to notice a pattern (`_repeated_failure` reads it to decide there is a
+                # procedure worth writing down), so a wording corrected on three different days is
+                # visible to `write_style_rule` through exactly the same door.
+                #
+                # `ok=True`, and the distinction matters: the draft is usable and a violation is an
+                # observation about it. Recording it as a failure would feed `_repeated_failure` and
+                # have the company writing a skill about how to fail at punctuation.
+                #
+                # One row per turn rather than one per hit, so a paragraph with nine curly quotes is
+                # one line in a log a person reads.
+                self.store.record_action(
+                    company,
+                    spec.role.value,
+                    "style_violation",
+                    {"rules": rules, "wording": sorted({v["text"] for v in left})[:8]},
+                    f"{tool_name}: " + ", ".join(rules),
+                    True,
+                )
 
             ctx.structured = result
             # The loop guard sees the **final** draft only. The first answer is scaffolding — a tool

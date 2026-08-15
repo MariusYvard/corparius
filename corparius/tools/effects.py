@@ -16,6 +16,7 @@ from .. import (
 )
 from .. import (
     documents,
+    housestyle,
     inbox,
     sitegen,
 )
@@ -1987,6 +1988,100 @@ def _nothing_to_learn(ctx) -> str:
     return ""
 
 
+# How many times one wording has to be corrected before it is worth a rule. Three, the same number
+# `write_skill` uses for a repeated failure, and for the same reason: twice is a coincidence and a
+# charter that grows on coincidences is a charter nobody can read.
+CORRECTIONS_BEFORE_A_RULE = 3
+# A ceiling on what agents may add. An operator's own rules are not counted: theirs are a decision,
+# these are an inference, and the two should not compete for the same room.
+RULE_WRITE_MAX = 12
+
+
+def _repeated_wording(ctx) -> list[str]:
+    """Wordings this company's charter has flagged at least `CORRECTIONS_BEFORE_A_RULE` times.
+
+    Reads the action log, which is where the executor records a style violation, so this needs no
+    table of its own. Exactly the shape `_repeated_failure` uses two functions up: the history the
+    product already keeps is the history a pattern is found in.
+    """
+    store = getattr(ctx, "store", None)
+    if store is None or not hasattr(store, "recent_actions"):
+        return []
+    if not hasattr(store, "recent_parameters"):
+        return []
+    seen: dict[str, int] = {}
+    for params in store.recent_parameters(ctx.company.get("slug", ""), "style_violation"):
+        for word in params.get("wording") or []:
+            text = str(word).strip()
+            # A single character is punctuation, and punctuation already has a rule. What is worth
+            # learning is a *word* this company keeps writing and correcting.
+            if len(text) > 3:
+                seen[text.lower()] = seen.get(text.lower(), 0) + 1
+    return sorted(w for w, n in seen.items() if n >= CORRECTIONS_BEFORE_A_RULE)
+
+
+def _nothing_to_rule(ctx) -> str:
+    """Why this turn writes no rule. A reason, so the log says which."""
+    slug = ctx.company.get("slug", "company")
+    style = housestyle.load(slug)
+    written = [r for r in style.rules if r.name.startswith(_AGENT_RULE_PREFIX)]
+    if len(written) >= RULE_WRITE_MAX:
+        return f"{RULE_WRITE_MAX} rules already written for this company; prune some first"
+    if not _repeated_wording(ctx):
+        return (
+            f"no wording has been corrected {CORRECTIONS_BEFORE_A_RULE} times, so there is no "
+            "pattern to write down"
+        )
+    return ""
+
+
+_AGENT_RULE_PREFIX = "learned-"
+
+
+def _write_style_rule_prompt(ctx) -> str:
+    words = _repeated_wording(ctx)
+    listed = "\n".join(f"- {w}" for w in words[:12])
+    return (
+        "This company's editorial rules keep catching the same wording. Below is what has "
+        "been flagged at least three times.\n\n"
+        + listed
+        + "\n\n`phrase`: the exact wording to forbid, copied from the list, nothing else. "
+        "`why`: one short clause an operator will read next to it, saying what to write "
+        "instead. Pick the one worth a permanent rule, not the one that appears most: a word "
+        "that is wrong in this company's voice, never one that happened to appear in a bad week."
+    )
+
+
+def _write_style_rule(ctx) -> str:
+    """Add one deterministic rule to the company's charter.
+
+    **The pattern is built here, from a literal, and never taken from the model.** A model-authored
+    regular expression is a model authoring code that runs on every draft forever, and one nested
+    quantifier is a check that hangs the company. `re.escape` on a phrase removes the entire class,
+    the same way `write_skill` sets its own scope rather than letting the model choose it.
+    """
+    result = getattr(ctx, "structured", None)
+    data = result.data if result else {}
+    phrase = " ".join(str(data.get("phrase") or "").split())
+    if len(phrase) < 4:
+        return "No rule written: the phrase was empty or too short to forbid."
+    if phrase.lower() not in {w.lower() for w in _repeated_wording(ctx)}:
+        # It has to be one of the wordings actually corrected. Otherwise this is a model deciding
+        # the company's editorial policy from whatever it had in mind, which is the opposite of a
+        # rule learned from what happened.
+        return f"No rule written: {phrase!r} is not one of the wordings that keep being corrected."
+    why = " ".join(str(data.get("why") or "").split())[:120] or "corrected repeatedly"
+    rule = housestyle.Rule(
+        name=f"{_AGENT_RULE_PREFIX}{text.slugify(phrase)[:32]}",
+        find=re.escape(phrase),
+        why=why,
+    )
+    slug = ctx.company.get("slug", "company")
+    if not housestyle.add_rule(slug, rule):
+        return f"Already a rule for {phrase!r}."
+    return f"Rule written: {phrase!r} is now checked on every draft. {why}"
+
+
 def _write_skill_prompt(ctx) -> str:
     tool, outputs = _repeated_failure(ctx)
     if not tool:
@@ -2119,6 +2214,11 @@ BEHAVIOUR: dict[str, Behaviour] = {
         skip_when=lambda c: _nothing_to_learn(c),
         prompt=lambda c: _write_skill_prompt(c),
         effect=lambda c, d: _ok(_write_skill(c)),
+    ),
+    "write_style_rule": Behaviour(
+        skip_when=lambda c: _nothing_to_rule(c),
+        prompt=lambda c: _write_style_rule_prompt(c),
+        effect=lambda c, d: _ok(_write_style_rule(c)),
     ),
     "write_note": Behaviour(
         prompt=lambda c: _write_note_prompt(c),

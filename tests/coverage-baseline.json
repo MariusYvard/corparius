@@ -60,6 +60,7 @@
   "corparius/doctor.py": 73.8,
   "corparius/documents.py": 91.6,
   "corparius/hitl.py": 100.0,
+  "corparius/housestyle.py": 94.0,
   "corparius/inbox.py": 95.6,
   "corparius/kernel/__init__.py": 100.0,
   "corparius/kernel/clock.py": 100.0,

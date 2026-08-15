@@ -278,3 +278,243 @@ def test_the_charter_reaches_the_prompt_and_the_answer(home):
     rules = {v["rule"] for v in ctx.style_violations}
     assert "puffery" in rules and "no-widget" in rules, rules
     assert "curly-quote" not in rules, "a fixed violation is not one that is left"
+
+    # Three: it is **recorded**, not only logged. This is the first link of the learning loop and
+    # nothing asserted it until the non-vacuity pass removed the write and no test noticed. A log
+    # line is invisible to the product: the operator does not read it and no agent can.
+    kept = Store(str(home / "data"))
+    try:
+        params = kept.recent_parameters("acme", "style_violation")
+    finally:
+        kept.close()
+    assert params, "the violation was logged and never recorded"
+    assert "incontournable" in params[0]["wording"]
+
+
+# --- the other source of prose on a page ------------------------------------------
+
+
+def test_the_shipped_page_copy_already_obeys_the_charter():
+    """**The claim I made and then measured, in the wrong order.**
+
+    A commit message of mine said the site's own copy held 13 dashes and 10 curly quotes outside the
+    charter. It does not. Those counts came from scanning `sitegen/*.py` for the characters, and every
+    hit was a regular expression built to *match* curly quotes, a punctuation set built to split on
+    dashes, or CSS. The prose is the `STRINGS` table, and all 105 entries across every language are
+    clean.
+
+    So this is the ratchet rather than the fix: the shipped furniture is correct today and a new
+    heading that is not will fail here rather than on somebody's published page.
+    """
+    from corparius.sitegen.copy import STRINGS
+
+    dirty = [
+        (lang, key, v["rule"])
+        for lang, table in STRINGS.items()
+        for key, value in table.items()
+        for v in hs.check(value)
+    ]
+    assert not dirty, dirty
+    assert sum(len(t) for t in STRINGS.values()) > 80, "the table shrank; this is checking little"
+
+
+def test_a_companys_own_copy_goes_through_its_charter_on_the_way_to_the_page(home, tmp_path):
+    """The half that was genuinely uncovered.
+
+    A drafted headline is styled on its way out of the model. `company.yaml` is styled by nothing,
+    and its text is most of what a visitor reads: the product description, the segment, the pains,
+    the includes. A charter that stops at the model reaches the smaller half of the page.
+
+    Straightened, not rewritten. A curly quotation mark arrives from a word processor and nobody
+    chose it. `incontournable` is the operator's own word in their own file, and a charter is an
+    instruction to their agents rather than a licence to edit them, so it is reported and left.
+    """
+    from corparius.sitegen.build import build_site
+
+    company = {
+        "slug": "acme",
+        "name": "Acme",
+        "language": "en",
+        "one_liner": "The “only” tool that matters.",
+        "offer": {"product": "An incontournable widget for teams.", "price_eur": 9},
+        "icp": {"segment": "teams", "pains": ["“manual” work"]},
+    }
+    before = dict(company)
+    page = pathlib.Path(build_site(company, str(tmp_path / "site"))).read_text(encoding="utf-8")
+
+    assert "“" not in page and "”" not in page, "curly quotes reached the page"
+    # `&quot;`, which is what this page's escaper produces for a straight quotation mark. The point
+    # is that the character arrived straight and was then escaped, rather than arriving curly.
+    assert "&quot;only&quot;" in page, page[:400]
+    assert "&quot;manual&quot;" in page, "a nested list of the operator's text was missed"
+    assert "incontournable" in page, "the operator's own word was rewritten"
+    assert company == before, "build_site edited the live company config"
+
+
+# --- an agent closing the loop ----------------------------------------------------
+
+
+def test_a_wording_corrected_three_times_becomes_a_rule_that_catches_it(home):
+    """The whole loop, end to end, because each half alone proves nothing.
+
+    A violation is recorded in the action log rather than only logged, which is what makes it
+    visible to an agent at all: `_repeated_failure` already reads that log to decide there is a
+    procedure worth writing down, and this uses the same door rather than a table of its own.
+
+    Three, the same threshold `write_skill` uses. Twice is a coincidence, and a charter that grows
+    on coincidences is one nobody can read.
+    """
+    import types
+
+    from corparius.store import Store
+    from corparius.tools import effects
+    from corparius.tools.registry import TOOLS
+
+    store = Store(str(home / "data"))
+    try:
+        ctx = types.SimpleNamespace(
+            company={"slug": "acme", "name": "Acme"}, store=store, role="strategy", structured=None
+        )
+        # Nothing has happened: the tool says so instead of running.
+        assert "no pattern" in TOOLS["write_style_rule"].skip_reason(ctx)
+
+        for _ in range(2):
+            store.record_action(
+                "acme", "social", "style_violation", {"wording": ["synergie"]}, "x", True
+            )
+        assert "no pattern" in TOOLS["write_style_rule"].skip_reason(ctx), "twice is not a pattern"
+
+        store.record_action(
+            "acme", "social", "style_violation", {"wording": ["synergie"]}, "x", True
+        )
+        assert TOOLS["write_style_rule"].skip_reason(ctx) == ""
+        assert "synergie" in effects._write_style_rule_prompt(ctx)
+
+        # The model answers with the phrase, and the rule is built from it.
+        ctx.structured = types.SimpleNamespace(
+            data={"phrase": "synergie", "why": "say what the thing does"}
+        )
+        out = TOOLS["write_style_rule"].run(ctx, "")
+        assert out.ok and "synergie" in out.output
+        # Inside the block: the second filing reads the log again, and a closed store is a
+        # ProgrammingError rather than an answer.
+        assert "Already a rule" in effects._write_style_rule(ctx)
+    finally:
+        store.close()
+
+    style = hs.load("acme")
+    assert [v["rule"] for v in hs.check("Une vraie synergie.", style)] == ["learned-synergie"]
+
+
+def test_the_pattern_is_built_from_a_literal_and_never_taken_from_the_model(home):
+    """A model-authored regular expression is a model authoring code that runs on every draft
+    forever, and one nested quantifier is a check that hangs the company. The schema asks for a
+    phrase, the effect escapes it, and a phrase that looks like a pattern is matched literally."""
+    import types
+
+    from corparius.store import Store
+    from corparius.tools import effects
+
+    store = Store(str(home / "data"))
+    try:
+        for _ in range(3):
+            store.record_action(
+                "acme", "social", "style_violation", {"wording": ["(a+)+b"]}, "x", True
+            )
+        ctx = types.SimpleNamespace(
+            company={"slug": "acme"},
+            store=store,
+            role="strategy",
+            structured=types.SimpleNamespace(data={"phrase": "(a+)+b", "why": "no"}),
+        )
+        assert "Rule written" in effects._write_style_rule(ctx)
+    finally:
+        store.close()
+
+    style = hs.load("acme")
+    assert [v["rule"] for v in hs.check("literally (a+)+b here", style)] == ["learned-a-b"]
+    assert hs.check("aaaaaaaaaaaaaaaaaaaaaaaaab", style) == [], "the phrase was read as a pattern"
+
+
+def test_a_phrase_the_company_never_corrected_is_refused(home):
+    """Otherwise this is a model deciding the company's editorial policy from whatever it had in
+    mind, which is the opposite of a rule learned from what happened."""
+    import types
+
+    from corparius.store import Store
+    from corparius.tools import effects
+
+    store = Store(str(home / "data"))
+    try:
+        ctx = types.SimpleNamespace(
+            company={"slug": "acme"},
+            store=store,
+            role="strategy",
+            structured=types.SimpleNamespace(data={"phrase": "whatever", "why": "because"}),
+        )
+        assert "not one of the wordings" in effects._write_style_rule(ctx)
+    finally:
+        store.close()
+    assert hs.load("acme").rules == hs.DEFAULT_RULES
+
+
+def test_an_operator_can_declare_a_fix_of_their_own(home):
+    """The shipped rules fix one thing (curly to straight) because that is the only correction that
+    needs no reading. An operator knows their own copy better: `fix:` in their file is a
+    substitution they have decided is safe, and this is what makes the field mean anything."""
+    _write(
+        home,
+        "rules:\n"
+        "  - name: house-name\n"
+        r"    find: Acme Inc\." + "\n"
+        "    fix: Acme\n"
+        "    why: the legal name is not the brand\n",
+    )
+    fixed, left = hs.apply("Buy from Acme Inc. today.", hs.load("acme"))
+    assert fixed == "Buy from Acme today."
+    assert not [v for v in left if v["rule"] == "house-name"]
+
+
+def test_a_hand_edited_file_survives_its_own_typos(home):
+    """Everything here is written by a person in a text editor, so every shape is a shape that will
+    arrive: a rule that is a bare string, one with no pattern at all, and a whole file that is a
+    list instead of a mapping. None of them may cost the rest of the charter, and none may raise
+    inside a prompt build."""
+    _write(
+        home,
+        "rules:\n  - just a string\n  - why: no pattern here\n  - name: real\n    find: widget\n",
+    )
+    assert [r.name for r in hs.load("acme").rules][:1] == ["real"]
+
+    _write(home, "- this file is a list\n- not a mapping\n")
+    assert hs.load("acme").rules == hs.DEFAULT_RULES
+
+
+def test_the_narrow_reader_skips_a_row_it_cannot_decode(home):
+    """`recent_parameters` reads a column every other caller ignores, so it meets whatever has ever
+    been written there: rows from an older schema, a value that is not JSON, a JSON list where a
+    mapping was expected. One of those must not cost the rows around it, because the caller is
+    deciding whether a pattern exists and a raised exception is not "no pattern".
+    """
+    from corparius.store import Store
+
+    store = Store(str(home / "data"))
+    try:
+        store.record_action("acme", "social", "style_violation", {"wording": ["good"]}, "x", True)
+        # Written straight to the column, which is how an older row or a hand-fixed database looks.
+        store.db.execute(
+            "INSERT INTO actions (company, agent, tool, parameters, output, ok, ts)"
+            " VALUES (?,?,?,?,?,?,?)",
+            ("acme", "social", "style_violation", "not json at all", "x", 1, 0.0),
+        )
+        store.db.execute(
+            "INSERT INTO actions (company, agent, tool, parameters, output, ok, ts)"
+            " VALUES (?,?,?,?,?,?,?)",
+            ("acme", "social", "style_violation", '["a list"]', "x", 1, 0.0),
+        )
+        store.db.commit()
+        rows = store.recent_parameters("acme", "style_violation")
+    finally:
+        store.close()
+
+    assert rows == [{"wording": ["good"]}], rows

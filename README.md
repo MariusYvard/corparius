@@ -314,9 +314,17 @@ measurements; [docs/adr/](docs/adr/) has one decision per file.
 
 Self-hosting the operations does not exempt the business from the law.
 [docs/conformite-fr.md](docs/conformite-fr.md) covers the parts that bite:
-e-invoicing through an approved PDP (Factur-X, the 2027 B2B mandate), ten-year
-archival, the choice of legal form, and where the EU AI Act classifies an agent as
-high-risk. Read it before you point this at real customers.
+e-invoicing through an approved PDP (Factur-X, the 2027 B2B mandate), the legal
+notice a commercial site must carry, ten-year archival, the choice of legal form,
+and where the EU AI Act classifies an agent as high-risk. Read it before you point
+this at real customers.
+
+Two things corparius does rather than claims. The notice fields are typed once in
+the console and the page renders **only what was filled**, because a heading over
+a blank says the company looked and found nothing. And connecting a bank (Qonto,
+alongside a Stripe link) proves the credentials and nothing else: no invoice is
+created, nothing is transmitted, and corparius does not assert that any bank is an
+approved platform. That fact lives in a public register, not in this code.
 
 ## Documentation
 
@@ -328,7 +336,7 @@ high-risk. Read it before you point this at real customers.
 | `docs/console.md` | the operator console (API, security model) |
 | `docs/llm-providers.md` | every free LLM provider: limits, keys, privacy notes |
 | `docs/securite.md` | the safety firewall and the Agent SRE mapping |
-| `docs/conformite-fr.md` | e-invoicing (PDP, Factur-X), legal forms, EU AI Act |
+| `docs/conformite-fr.md` | e-invoicing (PDP, Factur-X), the legal notice, legal forms, EU AI Act |
 | `docs/backlog.md` `docs/lean.md` | the CEO-governed backlog; pull flow, WIP limits, kaizen |
 | `docs/integrations.md` | the real-or-mock backend pattern (Stripe, SMTP) |
 | `docs/site.md` `docs/deploiement.md` | sales-site generator and multi-provider publishing |

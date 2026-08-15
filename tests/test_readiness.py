@@ -19,6 +19,8 @@ its whole budget in one burst". The README's cadence figure draws the contradict
 dots down the 00h line.
 """
 
+import pathlib
+
 import pytest
 
 from corparius import readiness
@@ -313,3 +315,29 @@ def test_a_filed_task_outranks_the_gate(home):
     # And it stops calling itself held, because it is not: it is about to run.
     assert "outreach" not in held_roles(ALL_ON, ready=set(), has_work={"outreach"})
     assert held_roles(ALL_ON, ready=set(), has_work={"outreach"})["ads"] == ["site", "payment"]
+
+
+def test_an_offer_that_is_not_a_mapping_is_not_an_offer(home):
+    """`offer:` left as a string or a list in a hand-edited company file. Reading `.get` off it
+    would raise inside the scheduler, which runs every tick, so the shape is checked rather than
+    trusted."""
+    for broken in ("just a sentence", ["a", "b"], 42):
+        assert readiness.facts({"slug": "a", "offer": broken}, str(home))["offer"] is False
+
+
+def test_a_marker_that_cannot_be_read_is_no_address_rather_than_a_crash(home, monkeypatch):
+    """The site is published (the marker exists) and the file itself will not open: a permission
+    change, a half-written file, a folder synced by something else. The fact stays true and the
+    address is empty, because the scheduler must not fall over on a read it does not depend on."""
+    from corparius.kernel import paths
+
+    site = paths.site_dir(str(home), "acme")
+    site.mkdir(parents=True, exist_ok=True)
+    (site / ".published").write_text("netlify:https://acme.example", encoding="utf-8")
+
+    def refuse(*_a, **_kw):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(pathlib.Path, "read_text", refuse)
+    assert readiness.published_url(str(home), "acme") == ""
+    assert readiness.facts({"slug": "acme"}, str(home))["site"] is True

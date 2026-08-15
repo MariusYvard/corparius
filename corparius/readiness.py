@@ -110,15 +110,3 @@ def facts(company: dict, data_path: str, slug: str = "") -> dict[str, bool]:
         # stronger signal is available honestly.
         "payment": link.startswith("http") or bool(cfg.get("STRIPE_API_KEY", "").strip()),
     }
-
-
-def missing(needs, company: dict, data_path: str, slug: str = "") -> list[str]:
-    """Which of a role's needs are not met yet, in the order the role declared them.
-
-    Returns a list rather than a boolean because the operator has to be told **which** one: "held
-    until you publish a site" is actionable and "not scheduled" is a bug report.
-    """
-    if not needs:
-        return []
-    have = facts(company, data_path, slug)
-    return [need for need in needs if not have.get(need, False)]

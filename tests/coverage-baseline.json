@@ -94,6 +94,7 @@
   "corparius/providers/routing.py": 100.0,
   "corparius/providers/signals.py": 65.7,
   "corparius/providers/sitecheck.py": 88.2,
+  "corparius/readiness.py": 100.0,
   "corparius/roster.py": 100.0,
   "corparius/safety.py": 99.0,
   "corparius/secretscli.py": 27.0,

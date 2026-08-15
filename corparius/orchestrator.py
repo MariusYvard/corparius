@@ -10,7 +10,7 @@ import logging
 import time
 from dataclasses import dataclass, field, replace
 
-from . import curator, documents, inbox, readiness
+from . import curator, documents, housestyle, inbox, readiness
 from .agents import Executor
 from .config.permissions import PermissionEngine
 from .config.settings import Settings
@@ -40,6 +40,13 @@ class RunContext:
     structured: object = None  # the last structured.Result, when a tool asked for one
     skills: object = None  # a skills.SkillLoader, or None when skills are off
     memory_top_k: int = 0  # durable facts recalled per prompt; 0 disables recall
+    # How this company writes: the charter that reaches the prompt and the rules that check the
+    # answer. `None` means the shipped default, which is what every caller that does not set it
+    # gets, so a plugin or a one-off console call is not writing without one.
+    style: object = None
+    # What the checker could not fix on the last draft, for a caller that wants to say so. An
+    # em dash or a banned word needs the sentence rewritten, which is a judgment this does not make.
+    style_violations: list = field(default_factory=list)
     # The company's own files, extracted once per tick. A pitch deck, a spec,
     # a price list: knowledge that had no way into a prompt at all before —
     # only the config, a hand-written skill, or nothing.
@@ -364,6 +371,9 @@ class Runtime:
                     # Read once per tick rather than per agent: extraction
                     # touches the disk, and every agent in a tick sees the
                     # same files.
+                    # Once per tick, like the documents and for the same reason: it is a file
+                    # read, and every agent in a tick writes to the same charter.
+                    style=housestyle.load(slug),
                     documents=documents.context(slug),
                     # The same files, unrendered, so each turn can rank them against its own prompt.
                     # "Every agent in a tick sees the same files" is true and was quietly doing more
@@ -459,6 +469,37 @@ class Runtime:
                         frozen = True
                         break
                 if frozen:
+                    break
+                # **A spent budget ends the day, once.** Measured on the example company with a
+                # 4 000-token ceiling: the budget ran out at the sixth tick and the run played all
+                # twenty-four, producing eleven refusals out of twenty-six actions. Nearly half the
+                # log was the company saying no to itself, and `ticks_run` came back 24 as though a
+                # day had happened.
+                #
+                # The breaker already had this shape and the budget did not. Same treatment: stop,
+                # say so where the operator looks, and let the next day open on a fresh ceiling,
+                # because the budget is created per day rather than per run.
+                if not budget.remaining:
+                    log.warning("tick %d token budget spent: ending the day", tick)
+                    self.store.record_action(
+                        slug,
+                        "system",
+                        "budget_spent",
+                        {"used": budget.used, "ceiling": budget.max_tokens},
+                        f"day ended at tick {tick}: {budget.used}/{budget.max_tokens} tokens",
+                        False,
+                    )
+                    inbox.notify(
+                        self.store,
+                        slug,
+                        "system",
+                        "The day stopped: the token budget is spent",
+                        f"{budget.used} of {budget.max_tokens} tokens went before the day was "
+                        "over, so the rest of it was not played rather than filled with refusals. "
+                        "Raise `budgets.session_tokens` in company.yaml for this company, or "
+                        "CORP_SESSION_TOKEN_BUDGET for every company that sets none. The spend "
+                        "breakdown says which agent went through it.",
+                    )
                     break
                 if breaker.mode == CircuitBreaker.CONSERVATIVE:
                     log.warning("tick %d circuit breaker CONSERVATEUR: reduced posture", tick)

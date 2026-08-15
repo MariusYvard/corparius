@@ -75,6 +75,11 @@ ALL_SRC = "\n".join(SRC.values())
 # 142: `docindex`, the table of contents over the company's files. The shape is PageIndex's —
 # structure first, content second — and its code is deliberately not vendored; `docindex`'s own
 # docstring carries the reasoning.
+# 145: `housestyle`, how a company writes and the half of it a machine can hold to. The
+# mechanical rules (a forbidden character, a banned phrase, a comma before the final `and`)
+# are checked in code because asking a model to obey them makes them advisory, and a model
+# that breaks one in ten generations is caught by nobody. The charter is per company and the
+# shipped set is a starting point rather than a position.
 # 144: `readiness`, the four facts a company either has or does not — an offer, a published
 # site, a mail account, a way to be paid. The roster declares which ones a role needs, so a
 # turn is not spent on outreach with nothing to link to. It is one module rather than a check
@@ -83,7 +88,7 @@ ALL_SRC = "\n".join(SRC.values())
 # 143: `app/guidance`, what the operator should do next and where. The CEO tab could answer
 # questions and could not answer *the* question — somebody who does not know what to do has
 # nothing to type.
-MODULE_COUNT = 144
+MODULE_COUNT = 145
 
 
 def test_every_source_file_is_scanned():

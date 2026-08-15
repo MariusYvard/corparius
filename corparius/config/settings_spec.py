@@ -666,13 +666,22 @@ SPEC: list[FieldSpec] = [
         "CORP_SESSION_TOKEN_BUDGET",
         "safety",
         type="int",
-        default="100000",
-        label_en="Session token budget",
-        label_fr="Budget de tokens par session",
-        help_en="Hard ceiling per session. Spent means halted. A company's own budget "
-        "overrides this.",
-        help_fr="Plafond dur par session. Épuisé = arrêt. Le budget propre à une "
-        "entreprise prime sur celui-ci.",
+        # 200 000 is derived rather than chosen, and the old 100 000 was sized for a roster that no
+        # longer exists. Measured: the shipped roster reaches 130 model calls in a day once a
+        # company has everything wired (60 of them the CEO's, which went from two turns a day to
+        # four), and a prompt carrying documents and skills costs roughly 1 500 tokens. 130 x 1 500
+        # is 195 000. `tests/test_readiness.py` fails if the roster outgrows this again.
+        default="200000",
+        label_en="Daily token budget",
+        label_fr="Budget de tokens par jour",
+        help_en="Hard ceiling for one day, and the day stops when it is spent rather than "
+        "filling with refusals. The shipped roster can reach 130 model calls in a day for a "
+        "company with everything wired, at roughly 1 500 tokens each. A company's own "
+        "`budgets.session_tokens` overrides this.",
+        help_fr="Plafond dur pour une journée, et la journée s'arrête quand il est épuisé au "
+        "lieu de se remplir de refus. Le roster livré peut atteindre 130 appels modèle par "
+        "jour pour une entreprise entièrement branchée, à environ 1 500 jetons chacun. Le "
+        "`budgets.session_tokens` propre à une entreprise prime sur celui-ci.",
     ),
     _f(
         "CORP_TOKENS_PER_MINUTE_LIMIT",

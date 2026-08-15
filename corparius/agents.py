@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 
-from . import structured
+from . import housestyle, structured
 from .config import cfg
 from .config.permissions import risk_of
 from .config.provider_table import split_target
@@ -61,6 +61,16 @@ def _messages(spec: AgentSpec, ctx, tool) -> list[dict]:
     # "Réponse". Naming the field and naming the language in the same clause is
     # an instruction a model can read as a translation request.
     system = f"{system}\n\n{language_line(ctx.company)}"
+    # How this company writes, beside the language it writes in. One block: the half a model has to
+    # apply (neutral, no promotion, vary how many things you list) plus a line naming the mechanical
+    # rules, which are also checked after the fact.
+    #
+    # Saying them as well as checking them is not duplication. The check catches what a model does;
+    # the sentence is what stops it doing it, and the cheapest violation is the one that never
+    # happened. `ctx.style` is the company's own charter when it has one, read once per tick.
+    charter = housestyle.instruction(getattr(ctx, "style", None))
+    if charter:
+        system = f"{system}\n\nHow this company writes:\n{charter}"
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
@@ -119,6 +129,29 @@ def _files(ctx, tool) -> str:
         query=query,
         docs=files,
     ) or (getattr(ctx, "documents", "") or "")
+
+
+def _styled(data, style):
+    """Every string in a structured answer, through the charter. Returns (data, what is left).
+
+    Walks nested lists and mappings because a tool's schema does: `tasks` is a list of strings and
+    `findings` a list of mappings, and a charter that only reached the top level would leave the
+    part a visitor actually reads untouched.
+    """
+    left: list[dict] = []
+
+    def walk(value):
+        if isinstance(value, str):
+            fixed, hits = housestyle.apply(value, style)
+            left.extend(hits)
+            return fixed
+        if isinstance(value, list):
+            return [walk(item) for item in value]
+        if isinstance(value, dict):
+            return {key: walk(item) for key, item in value.items()}
+        return value
+
+    return walk(data), left
 
 
 def _recall(ctx, tool) -> str:
@@ -457,6 +490,27 @@ class Executor:
                 # more context, it did not stake the turn on getting it.
                 if second.ok and second.data:
                     result = second
+
+            # **The charter, applied to the answer rather than asked for.** Straight quotation
+            # marks replace curly ones by substitution, with no reading required; everything else
+            # (an em dash, a banned word) is reported and left alone, because replacing one needs
+            # the sentence and a checker that guessed would quietly change what the agent meant.
+            #
+            # On `result.data` and not on the JSON around it: the effect reads the fields, so this
+            # is the last point where the text is still text.
+            result.data, left = _styled(result.data, getattr(ctx, "style", None))
+            if left:
+                # Recorded beside the action rather than raised. The draft is usable and the
+                # violation is a fact about it, and a turn that failed over punctuation would be
+                # the charter costing more than it saves.
+                log.info(
+                    "[%s] %s: %d style violation(s): %s",
+                    spec.role.value,
+                    tool_name,
+                    len(left),
+                    ", ".join(sorted({v["rule"] for v in left})),
+                )
+                ctx.style_violations = left
 
             ctx.structured = result
             # The loop guard sees the **final** draft only. The first answer is scaffolding — a tool

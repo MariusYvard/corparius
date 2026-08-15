@@ -154,6 +154,10 @@ RANKS: dict[str, int] = {
     # orchestrator computed none, so the console could say "you cannot take money" while the ads
     # agent adjusted bids. One computation, two callers, and the lower rank is the one that decides.
     "readiness": 4,
+    # Rank 4 and pure text in, text out, the same argument `docindex` makes: an editorial rule can
+    # be measured in a unit test rather than behind a store fixture. It reads `kernel.paths` and
+    # `yaml` to load a company's own charter and nothing else.
+    "housestyle": 4,
     "skills": 4,
     "skillimport": 4,
     "structured": 4,

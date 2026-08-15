@@ -341,3 +341,79 @@ def test_a_marker_that_cannot_be_read_is_no_address_rather_than_a_crash(home, mo
     monkeypatch.setattr(pathlib.Path, "read_text", refuse)
     assert readiness.published_url(str(home), "acme") == ""
     assert readiness.facts({"slug": "acme"}, str(home))["site"] is True
+
+
+# --- what a day can cost, against what a day is allowed ---------------------------
+
+
+def test_the_shipped_budget_covers_the_busiest_day_the_roster_can_produce():
+    """**A default that the roster outgrew, and a ratchet so it cannot again.**
+
+    `CORP_SESSION_TOKEN_BUDGET` was 100 000 and sized for a roster where the CEO ran twice a day.
+    It runs four times now, and its playbook is fifteen tools, so the CEO alone is 60 model calls of
+    the 130 a fully wired company can reach. At roughly 1 500 tokens for a prompt carrying documents
+    and skills, a day is about 195 000 and the ceiling was half of it.
+
+    The failure that causes is not "it costs less". Measured on the example company with a 4 000
+    ceiling, before the day learned to end: the budget went at the sixth tick and the run played all
+    twenty-four, producing eleven refusals out of twenty-six actions and reporting `ticks_run: 24`.
+
+    So this asserts the relationship rather than the number: add a tool to the CEO's playbook, or a
+    turn to its cadence, and this fails until somebody decides what the day is allowed to cost.
+    """
+    from corparius.config.settings_spec import BY_KEY
+
+    per_call = 1500  # a prompt with documents and skills on it, plus a short structured answer
+    everything = {"offer", "site", "mail", "payment"}
+    calls = sum(
+        len(spec.playbook)
+        for hour in range(24)
+        for spec in due_roles(hour, ALL_ON, ready=everything)
+    )
+    ceiling = int(BY_KEY["CORP_SESSION_TOKEN_BUDGET"].default)
+    assert calls * per_call <= ceiling, (
+        f"a full day is {calls} calls (~{calls * per_call} tokens) against a {ceiling} ceiling: "
+        "the roster grew past what a day is allowed to spend"
+    )
+
+
+def test_a_spent_budget_ends_the_day_instead_of_filling_it_with_refusals(home):
+    """The measured behaviour, not the setting. A ceiling one tick blows: the day has to stop, say
+    so once where the operator looks, and report the hours it actually played.
+
+    `ticks_run` is the assertion that matters. It came back 24 on a day that stopped working at the
+    sixth hour, and this file's own neighbours already hold the rule the code broke: "a run stopped
+    mid-day did not play a full day, and reporting that it did would be the console lying about its
+    own work".
+    """
+    from corparius.config.settings import Settings
+    from corparius.orchestrator import Runtime
+    from corparius.store import Store
+
+    settings = Settings()
+    settings.llm_mock = True
+    settings.data_path = str(home / "data")
+    store = Store(settings.data_path)
+    try:
+        store.save_state("t", {"tick": 0})
+        done = Runtime(settings, store).run(
+            {
+                "slug": "t",
+                "name": "T",
+                "offer": {"product": "p", "price_eur": 9},
+                "agents": {r.value: True for r in AgentRole},
+                # Small enough that one tick spends it, large enough that the tick happens.
+                "budgets": {"session_tokens": 1200, "tokens_per_minute": 100_000_000},
+            },
+            ticks=24,
+        )
+        actions = store.recent_actions("t", limit=500)
+        titles = [item["title"] for item in store.list_inbox("t")]
+    finally:
+        store.close()
+
+    assert done["ticks_run"] < 24, "the day carried on after it could not afford anything"
+    refusals = [r for r in actions if "budget stop" in str(r.get("output", "")).lower()]
+    assert not refusals, f"{len(refusals)} refusals were logged instead of stopping"
+    assert any(r.get("tool") == "budget_spent" for r in actions), "it stopped without saying so"
+    assert any("token budget" in t for t in titles), "and without telling the operator"

@@ -57,6 +57,16 @@ BLOCKS = {
     # contents reached the system prompt unfenced. Caught here, before it ran anywhere.
     "files": True,
     "language_line": False,
+    # The company's editorial charter. **Not fenced, and this one is worth stating rather than
+    # assuming.** Every other unfenced block here is text corparius wrote; this one is written by the
+    # operator, in `companies/<slug>/style.yaml`, so the question "could a stranger put words in the
+    # host's voice through it" has to be asked.
+    #
+    # The answer is that the operator is not a stranger. They already control the system prompt
+    # through `company.yaml`, the skills folder and every setting, so a charter is one more thing
+    # they say to their own agents rather than a channel into them. What arrives through an untrusted
+    # channel is a *document*, and that is the block above this one, which is fenced.
+    "charter": False,
 }
 
 

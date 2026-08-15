@@ -10,6 +10,7 @@ import types
 
 import pytest
 
+from corparius import housestyle
 from corparius.agents import _messages, language_line
 from corparius.kernel.records import AgentRole
 from corparius.roster import ROSTER
@@ -116,11 +117,15 @@ def test_the_prompt_is_unchanged_when_no_skill_applies(tmp_path):
     )
     spec = ROSTER[AgentRole.SOCIAL]
     system = _messages(spec, ctx, TOOLS["draft_social_post"])[0]["content"]
-    # Still exact equality, against a baseline that now includes the one
-    # unconditional line every prompt carries: the company's language. The
-    # property under test is that nothing *else* is added, so weakening this
-    # to a substring check would have retired the test rather than updated it.
-    assert system == f"{spec.system_prompt}\n\n{language_line(ctx.company)}"
+    # Still exact equality, against a baseline that now includes the two
+    # unconditional blocks every prompt carries: the language a company writes in,
+    # and how it writes. The property under test is that nothing *else* is added,
+    # so weakening this to a substring check would have retired the test rather
+    # than updated it.
+    assert system == (
+        f"{spec.system_prompt}\n\n{language_line(ctx.company)}"
+        f"\n\nHow this company writes:\n{housestyle.instruction()}"
+    )
 
 
 def test_an_applicable_skill_reaches_the_system_prompt(tmp_path):
@@ -139,12 +144,10 @@ def test_an_agent_with_no_loader_is_unaffected():
     that builds a context by hand leaves it unset."""
     ctx = types.SimpleNamespace(company={"name": "T", "offer": {}}, memory=[])
     spec = ROSTER[AgentRole.SOCIAL]
-    # Still exact equality, against a baseline that now includes the one
-    # unconditional line every prompt carries: the company's language. The
-    # property under test is that nothing *else* is added, so weakening this
-    # to a substring check would have retired the test rather than updated it.
+    # Same baseline as above, and the same reason for keeping it exact.
     assert _messages(spec, ctx, TOOLS["draft_social_post"])[0]["content"] == (
         f"{spec.system_prompt}\n\n{language_line(ctx.company)}"
+        f"\n\nHow this company writes:\n{housestyle.instruction()}"
     )
 
 

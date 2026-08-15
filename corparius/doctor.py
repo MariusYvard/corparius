@@ -855,6 +855,46 @@ def _check_claude_cli(s: Settings) -> tuple:
     )
 
 
+def _check_legal_notice(s: Settings) -> tuple:
+    """A company that can take money and carries no legal notice.
+
+    Not a style opinion. A site that sells to French customers is required to name who publishes it,
+    where they are registered and how to reach them, and `docs/conformite-fr.md` holds the rest of
+    what applies. corparius cannot write those lines (they are register identifiers, and inventing
+    one would be worse than leaving the section out) so the honest thing it can do is notice.
+
+    Gated on `readiness`'s payment fact rather than on the site existing: the obligation follows
+    selling, and a company with a page and no checkout has not started. Which is also why this is a
+    warning and never an error, because whether it applies is a question about the operator's
+    jurisdiction and not about their config.
+    """
+    from . import company as company_mod
+    from . import readiness
+    from .sitegen.sections import LEGAL_FIELDS
+
+    base = paths.companies_dir()
+    slugs = sorted(p.parent.name for p in base.glob("*/company.yaml")) if base.is_dir() else []
+    if not slugs:
+        return ("ok", "legal", "no company yet")
+    silent = []
+    for slug in slugs:
+        company, _, _ = company_mod.validate(company_mod.load(company_mod.path_for(slug), slug))
+        if not readiness.facts(company, s.data_path, slug)["payment"]:
+            continue
+        legal = company.get("legal") or {}
+        if not any(str(legal.get(key) or "").strip() for key, _ in LEGAL_FIELDS):
+            silent.append(slug)
+    if not silent:
+        return ("ok", "legal", "every company that can be paid names who publishes its site")
+    return (
+        "warn",
+        "legal",
+        f"{', '.join(silent)} can take money and carries no legal notice. Add a `legal:` block to "
+        "company.yaml (publisher, address, registration, contact) and it renders on the page. "
+        "See docs/conformite-fr.md.",
+    )
+
+
 def _check_deploy_order() -> tuple:
     """The local provider is always available, so anything ordered after it is
     unreachable. Setting NETLIFY_AUTH_TOKEN and expecting a publish is the
@@ -1131,6 +1171,7 @@ def _all_checks(s: Settings, store: Store | None) -> list[tuple]:
         _check_network(s),
         _check_claude_cli(s),
         _check_deploy_order(),
+        _check_legal_notice(s),
         _check_plugins(s),
         _check_skills(s),
         _check_apps(s),

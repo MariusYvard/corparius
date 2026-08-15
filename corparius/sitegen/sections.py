@@ -163,6 +163,52 @@ def privacy_html(company: dict, txt: dict) -> str:
     )
 
 
+# What French law names, in the order a reader looks for it. `LCEN` article 6 III for a site that
+# sells, plus the commercial register identifiers. Declared as data so the section renders whatever
+# the operator filled and nothing else: a legal notice with `RCS: ` and a blank after it is worse
+# than one that omits the line, because it says the company looked and found nothing.
+#
+# **This is the fields the law names, not legal advice**, and `docs/conformite-fr.md` is where the
+# obligations themselves are written down.
+LEGAL_FIELDS = (
+    ("publisher", "Éditeur"),
+    ("legal_form", "Forme juridique"),
+    ("capital", "Capital social"),
+    ("address", "Siège social"),
+    ("email", "Contact"),
+    ("phone", "Téléphone"),
+    ("registration", "RCS / SIREN"),
+    ("vat", "TVA intracommunautaire"),
+    ("director", "Directeur de la publication"),
+)
+
+
+def legal_html(company: dict, txt: dict) -> str:
+    """`legal:`: who publishes this site and where to reach them.
+
+    Mirrors `privacy_html` deliberately, down to the empty return: a section nobody filled must not
+    render an empty heading. A company that sells to French customers is required to carry this, and
+    a page that carries the heading with nothing under it satisfies nobody.
+    """
+    legal = company.get("legal") or {}
+    if not isinstance(legal, dict):
+        return ""
+    rows = [
+        f"<li><strong>{esc(label)}</strong> {esc(str(legal[key]).strip())}</li>"
+        for key, label in LEGAL_FIELDS
+        if str(legal.get(key) or "").strip()
+    ]
+    host = str(legal.get("host") or "").strip()
+    if host:
+        rows.append(f"<li><strong>{esc(txt['host'])}</strong> {esc(host)}</li>")
+    if not rows:
+        return ""
+    return (
+        f'<section id="legal"><h2>{esc(txt["legal"])}</h2>'
+        f'<ul class="gets">{"".join(rows)}</ul></section>'
+    )
+
+
 def extra_pages(company: dict) -> list[dict]:
     """`site.pages`: secondary pages, each a title and some prose.
 

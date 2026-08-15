@@ -917,6 +917,37 @@ SPEC: list[FieldSpec] = [
         help_fr="Une clé restreinte en lecture suffit : corparius lit le solde et les "
         "paiements, il n'en crée jamais.",
     ),
+    # Qonto, the other half of being paid in France. Stripe is a checkout link a stranger clicks;
+    # Qonto is a business account a client transfers to against an invoice. Both mean "this company
+    # can take money", and a company that sells to other businesses usually has the second.
+    #
+    # Read-only, and `providers/qonto.py` says why: adding a second provider that can *move* money
+    # is a decision to take on its own rather than inside a settings change.
+    _f(
+        "QONTO_LOGIN",
+        "payments",
+        label_en="Qonto login",
+        label_fr="Login Qonto",
+        help_en="From the Qonto app: Settings, Integrations, API keys. The login is the visible "
+        "half of the pair; the secret key goes below.",
+        help_fr="Depuis l'app Qonto : Paramètres, Intégrations, clés API. Le login est la moitié "
+        "visible de la paire ; la clé secrète va en dessous.",
+        help_url="https://app.qonto.com/settings/integrations",
+    ),
+    _f(
+        "QONTO_SECRET_KEY",
+        "payments",
+        type="password",
+        secret=True,
+        label_en="Qonto secret key",
+        label_fr="Clé secrète Qonto",
+        help_en="Read access to the organization is enough: corparius reads which accounts exist "
+        "and never writes. Electronic invoicing itself goes through an approved platform, which "
+        "this is not; see docs/conformite-fr.md for what the French mandate requires.",
+        help_fr="Un accès en lecture à l'organisation suffit : corparius lit quels comptes "
+        "existent et n'écrit jamais. La facturation électronique elle-même passe par une "
+        "plateforme agréée, ce que ceci n'est pas ; voir docs/conformite-fr.md.",
+    ),
     _f(
         "CORP_STRIPE_PAYMENT_LINK",
         "payments",

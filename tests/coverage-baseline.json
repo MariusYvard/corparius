@@ -92,6 +92,7 @@
   "corparius/providers/ollama_setup.py": 48.4,
   "corparius/providers/preflight.py": 89.4,
   "corparius/providers/provider_check.py": 62.3,
+  "corparius/providers/qonto.py": 94.6,
   "corparius/providers/routing.py": 100.0,
   "corparius/providers/signals.py": 65.7,
   "corparius/providers/sitecheck.py": 88.2,

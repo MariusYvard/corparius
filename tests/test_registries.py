@@ -75,6 +75,11 @@ ALL_SRC = "\n".join(SRC.values())
 # 142: `docindex`, the table of contents over the company's files. The shape is PageIndex's —
 # structure first, content second — and its code is deliberately not vendored; `docindex`'s own
 # docstring carries the reasoning.
+# 146: `providers/qonto`, the other way a French company is paid. Stripe is a checkout link a
+# stranger clicks; Qonto is a business account a client transfers to against an invoice, which
+# is how business-to-business selling actually works here. Read-only: it proves the
+# credentials and reads which accounts exist, and moving money through a second provider is a
+# decision to take on its own rather than inside a settings change.
 # 145: `housestyle`, how a company writes and the half of it a machine can hold to. The
 # mechanical rules (a forbidden character, a banned phrase, a comma before the final `and`)
 # are checked in code because asking a model to obey them makes them advisory, and a model
@@ -88,7 +93,7 @@ ALL_SRC = "\n".join(SRC.values())
 # 143: `app/guidance`, what the operator should do next and where. The CEO tab could answer
 # questions and could not answer *the* question — somebody who does not know what to do has
 # nothing to type.
-MODULE_COUNT = 145
+MODULE_COUNT = 146
 
 
 def test_every_source_file_is_scanned():

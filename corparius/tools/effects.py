@@ -175,9 +175,33 @@ def _review_ad_budget(ctx) -> str:
     return f"Ad budget reviewed: {cap} EUR/day cap, within cap"
 
 
+def _external_site(company: dict) -> str:
+    """The address of a site the operator runs outside corparius, or "".
+
+    Three kinds of site exist now and only this one is nobody's business here. `companies/<slug>/
+    site/` holds pages corparius publishes for the operator; a generated page is built from
+    `company.yaml`; this is a site that lives elsewhere, is deployed by something else, and is
+    declared with `site.external: true` beside its URL.
+
+    One function rather than the same two lines in five effects, for the reason `paths.owned_site`
+    is one function: the question "is this site mine to touch" must have exactly one answer.
+    """
+    site = (company or {}).get("site") or {}
+    if not isinstance(site, dict) or not site.get("external"):
+        return ""
+    return str(site.get("url") or "").strip()
+
+
 def _build_site(ctx, draft: str) -> str:
     company = ctx.company
     slug = company.get("slug", "company")
+    outside = _external_site(company)
+    if outside:
+        return (
+            f"This company's site is {outside}, which it runs itself. Nothing was built: a page "
+            "generated here would be a second site nobody asked for, and the design agent's work "
+            "belongs in the one that is live."
+        )
     owned = paths.owned_site(slug)
     if owned is not None:
         # Generating a competing page here is worse than doing nothing. Measured
@@ -250,6 +274,20 @@ def _deploy_site(ctx) -> ToolResult:
     to be wrapped in _ok() and recorded in the action log as a success."""
     company = ctx.company
     slug = company.get("slug", "company")
+    # Refused rather than skipped, and the distinction is the point: this tool is at the human gate
+    # and a "success" that published nothing to somebody else's domain is the exact shape of report
+    # this function was rewritten to stop making. A site the operator deploys themselves has a
+    # pipeline of its own, and corparius pushing into it would be two things writing one address.
+    outside = _external_site(company)
+    if outside:
+        return ToolResult(
+            ok=False,
+            output=(
+                f"Not published: {outside} is this company's own site and it deploys it itself. "
+                "The company editor has the switch, under the site section, if you want corparius "
+                "to publish instead."
+            ),
+        )
     owned = paths.owned_site(slug)
     if owned is not None:
         out_dir = owned
@@ -897,6 +935,9 @@ def _generated_page(ctx) -> tuple[str, str]:
 
 def _no_generated_page(ctx) -> str:
     """Why this tool has nothing to do, in the operator's words or "" when it does."""
+    outside = _external_site(ctx.company)
+    if outside:
+        return f"this company's site is {outside} and it runs it itself; corparius generates none"
     if paths.owned_site(ctx.company.get("slug", "company")) is not None:
         return "this company writes its own site, so there is no generated page to review"
     return "" if _generated_page(ctx)[1] else "no generated page yet; build_sales_site makes one"

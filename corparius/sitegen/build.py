@@ -22,6 +22,7 @@ from .sections import (
     extra_pages,
     faq_html_from,
     faq_pairs,
+    legal_html,
     privacy_html,
     proof_html,
     steps_html,
@@ -189,6 +190,9 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
     parts.append(proof_html(company, txt))
     parts.append(voices_html(company, txt))
     parts.append(privacy_html(company, txt))
+    # Last before the footer, which is where a reader looks for it and where every site that
+    # carries one puts it.
+    parts.append(legal_html(company, txt))
 
     body_html = "".join(p for p in parts if p)
     if body_html:

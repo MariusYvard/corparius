@@ -72,7 +72,10 @@ def test_the_two_classes_of_writable_key_partition_the_writable_set():
     assert registry | app_settings.CREDENTIALS == writable
     assert not (registry & app_settings.CREDENTIALS), "a key cannot be in both classes"
     # Pinned, so growing either class is a line somebody reads.
-    assert len(writable) == 108 and len(registry) == 80 and len(app_settings.CREDENTIALS) == 28
+    # 82 registry fields: `QONTO_LOGIN` and `QONTO_SECRET_KEY`, the second way a French company is
+    # paid. A checkout link is clicked by a stranger; a business account is transferred to against
+    # an invoice, which is most business-to-business selling here.
+    assert len(writable) == 110 and len(registry) == 82 and len(app_settings.CREDENTIALS) == 28
 
 
 def test_the_host_allow_list_is_in_neither_class():

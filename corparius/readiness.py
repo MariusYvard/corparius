@@ -96,17 +96,30 @@ def facts(company: dict, data_path: str, slug: str = "") -> dict[str, bool]:
     if not link:
         link = cfg.get("CORP_STRIPE_PAYMENT_LINK", "").strip()
     marker = Path(paths.site_dir(data_path, slug)) / ".published" if slug else None
+    site = (company or {}).get("site") or {}
+    # A site the operator runs outside corparius is a public address like any other, and the roles
+    # that wait for one have no business asking who deployed it. Without this the gate held outreach
+    # forever on exactly the companies most ready to use it: the ones that already had a site.
+    external = bool(isinstance(site, dict) and site.get("external") and site.get("url"))
     return {
         "offer": _offer(company),
         # Published, not merely built. A site in the data folder is a draft; the marker is written
         # by `app/publish.py` only after a provider accepted it, which is what makes a link worth
         # sending to a stranger.
-        "site": bool(marker and marker.is_file()),
+        "site": external or bool(marker and marker.is_file()),
         "mail": bool(
             cfg.get("CORP_SMTP_HOST", "").strip() and cfg.get("CORP_SMTP_USER", "").strip()
         ),
-        # A link the operator pasted, or a Stripe key. Either is the operator saying "this company
-        # sells"; neither proves a charge has ever landed, and see the module docstring for why no
-        # stronger signal is available honestly.
-        "payment": link.startswith("http") or bool(cfg.get("STRIPE_API_KEY", "").strip()),
+        # A link the operator pasted, a Stripe key, or a Qonto account. Each is the operator saying
+        # "this company sells", and none proves a charge has ever landed; the module docstring says
+        # why no stronger signal is available honestly.
+        #
+        # Qonto counts because a French company selling to other businesses is paid by transfer
+        # against an invoice, not by a checkout link, and a gate that only knew about checkout
+        # would hold its finance agent forever on exactly that company.
+        "payment": (
+            link.startswith("http")
+            or bool(cfg.get("STRIPE_API_KEY", "").strip())
+            or bool(cfg.get("QONTO_LOGIN", "").strip() and cfg.get("QONTO_SECRET_KEY", "").strip())
+        ),
     }

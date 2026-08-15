@@ -447,6 +447,24 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
     # the static page. Normalised here rather than read raw in sitegen, because
     # a key that survives `load` only by accident is a key that disappears the
     # next time this dict is rebuilt.
+    legal_in = raw.get("legal") or {}
+    legal: dict = {}
+    if isinstance(legal_in, dict):
+        from .sitegen.sections import LEGAL_FIELDS
+
+        known = {key for key, _label in LEGAL_FIELDS} | {"host"}
+        for key, value in legal_in.items():
+            # Not `text`: that name is the `kernel.text` module at the top of this file, and binding
+            # it here made it local for the whole function, so `text.slugify_loose` forty lines up
+            # would have raised at runtime. Ruff caught it as F823 before it ran.
+            written = " ".join(str(value or "").split())
+            if not written:
+                continue
+            if key not in known:
+                warnings.append(f"legal.{key} is not a field the legal notice renders; ignored")
+                continue
+            legal[key] = written
+
     site_in = raw.get("site") or {}
     site: dict = {}
     if isinstance(site_in, dict):
@@ -477,6 +495,29 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             url = ""
         if url:
             site["url"] = url
+
+        # **A site the operator runs themselves, outside corparius entirely.**
+        #
+        # Two kinds of "own site" already existed and neither is this one. `companies/<slug>/site/`
+        # holds pages corparius publishes on the operator's behalf; a generated page is built from
+        # `company.yaml`. This third kind is a site that lives somewhere else, is deployed by
+        # something else, and wants corparius to leave it alone.
+        #
+        # It is a `site.url` plus `external: true`, rather than a fourth publishing provider,
+        # because there is nothing to publish. What the flag changes is what the *rest* of the
+        # product may assume: nothing builds, nothing deploys, and the roles that wait for a public
+        # address stop waiting, which is the half that was broken. `readiness` counted a site as
+        # existing only when corparius had published one, so a company with a perfectly good site of
+        # its own held its outreach agent forever.
+        external = str(site_in.get("external", "")).strip().lower() in ("true", "yes", "1")
+        if external and not url:
+            warnings.append(
+                "site.external is set and site.url is not: an external site is an address, "
+                "so this is ignored"
+            )
+            external = False
+        if external:
+            site["external"] = True
 
         accent = str(site_in.get("accent", "")).strip()
         if accent and not re.fullmatch(r"#[0-9a-fA-F]{6}", accent):
@@ -596,6 +637,12 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
         },
         "hitl_tools": hitl,
         **({"site": site} if site else {}),
+        # Who publishes this site and where to reach them. Passed through as the operator wrote it,
+        # with the keys `sitegen.sections.LEGAL_FIELDS` names: this is the one block where inventing
+        # or normalising a value would be worse than omitting it, because every line of it is a
+        # legal identifier that has to match a register. Empty when they wrote none, and the doctor
+        # is what notices that a company selling to French customers has no legal notice.
+        **({"legal": legal} if legal else {}),
         **perms,
     }
     return cfg, errors, warnings

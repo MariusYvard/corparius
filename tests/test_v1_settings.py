@@ -77,7 +77,7 @@ def test_every_field_carries_what_a_form_needs(server):
 
     status, data = _call(server, "GET", "/api/v1/settings")
     assert status == 200
-    assert len(data["fields"]) == len(settings_spec.SPEC) == 80
+    assert len(data["fields"]) == len(settings_spec.SPEC) == 82
     groups = {g["name"] for g in data["groups"]}
     assert len(groups) == 8
     for f in data["fields"]:

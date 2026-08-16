@@ -679,12 +679,19 @@ SPEC: list[FieldSpec] = [
         "CORP_SESSION_TOKEN_BUDGET",
         "safety",
         type="int",
-        # 200 000 is derived rather than chosen, and the old 100 000 was sized for a roster that no
-        # longer exists. Measured: the shipped roster reaches 130 model calls in a day once a
-        # company has everything wired (60 of them the CEO's, which went from two turns a day to
-        # four), and a prompt carrying documents and skills costs roughly 1 500 tokens. 130 x 1 500
-        # is 195 000. `tests/test_readiness.py` fails if the roster outgrows this again.
-        default="200000",
+        # Derived rather than chosen, and raised twice by the test that watches it rather than by
+        # anybody's taste. The first 100 000 was sized for a roster where the CEO ran twice a day;
+        # 200 000 covered the 130 model calls a fully wired company reaches, at roughly 1 500 tokens
+        # for a prompt carrying documents and skills.
+        #
+        # 240 000 now, because design gained `edit_site_page` and a day is 136 calls — 204 000, which
+        # is past the old ceiling. The extra headroom is deliberate: a company that reviews its site
+        # and then fixes one thing on it is the shape this roster is growing towards, and a ceiling
+        # sized exactly to today's playbook fails on the next tool rather than on the next excess.
+        #
+        # `tests/test_readiness.py` fails if the roster outgrows this again, and says so in those
+        # words: somebody has to decide what a day is allowed to cost.
+        default="240000",
         label_en="Daily token budget",
         label_fr="Budget de tokens par jour",
         help_en="Hard ceiling for one day, and the day stops when it is spent rather than "

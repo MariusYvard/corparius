@@ -316,6 +316,33 @@ SPEC: dict[str, ToolSpec] = {
             "worst": {"type": "str", "default": "", "max_len": 200},
         },
     ),
+    # The tool `review_site`'s own docstring promised and nothing provided. It said the review is
+    # "a punch list that names files and quotes text, which is what the operator or a later task
+    # acts on" — and there was no later task: measured on a real install, the design agent wrote 17,
+    # then 16, then 18 findings on consecutive days and the same faults were re-found every time,
+    # because no tool in the package writes into a company's own site.
+    #
+    # **Text only, and that is what makes it safe rather than brave.** The objection in that
+    # docstring is real: editing hand-written HTML from a prompt, with no build and no test, is how
+    # a working site becomes a broken one. So `find` and `replace` may not contain `<` or `>` — the
+    # structure of the document cannot change, only the words in it, and every finding the review
+    # actually produces is a wording fix ("the present tense claims something that is not live yet").
+    #
+    # One change per turn, on one file, quoting the exact text. A model that quotes something the
+    # page does not contain is refused rather than guessed at, which is also the cheapest
+    # hallucination check available here.
+    "edit_site_page": ToolSpec(
+        "edit_site_page",
+        "Fix one piece of wording on the company's own site",
+        needs_draft=True,
+        risk=permissions.WRITE_LOCAL,
+        schema={
+            "page": {"type": "str", "required": True, "max_len": 80},
+            "find": {"type": "str", "required": True, "max_len": 300},
+            "replace": {"type": "str", "default": "", "max_len": 300},
+            "why": {"type": "str", "default": "", "max_len": 200},
+        },
+    ),
     "write_site_content": ToolSpec(
         "write_site_content",
         "Draft the site sections and write them into company.yaml",

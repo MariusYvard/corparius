@@ -361,7 +361,19 @@ OWNERS: dict[str, tuple[frozenset[str], str]] = {
     # → api/** only.
     # Done, stage 6. `webui` was the second owner; the transport now lives in `api/server`,
     # and `appserver` is the MCP server, a different door on the same product.
-    "http.server": (frozenset({"api/server", "appserver"}), "api/**"),
+    # `providers/screenshot` is the third, and it **serves** rather than listens for an operator. A
+    # site links its assets absolutely — `href="/assets/style.css"` is how anything served from a web
+    # root is written — and over `file://` a leading slash resolves to the root of the disk, so the
+    # real site rendered with every rule of its stylesheet missing: a wall of unstyled serif. A
+    # design agent shown that would report confidently that the design is broken, which is worse
+    # than showing it nothing.
+    #
+    # A loopback server on an OS-chosen port, up for the seconds the captures take, rooted at the
+    # folder being photographed. Nothing is published and nothing outlives the call.
+    "http.server": (
+        frozenset({"api/server", "appserver", "providers/screenshot"}),
+        "api/** plus the renderer",
+    ),
 }
 
 

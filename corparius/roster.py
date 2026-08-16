@@ -213,6 +213,12 @@ ROSTER: dict[AgentRole, AgentSpec] = {
             # is a fact about the company, not a setting: exactly one of them ever
             # runs, and each says why when it is the other's turn.
             "review_site",
+            # **And then act on one of them**, which is what the review had no way to do. Measured
+            # on a real install: 17 findings written to a document, then 16, then 18 on consecutive
+            # days, the same faults re-found every time because nothing in the package could write
+            # into a company's own site. The review names what is wrong and this fixes one thing;
+            # ordered after it so the punch list it reads is today's.
+            "edit_site_page",
             "draft_design_brief",
             "produce_mockup",
             "build_sales_site",

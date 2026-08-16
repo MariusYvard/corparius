@@ -43,9 +43,13 @@ viewport; there is no full-page flag to have.
 
 from __future__ import annotations
 
+import contextlib
+import functools
+import http.server
 import logging
 import os
 import shutil
+import threading
 import time
 from pathlib import Path
 
@@ -221,25 +225,78 @@ def _settled(out: Path, timeout: int) -> bool:
     return False
 
 
+@contextlib.contextmanager
+def _served(root: Path):
+    """Serve `root` on loopback for as long as the block runs, yielding its base URL.
+
+    **A site has to be fetched, not opened**, and this cost a wrong answer to learn. Real pages link
+    their assets absolutely — vigil's is `<link rel="stylesheet" href="/assets/style.css">`, which is
+    how anything served from a web root is written — and over `file://` a leading slash resolves to
+    the root of the *disk*. Measured on the real site: the page rendered with every rule of its
+    stylesheet missing, a wall of unstyled serif. Handing that to a design agent is worse than
+    handing it nothing, because it would report confidently that the design is broken.
+
+    Bound to 127.0.0.1 on a port the OS picks, up for the seconds the captures take. Nothing is
+    published: `directory=` roots the handler at the folder, so the URL space is the site and
+    nothing above it.
+    """
+
+    class Quiet(http.server.SimpleHTTPRequestHandler):
+        """Silent, and a subclass rather than an attribute on a `functools.partial`.
+
+        The first version set `log_message` on the partial, which is an object the handler never
+        consults — so every asset still printed a line to stderr and an operator's console filled
+        with `GET /assets/style.css 200` for a picture they did not ask about. Measured, then fixed.
+        """
+
+        def log_message(self, *args, **kwargs) -> None:
+            return
+
+    handler = functools.partial(Quiet, directory=str(root))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def capture_all(pages: list[str], into: Path | str, limit: int = 4) -> list[str]:
-    """Render several pages, returning the ones that worked.
+    """Render several pages of one site, returning the captures that worked.
+
+    Served rather than opened, from the folder the pages share, so each renders with its stylesheet,
+    its fonts and its images exactly as a visitor gets them.
 
     Bounded, and the bound is stated rather than silent: a site with forty pages would otherwise
     spend forty seconds and hand a model forty images to pay for. Four is the first screen of the
     four pages a sales site usually has, and the ones dropped are logged.
     """
     into = Path(into)
-    made = []
-    for page in pages[:limit]:
-        shot = capture(page, into / (Path(page).stem + ".png"))
-        if shot["ok"]:
-            made.append(shot["path"])
-        else:
-            log.info("screenshot: %s not captured (%s)", page, shot["error"])
+    wanted = [Path(p) for p in pages[:limit]]
+    if not wanted:
+        return []
     if len(pages) > limit:
         log.info(
             "screenshot: %d page(s) past the limit of %d were not captured",
             len(pages) - limit,
             limit,
         )
+    root = wanted[0].parent
+    made = []
+    with _served(root) as base:
+        for page in wanted:
+            # A page outside the root is unreachable over this server, and there is no such case in
+            # the product: `_site_pages_for` globs one folder. Said rather than skipped in silence,
+            # because that looks exactly like a browser that failed.
+            try:
+                where = page.relative_to(root).as_posix()
+            except ValueError:
+                log.info("screenshot: %s is outside %s, not captured", page.name, root)
+                continue
+            shot = capture(f"{base}/{where}", into / (page.stem + ".png"))
+            if shot["ok"]:
+                made.append(shot["path"])
+            else:
+                log.info("screenshot: %s not captured (%s)", page.name, shot["error"])
     return made

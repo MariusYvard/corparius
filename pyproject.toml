@@ -68,6 +68,19 @@ artifacts = ["corparius/webui.html", "corparius/api/static/**"]
 "plugins/registry.json" = "corparius/_data/plugins/registry.json"
 
 [tool.hatch.build.targets.sdist]
+# The same artifacts as the wheel, and the release taught us why in the most direct way available:
+# the `pypi` job's own guard refused to publish because `corparius/api/static/index.html` was not in
+# the wheel, on a run whose log shows vite writing all four files a minute earlier.
+#
+# `python -m build` makes the **sdist first and then builds the wheel from it**. The console is
+# generated and therefore gitignored, so an sdist that does not name it drops it, and the wheel built
+# out of that sdist cannot contain what its own `artifacts` line asks for. Reproduced locally, which
+# is what turned a guess into this line: `--wheel` alone carried four files, a full `build` carried
+# none.
+#
+# Declared here rather than fixed with `--wheel` in CI, because an sdist that cannot build a working
+# package is a broken sdist whoever runs it.
+artifacts = ["corparius/webui.html", "corparius/api/static/**"]
 include = [
     "/corparius",
     "/companies/example",

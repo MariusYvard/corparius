@@ -850,6 +850,85 @@ def _owned_pages(slug: str) -> list:
     return pages[:SITE_REVIEW_PAGES]
 
 
+def _edit_site_prompt(ctx) -> str:
+    """One wording fix, quoted exactly, on a page that exists.
+
+    The review before it wrote a punch list into `documents/site-review`, which `_files` puts in
+    front of this turn like every other document. So the prompt does not repeat the findings: it
+    names the pages, states the one rule that matters, and lets the block above it supply the work.
+    """
+    slug = ctx.company.get("slug", "company")
+    pages = _owned_pages(slug)
+    if not pages:
+        return (
+            f"{_name(ctx)} has no site of its own to edit. Leave `find` empty and say so in `why`."
+        )
+    body, names = _site_text(slug)
+    return (
+        f"Below is the visible text of {_name(ctx)}'s own site. The site review in the documents "
+        "above lists what to change; make **one** of those changes now, the most important one "
+        "that is still wrong.\n\n"
+        f"`page`: one of {', '.join(p.name for p in pages)}. "
+        "`find`: the exact words to replace, copied character for character from the text below — "
+        "if they are not on the page word for word the change is refused, so quote and do not "
+        "paraphrase. `replace`: what to put there instead; empty deletes the words. "
+        "**Neither may contain `<` or `>`**: this changes wording, never markup, and a change that "
+        "needs new structure is one to describe in `why` and leave to a person. "
+        f"`why`: one sentence.\n\nPages shown: {', '.join(names)}.\n\n{body}"
+    )
+
+
+def _edit_site(ctx) -> ToolResult:
+    """Apply it, or refuse it with the reason. Never a rewrite.
+
+    Every refusal below is a fact about the page rather than a policy, and each one is the cheapest
+    check for a different way this could go wrong:
+
+      * a page that is not one of this company's own is a path somebody built out of model output;
+      * `<` or `>` in either side would let a wording tool change the document's structure, which is
+        the objection `_review_site` raises and the reason it writes a list instead of editing;
+      * text that is not on the page is a model quoting something it did not read, and guessing at
+        what it meant is how a fix lands in the wrong sentence;
+      * text that is on the page twice is ambiguous, and picking the first is a coin toss on which
+        half of the site changes.
+
+    Nothing here needs a build or a test to be safe, because none of it can alter the markup. And
+    the folder is a git repository that `_autocommit` pushes at the end of the run, so the change is
+    a commit an operator can read and revert.
+    """
+    slug = ctx.company.get("slug", "company")
+    result = getattr(ctx, "structured", None)
+    data = result.data if result else {}
+    want = str(data.get("page", "")).strip()
+    find = str(data.get("find", ""))
+    swap = str(data.get("replace", ""))
+    why = " ".join(str(data.get("why", "")).split())
+
+    pages = _owned_pages(slug)
+    if not pages:
+        return _fail("this company has no site of its own to edit")
+    if not find.strip():
+        return _fail(f"nothing to change{': ' + why if why else ''}")
+    # By name against the pages actually listed, so a value like `../../company.yaml` never becomes
+    # a path. The same rule as everywhere else here: only names that exist are ever opened.
+    page = next((p for p in pages if p.name == want), None)
+    if page is None:
+        return _fail(
+            f"{want!r} is not one of this company's pages ({', '.join(p.name for p in pages)})"
+        )
+    if any(c in find or c in swap for c in "<>"):
+        return _fail("this tool changes wording, not markup; describe a structural change instead")
+
+    raw = page.read_text(encoding="utf-8", errors="replace")
+    seen = raw.count(find)
+    if seen == 0:
+        return _fail(f"{page.name} does not contain those words; quote the page exactly")
+    if seen > 1:
+        return _fail(f"those words appear {seen} times in {page.name}; quote more of the sentence")
+    page.write_text(raw.replace(find, swap, 1), encoding="utf-8")
+    return _ok(f"{page.name}: {find[:60]!r} -> {swap[:60]!r}" + (f" ({why})" if why else ""))
+
+
 def _site_is_not_generated(ctx) -> str:
     """Why drafting copy into company.yaml would reach nothing here."""
     slug = ctx.company.get("slug", "company")
@@ -2467,6 +2546,17 @@ BEHAVIOUR: dict[str, Behaviour] = {
             "been decided, answer exactly: nothing decided."
         ),
         effect=lambda c, d: _ok(_record_decision(c, d)),
+    ),
+    "edit_site_page": Behaviour(
+        # The same gate as the review it acts on, and for the same reason: a company whose page is
+        # generated from `company.yaml` is edited by writing that file, not by patching the output.
+        skip_when=lambda c: (
+            ""
+            if _owned_pages(c.company.get("slug", "company"))
+            else "this company has no site of its own; its page is generated from company.yaml"
+        ),
+        prompt=lambda c: _edit_site_prompt(c),
+        effect=lambda c, d: _edit_site(c),
     ),
     "review_site": Behaviour(
         # Nothing to review when the page is generated from company.yaml — that is

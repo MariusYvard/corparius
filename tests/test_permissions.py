@@ -158,7 +158,21 @@ def test_the_shipped_defaults_gate_exactly_what_they_used_to(tmp_path):
 
     engine = PermissionEngine.from_settings(Settings(), {}, Store(str(tmp_path)))
     gated = {name for name, tool in TOOLS.items() if engine.evaluate(tool, "t").needs_user}
-    assert gated == {"send_financial_transaction", "publish_production_code", "deploy_site"}
+    assert gated == {
+        "send_financial_transaction",
+        "publish_production_code",
+        "deploy_site",
+        # **The fourth, and it is a default worth arguing for rather than one that drifted in.**
+        # `write_app_code` writes a program and then starts it on the operator's machine, which is
+        # `permissions.CODE` by the plain reading of that class: it ships code to a place that runs
+        # it. Above the shipped threshold, so it asks once.
+        #
+        # An operator who wants a company writing and running its own programs unattended lowers
+        # their threshold or names the tool in `auto_allow`, which is what those settings are for.
+        # The other direction — shipping a default where an agent silently starts processes on
+        # everybody's machine — is not a default to choose on their behalf.
+        "write_app_code",
+    }
 
 
 def test_the_gate_reports_a_refusal_as_a_recoverable_error(tmp_path):

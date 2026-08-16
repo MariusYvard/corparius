@@ -316,6 +316,35 @@ SPEC: dict[str, ToolSpec] = {
             "worst": {"type": "str", "default": "", "max_len": 200},
         },
     ),
+    # **The coder's hands.** What was there: `generate_code` asked a model to "describe a small
+    # feature in one sentence" and returned the sentence; `publish_production_code` returned the
+    # literal string "Merged PR #42 to production (mock)", the same number for every company on every
+    # day. No folder for source, no language, nothing that runs — and a real task from a real
+    # document was being queued to that role on the owner's own install.
+    #
+    # `CODE`, which is the class above `EXTERNAL`: this writes a program and then **starts it on the
+    # operator's machine**. The bounds are in `codeapps.py` and stated there rather than implied —
+    # loopback only, a lifetime, an environment holding `PATH` and `PORT` and nothing else.
+    #
+    # The success criterion is the interesting part. A tool that reported "code written" would be
+    # the mock with more steps; this one starts what it wrote and waits for it to answer, so its
+    # answer is "this program runs" or the last three hundred characters of why it does not.
+    "write_app_code": ToolSpec(
+        "write_app_code",
+        "Write a small program the company owns, and run it",
+        needs_draft=True,
+        risk=permissions.CODE,
+        schema={
+            "name": {"type": "str", "required": True, "max_len": 40},
+            "language": {"type": "str", "default": "python", "max_len": 12},
+            "entry": {"type": "str", "default": "main.py", "max_len": 60},
+            # Big, because it is a program. 8 000 characters is a small service and about five
+            # thousand tokens: past that a model is writing a codebase in one call, which is the
+            # shape that produces something nobody can review.
+            "source": {"type": "str", "required": True, "max_len": 8000},
+            "description": {"type": "str", "default": "", "max_len": 160},
+        },
+    ),
     # The tool `review_site`'s own docstring promised and nothing provided. It said the review is
     # "a punch list that names files and quotes text, which is what the operator or a later task
     # acts on" — and there was no later task: measured on a real install, the design agent wrote 17,
@@ -378,14 +407,22 @@ SPEC: dict[str, ToolSpec] = {
         "Watch configured sources for buying signals",
         risk=permissions.EXTERNAL,
     ),
+    # **Describes, and that is now the whole claim.** It asks a model for a sentence and returns
+    # that sentence; nothing is written and nothing runs. Kept because describing a change before
+    # making it is real work, and renamed in the console because "Draft a feature or fix" reads like
+    # a branch appeared somewhere. `write_app_code` is the one with hands.
     "generate_code": ToolSpec(
         "generate_code",
-        "Draft a feature or fix",
+        "Describe a change in one sentence (writes nothing)",
         needs_draft=True,
     ),
+    # It returns the string "Merged PR #42 to production (mock)" — the same number for every company
+    # on every day — and asks the operator to approve doing so. There is no repository behind it and
+    # no merge. The description says that now, because an operator reading "Merge a PR to production"
+    # in an approval queue has every reason to believe one happened.
     "publish_production_code": ToolSpec(
         "publish_production_code",
-        "Merge a PR to production",
+        "Not built: reports a merge that does not happen",
         risk=permissions.CODE,
         hitl=True,
     ),
@@ -398,9 +435,12 @@ SPEC: dict[str, ToolSpec] = {
         # than one argued from the picture.
         sees_images=True,
     ),
+    # Returns "Mockup produced: landing hero and one ad variant (mock)" and produces no mockup. The
+    # design agent's real visual output is `draft_design_brief`, and its real page work is
+    # `review_site` and `edit_site_page`.
     "produce_mockup": ToolSpec(
         "produce_mockup",
-        "Produce a landing or ad mockup",
+        "Not built: reports a mockup that is not produced",
     ),
     # The other half of the site loop, and a **separate tool on a different role** rather than a second
     # model call inside the build. Two reasons, and neither is style. A tool effect reaches `company`,

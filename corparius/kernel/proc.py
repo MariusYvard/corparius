@@ -31,6 +31,7 @@ create") and raising would force them to catch immediately.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass
 
@@ -108,3 +109,88 @@ def run(
         stdout=out.stdout or "",
         stderr=out.stderr or "",
     )
+
+
+@dataclass
+class Started:
+    """A process that is still running, and the file its output is going into.
+
+    Deliberately not a `Popen`. Returning one would put `subprocess` types in the signature of
+    every caller and make the rule this module exists for a rule about one import instead of about
+    a capability — the same argument `Completed` is here for.
+    """
+
+    pid: int
+    log: str
+    _proc: object = None
+
+    def alive(self) -> bool:
+        return self._proc is not None and self._proc.poll() is None  # type: ignore[attr-defined]
+
+    def returncode(self) -> int | None:
+        """None while it runs, the exit code once it has stopped."""
+        return None if self._proc is None else self._proc.poll()  # type: ignore[attr-defined]
+
+    def stop(self, grace: float = 5.0) -> int | None:
+        """Ask it to stop, then insist. Returns the exit code, or None if it was already gone.
+
+        Terminate before kill because a program that keeps state deserves the chance to write it
+        down, and `grace` seconds is long enough for a web server to finish a request and short
+        enough that an operator pressing Stop does not wait on a program that is not listening.
+        """
+        if self._proc is None:
+            return None
+        proc = self._proc
+        if proc.poll() is not None:  # type: ignore[attr-defined]
+            return proc.poll()  # type: ignore[attr-defined]
+        proc.terminate()  # type: ignore[attr-defined]
+        try:
+            return proc.wait(timeout=grace)  # type: ignore[attr-defined]
+        except subprocess.TimeoutExpired:
+            proc.kill()  # type: ignore[attr-defined]
+            try:
+                return proc.wait(timeout=grace)  # type: ignore[attr-defined]
+            except subprocess.TimeoutExpired:
+                return None
+
+
+def start(cmd: list[str], *, cwd: str | None = None, log: str, env: dict | None = None) -> Started:
+    """Launch `cmd` and leave it running, with its output going to `log`.
+
+    The other half of this module, and a different job from `run`: that one waits for an answer,
+    this one supervises something that is meant to outlive the call. A company's own application is
+    a program that serves requests, so there is nothing to wait for.
+
+    **Output to a file rather than a pipe**, and it is not a detail. A pipe nobody reads fills its
+    buffer and the program blocks writing to it — a web server that logs a line per request would
+    stop dead after a few thousand of them, which is the kind of failure that looks like the program
+    being wrong. A file has no such limit and gives the operator something to read afterwards.
+
+    `env` replaces rather than extends when given, so a caller can decide exactly what a program
+    written by a model is allowed to see of the machine it runs on.
+    """
+    handle = open(log, "a", encoding="utf-8", errors="replace")  # noqa: SIM115 - owned by the child
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            env=env,
+            # Its own group, so stopping it stops what it spawned. A dev server that forks a
+            # reloader is the normal case, and terminating only the parent leaves the child holding
+            # the port — which then looks like a program that would not die.
+            start_new_session=(os.name != "nt"),
+            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0),
+        )
+    except OSError as exc:
+        handle.close()
+        raise ProcError(f"{cmd[0]} could not be started: {exc}") from exc
+    finally:
+        # **Ours, closed; the child has its own.** `Popen` duplicates the descriptor into the child,
+        # so keeping this one open leaks a handle per launch — and on Windows it holds a lock on a
+        # file the operator may want to delete or rotate. The suite treats a `ResourceWarning` as a
+        # failure, which is how this was found rather than lived with.
+        handle.close()
+    return Started(pid=proc.pid, log=str(log), _proc=proc)

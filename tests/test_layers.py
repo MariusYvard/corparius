@@ -159,6 +159,11 @@ RANKS: dict[str, int] = {
     # be measured in a unit test rather than behind a store fixture. It reads `kernel.paths` and
     # `yaml` to load a company's own charter and nothing else.
     "housestyle": 4,
+    # A program the company wrote, and the supervisor that runs it. Rank 4 because it is domain
+    # knowledge — what an app is, where it lives, what bounds it — and the one host capability it
+    # needs is `kernel/proc.start`, which is rank 0 and owns `subprocess` for exactly this reason.
+    "codeapps": 4,
+    "providers/apprunner": 3,
     # Rank 4 and pure: bytes in, bytes out, `struct` and nothing else. A PNG is a chunk stream and a
     # JPEG a segment stream, so what is *about* the file can be dropped without decoding what the
     # file is, which is what keeps this in the domain and out of the providers.
@@ -679,12 +684,23 @@ def test_only_the_clock_waits():
     growing. Same class as `sitecheck` and the same layer: rank 3 waiting for its own outside world,
     not a loop floor and not a retry backoff.
 
-    A fourth would fail here, which is still the point.
+    **And a fourth, which is the one that most needed naming.** `codeapps` starts a program the
+    company's own coder wrote and then polls loopback until it answers. Waiting on a process it just
+    launched is its own business — a program that has not opened its port in twenty seconds has not
+    started, and reporting success because the process object exists would hand the site an address
+    that refuses connections.
+
+    A fifth would fail here, which is still the point.
     """
     found = sorted(
         _key(path) for path in _modules() if "time.sleep(" in path.read_text(encoding="utf-8")
     )
-    assert found == ["kernel/clock", "providers/screenshot", "providers/sitecheck"], (
+    assert found == [
+        "kernel/clock",
+        "providers/apprunner",
+        "providers/screenshot",
+        "providers/sitecheck",
+    ], (
         f"time.sleep is called in {found}. Waiting belongs to `kernel/clock.pace()`, or to the rank-3 "
         "module whose remote is being waited for — and each such place has to be named here."
     )

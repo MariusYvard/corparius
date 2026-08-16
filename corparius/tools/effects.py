@@ -850,6 +850,116 @@ def _owned_pages(slug: str) -> list:
     return pages[:SITE_REVIEW_PAGES]
 
 
+def _write_app_prompt(ctx) -> str:
+    """What to build, and the one contract the program has to honour.
+
+    Written as a brief rather than a specification, because the backlog task is the specification:
+    `by_task_only` is not set, so this also runs from the playbook, and a playbook turn with no task
+    should improve what exists rather than invent a second thing.
+    """
+    from .. import codeapps
+
+    slug = ctx.company.get("slug", "company")
+    have = codeapps.load(slug)
+    already = (
+        "This company already has: "
+        + "; ".join(f"{a.name} ({a.description or a.language})" for a in have)
+        + ". Improve one of those by writing it again in full, or add one that is missing.\n\n"
+        if have
+        else ""
+    )
+    task = getattr(ctx, "task", None)
+    asked = f"The task asking for this: {task['title']}\n\n" if task else ""
+    return (
+        f"Write one small program {_name(ctx)} owns and runs itself.\n\n"
+        f"{asked}{already}"
+        "**The contract, and it is the whole of it:** the program is started with a `PORT` "
+        "environment variable and must listen on `127.0.0.1` at that port and answer HTTP. Nothing "
+        "else is guaranteed — no API key, no database, no network beyond what you open yourself, "
+        "and the only environment variables are `PATH` and `PORT`.\n\n"
+        "`language`: python is always available. node only if it is installed. "
+        "`entry`: the file name to run, `main.py` unless you have a reason. "
+        "`source`: the complete file, ready to run, standard library only — a program that needs a "
+        "package nobody installed does not start, and this is checked by starting it. "
+        "`name`: short, lowercase, hyphenated. `description`: one line for the operator."
+    )
+
+
+def _write_app(ctx) -> ToolResult:
+    """Write the program, then **start it**, and report which of those happened.
+
+    A tool that wrote a file and said "code written" would be the mock this replaces with extra
+    steps. The claim worth making is that the thing runs, so this makes that claim by running it and
+    hands back the log when it does not — the last three hundred characters of a traceback is what
+    an operator can act on, where "it failed" is not.
+
+    Written under `code/<name>/`, which is inside the company's git repository, so a program that
+    turns out to be wrong is a commit to revert rather than a mess to find.
+    """
+    import yaml
+
+    from .. import codeapps
+
+    slug = ctx.company.get("slug", "company")
+    result = getattr(ctx, "structured", None)
+    data = result.data if result else {}
+    name = text.slugify(str(data.get("name", "")))[:40]
+    source = str(data.get("source", ""))
+    if not name or not source.strip():
+        return _fail("nothing to write: the model produced no name or no source")
+    language = str(data.get("language", "python")).strip().lower()
+    if language not in codeapps.LANGUAGES:
+        return _fail(
+            f"{language!r} is not a language this can run ({', '.join(codeapps.LANGUAGES)})"
+        )
+    # **The seventh new app is refused**, and replacing an existing one never is. A model asked
+    # daily to write a program does not remember what it called yesterday's, so it invents `demo`,
+    # then `demo-v2`, then `retour-vocal` — a folder, a process and a port each, against fifty ports.
+    # The refusal names what is already there, which is also the prompt for improving one instead.
+    full = codeapps.room_for(slug, name)
+    if full:
+        return _fail(full)
+    entry = Path(str(data.get("entry") or "main.py")).name  # never a path, only a file name
+    folder = codeapps.code_dir(slug) / name
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / entry).write_text(source, encoding="utf-8")
+    # **The port is written down, not left to be derived again.** Derivation probes past ports its
+    # siblings already hold, so adding a seventh app could otherwise move the address of the second —
+    # and the sales page holds that address in its markup. Settled once, at the moment the app is
+    # created, and stable from then on however many others arrive.
+    port = codeapps.next_port(slug, name)
+    (folder / codeapps.MANIFEST).write_text(
+        yaml.safe_dump(
+            {
+                "name": name,
+                "language": language,
+                "entry": entry,
+                "port": port,
+                "description": " ".join(str(data.get("description", "")).split())[:160],
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    # Restart rather than start: the second time this runs on the same app, the old process is still
+    # holding the port and would make a correct program look like a broken one.
+    #
+    # Through `codeapps`, which builds the four host-shaped arguments a rank-3 supervisor takes. The
+    # layer test split those two when this landed and was right to: one says what an app is, the
+    # other launches processes and knows nothing about companies.
+    codeapps.halt(slug, name)
+    started = codeapps.launch(slug, name)
+    if not started.get("ok"):
+        return _fail(
+            f"{name} was written to code/{name}/{entry} but does not run: {started['error']}"
+        )
+    return _ok(
+        f"{name} written to code/{name}/{entry} and answering on {started['url']} "
+        f"({len(source)} chars of {language})"
+    )
+
+
 def _edit_site_prompt(ctx) -> str:
     """One wording fix, quoted exactly, on a page that exists.
 
@@ -2602,6 +2712,10 @@ BEHAVIOUR: dict[str, Behaviour] = {
     ),
     "scan_signals": Behaviour(
         effect=lambda c, d: _ok(_scan_signals(c)),
+    ),
+    "write_app_code": Behaviour(
+        prompt=_write_app_prompt,
+        effect=lambda c, d: _write_app(c),
     ),
     "generate_code": Behaviour(
         prompt=lambda c: f"Describe a small feature for {_name(c)} in one sentence.",

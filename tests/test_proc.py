@@ -9,6 +9,8 @@ The child processes here are this interpreter, so these are real runs with no ne
 fixtures and no mocking: the seam being tested *is* the boundary to the operating system.
 """
 
+import os
+import subprocess
 import sys
 
 import pytest
@@ -100,3 +102,184 @@ def test_the_cwd_is_honoured(tmp_path):
     repository the process happened to start in."""
     out = proc.run(_py("import os; print(os.getcwd())"), cwd=str(tmp_path))
     assert out.stdout.strip() == str(tmp_path.resolve())
+
+
+# --- the other half: a process that is meant to outlive the call --------------------
+
+
+def _sleeper(tmp_path, seconds: int = 30) -> str:
+    """A program that stays up and says so, so a test can tell running from finished."""
+    script = tmp_path / "sleeper.py"
+    script.write_text(
+        f"import time\nprint('up', flush=True)\ntime.sleep({seconds})\n",
+        encoding="utf-8",
+    )
+    return str(script)
+
+
+def test_a_started_process_is_alive_and_stops_when_asked(tmp_path):
+    """`run` waits for an answer; `start` supervises something with nothing to wait for. A company's
+    own program serves requests, so the two are different jobs and this is the second one."""
+    import sys
+
+    started = proc.start(
+        [sys.executable, _sleeper(tmp_path)], cwd=str(tmp_path), log=str(tmp_path / "out.log")
+    )
+    assert started.pid > 0
+    assert started.alive() is True
+    assert started.returncode() is None
+
+    started.stop()
+    assert started.alive() is False
+    assert started.returncode() is not None
+
+
+def test_the_output_goes_to_a_file_and_not_a_pipe(tmp_path):
+    """Not a detail. A pipe nobody reads fills its buffer and the program blocks writing to it — a
+    web server logging a line per request would stop dead after a few thousand, which is the kind of
+    failure that looks like the program being wrong. A file has no such limit and leaves the operator
+    something to read."""
+    import sys
+    import time
+
+    log = tmp_path / "out.log"
+    started = proc.start([sys.executable, _sleeper(tmp_path)], cwd=str(tmp_path), log=str(log))
+    for _ in range(40):
+        if log.is_file() and "up" in log.read_text(encoding="utf-8", errors="replace"):
+            break
+        time.sleep(0.1)
+    started.stop()
+    assert "up" in log.read_text(encoding="utf-8", errors="replace")
+
+
+def test_stopping_something_already_gone_is_not_an_error(tmp_path):
+    """The caller does not know whether a program exited on its own, and asking should not be how it
+    finds out the hard way."""
+    import sys
+
+    started = proc.start(
+        [sys.executable, "-c", "pass"], cwd=str(tmp_path), log=str(tmp_path / "x.log")
+    )
+    started._proc.wait(timeout=10)  # type: ignore[attr-defined]
+    assert started.alive() is False
+    assert started.stop() is not None  # the exit code, not an exception
+
+
+def test_a_command_that_cannot_be_started_raises_the_module_s_own_error(tmp_path):
+    """`ProcError`, like `run`: a caller that had to catch `OSError` would be a caller importing
+    nothing useful to tell the two apart."""
+    with pytest.raises(proc.ProcError):
+        proc.start(
+            ["definitely-not-a-program-on-this-machine"],
+            cwd=str(tmp_path),
+            log=str(tmp_path / "x.log"),
+        )
+
+
+def test_the_environment_is_replaced_rather_than_extended(tmp_path, monkeypatch):
+    """The reason `env` exists at all: a caller decides exactly what a program written by a model may
+    see of the machine it runs on. Extending would hand it every API key in the process."""
+    import sys
+    import time
+
+    monkeypatch.setenv("A_SECRET_OF_THE_PARENT", "do-not-pass-this-on")
+    script = tmp_path / "peek.py"
+    script.write_text(
+        "import os, json\nprint(json.dumps(sorted(os.environ)), flush=True)\n", encoding="utf-8"
+    )
+    log = tmp_path / "env.log"
+    started = proc.start(
+        [sys.executable, str(script)],
+        cwd=str(tmp_path),
+        log=str(log),
+        env={
+            "PATH": os.environ.get("PATH", ""),
+            "MARKER": "1",
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+        },
+    )
+    for _ in range(40):
+        if log.is_file() and log.read_text(encoding="utf-8", errors="replace").strip():
+            break
+        time.sleep(0.1)
+    started.stop()
+
+    seen = log.read_text(encoding="utf-8", errors="replace")
+    assert "MARKER" in seen
+    assert "A_SECRET_OF_THE_PARENT" not in seen
+
+
+def test_the_parent_does_not_keep_the_log_handle_open(tmp_path):
+    """One handle leaked per launch, and on Windows it holds a lock on a file the operator may want
+    to delete or rotate. Found because the suite treats a `ResourceWarning` as a failure; asserted
+    here so it stays found."""
+    import sys
+
+    log = tmp_path / "held.log"
+    started = proc.start([sys.executable, "-c", "pass"], cwd=str(tmp_path), log=str(log))
+    started._proc.wait(timeout=10)  # type: ignore[attr-defined]
+    started.stop()
+    # If the parent still held it, this would raise PermissionError on Windows.
+    log.unlink()
+    assert not log.exists()
+
+
+def test_stopping_a_started_that_never_ran_says_nothing_happened(tmp_path):
+    """`Started` is a dataclass and a caller can hold one that never got a process — a failed launch
+    that was recorded before it raised. `None` is the honest answer for "there was no exit code",
+    and it is not the same as zero."""
+    empty = proc.Started(pid=0, log=str(tmp_path / "x.log"))
+    assert empty.alive() is False
+    assert empty.returncode() is None
+    assert empty.stop() is None
+
+
+class _Stubborn:
+    """A process that ignores being asked and has to be killed.
+
+    A double rather than a real program, and deliberately: on Windows `terminate()` is
+    `TerminateProcess`, which cannot be ignored, so the escalation below is unreachable with an
+    actual child there. What is being tested is the decision — ask, wait, insist — and that is
+    logic rather than an operating system behaviour.
+    """
+
+    def __init__(self, *, dies_on_kill: bool = True):
+        self.terminated = self.killed = 0
+        self._dies_on_kill = dies_on_kill
+        self._waits = 0
+
+    def poll(self):
+        return None if self.killed == 0 else 0
+
+    def terminate(self):
+        self.terminated += 1
+
+    def kill(self):
+        self.killed += 1
+
+    def wait(self, timeout=None):
+        self._waits += 1
+        if self._waits == 1 or not self._dies_on_kill:
+            raise subprocess.TimeoutExpired(cmd="x", timeout=timeout or 0)
+        return 0
+
+
+def test_a_program_that_ignores_terminate_is_killed(tmp_path):
+    """Terminate before kill, because a program that keeps state deserves the chance to write it
+    down; kill after, because an operator pressing Stop is not asking politely twice."""
+    stubborn = _Stubborn()
+    started = proc.Started(pid=1, log=str(tmp_path / "x.log"), _proc=stubborn)
+
+    assert started.stop(grace=0.01) == 0
+    assert stubborn.terminated == 1 and stubborn.killed == 1
+
+
+def test_a_program_that_survives_a_kill_is_reported_rather_than_waited_on(tmp_path):
+    """Nothing can stop a process the OS will not kill — a wedged driver, a debugger attached. The
+    honest answer is `None` and moving on, because blocking here would hang the shutdown of the
+    console rather than the one program that is stuck."""
+    unkillable = _Stubborn(dies_on_kill=False)
+    started = proc.Started(pid=1, log=str(tmp_path / "x.log"), _proc=unkillable)
+
+    assert started.stop(grace=0.01) is None
+    assert unkillable.killed == 1

@@ -98,7 +98,7 @@ ALL_SRC = "\n".join(SRC.values())
 # 143: `app/guidance`, what the operator should do next and where. The CEO tab could answer
 # questions and could not answer *the* question — somebody who does not know what to do has
 # nothing to type.
-MODULE_COUNT = 148
+MODULE_COUNT = 150
 
 
 def test_every_source_file_is_scanned():

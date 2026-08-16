@@ -230,8 +230,12 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         AgentRole.CODER,
         None,
         Difficulty.HARD,
-        "You ship product changes behind human review.",
-        ["generate_code", "publish_production_code"],
+        "You write and run the small programs this company owns.",
+        # `write_app_code` first, because it is the one with hands: it writes a program under
+        # `code/<name>/` and starts it, and its answer is "this runs" or the log saying why not.
+        # The two after it are what the role used to be — a sentence and a hardcoded PR number —
+        # and they are named as such in their own descriptions now rather than reading as work.
+        ["write_app_code", "generate_code", "publish_production_code"],
         model="local:qwen2.5-coder:14b",
     ),  # task-adapted code model, kept on-prem
 }

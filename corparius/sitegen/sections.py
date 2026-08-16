@@ -177,6 +177,73 @@ LEGAL_FIELDS = (
 )
 
 
+def apps_html(company: dict, txt: dict) -> str:
+    """`site.apps`: the company's own programs, on its own page.
+
+    **This is the one section that puts JavaScript on a generated page, and it is opt-in for that
+    reason.** The generator's defended property is that the page is a single static file with nothing
+    to reach and nothing left running — `faq_pairs` bakes its answers at build time and says why. A
+    company that lists an app here has decided otherwise about its own site, for a program it wrote
+    and that runs on its own machine.
+
+    So: absent unless asked for, and honest about what it is when it is. The address is loopback,
+    which means the demo works for the operator and for nobody else — a visitor on the internet gets
+    the fallback line rather than a spinner that never resolves, because a form that fails silently
+    is worse than a sentence saying it needs the app running.
+    """
+    from .. import codeapps
+
+    wanted = [
+        str(n).strip() for n in ((company.get("site") or {}).get("apps") or []) if str(n).strip()
+    ]
+    if not wanted:
+        return ""
+    slug = str(company.get("slug") or "")
+    have = {app.name: app for app in codeapps.load(slug)}
+    cards = []
+    for name in wanted:
+        app = have.get(text.slugify(name))
+        if app is None:
+            log.warning("site: %r is listed under site.apps and this company has no such app", name)
+            continue
+        cards.append(
+            f'<article class="app" data-app="{esc(app.name)}" data-url="{esc(app.url)}">'
+            f"<h3>{esc(app.name)}</h3>"
+            + (f"<p>{esc(app.description)}</p>" if app.description else "")
+            + f'<form><input name="q" placeholder="{esc(txt["appAsk"])}" autocomplete="off">'
+            f'<button type="submit">{esc(txt["appSend"])}</button></form>'
+            f'<pre class="app-out" hidden></pre>'
+            f'<p class="app-off">{esc(txt["appOff"])}</p></article>'
+        )
+    if not cards:
+        return ""
+    return (
+        f'<section id="apps"><h2>{esc(txt["apps"])}</h2>'
+        f'<div class="apps">{"".join(cards)}</div>{APPS_SCRIPT}</section>'
+    )
+
+
+# Small, inline and dependency-free, for the same reason the rest of this generator is: a page that
+# pulled a framework to send one request would be a page whose behaviour lives on somebody else's
+# CDN. It hides the "not running" line only once an answer arrives, so the page is honest before
+# JavaScript has run at all and honest again if the app is not there.
+APPS_SCRIPT = """<script>
+for (const card of document.querySelectorAll('.app')) {
+  const out = card.querySelector('.app-out'), off = card.querySelector('.app-off');
+  card.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const q = new FormData(e.target).get('q') || '';
+    out.hidden = false; out.textContent = '...';
+    try {
+      const r = await fetch(card.dataset.url + '/?q=' + encodeURIComponent(q));
+      out.textContent = await r.text();
+      off.hidden = true;
+    } catch (err) { out.hidden = true; off.hidden = false; }
+  });
+}
+</script>"""
+
+
 def legal_html(company: dict, txt: dict) -> str:
     """`legal:`: who publishes this site and where to reach them.
 

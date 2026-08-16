@@ -287,6 +287,14 @@ class Runtime:
         should_stop = should_stop or (lambda: False)
         slug = company["slug"]
         self._refresh_repo(slug)
+        # Programs the company wrote, from earlier runs. Stopped here rather than left because the
+        # lifetime is the only real bound on them: memory cannot be capped the same way on all three
+        # platforms, so a leak is answered by a clock. A company runs unattended for days and the
+        # start of a day is when somebody is watching.
+        from .providers import apprunner
+
+        for gone in apprunner.sweep():
+            log.info("%s: stopped after its lifetime", gone)
         budgets = company.get("budgets", {})
         gate = ApprovalGate(
             self.store, PermissionEngine.from_settings(self.settings, company, self.store)

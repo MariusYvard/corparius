@@ -532,4 +532,13 @@ def drain_and_close(ui: UiState, join_timeout: float = 5.0) -> None:
     for t in threading.enumerate():
         if t.name.startswith("corparius-run-"):
             t.join(timeout=join_timeout)
+    # **And every program a company wrote.** These are real processes, started by corparius and
+    # holding loopback ports; a console that exits leaving them behind is one an operator has to hunt
+    # for in a task manager, and the port they hold is the one the next launch needs. After the runs
+    # join, so a tick that was mid-request against its own app is not shot from under it.
+    from ..providers import apprunner
+
+    stopped = apprunner.stop_all()
+    if stopped:
+        log.info("stopped %d company program(s) on the way out", stopped)
     ui.close()

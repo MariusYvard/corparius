@@ -850,6 +850,138 @@ def _owned_pages(slug: str) -> list:
     return pages[:SITE_REVIEW_PAGES]
 
 
+def _broken_app(slug: str):
+    """The company's program most in need of attention, or None.
+
+    Not answering beats never started beats newest: a program that used to work and stopped is the
+    one an operator is losing something over, and one that has never run is the one whose first
+    version was wrong. With everything healthy there is nothing to fix, and saying so is a better
+    turn than picking one at random to rewrite.
+    """
+    from .. import codeapps
+
+    states = codeapps.statuses(slug)
+    down = [s for s in states if not s.get("answering")]
+    return down[0] if down else None
+
+
+def _fix_app_prompt(ctx) -> str:
+    """The current source and what the program said when it died.
+
+    This is the whole of the fix loop and the reason this tool is not a second `write_app_code`: the
+    log is the diagnosis. A model asked to repair a program without being shown its traceback is a
+    model rewriting from memory, which is how a working half becomes broken too.
+    """
+    from .. import codeapps
+    from ..providers import apprunner
+
+    slug = ctx.company.get("slug", "company")
+    broken = _broken_app(slug)
+    if broken is None:
+        return (
+            f"Every program {_name(ctx)} owns is answering. Return the source of the one you would "
+            "improve next, unchanged, and say why in `why` — or leave `source` empty if none needs it."
+        )
+    app = codeapps.get(slug, broken["name"])
+    source = ""
+    if app is not None:
+        try:
+            source = (app.folder / app.entry).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            source = ""
+    said = apprunner.tail(broken.get("log", ""), limit=1200)
+    return (
+        f"{_name(ctx)}'s program `{broken['name']}` is not answering on port {broken['port']}.\n\n"
+        f"**What it said:**\n{said}\n\n"
+        f"**Its current {app.entry if app else 'source'}:**\n{source[:6000]}\n\n"
+        "Return the **complete corrected file** in `source` — not a patch, not the changed lines, "
+        "the whole thing ready to run. It is started with a `PORT` environment variable and must "
+        "listen on 127.0.0.1 at that port. Standard library only. `name` is "
+        f"`{broken['name']}`. `why`: one sentence on what was wrong."
+    )
+
+
+def _fix_app(ctx) -> ToolResult:
+    """Write the corrected file, restart, and report whether it answers now.
+
+    Same contract as `write_app_code` and for the same reason: the claim worth making is that the
+    program runs. A repair that reported "fixed" without starting it would be the mock this replaced.
+    """
+    from .. import codeapps
+
+    slug = ctx.company.get("slug", "company")
+    result = getattr(ctx, "structured", None)
+    data = result.data if result else {}
+    source = str(data.get("source", ""))
+    why = " ".join(str(data.get("why", "")).split())
+    broken = _broken_app(slug)
+    if broken is None:
+        return _ok(f"every program is answering{'; ' + why if why else ''}")
+    name = text.slugify(str(data.get("name") or broken["name"]))
+    app = codeapps.get(slug, name)
+    if app is None:
+        return _fail(f"{name!r} is not one of this company's programs")
+    if not source.strip():
+        return _fail(f"{app.name} is down and no replacement source was produced")
+
+    (app.folder / app.entry).write_text(source, encoding="utf-8")
+    codeapps.halt(slug, app.name)
+    started = codeapps.launch(slug, app.name)
+    if not started.get("ok"):
+        return _fail(f"{app.name} was rewritten and still does not run: {started['error']}")
+    return _ok(
+        f"{app.name} repaired and answering on {started['url']}" + (f" ({why})" if why else "")
+    )
+
+
+def _publish_code(ctx) -> ToolResult:
+    """Commit the company's own source and push it to its repository.
+
+    What this used to be: `return "Merged PR #42 to production (mock)"` — a fixed string, the same
+    number for every company on every day, behind a human approval gate. There was no repository
+    behind it and no merge.
+
+    What it is now is the true version of the same sentence. A company folder **is** a git
+    repository (`companyrepo`), it holds `code/` alongside the config and the documents, and pushing
+    it is what puts the company's own programs somewhere other than this machine. That is a real
+    thing to ask an operator to approve, which is what the gate on it was always for.
+    """
+    from .. import codeapps
+    from ..providers import companyrepo
+
+    slug = ctx.company.get("slug", "company")
+    programs = codeapps.load(slug)
+    if not programs:
+        return _fail("this company has written no programs yet, so there is nothing to publish")
+    if not companyrepo.is_repo(slug):
+        # No command in the sentence, which `tests/test_inbox_remedy.py` enforces and which caught
+        # the first version of this line naming one. It states what is true and stops: **creating a
+        # company repository is not something the console can do yet**, and pointing at a terminal
+        # would be the product handing its own work back, so the honest answer is the fact without
+        # the instruction until that button exists.
+        return _fail(
+            f"{slug} is not versioned, so its {len(programs)} program(s) exist only on this machine"
+        )
+    where = companyrepo.remote_url(slug)
+    if not where:
+        return _fail(
+            f"{slug} has no remote, so its {len(programs)} program(s) stay on this machine"
+        )
+    # `publish`, not `sync`. The first version called `sync` and reported "nothing had changed since
+    # the last publish" for a company whose code had **never** been pushed: `sync` returns early on a
+    # clean tree, and a folder whose first commit predates its remote is clean and entirely
+    # unpublished. Measured on a throwaway repository, where the remote held no `code/` at all while
+    # the tool said everything was fine.
+    out = companyrepo.publish(slug, f"{slug}: publish {len(programs)} program(s)")
+    if out.get("pushed"):
+        if out.get("already"):
+            return _ok(f"{len(programs)} program(s) already on {where}, nothing new to send")
+        return _ok(f"{len(programs)} program(s) pushed to {where}")
+    # Committed and not pushed is the honest half-answer, and the repository work already puts it in
+    # the operator's inbox with a button that settles it.
+    return _fail(f"committed locally, not pushed: {out.get('error') or 'no reason given'}")
+
+
 def _write_app_prompt(ctx) -> str:
     """What to build, and the one contract the program has to honour.
 
@@ -2717,12 +2849,23 @@ BEHAVIOUR: dict[str, Behaviour] = {
         prompt=_write_app_prompt,
         effect=lambda c, d: _write_app(c),
     ),
+    # Was: a prompt asking for one sentence, and that sentence returned. It repairs a program that
+    # has stopped answering now, which is the half of the loop `write_app_code` does not cover —
+    # writing something new is not the same job as reading a traceback and correcting it.
     "generate_code": Behaviour(
-        prompt=lambda c: f"Describe a small feature for {_name(c)} in one sentence.",
-        effect=lambda c, d: _ok(f"Feature branch drafted: {d[:110]}"),
+        skip_when=lambda c: (
+            ""
+            if _broken_app(c.company.get("slug", "company"))
+            else "every program this company owns is answering, so there is nothing to repair"
+        ),
+        prompt=_fix_app_prompt,
+        effect=lambda c, d: _fix_app(c),
     ),
+    # Was: `return "Merged PR #42 to production (mock)"`. It commits the company's own source and
+    # pushes it to the company's repository, which is the true version of the sentence its name has
+    # always made — and a real thing to ask an operator to approve.
     "publish_production_code": Behaviour(
-        effect=lambda c, d: _ok("Merged PR #42 to production (mock)"),
+        effect=lambda c, d: _publish_code(c),
     ),
     "draft_design_brief": Behaviour(
         prompt=lambda c: f"Describe a visual direction for {_name(c)} in one sentence.",

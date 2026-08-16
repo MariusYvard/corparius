@@ -407,22 +407,31 @@ SPEC: dict[str, ToolSpec] = {
         "Watch configured sources for buying signals",
         risk=permissions.EXTERNAL,
     ),
-    # **Describes, and that is now the whole claim.** It asks a model for a sentence and returns
-    # that sentence; nothing is written and nothing runs. Kept because describing a change before
-    # making it is real work, and renamed in the console because "Draft a feature or fix" reads like
-    # a branch appeared somewhere. `write_app_code` is the one with hands.
+    # **The repair half of the loop.** `write_app_code` writes a program; this one reads the log of a
+    # program that has stopped answering and writes the corrected file. Two tools rather than one
+    # because they are different jobs: writing something new is not reading a traceback, and a single
+    # tool asked to do both gets a prompt that describes neither.
+    #
+    # `CODE` for the same reason as its sibling — it rewrites a file and restarts the process — and
+    # it skips itself when everything is answering, which is most days.
     "generate_code": ToolSpec(
         "generate_code",
-        "Describe a change in one sentence (writes nothing)",
+        "Repair a program of this company's that has stopped answering",
         needs_draft=True,
+        risk=permissions.CODE,
+        schema={
+            "name": {"type": "str", "default": "", "max_len": 40},
+            "source": {"type": "str", "default": "", "max_len": 8000},
+            "why": {"type": "str", "default": "", "max_len": 200},
+        },
     ),
-    # It returns the string "Merged PR #42 to production (mock)" — the same number for every company
-    # on every day — and asks the operator to approve doing so. There is no repository behind it and
-    # no merge. The description says that now, because an operator reading "Merge a PR to production"
-    # in an approval queue has every reason to believe one happened.
+    # It used to return "Merged PR #42 to production (mock)" — a fixed string, the same number for
+    # every company on every day, behind a human approval gate for a merge that never happened. It
+    # commits the company's own `code/` and pushes it to the company's repository now, which is the
+    # true version of the sentence its name has always made and a real thing to approve.
     "publish_production_code": ToolSpec(
         "publish_production_code",
-        "Not built: reports a merge that does not happen",
+        "Commit and push this company's programs to its repository",
         risk=permissions.CODE,
         hitl=True,
     ),

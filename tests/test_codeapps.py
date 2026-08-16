@@ -149,18 +149,29 @@ def test_the_entry_is_a_file_name_and_never_a_path(home):
 # --- what the program may see of the machine ---------------------------------------
 
 
-def test_the_child_gets_a_path_a_port_and_nothing_else(home, monkeypatch):
-    """A model wrote this program. The environment is the cheapest place to be strict, and a secret
-    it never receives is a secret it cannot leak — so no `CORP_*`, no API key, no home."""
+def test_the_child_sees_no_credential_of_any_kind(home, monkeypatch):
+    """The promise, stated as what it is: **no credentials**, not a list of four variables.
+
+    It was that list first — `PATH`, `PORT`, `PYTHONUNBUFFERED`, `SYSTEMROOT` — and it worked on
+    Windows, passed locally and failed every macOS job in CI, with a child that started, wrote
+    nothing to its log and never bound its port. Which four variables an interpreter needs is not a
+    thing to guess three times.
+    """
     from corparius import codeapps
 
     monkeypatch.setenv("GROQ_API_KEY", "gsk-secret")
     monkeypatch.setenv("CORP_UI_TOKEN", "a-token")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk-live-secret")
+    monkeypatch.setenv("SOME_PASSWORD", "hunter2")
+    monkeypatch.setenv("HARMLESS_SETTING", "kept")
     app = codeapps.CodeApp(name="x", language="python", entry="main.py", port=8799)
     env = codeapps.child_env(app)
 
-    assert env["PORT"] == "8799" and env["PATH"]
-    assert not [k for k in env if k.startswith(("CORP_", "GROQ_"))], env
+    assert env["PORT"] == "8799"
+    assert env.get("HARMLESS_SETTING") == "kept", "the machine's own environment was thrown away"
+    for leaked in ("GROQ_API_KEY", "CORP_UI_TOKEN", "STRIPE_SECRET_KEY", "SOME_PASSWORD"):
+        assert leaked not in env, leaked
+    assert "gsk-secret" not in " ".join(env.values())
 
 
 def test_a_program_can_read_its_port_from_the_environment(home):
@@ -288,12 +299,18 @@ def test_an_app_that_is_listed_and_does_not_exist_is_left_out(home):
 # --- and the tools that still do nothing say so --------------------------------------
 
 
-@pytest.mark.parametrize("name", ["publish_production_code", "produce_mockup"])
-def test_a_tool_that_reports_work_it_does_not_do_says_that_in_its_description(name):
-    """`publish_production_code` returns "Merged PR #42 to production (mock)" and asks the operator
-    to approve it. An operator reading "Merge a PR to production" in an approval queue has every
-    reason to believe one happened, so the console now reads what it is."""
-    assert "Not built" in TOOLS[name].description, TOOLS[name].description
+def test_the_one_tool_that_still_reports_work_it_does_not_do_says_so():
+    """`produce_mockup` returns "Mockup produced: landing hero and one ad variant (mock)" and
+    produces no mockup. Its description reads as that now, because an operator scanning a log has no
+    other way to tell it apart from the tools that do something.
+
+    Its two former neighbours are gone from this list, and that is the point of the file: they were
+    repaired rather than relabelled. `generate_code` reads a broken program's log and writes the
+    corrected file; `publish_production_code` commits the company's source and pushes it.
+    """
+    assert "Not built" in TOOLS["produce_mockup"].description
+    for repaired in ("generate_code", "publish_production_code", "write_app_code"):
+        assert "Not built" not in TOOLS[repaired].description, repaired
 
 
 def test_the_one_with_hands_is_on_the_coder_s_playbook():
@@ -421,3 +438,137 @@ def test_two_programs_never_share_one_port(home):
     ports = [app.port for app in codeapps.load("acme")]
     assert len(set(ports)) == len(ports), f"two apps share a port: {sorted(ports)}"
     assert all(codeapps.PORT_FLOOR <= p < codeapps.PORT_CEILING for p in ports)
+
+
+# --- the two tools that used to be strings ------------------------------------------
+
+
+def test_a_broken_program_is_repaired_from_its_own_log(home):
+    """The loop that was missing entirely. `write_app_code` writes something new; this reads the
+    traceback of a program that stopped answering and writes the corrected file. Two tools because
+    they are two jobs — a single one asked to do both gets a prompt describing neither.
+
+    What it replaced: `generate_code` asked a model to describe a feature in one sentence and
+    returned that sentence.
+    """
+    import types
+
+    from corparius import codeapps
+
+    assert _write(source="import a_module_that_is_not_installed\n").ok is False
+
+    ctx = types.SimpleNamespace(company={"slug": "acme", "name": "Acme"}, store=None)
+    asked = TOOLS["generate_code"].draft_prompt(ctx)
+    assert "listener" in asked, "the prompt does not name the program that is down"
+    assert "No module named" in asked or "ModuleNotFoundError" in asked, (
+        "the prompt does not carry the traceback, so a model would rewrite from memory"
+    )
+
+    fixed = TOOLS["generate_code"].run(
+        types.SimpleNamespace(
+            company={"slug": "acme", "name": "Acme"},
+            store=None,
+            structured=types.SimpleNamespace(
+                data={"name": "listener", "source": SERVER, "why": "the import did not exist"}
+            ),
+        )
+    )
+    assert fixed.ok is True, fixed.output
+    assert codeapps.status("acme", "listener")["answering"] is True
+
+
+def test_the_repair_tool_stands_down_when_everything_answers(home):
+    """Most days nothing is broken. A tool that rewrote a working program to have something to do is
+    the shape `stop_useless_work` exists to catch."""
+    import types
+
+    assert _write().ok is True
+    ctx = types.SimpleNamespace(company={"slug": "acme"}, store=None)
+    assert "nothing to repair" in TOOLS["generate_code"].behaviour.skip_when(ctx)
+
+
+def test_a_repair_that_still_does_not_run_is_a_failure(home):
+    """Same contract as writing one: the claim is that the program runs, so a rewrite that does not
+    start is reported as one rather than as a fix."""
+    import types
+
+    assert _write(source="import nope_not_here\n").ok is False
+    out = TOOLS["generate_code"].run(
+        types.SimpleNamespace(
+            company={"slug": "acme"},
+            store=None,
+            structured=types.SimpleNamespace(
+                data={"name": "listener", "source": "import still_not_here\n"}
+            ),
+        )
+    )
+    assert out.ok is False and "still does not run" in out.output
+
+
+def test_publishing_puts_the_source_on_the_remote(home, tmp_path):
+    """What this used to be: `return "Merged PR #42 to production (mock)"` — a fixed string, the same
+    number for every company on every day, behind a human approval gate for a merge that never
+    happened. It commits the company's own `code/` and pushes it.
+    """
+    import subprocess
+    import types
+
+    from corparius.providers import companyrepo
+
+    if not companyrepo.git_available():
+        pytest.skip("git is not on PATH")
+
+    assert _write().ok is True
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    companyrepo._git(["remote", "add", "origin", str(bare)], companyrepo.ensure_repo("acme"))
+
+    ctx = types.SimpleNamespace(company={"slug": "acme"}, store=None)
+    out = TOOLS["publish_production_code"].run(ctx)
+    assert out.ok is True, out.output
+
+    listed = subprocess.run(
+        ["git", "--git-dir", str(bare), "ls-tree", "-r", "--name-only", "main"],
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert "code/listener/main.py" in listed, listed
+    assert "code/listener/app.log" not in listed, "the program's output was versioned too"
+
+
+def test_a_second_publish_says_there_was_nothing_new(home, tmp_path):
+    """And it is a *check* rather than an assumption. The first version called `sync`, which returns
+    early on a clean tree, and reported "nothing had changed since the last publish" about a company
+    whose code had **never** been pushed — the remote held no `code/` at all. Unknown now means
+    everything is unpushed, not nothing."""
+    import subprocess
+    import types
+
+    from corparius.providers import companyrepo
+
+    if not companyrepo.git_available():
+        pytest.skip("git is not on PATH")
+
+    assert _write().ok is True
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    companyrepo._git(["remote", "add", "origin", str(bare)], companyrepo.ensure_repo("acme"))
+
+    ctx = types.SimpleNamespace(company={"slug": "acme"}, store=None)
+    first = TOOLS["publish_production_code"].run(ctx)
+    second = TOOLS["publish_production_code"].run(ctx)
+    assert first.ok and second.ok
+    assert "pushed" in first.output and "already" in second.output
+
+
+def test_publishing_without_a_remote_is_refused_with_the_fact(home):
+    """No terminal command in the sentence: creating a company repository is not something the
+    console can do yet, and pointing at one would be the product handing its own work back."""
+    import types
+
+    assert _write().ok is True
+    out = TOOLS["publish_production_code"].run(
+        types.SimpleNamespace(company={"slug": "acme"}, store=None)
+    )
+    assert out.ok is False and "not versioned" in out.output
+    assert "corparius " not in out.output, "the refusal names a command to run"

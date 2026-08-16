@@ -38,8 +38,9 @@ rather than hidden. What is enforced:
     program that leaks slowly and a company runs unattended for days;
   * **one at a time per app**, tracked by pid, so a run that restarts does not leave the old one
     holding the port;
-  * **its own environment** — the child gets `PATH`, `PORT` and nothing else. No API keys, no
-    `CORP_*`, no home. A program that needs a secret has to be given one deliberately.
+  * **an environment with no credentials in it** — every `CORP_*` and every name reading like a
+    key, a token, a secret or a password is removed before the child sees it. A program that needs
+    one has to be given it deliberately.
 
 What is **not** enforced, and saying so is the point: memory and disk are not capped. `resource`
 does it on POSIX and Windows needs a Job Object, and a bound that exists on one platform is a bound
@@ -242,20 +243,38 @@ def command_for(app: CodeApp) -> tuple[list[str], str]:
     return parts, ""
 
 
-def child_env(app: CodeApp) -> dict:
-    """What the program is allowed to see of this machine.
+# What a program written by a model must never be handed. A **deny list**, and the first version was
+# an allow list of four variables — `PATH`, `PORT`, `PYTHONUNBUFFERED`, `SYSTEMROOT` — which passed
+# here and failed every macOS job in CI: the child started, wrote nothing at all to its log, and
+# never bound its port. An interpreter needs more of its environment than four names on some
+# platforms, and guessing which four is a guess that has to be right on three operating systems.
+#
+# Denying is the shape that achieves the same thing without that bet: the promise was never "four
+# variables", it was "no credentials", and this states exactly that.
+SECRET_MARKERS = ("_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_PASS", "_CREDENTIAL")
 
-    `PATH` because a program that cannot find its own interpreter is not bounded, it is broken.
-    `PORT` because that is how every web framework expects to be told. **Nothing else** — no
-    `CORP_*`, no API keys, no home directory. A model wrote this program; the environment is the
-    cheapest place to be strict, and a secret it never receives is a secret it cannot leak.
+
+def child_env(app: CodeApp) -> dict:
+    """The machine's environment, minus everything that is a credential, plus `PORT`.
+
+    A model wrote this program, so the environment is the cheapest place to be strict — and the
+    promise being kept is **no credentials**, not "four variables". Stated that way because the first
+    version was the other way: an allow list of `PATH`, `PORT`, `PYTHONUNBUFFERED` and `SYSTEMROOT`,
+    which worked on Windows, passed here, and failed every macOS job in CI with a child that started,
+    wrote nothing to its log and never bound its port. Guessing which four variables an interpreter
+    needs is a guess that has to be right on three operating systems.
+
+    So: every `CORP_*`, and every name that reads like a key, a token, a secret or a password, is
+    removed. What is left is what the operating system needs to run a program, which is the thing
+    that cannot be enumerated portably.
     """
-    return {
-        "PATH": os.environ.get("PATH", ""),
-        "PORT": str(app.port),
-        "PYTHONUNBUFFERED": "1",
-        "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+    safe = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith("CORP_")
+        and not any(marker in name.upper() for marker in SECRET_MARKERS)
     }
+    return {**safe, "PORT": str(app.port), "PYTHONUNBUFFERED": "1"}
 
 
 def key(slug: str, name: str) -> str:

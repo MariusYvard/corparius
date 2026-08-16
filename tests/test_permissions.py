@@ -172,6 +172,11 @@ def test_the_shipped_defaults_gate_exactly_what_they_used_to(tmp_path):
         # The other direction — shipping a default where an agent silently starts processes on
         # everybody's machine — is not a default to choose on their behalf.
         "write_app_code",
+        # And its repair half, for the same reason: it rewrites a file the company runs and restarts
+        # the process. `generate_code` used to be `READ` because it read nothing and wrote nothing —
+        # it returned a sentence — so its class moving is the classification catching up with what
+        # the tool became rather than a threshold quietly widening.
+        "generate_code",
     }
 
 

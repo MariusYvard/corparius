@@ -182,7 +182,11 @@ def start(cmd: list[str], *, cwd: str | None = None, log: str, env: dict | None 
             # reloader is the normal case, and terminating only the parent leaves the child holding
             # the port — which then looks like a program that would not die.
             start_new_session=(os.name != "nt"),
-            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0),
+            # `getattr`, because the constant only exists on Windows. The conditional expression
+            # never evaluates it elsewhere at runtime, but mypy checks the attribute regardless and
+            # `--platform linux` is one of the two invocations CI runs — which is how this was found,
+            # having passed the default and the win32 pass here.
+            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
         )
     except OSError as exc:
         handle.close()

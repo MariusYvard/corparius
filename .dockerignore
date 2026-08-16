@@ -8,3 +8,8 @@ companies/*/state.json
 .env
 docs/
 tests/
+# The console's dependencies and its build output. `npm ci` runs inside the image's own build
+# stage, so a host node_modules would be copied for nothing and a host build would be copied over
+# by the stage that makes it. Both are large and neither is used.
+web/node_modules/
+corparius/api/static/

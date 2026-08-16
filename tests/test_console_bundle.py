@@ -127,6 +127,36 @@ def test_the_wheel_and_the_frozen_build_both_declare_the_directory():
     assert '"index.html").is_file()' in spec, "the entry must be guarded, not unconditional"
 
 
+def test_the_image_builds_the_console_too():
+    """**Three packaging paths, and this test used to check two.** v0.5.0 shipped with the wheel and
+    the three native binaries carrying the new console and the container serving the old page: the
+    `Dockerfile` copied `corparius/` from a checkout, `api/static/` is generated and not in git, so
+    there was nothing to copy.
+
+    Nothing failed, and that is the part worth stating. A missing build is a *supported* state —
+    `/` falls back to `webui.html` — so the image worked, answered 200, and rendered a console one
+    version out of date. Found by pulling the published image and looking, which is not a thing that
+    happens on a schedule.
+
+    Asserted on the file rather than by building, because a `docker build` in this suite would need
+    Docker on every machine that runs it. The build itself is smoked in CI.
+    """
+    dockerfile = pathlib.Path("Dockerfile").read_text(encoding="utf-8")
+    assert "npm ci" in dockerfile and "npm run build" in dockerfile, (
+        "the image does not build the console, so it ships whatever the checkout had"
+    )
+    assert "COPY --from=console-build /corparius/api/static" in dockerfile
+    # Order matters and is invisible from the outside: `COPY corparius ./corparius` would put the
+    # checkout's empty tree over the built one if it came second.
+    assert dockerfile.index("COPY corparius ./corparius") < dockerfile.index(
+        "COPY --from=console-build"
+    ), "the source copy would overwrite the assets the build stage just made"
+    ignored = pathlib.Path(".dockerignore").read_text(encoding="utf-8")
+    assert "corparius/api/static/" in ignored, (
+        "a host build would ride into the context and land in the image ahead of the stage's"
+    )
+
+
 # --- resolution -----------------------------------------------------------------
 
 

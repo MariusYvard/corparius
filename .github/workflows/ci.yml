@@ -285,3 +285,48 @@ jobs:
           contains "$wheel_root" '<div id="app">' "the installed / serves it"
           kill "$pid" 2>/dev/null || true
           echo "wheel smoke OK: installed package runs a day offline and serves the console at /"
+
+  # The third packaging path, and the one that had no test at all. v0.5.0 shipped with the wheel
+  # and the three native binaries carrying the new console and the **container serving the old
+  # page**: the Dockerfile copied `corparius/` from a checkout, `api/static/` is generated and not
+  # in git, so there was nothing to copy. Nothing failed — a missing build is a supported state and
+  # `/` falls back to `webui.html` — so the image answered 200 and rendered a console one version
+  # behind. Found by pulling the published image and looking, which is not a thing that happens on
+  # a schedule.
+  #
+  # amd64 only and no push: this asks whether the image contains what it should, and the release
+  # workflow is what builds both architectures.
+  image-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the image
+        run: docker build -t corparius:ci .
+      - name: The container serves the built console
+        run: |
+          set -euo pipefail
+          contains() {
+            case "$1" in
+              *"$2"*) echo "  checked · $3" ;;
+              *) echo "FAILED · $3 — no match for: $2"; exit 1 ;;
+            esac
+          }
+          cid=$(docker run -d -p 18600:8600 corparius:ci)
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18600/api/session >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          # `/` and `/app/` separately, because they differ by one branch and the fallback answers
+          # 200 with the old page: a broken switch looks exactly like success from the status code.
+          root=$(curl -fsS http://127.0.0.1:18600/)
+          contains "$root" '<div id="app">' "/ serves the built console, not the fallback"
+          shell=$(curl -fsS http://127.0.0.1:18600/app/)
+          contains "$shell" '<div id="app">' "/app/ serves it too"
+          curl -fsS http://127.0.0.1:18600/app/console.js  > /dev/null
+          curl -fsS http://127.0.0.1:18600/app/console.css > /dev/null
+          # Node built it and Node is not in the runtime image. Asserted, because a single-stage
+          # image that happened to keep the toolchain would pass everything above.
+          docker run --rm corparius:ci sh -c '! command -v node' \
+            || { echo "the runtime image carries Node"; exit 1; }
+          echo "image smoke OK: the container serves the built console and ships no toolchain"

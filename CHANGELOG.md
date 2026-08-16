@@ -6,6 +6,27 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
+## 0.5.1 — le conteneur servait l'ancienne console
+
+- **Fixed : l'image Docker ne construisait pas la console.** `corparius/api/static/`
+  est produit par `npm run build` et n'est pas dans git ; le `Dockerfile` copiait
+  `corparius/` depuis un dépôt, donc il n'y avait rien à copier. La 0.5.0 est
+  partie comme ça : le wheel et les trois binaires natifs portaient la nouvelle
+  console, le conteneur servait l'ancienne page.
+
+  **Et rien n'a échoué**, ce qui est la partie qui compte. Une console non
+  construite est un état *prévu* — `/` retombe sur `webui.html` — donc l'image
+  marchait, répondait 200, et affichait une console d'une version de retard.
+  Trouvé en tirant l'image publiée et en regardant, ce qui n'arrive pas à
+  intervalles réguliers.
+
+  Le `Dockerfile` a une étape de construction Node, donc `docker build .` depuis
+  un dépôt produit la même image que la CI, et Node ne survit pas dans l'image
+  d'exécution. Deux tests le tiennent : l'un sur le fichier, l'ordre des copies
+  compris — parce que copier les sources après aurait recouvert les assets par
+  l'arborescence vide — et l'autre en CI, qui construit l'image, demande `/` et
+  vérifie que ce n'est pas le repli.
+
 ## 0.5.0 — l'agent codeur a des mains, l'agent design a des yeux, et le paquet arrive enfin sur PyPI
 
 Une version mineure et pas un correctif, parce que trois modules et cinq outils

@@ -1,10 +1,12 @@
 """The HybridRouter must run offline in mock mode and pick the right tier model."""
 
+import pytest
 import requests
 
 from corparius.config.provider_table import OPENAI_COMPAT_PROVIDERS, split_target
 from corparius.config.settings import Settings
 from corparius.kernel.records import Difficulty, LLMResult, Usage
+from corparius.providers import llm as llm_mod
 from corparius.providers.llm import HybridRouter, LLMProvider
 
 
@@ -232,3 +234,131 @@ def test_a_tier_default_is_still_demoted_by_its_cooldown(monkeypatch):
     s.normal_model = "groq:llama-3.3-70b-versatile"
     asked = _asked_provider(monkeypatch, s, None, resting=("groq",))
     assert asked and asked[0] != "groq", f"the resting tier model was tried first: {asked}"
+
+
+# --- whose fault it was ------------------------------------------------------------
+#
+# Taken from reading LiteLLM's router, which draws this line from the other end: it cools down on
+# 429, 401, 408 and 5XX, exempts other 4XX outright, and never cools down an `APIConnectionError`.
+# The reasoning transports even though almost nothing else in that file does — its ratio-based rule
+# (50% failures over at least five requests) needs a request volume a company turn does not have,
+# and its five-second default suits a pool of interchangeable deployments rather than a short chain
+# of free tiers on per-minute limits.
+#
+# Measured here before the rule existed, and every one of these six was rested for 45 or 90 seconds:
+#
+#     429 the provider is limiting us      right
+#     401 our key is wrong                 right
+#     400 our request is malformed         wrong
+#     the prompt exceeded the context      wrong, and expensively
+#     a passing network blip               wrong
+#     503 the provider is down             right
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected"),
+    [
+        (requests.HTTPError("429 Client Error: Too Many Requests"), "rate_limit"),
+        (requests.HTTPError("Rate limit reached for model"), "rate_limit"),
+        (requests.HTTPError("401 Client Error: Unauthorized"), "auth"),
+        (requests.HTTPError("Invalid API key provided"), "auth"),
+        (requests.HTTPError("400 Client Error: Bad Request"), "bad_request"),
+        (llm_mod.ProviderError("maximum context length is 8192 tokens"), "context"),
+        (requests.ConnectionError("Connection aborted"), "unreachable"),
+        (requests.Timeout("Read timed out"), "timeout"),
+        (requests.HTTPError("503 Server Error: Service Unavailable"), "unavailable"),
+        (llm_mod.ProviderError("something nobody has seen"), "unknown"),
+    ],
+)
+def test_every_refusal_is_given_a_cause(exc, expected):
+    """The taxonomy, before any rule reads it. `"429" in str(exc)` at each place that cares is one
+    classifier per caller, which is how two of them come to disagree."""
+    assert llm_mod.cause_of(exc) == expected
+
+
+def test_a_context_overflow_is_read_before_the_400_it_arrives_as():
+    """Ordering that matters and would be invisible otherwise. A context overflow *is* a 400, and
+    the two want opposite things from an operator: shorten what you are sending, versus fix how you
+    are sending it."""
+    both = requests.HTTPError("400 Bad Request: maximum context length is 8192 tokens")
+    assert llm_mod.cause_of(both) == "context"
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        requests.HTTPError("429 Too Many Requests"),
+        requests.HTTPError("401 Unauthorized"),
+        requests.HTTPError("503 Service Unavailable"),
+        requests.Timeout("Read timed out"),
+    ],
+)
+def test_what_the_provider_owns_stands_it_down(exc):
+    llm_mod._resting.clear()
+    llm_mod._rest("groq", exc)
+    assert llm_mod._is_resting("groq") is True
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        requests.HTTPError("400 Client Error: Bad Request"),
+        llm_mod.ProviderError("maximum context length is 8192 tokens"),
+        requests.ConnectionError("Connection aborted"),
+    ],
+)
+def test_what_we_sent_never_stands_a_provider_down(exc):
+    """The correction. A malformed request and a prompt too long are ours, and a network that is
+    down is nobody's — resting a healthy service for any of the three takes capacity away for a
+    minute and a half over a fault the provider had no part in."""
+    llm_mod._resting.clear()
+    llm_mod._rest("groq", exc)
+    assert llm_mod._is_resting("groq") is False
+
+
+def test_our_own_bug_can_no_longer_empty_the_whole_chain():
+    """The expensive one, and the reason this was worth changing.
+
+    A prompt that overflows the context fails at the first provider, is rested there, and is then
+    sent **unchanged** to the next one, which fails identically and is rested too. Three steps later
+    the chain is empty, everything falls through to a local Ollama that may not be installed, and
+    the operator is told no model could be reached — which is the path this project already followed
+    to a 500 in the CEO chat.
+    """
+    llm_mod._resting.clear()
+    too_long = llm_mod.ProviderError("maximum context length is 8192 tokens")
+    for provider in ("groq", "cerebras", "openrouter", "mistral"):
+        llm_mod._rest(provider, too_long)
+    assert llm_mod.resting_providers() == {}, "one bad prompt stood the whole chain down"
+
+
+def test_a_rate_limit_rests_longer_than_an_outage():
+    """Free tiers meter per minute, so the wait has to outlast the window that refused; a 503 is
+    over when it is over. Different numbers because they are different facts."""
+    llm_mod._resting.clear()
+    llm_mod._rest("groq", requests.HTTPError("429 Too Many Requests"))
+    llm_mod._rest("cerebras", requests.HTTPError("503 Service Unavailable"))
+    left = llm_mod.resting_providers()
+    assert left["groq"] > left["cerebras"]
+
+
+def test_the_two_classes_of_cause_do_not_overlap():
+    """Both ends of the thread. A cause in neither list would be silently treated as ours and never
+    rest anything, which is the failure that looks like working."""
+    assert not (set(llm_mod.THEIRS) & set(llm_mod.OURS))
+    assert not (set(llm_mod.THEIRS) & set(llm_mod.NOBODY))
+    named = set(llm_mod.THEIRS) | set(llm_mod.OURS) | set(llm_mod.NOBODY)
+    seen = {
+        llm_mod.cause_of(e)
+        for e in (
+            requests.HTTPError("429"),
+            requests.HTTPError("401"),
+            requests.HTTPError("400"),
+            requests.HTTPError("503"),
+            requests.Timeout("timed out"),
+            requests.ConnectionError("x"),
+            llm_mod.ProviderError("context length"),
+            llm_mod.ProviderError("?"),
+        )
+    }
+    assert seen <= named, f"causes nothing classifies: {sorted(seen - named)}"

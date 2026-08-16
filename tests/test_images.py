@@ -302,7 +302,29 @@ def test_a_tool_that_never_asked_receives_nothing(monkeypatch):
 
 def test_the_tools_that_ask_are_the_ones_whose_job_is_visual():
     asking = sorted(name for name, t in TOOLS.items() if getattr(t, "sees_images", False))
-    assert asking == ["draft_design_brief", "scan_competitors"]
+    assert asking == [
+        "draft_design_brief",
+        # The two reviews, which judged pages they had never seen. `_site_text` strips the tags and
+        # sends the prose, which is the right input for wording and says nothing about contrast,
+        # hierarchy, or whether the first screen names what is being sold.
+        "review_generated_site",
+        "review_site",
+        "scan_competitors",
+    ]
+
+
+def test_only_the_reviews_take_their_own_picture():
+    """`shoots_site` is the stronger claim and a much shorter list.
+
+    `sees_images` offers what is already on file; this renders the company's own pages with a
+    browser, which costs a couple of seconds each. A design brief is helped by a competitor's
+    screenshot the operator dropped in and has no business making corparius launch a browser, so the
+    two flags are deliberately not the same set.
+    """
+    shooting = sorted(name for name, t in TOOLS.items() if getattr(t, "shoots_site", False))
+    assert shooting == ["review_generated_site", "review_site"]
+    for name in shooting:
+        assert TOOLS[name].sees_images, f"{name} takes a picture nothing would send"
 
 
 def test_the_flag_cannot_be_set_on_a_tool_that_calls_no_model():

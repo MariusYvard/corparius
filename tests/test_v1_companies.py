@@ -129,3 +129,51 @@ def test_a_creation_is_not_slug_scoped(server):
 
     route = next(r for r in routes.ROUTES if r.method == "POST" and r.path == "/api/v1/companies")
     assert route.needs_slug is False
+
+
+# --- settling a diverged repository from the console -------------------------------
+
+
+def test_the_resolve_endpoint_refuses_a_company_with_no_repository(server):
+    """The common case for a company that was never versioned, and it has to be a refusal with a
+    sentence rather than a 500: the console offers this button off an inbox notice, and a notice can
+    outlive the repository it was written about."""
+    status, body = _call(
+        server, "POST", "/api/v1/repo/resolve", {"company": "example", "keep": "mine"}
+    )
+    assert status == 400
+    assert body["ok"] is False and "repository" in body["error"]
+
+
+def test_an_unknown_choice_is_refused_at_the_route(server):
+    """This argument decides which version of a file survives and it arrives from a browser. A value
+    the core does not understand must not fall through to a default."""
+    status, body = _call(
+        server, "POST", "/api/v1/repo/resolve", {"company": "example", "keep": "whatever"}
+    )
+    assert status == 400 and "whatever" in body["error"]
+
+
+def test_settling_it_also_closes_the_notice_that_asked(server, monkeypatch):
+    """The last step, and leaving it undone would be the thing being fixed: a product that settles
+    the divergence and leaves "the company repository is behind" on screen has asked the operator to
+    tidy up by hand.
+
+    The id is derived from the title on both sides — `inbox.item_id` keys on it — so this also holds
+    the two spellings together. A notice filed by yesterday's run in another process is found by
+    today's endpoint without anything carrying an id between them.
+    """
+    from corparius import inbox
+    from corparius.api import state
+    from corparius.providers import companyrepo
+
+    store = state.UiState(state.fresh_settings(), None).store()
+    store.add_inbox("example", "system", inbox.NOTIFICATION, inbox.REPO_BEHIND, "", (), "repo")
+    assert [i["title"] for i in store.list_inbox("example", "pending")] == [inbox.REPO_BEHIND]
+
+    monkeypatch.setattr(companyrepo, "resolve", lambda slug, keep: {"ok": True, "pushed": True})
+    status, _ = _call(
+        server, "POST", "/api/v1/repo/resolve", {"company": "example", "keep": "mine"}
+    )
+    assert status == 200
+    assert store.list_inbox("example", "pending") == [], "the notice outlived the problem"

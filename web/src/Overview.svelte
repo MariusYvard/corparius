@@ -185,6 +185,31 @@
     }
   }
 
+  // `summary.inbox_fixes` is `inbox.FIXES` itself, sent with every summary and never read until
+  // now. Taking the map from the payload rather than copying it into this file is the difference
+  // between one table and two: a fix added in Python would otherwise render a button that goes
+  // nowhere, silently, which is the failure mode this whole notice mechanism exists to prevent.
+  function remedy(fix) {
+    const tab = summary?.inbox_fixes?.[fix];
+    if (tab && onTab) onTab(tab);
+  }
+
+  // The repository, settled from here. No terminal, and the operator decides only the part that is
+  // theirs: which version of their own file survives. Everything git — fetching, rebasing, pushing
+  // — is the core's, and the notice is closed by the same call that settles it, because leaving
+  // "your repository is behind" on screen after fixing it asks them to tidy up by hand.
+  async function settleRepo(id, keep) {
+    busy = id;
+    try {
+      await post("/api/v1/repo/resolve", { company, keep }, { token });
+      await refresh();
+    } catch (e) {
+      failure = e;
+    } finally {
+      busy = "";
+    }
+  }
+
   async function startRun(ticks, loop) {
     busy = "run";
     try {
@@ -302,14 +327,39 @@
           <Approval {approval} {lang} {busy} compact onDecide={decide} />
         {/each}
 
+        <!-- **The remedy, which this console was not rendering at all.** Six `fix` values exist in
+             `inbox.FIXES`, each with a button label and a sentence saying what pressing it does, in
+             both languages, held by `tests/test_inbox_remedy.py` at both ends — and the only control
+             here was "Dismiss". A product that tells you the mail account is not connected and
+             offers you a way to stop being told is not a product that fixed anything.
+
+             Two shapes, because two kinds of notice exist. Most fixes are one action: open the place
+             this is settled, or press the control that settles it. A diverged repository is a
+             *choice* — which version of your own file survives — so it gets one button per side and
+             the sentence beside them says the other stays in the history. -->
         {#each summary.inbox as item (item.id)}
           <article class="row">
             <div class="grow">
               <strong>{item.title}</strong>
               <span class="muted small">· {t("ib." + item.kind)}</span>
               {#if item.body}<p class="desc">{item.body}</p>{/if}
+              {#if item.fix}<p class="desc muted">{t("ib.next." + item.fix)}</p>{/if}
             </div>
             <div class="actions">
+              {#if item.fix === "repo"}
+                <button
+                  class="primary"
+                  disabled={busy === item.id}
+                  onclick={() => settleRepo(item.id, "mine")}>{t("ib.fix.repo")}</button
+                >
+                <button disabled={busy === item.id} onclick={() => settleRepo(item.id, "theirs")}>
+                  {t("ib.fix.repoTheirs")}
+                </button>
+              {:else if item.fix}
+                <button class="primary" disabled={busy === item.id} onclick={() => remedy(item.fix)}>
+                  {t("ib.fix." + item.fix)}
+                </button>
+              {/if}
               <button disabled={busy === item.id} onclick={() => answer(item.id)}>
                 {t("ib.dismiss")}
               </button>

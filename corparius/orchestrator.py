@@ -286,6 +286,7 @@ class Runtime:
         running until the process dies."""
         should_stop = should_stop or (lambda: False)
         slug = company["slug"]
+        self._refresh_repo(slug)
         budgets = company.get("budgets", {})
         gate = ApprovalGate(
             self.store, PermissionEngine.from_settings(self.settings, company, self.store)
@@ -568,6 +569,35 @@ class Runtime:
             **last,
         }
 
+    def _refresh_repo(self, slug: str) -> None:
+        """Get current before working, which is the half that was missing.
+
+        `_autocommit` below has always pushed at the end of a run and never fetched at the start, so
+        a company whose remote had moved found out about it with the day's work already committed on
+        top of a stale base. That is the one moment when the reconciliation is hardest: two rewritten
+        copies of the same generated document, and a rebase with nothing to choose between them.
+
+        Measured on a real install, and both sides were corparius: `after 3 tick(s)` on the remote
+        and `after 6 tick(s)` locally, colliding on the end-of-day summary the CEO rewrites daily.
+        Refreshing first makes that an ordinary edit with one parent.
+
+        Same silence rule as the commit: a repository that cannot be reached is not a reason to
+        refuse to run a day. It says so at info and carries on.
+        """
+        from .providers import companyrepo
+
+        if not companyrepo.autocommit_enabled():
+            return
+        try:
+            res = companyrepo.refresh(slug)
+        except Exception as exc:  # defensive: refresh already swallows its own
+            log.info("%s: could not refresh the repository (%s)", slug, exc)
+            return
+        if res.get("updated"):
+            log.info("%s: repository brought up to date before the run", slug)
+        elif res.get("error"):
+            log.info("%s: repository not refreshed — %s", slug, res["error"])
+
     def _autocommit(self, slug: str, ran: int) -> dict:
         """Commit the company folder once the run is over, when the operator
         asked for it. Once per run and not once per tick: an agent changes
@@ -590,15 +620,45 @@ class Runtime:
         # discarded, so a company's repository quietly stopped being a backup.
         if res.get("committed") and not res.get("pushed"):
             log.warning("%s: committed but not pushed — %s", slug, res.get("error"))
+            # **A choice, not an instruction.** This notice used to end in "Resolve it by hand:
+            # git pull --rebase in C:\\...", which asks somebody who chose a console to open a
+            # terminal and finish corparius's own work. Everything git can be told to do is
+            # corparius's job; what comes back here is only the part that is genuinely the
+            # operator's — which of two versions of *their own* file survives — and it comes back
+            # as two buttons with the consequence written next to them.
+            clashes = self._repo_clashes(slug)
             inbox.notify(
                 self.store,
                 slug,
                 "system",
-                "The company repository is behind",
+                inbox.REPO_BEHIND,
                 "Its work is committed locally and the push was refused: "
                 f"{res.get('error') or 'no reason given'}. Until it goes through, this "
-                "company only exists on this machine.",
+                "company only exists on this machine."
+                + (
+                    "\n\nBoth this machine and the remote changed "
+                    + ", ".join(clashes)
+                    + ". Choose which version survives; the other stays in the repository's "
+                    "history either way."
+                    if clashes
+                    else ""
+                ),
+                fix="repo" if clashes else "",
+                options=tuple(clashes),
             )
         elif res.get("recovered"):
             log.info("%s: the remote had moved; rebased onto it and pushed", slug)
+            if res.get("note"):
+                log.info("%s: %s", slug, res["note"])
         return {"enabled": True, **res}
+
+    def _repo_clashes(self, slug: str) -> list[str]:
+        """Which files the operator is being asked about. Read-only, and never fatal: a notice that
+        could not list them is still worth showing, it just has one button fewer."""
+        from .providers import companyrepo
+
+        try:
+            return companyrepo.conflicting_paths(slug)[:6]
+        except Exception as exc:  # defensive: the notice matters more than the list
+            log.info("%s: could not list the conflicting files (%s)", slug, exc)
+            return []

@@ -146,13 +146,23 @@ def test_a_run_where_every_model_reply_is_an_attack_still_only_runs_playbooks(
 
     class _Router:
         def __init__(self, settings):
-            pass
+            # Kept, not discarded. The executor reads `router.settings.llm_mock` to decide whether a
+            # picture is worth sending, so a double that threw its settings away is a double the
+            # executor cannot ask.
+            self.settings = settings
 
         def generate(self, messages, difficulty=None, model=None, max_tokens=512):
             return LLMResult(text=HOSTILE, usage=Usage(2, 2), model="m", provider="p")
 
         def embed(self, text):
             return [0.0] * 8
+
+        def resolve_model(self, difficulty=None, model=None):
+            # The executor asks which model a turn will land on before deciding whether to send it
+            # a picture — `review_site` renders the company's pages now, and spending a browser on
+            # a text-only model is the waste `sees_images` exists to prevent. A double without this
+            # is a router the executor cannot reason about.
+            return "p:m"
 
     monkeypatch.setattr("corparius.orchestrator.HybridRouter", _Router, raising=False)
     monkeypatch.setattr("corparius.providers.llm.HybridRouter", _Router)

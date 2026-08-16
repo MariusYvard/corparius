@@ -866,6 +866,16 @@ def v1_site_post(ctx):
     return 200, {"ok": True, "built": True}
 
 
+def v1_repo_resolve(ctx):
+    """Settle a diverged company repository, from the console.
+
+    The point of the endpoint is what the operator does *not* do: no terminal, no `git pull
+    --rebase`, no path to copy out of a notice. They pick which version of their own file survives
+    and corparius does the fetching, the rebasing and the push.
+    """
+    return adapters.resolve_repo(ctx.state, ctx.slug, str(ctx.body.get("keep", "mine")))
+
+
 def v1_deploy(ctx):
     """Publish it, through whichever provider is configured.
 

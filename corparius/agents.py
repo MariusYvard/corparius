@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 
 from . import housestyle, structured
 from .config import cfg
 from .config.permissions import risk_of
 from .config.provider_table import split_target
+from .kernel import paths
 from .kernel.records import AgentRole, ToolResult, Trace
 from .roster import AgentSpec
 from .safety import BudgetExceeded, LoopGuard
@@ -152,6 +154,29 @@ def _styled(data, style):
         return value
 
     return walk(data), left
+
+
+def _site_pages_for(ctx) -> list:
+    """The pages worth rendering for this company: its own site, or the generated one.
+
+    The same precedence `app/publish.py` uses, and for the reason the *second* live divergence in
+    this project was about: a company that maintains its own `site/public` publishes that, and a
+    review that rendered the generated page instead would be criticising a file nobody visits.
+
+    Home page first. `_owned_pages` learned that by measurement — sorting by size put a 7 674-
+    character `tech.html` ahead of `index.html` and the home page was never reviewed at all — and a
+    capture budget of four pages would repeat the mistake exactly.
+    """
+    slug = str((ctx.company or {}).get("slug") or "")
+    own = paths.owned_site(slug) if slug else None
+    if own is not None:
+        pages = sorted(
+            own.rglob("*.html"), key=lambda p: (p.name != "index.html", p.stat().st_size)
+        )
+        if pages:
+            return pages
+    generated = paths.site_index(getattr(ctx, "data_path", "") or ".", slug)
+    return [generated] if generated.is_file() else []
 
 
 def _recall(ctx, tool) -> str:
@@ -342,8 +367,9 @@ class Executor:
         """
         if not getattr(tool, "sees_images", False):
             return []
-        pictures = list(getattr(ctx, "images", []) or [])
-        if not pictures:
+        on_file = list(getattr(ctx, "images", []) or [])
+        shoots = bool(getattr(tool, "shoots_site", False))
+        if not on_file and not shoots:
             return []
         # Asked of the router, not read off the settings: `spec.model` is None for
         # nine of the ten roles and the tier decides, so reading the tier here is
@@ -355,10 +381,59 @@ class Executor:
                 spec.role.value,
                 tool.name,
                 model,
-                len(pictures),
+                len(on_file),
             )
             return []
-        return pictures
+        # **Taken here, after the model has been established as able to read one.** A capture costs
+        # a couple of seconds of browser per page, and spending that to send a picture the provider
+        # will drop is the same waste `sees_images` was written to avoid — one step later in the
+        # same function.
+        return (self._site_shots(ctx, spec, tool) if shoots else []) + on_file
+
+    def _site_shots(self, ctx, spec, tool) -> list:
+        """Pictures of the company's own pages, rendered now.
+
+        The design agent has always reviewed sites it had never seen: `_site_text` strips the tags
+        and sends the prose, which is the right input for wording and says nothing about contrast,
+        hierarchy, or whether the first screen names what is being sold. The text still goes; this
+        is the other half.
+
+        Never fatal, at every step. No browser on the machine, a page that would not render, a file
+        too large to send — each of those costs this turn its picture and nothing else, and the
+        review carries on with exactly what it had before.
+        """
+        from .providers import llm as llm_mod
+        from .providers import screenshot
+
+        pages = _site_pages_for(ctx)
+        if not pages or not screenshot.available():
+            if pages:
+                log.info(
+                    "[%s] %s: no browser on this machine, so the review is text only",
+                    spec.role.value,
+                    tool.name,
+                )
+            return []
+        # Under the company's own folder rather than a temporary directory, and deliberately not in
+        # `documents/`: an operator's document list must not fill up with machine-made screenshots,
+        # and `documents/written/` is synced to the company repository, where a new PNG per run
+        # would be a commit per run of a file nobody reads.
+        into = paths.companies_dir() / (ctx.company.get("slug", "") or "company") / ".shots"
+        made = screenshot.capture_all([str(p) for p in pages], into)
+        if not made:
+            return []
+        # `Path`, not `str`. `read_images` decides the media type from `path.suffix` and a string has
+        # none, so every capture came back as "not an image format a provider accepts" — a picture
+        # taken, paid for in browser time, and dropped one line before it would have been sent. It
+        # failed silently into the skipped list, which is exactly where an end-to-end test earns its
+        # place over one that stops at `capture_all`.
+        shots, skipped = llm_mod.read_images([Path(p) for p in made])
+        if skipped:
+            log.info(
+                "[%s] %s: %d capture(s) too large to send", spec.role.value, tool.name, len(skipped)
+            )
+        log.info("[%s] %s: %d page(s) rendered and sent", spec.role.value, tool.name, len(shots))
+        return shots
 
     def _model_reads_images(self, model: str, ctx) -> bool:
         """Measured verdict if there is one, the catalogue's claim otherwise."""

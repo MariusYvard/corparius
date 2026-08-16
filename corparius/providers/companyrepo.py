@@ -360,7 +360,7 @@ def sync(slug: str, message: str) -> dict:
     # install: one commit pushed from elsewhere rejected every automatic push for
     # eight runs, and the repository quietly stopped being a backup.
     if _diverged(reason):
-        fixed = _rebase_onto_remote(path)
+        fixed, note = _rebase_onto_remote(path)
         if fixed:
             again = _git(["push", "origin", "main"], path, check=False)
             if again.returncode == 0:
@@ -370,12 +370,16 @@ def sync(slug: str, message: str) -> dict:
                     "pushed": True,
                     "error": "",
                     "recovered": True,
+                    # Empty when the rebase was ordinary. When it is not, it names the generated
+                    # documents whose remote version was superseded, so a recovery that happened
+                    # silently is a recovery the operator can still read about.
+                    "note": note,
                 }
             reason = (again.stderr or again.stdout).strip()
         else:
             reason = (
-                "the remote has commits this copy does not, and rebasing onto them "
-                "conflicts. Resolve it by hand: git pull --rebase in " + str(path)
+                "the remote has commits this copy does not, and rebasing onto them conflicts: "
+                f"{note}. Resolve it by hand: git pull --rebase in {path}"
             )
     return {
         "ok": True,
@@ -392,21 +396,163 @@ def _diverged(reason: str) -> bool:
     return "non-fast-forward" in text or "fetch first" in text or "rejected" in text
 
 
-def _rebase_onto_remote(path) -> bool:
-    """Put the local commits on top of the remote's. True when the tree is clean after.
+# The one directory in a company folder whose contents corparius writes and nothing else does.
+# `documents.write` puts every agent's output under `<company>/documents/written/`, and
+# `documents.save` — the operator dropping a file in — lands in the folder root, "never in
+# `written/`", which its own docstring states and a test holds.
+#
+# That distinction is what makes an automatic conflict resolution defensible at all. Two machines
+# that both ran a day produced two end-of-day summaries; picking one is choosing between two things
+# corparius wrote. Two versions of `company.yaml`, or of a `site/public` that the operator maintains
+# by hand, are two things a *person* wrote, and no rule here is allowed to choose between those.
+GENERATED = "documents/written/"
 
-    `--autostash` so a run that left the folder dirty does not block its own backup,
-    and an abort on any failure: leaving a repository mid-rebase would be worse than
-    the unpushed commits it was trying to fix, because the next run would find a
-    detached head and fail in a way nobody could read.
+
+def _conflicting(path) -> list[str]:
+    """The paths a rebase stopped on, as git reports them."""
+    out = _git(["diff", "--name-only", "--diff-filter=U"], path, check=False)
+    return [line.strip() for line in out.stdout.splitlines() if line.strip()]
+
+
+def _rebase_onto_remote(path) -> tuple[bool, str]:
+    """Put the local commits on top of the remote's. Returns (clean, what happened).
+
+    `--autostash` so a run that left the folder dirty does not block its own backup, and an abort on
+    any failure: leaving a repository mid-rebase would be worse than the unpushed commits it was
+    trying to fix, because the next run would find a detached head and fail unreadably.
+
+    **And a second attempt when every conflict is in corparius's own output.** Measured on a real
+    install: the two sides were `vigil: automatic commit after 3 tick(s)` and `after 6 tick(s)`, both
+    written by corparius, colliding on `documents/written/end-of-day.md` — the summary the CEO
+    rewrites every day. That is corparius conflicting with itself, and telling the operator to open a
+    terminal and rebase by hand is asking them to arbitrate between two things they did not write.
+
+    `-X theirs`, and the flag is inverted from what it reads like: during a rebase "ours" is the
+    branch being replayed *onto* (the remote) and "theirs" is the commit being replayed (this
+    machine's). Measured on a throwaway repository rather than remembered, because getting this
+    backwards would silently discard the run that just finished.
+
+    **Nothing is lost.** The remote's commit stays in the history the rebase builds on, so its
+    version of the file is one `git show` away — the same "archive, never erase" rule the skill
+    curator follows. What is superseded is a generated document, and it is named in the report so
+    the operator can go and look at it.
     """
     if _git(["fetch", "origin", "main"], path, check=False).returncode != 0:
-        return False
+        return False, "could not reach the remote"
     out = _git(["rebase", "--autostash", "origin/main"], path, check=False)
     if out.returncode == 0:
-        return True
+        return True, ""
+
+    clashes = _conflicting(path)
     _git(["rebase", "--abort"], path, check=False)
-    return False
+    if not clashes:
+        return False, "the rebase failed and reported no conflicting file"
+    hand_written = [name for name in clashes if GENERATED not in name.replace("\\", "/")]
+    if hand_written:
+        # Everything corparius did not write is the operator's, and this is where the terminal is
+        # still the honest answer. The files are named now: "resolve it by hand" without saying what
+        # is in the way is a request to go and find out.
+        return False, "conflicts outside corparius's own output: " + ", ".join(hand_written[:6])
+
+    retry = _git(["rebase", "--autostash", "-X", "theirs", "origin/main"], path, check=False)
+    if retry.returncode != 0:
+        _git(["rebase", "--abort"], path, check=False)
+        return False, "conflicts in generated documents that could not be resolved automatically"
+    return True, "superseded on the remote, recoverable in the history: " + ", ".join(clashes[:6])
+
+
+def resolve(slug: str, keep: str = "mine") -> dict:
+    """Settle a diverged repository, taking one side for the files that clash. Then push.
+
+    The half of the split that is not corparius's to decide. `sync` reconciles conflicts in
+    `documents/written/` on its own, because both versions there were written by corparius; a clash
+    in `company.yaml` or in a hand-maintained `site/public` is two decisions a *person* made, and
+    picking one silently would overwrite a change somebody made from another machine.
+
+    So the decision comes back to the operator — and only the decision. The fetching, the rebasing,
+    the strategy flag and the push are this function's job, because a console operator has chosen not
+    to use a terminal and a product that sends them to one to finish its own work has handed the
+    problem back instead of solving it.
+
+    `keep="mine"` keeps this machine's version of the clashing files, `keep="theirs"` the other
+    machine's. Either way both commits stay in the history the rebase builds on, so the version that
+    lost is one `git show` away rather than gone.
+    """
+    # The argument before the world, and the order is not arbitrary. `keep` decides which version of
+    # a file survives and it arrives from a browser; checking the repository first would hide a
+    # client sending nonsense behind "not a repository" on every company that has none, which is
+    # most of them.
+    if keep not in ("mine", "theirs"):
+        return {"ok": False, "pushed": False, "error": f"unknown choice {keep!r}"}
+    if not git_available() or not is_repo(slug) or not remote_url(slug):
+        return {"ok": False, "pushed": False, "error": "not a repository with a remote"}
+    path = repo_dir(slug)
+    if _git(["fetch", "origin", "main"], path, check=False).returncode != 0:
+        return {"ok": False, "pushed": False, "error": "could not reach the remote"}
+    # Inverted, and measured rather than remembered: during a rebase "ours" is the branch being
+    # replayed onto (the remote) and "theirs" is the commit being replayed (this machine's). Reading
+    # these the other way round would discard exactly the side the operator asked to keep.
+    strategy = "theirs" if keep == "mine" else "ours"
+    out = _git(["rebase", "--autostash", "-X", strategy, "origin/main"], path, check=False)
+    if out.returncode != 0:
+        _git(["rebase", "--abort"], path, check=False)
+        return {"ok": False, "pushed": False, "error": (out.stderr or out.stdout).strip()[:300]}
+    pushed = _git(["push", "origin", "main"], path, check=False)
+    if pushed.returncode != 0:
+        return {
+            "ok": False,
+            "pushed": False,
+            "error": (pushed.stderr or pushed.stdout).strip()[:300],
+        }
+    return {"ok": True, "pushed": True, "error": "", "kept": keep}
+
+
+def conflicting_paths(slug: str) -> list[str]:
+    """Which files a push would collide on, without changing anything.
+
+    Read-only by construction: the rebase is attempted and immediately aborted. The console needs
+    this to name the files in the choice it puts in front of the operator, and a choice that said
+    "some files conflict" would be a choice made blind.
+    """
+    if not git_available() or not is_repo(slug) or not remote_url(slug):
+        return []
+    path = repo_dir(slug)
+    if _git(["fetch", "origin", "main"], path, check=False).returncode != 0:
+        return []
+    out = _git(["rebase", "--autostash", "origin/main"], path, check=False)
+    if out.returncode == 0:
+        # It applied cleanly, which is a fact worth having found out. Nothing to report and nothing
+        # to undo: the copy is simply current now.
+        return []
+    names = _conflicting(path)
+    _git(["rebase", "--abort"], path, check=False)
+    return names
+
+
+def refresh(slug: str) -> dict:
+    """Bring the copy up to date **before** a run, not after it.
+
+    This is the fix for the whole class rather than for one occurrence. `sync` only ever pushed, so
+    a company whose remote had moved discovered it at the end of a day, with the day's writes already
+    committed on top of a stale base — which is precisely when a rebase has two rewritten copies of
+    the same generated document to reconcile. Refreshing first means the day is written on top of
+    what the remote already had, and the push at the end is an ordinary fast-forward.
+
+    Never raises, and never touches a dirty tree: a run that starts on uncommitted work would have
+    that work stashed and replayed by a rebase, and a backup step is not allowed to move an
+    operator's files around underneath them. It reports and stands down instead.
+    """
+    if not git_available() or not is_repo(slug) or not remote_url(slug):
+        return {"ok": False, "updated": False, "error": "not a repository with a remote"}
+    path = repo_dir(slug)
+    if dirty(slug):
+        return {"ok": True, "updated": False, "error": "uncommitted changes; left alone"}
+    before = _git(["rev-parse", "HEAD"], path, check=False).stdout.strip()
+    clean, note = _rebase_onto_remote(path)
+    if not clean:
+        return {"ok": False, "updated": False, "error": note}
+    after = _git(["rev-parse", "HEAD"], path, check=False).stdout.strip()
+    return {"ok": True, "updated": before != after, "error": "", "note": note}
 
 
 def autocommit_enabled() -> bool:

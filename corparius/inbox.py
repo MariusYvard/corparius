@@ -62,7 +62,19 @@ FIXES = {
     # there rather than closed as done — the operator sets the agent and the tool,
     # or rejects it.
     "backlog": "operations",
+    # Overview, where the repository's state is already reported. This one **acts** rather than
+    # navigates: the notice carries the clashing paths in `options` and the console presses
+    # `POST /api/v1/repo/resolve` with the side the operator picked. The version it replaces is
+    # asked for by name, so the choice is informed, and it stays in the repository's history either
+    # way. Sending somebody to a terminal for this was the thing being fixed, so a fix that only
+    # opened a tab would have missed the point in exactly the way `backlog` did first time.
+    "repo": "overview",
 }
+
+# The title of the repository notice, in one place. `item_id` keys on the title, so the run that
+# files this notice and the endpoint that settles it have to spell it identically or the settle
+# finds nothing and the operator is left with a notice about a problem that no longer exists.
+REPO_BEHIND = "The company repository is behind"
 
 
 def item_id(company: str, kind: str, agent: str, title: str) -> str:

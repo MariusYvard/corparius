@@ -150,3 +150,21 @@ def _refuse_the_network(self, address):
 
 
 socket.socket.connect = _refuse_the_network
+
+
+@pytest.fixture(autouse=True)
+def no_browser(monkeypatch):
+    """No test launches a browser unless it says it wants one.
+
+    `review_site` renders the company's own pages so the design agent can see what it is judging,
+    and the moment that landed, the injection suite started taking real screenshots of its fixture
+    site: seconds a test, on a machine that happens to have Chromium, in a suite that has to pass on
+    one that does not. The same argument as `CORP_LLM_MOCK` being on by default here — a test that
+    reaches the outside world is a test whose result depends on the outside world.
+
+    `tests/test_screenshot.py` opts back in by patching `available` itself, which is also how it
+    stays honest about needing a browser: it skips where there is none.
+    """
+    from corparius.providers import screenshot
+
+    monkeypatch.setattr(screenshot, "available", lambda: False, raising=False)

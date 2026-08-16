@@ -1741,10 +1741,12 @@ def _plan_from_docs_prompt(ctx) -> str:
         f"Roles and what each can do:\n{_roster_menu(ctx)}\n\n"
         + "\n\n".join(chunks)
         + already
-        + "\n\n`tasks`: at most four, each as `role|tool|title` with a vertical bar "
+        + "\n\n`tasks`: at most four, each as `role|tool|title|source` with a vertical bar "
         "between them. The title must name the change, not the category — quote the "
         "words to fix when the document quotes them. Use only a role from the list "
-        "and one of that role's own tools. `note`: one sentence on what you queued."
+        "and one of that role's own tools. **`source` is the name of the document above "
+        "this came from**, exactly as it is headed; a task nobody can trace back to a "
+        "paragraph is one nobody can correct. `note`: one sentence on what you queued."
     )
 
 
@@ -1766,10 +1768,15 @@ def _plan_from_docs(ctx) -> str:
     queued, refused = [], []
     for entry in (data.get("tasks") or [])[:4]:
         parts = [p.strip() for p in str(entry).split("|")]
-        if len(parts) != 3:
-            refused.append(f"{str(entry)[:40]} (not role|tool|title)")
+        # **Three or four.** The source arrived after the format did, and refusing every
+        # three-field answer would throw away a whole round because a model omitted the newest
+        # field — which is a tool that stops working the day a weaker tier answers it. A task with
+        # no source is queued and says so, which is a worse task and not a lost one.
+        if len(parts) not in (3, 4):
+            refused.append(f"{str(entry)[:40]} (not role|tool|title|source)")
             continue
-        role, tool, title = parts
+        role, tool, title = parts[:3]
+        source = parts[3] if len(parts) == 4 else ""
         if not title:
             continue
         if not enabled.get(role) or tool not in playbooks.get(role, set()):
@@ -1784,7 +1791,27 @@ def _plan_from_docs(ctx) -> str:
         if store.wip_count(slug, role) >= wip_limit:
             refused.append(f"{role} (at its work-in-progress limit)")
             continue
-        store.add_task(slug, title[:90], role, 2, "approved", "ceo", tool=tool)
+        # The provenance, on the row the operator reads. Taken from docling-graph, where every
+        # extracted node carries a `__provenance__` back to its chunk and page — and it is the rule
+        # this codebase already applies to everything else it publishes: `proof_html` refuses a
+        # claim with no source, and every number is Measured, Given or Estimated. A task drawn out
+        # of a document was the one thing arriving with no origin at all.
+        #
+        # Named rather than trusted: the model is asked for a heading it was shown, so a source that
+        # is not one of the documents sent is worth saying out loud rather than recording as fact.
+        known = {d.label for d in _agent_documents(slug)[:PLAN_FROM_DOCS_COUNT]}
+        if source and source not in known:
+            source = f"{source} (not one of the documents read)"
+        store.add_task(
+            slug,
+            title[:90],
+            role,
+            2,
+            "approved",
+            "ceo",
+            tool=tool,
+            why=(f"From {source}" if source else "From the documents; the source was not named"),
+        )
         existing.add(title.strip().lower())
         queued.append(f"{role}/{tool}: {title[:50]}")
     if not queued:

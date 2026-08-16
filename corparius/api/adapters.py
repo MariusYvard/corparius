@@ -616,6 +616,30 @@ def deploy(ui: UiState, slug: str) -> tuple[int, dict]:
     return 200, {"ok": True, **{k: v for k, v in out.items() if k != "folder"}}
 
 
+def resolve_repo(ui: UiState, slug: str, keep: str) -> tuple[int, dict]:
+    """`companyrepo.resolve`, plus clearing the notice that asked the question.
+
+    The notice is dismissed here rather than left for the operator to tick off, and that is the same
+    rule as the endpoint itself: a product that settles the divergence and then leaves "the company
+    repository is behind" sitting in the inbox has asked them to do the last step by hand, which is
+    the whole thing being fixed.
+    """
+    from .. import inbox as inbox_mod
+    from ..providers import companyrepo
+
+    out = companyrepo.resolve(slug, keep)
+    if not out.get("ok"):
+        return 400, {"ok": False, "error": out.get("error", "could not settle the repository")}
+    # The id is derived the same way `notify` derived it, from the same four strings, which is what
+    # `item_id` is for: the title is the key, so the notice this settles is found without the caller
+    # having to carry an id from a run that happened yesterday in another process.
+    ui.store().resolve_inbox(
+        inbox_mod.item_id(slug, inbox_mod.NOTIFICATION, "system", inbox_mod.REPO_BEHIND),
+        f"kept {keep}",
+    )
+    return 200, {"ok": True, **out}
+
+
 def _skill_where(path) -> str:
     """A skill's path relative to the skills root it lives under, or its last two segments.
 

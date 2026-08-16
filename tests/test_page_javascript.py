@@ -172,7 +172,14 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # `wiz.newOption`, which is the "+ New company…" an operator learned to look for in this page's
     # own picker. Reusing them was the point: a second vocabulary for one gesture is how two screens
     # come to call the same thing by different names.
-    assert result["counts"] == {"en": 594, "fr": 594}, result["counts"]
+    # 597. The three since 594 are a remedy this console had and never showed. `inbox.FIXES` carries
+    # six of them, each with a button label and a sentence, held at both ends by
+    # `tests/test_inbox_remedy.py` — and the Svelte inbox rendered one control per notice, "Dismiss".
+    # A product that says the mail account is not connected and offers you a way to stop being told
+    # has not fixed anything. `ib.fix.repo` / `ib.fix.repoTheirs` are two because a diverged
+    # repository is a choice rather than an action, and `ib.next.repo` is the sentence that makes it
+    # an informed one: the side you do not keep stays in the history.
+    assert result["counts"] == {"en": 597, "fr": 597}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

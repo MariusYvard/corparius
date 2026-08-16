@@ -412,6 +412,13 @@
                 · {#if task.tool}{task.tool}{:else}<span class="chip warn">{t("task.noTool")}</span>{/if}
                 {#if task.priority}· p{task.priority}{/if}
               </p>
+              <!-- **Where this came from**, which the store has carried on every task row for a long
+                   time and this console has never rendered. `propose_task` writes a reason; a task
+                   drawn out of the company's own documents now names the document. A board where
+                   every card is a title and nothing else asks an operator to approve work whose
+                   origin they cannot see, and the one who has to reject a wrong task is the one who
+                   most needs to know which paragraph produced it. -->
+              {#if task.why}<p class="desc muted small">{task.why}</p>{/if}
 
               {#if editing === task.id}
                 <div class="edit">

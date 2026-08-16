@@ -75,7 +75,12 @@ def test_the_two_classes_of_writable_key_partition_the_writable_set():
     # 82 registry fields: `QONTO_LOGIN` and `QONTO_SECRET_KEY`, the second way a French company is
     # paid. A checkout link is clicked by a stranger; a business account is transferred to against
     # an invoice, which is most business-to-business selling here.
-    assert len(writable) == 110 and len(registry) == 82 and len(app_settings.CREDENTIALS) == 28
+    # 111 writable, 83 registry fields: `CORP_BROWSER_PATH`, which is the one setting behind the
+    # design agent seeing the pages it reviews. Empty in almost every install — corparius finds Edge,
+    # Chrome, Brave or Chromium by itself — and settable because "found automatically" needs an
+    # override for the machine where the search misses, and because the alternative is telling
+    # somebody to edit a file by hand.
+    assert len(writable) == 111 and len(registry) == 83 and len(app_settings.CREDENTIALS) == 28
 
 
 def test_the_host_allow_list_is_in_neither_class():

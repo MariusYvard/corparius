@@ -602,10 +602,70 @@ _RATE_LIMIT_COOLDOWN_S = 90.0
 _resting: dict[str, float] = {}
 
 
+# Why a call failed, as a small closed set rather than a substring search at the point of use.
+#
+# Taken from LiteLLM's `exception_mapping_utils`, which is the same idea at forty times the size:
+# every provider says "you are going too fast" differently, and a router that reasons about
+# `"429" in str(exc)` at each place it cares is a router with one classifier per caller. Naming the
+# causes once is what lets the rule below be about *whose fault it is* instead of about wording.
+THEIRS = ("rate_limit", "auth", "unavailable", "timeout", "unknown")
+OURS = ("bad_request", "context")
+NOBODY = ("unreachable",)
+
+
+def cause_of(exc: Exception) -> str:
+    """One of the constants above. Strings, because that is what an HTTP client hands back."""
+    text = str(exc).lower()
+    if isinstance(exc, requests.ConnectionError):
+        return "unreachable"
+    if isinstance(exc, requests.Timeout) or "timed out" in text or " 408" in text:
+        return "timeout"
+    if "429" in text or "too many" in text or "rate limit" in text or "quota" in text:
+        return "rate_limit"
+    if "401" in text or "403" in text or "unauthorized" in text or "invalid api key" in text:
+        return "auth"
+    # Before the generic 400, because a context overflow *is* a 400 and the two want opposite
+    # answers from an operator: shorten the prompt, versus fix the request.
+    if "context length" in text or "context limit" in text or "too many tokens" in text:
+        return "context"
+    if "400" in text or "422" in text or "invalid_request" in text:
+        return "bad_request"
+    if "503" in text or "502" in text or "500" in text or "overload" in text:
+        return "unavailable"
+    return "unknown"
+
+
 def _rest(provider: str, exc: Exception) -> None:
-    """Stand a provider down briefly after it refuses."""
-    text = str(exc)
-    seconds = _RATE_LIMIT_COOLDOWN_S if ("429" in text or "Too Many" in text) else _COOLDOWN_S
+    """Stand a provider down, **when the refusal was the provider's to make.**
+
+    Measured before this rule existed, on the six causes that actually occur:
+
+    ```text
+        429 the provider is limiting us      rested 90s     right
+        401 our key is wrong                 rested 45s     right
+        400 our request is malformed         rested 45s     wrong
+        the prompt exceeded the context      rested 45s     wrong, and expensively so
+        a passing network blip               rested 45s     wrong
+        503 the provider is down             rested 45s     right
+    ```
+
+    The middle three are the interesting ones and the third is the worst. A prompt too long is *our*
+    bug; resting the provider for it punishes a healthy service, and the next step in the chain then
+    receives the same too-long prompt, fails identically and is rested too. **The chain empties on
+    our own mistake**, everything falls through to a local Ollama that may not be installed, and the
+    operator is told no model could be reached. That is the path this project already followed to a
+    500 in the CEO chat.
+
+    So: rest for what the provider owns, never for what we sent it. LiteLLM draws the same line from
+    the other end — it cools down on 429, 401, 408 and 5XX and exempts other 4XX outright, and never
+    cools down an `APIConnectionError`, because a network that is down is not a provider that is
+    down and resting all of them means having nothing when it comes back.
+    """
+    reason = cause_of(exc)
+    if reason in OURS or reason in NOBODY:
+        log.info("%s failed (%s), not a reason to stand it down", provider, reason)
+        return
+    seconds = _RATE_LIMIT_COOLDOWN_S if reason == "rate_limit" else _COOLDOWN_S
     _resting[provider] = time.monotonic() + seconds
 
 

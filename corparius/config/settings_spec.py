@@ -1119,6 +1119,22 @@ SPEC: list[FieldSpec] = [
     ),
     # --- publishing ---------------------------------------------------------
     _f(
+        "CORP_BROWSER_PATH",
+        "publishing",
+        label_en="Browser for screenshots",
+        label_fr="Navigateur pour les captures",
+        # A setting nobody should need. It exists because "found automatically" has to be
+        # overridable when the search misses — a portable Chromium, a snap in an unusual place, a
+        # second build somebody wants used — and because leaving them to edit a file by hand for it
+        # would be the thing this product refuses to ask for.
+        help_en="Left empty, corparius finds Edge, Chrome, Brave or Chromium by itself and the "
+        "design agent sees the pages it reviews. Set a path only if yours is somewhere unusual. "
+        "With no browser at all, the review still runs on the page text.",
+        help_fr="Laissé vide, corparius trouve Edge, Chrome, Brave ou Chromium tout seul et l'agent "
+        "design voit les pages qu'il relit. N'indiquez un chemin que si le vôtre est à un endroit "
+        "inhabituel. Sans navigateur, la revue se fait quand même sur le texte des pages.",
+    ),
+    _f(
         "CORP_DEPLOY_PROVIDERS",
         "publishing",
         default="netlify,s3,ssh,local",

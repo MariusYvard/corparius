@@ -126,6 +126,7 @@ RANKS: dict[str, int] = {
     "providers/provider_check": 3,
     "providers/routing": 3,
     "providers/signals": 3,
+    "providers/screenshot": 3,
     "providers/sitecheck": 3,
     # 4 — domain
     # The roster is data — roles, cadences, playbooks naming tools as strings — and it is
@@ -658,12 +659,20 @@ def test_only_the_clock_waits():
     does not absorb it: its own docstring says a backoff or a poll interval belongs to whoever owns the
     retry or the poll.
 
-    A third would fail here, which is the point.
+    **And a third arrived, which is what the sentence below was written to make happen.**
+    `providers/screenshot` renders a page with the browser already on the machine, and on Windows the
+    launcher hands the request to the instance that is already running and returns in a tenth of a
+    second — measured with Edge and with Chrome — while the picture is written about three seconds
+    later. So the process exiting is not the signal and the file is: it is polled until it stops
+    growing. Same class as `sitecheck` and the same layer: rank 3 waiting for its own outside world,
+    not a loop floor and not a retry backoff.
+
+    A fourth would fail here, which is still the point.
     """
     found = sorted(
         _key(path) for path in _modules() if "time.sleep(" in path.read_text(encoding="utf-8")
     )
-    assert found == ["kernel/clock", "providers/sitecheck"], (
+    assert found == ["kernel/clock", "providers/screenshot", "providers/sitecheck"], (
         f"time.sleep is called in {found}. Waiting belongs to `kernel/clock.pace()`, or to the rank-3 "
         "module whose remote is being waited for — and each such place has to be named here."
     )

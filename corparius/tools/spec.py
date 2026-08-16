@@ -51,6 +51,15 @@ class ToolSpec:
     # all for reconciling Stripe. Declared here so it is greppable, rather than inferred from
     # the role.
     sees_images: bool = False
+    # **This tool wants a picture of the company's own site, taken now.** Different from
+    # `sees_images`, which offers what is already on file: a design review that only saw the files an
+    # operator had dropped in would be reviewing whatever happened to be lying around.
+    #
+    # The capture is a rank-3 job (`providers/screenshot`) driving a browser that is already on the
+    # machine, and it is taken only after the executor has established that the model can read one —
+    # so a company on a text-only tier pays nothing for a flag it cannot use. No browser means no
+    # picture and a review that goes on with the page text, which is what it always had.
+    shoots_site: bool = False
     # This tool runs only when a task names it, never from a playbook. Its prompt is written
     # for a task ("what *this task* cannot proceed without"), so a playbook turn would ask it
     # with no task to be about.
@@ -296,6 +305,12 @@ SPEC: dict[str, ToolSpec] = {
         "Read the company's own site and write down what to change",
         needs_draft=True,
         risk=permissions.WRITE_LOCAL,
+        # It reviews a *page*, so it is shown one. Reading the stripped text is right for wording and
+        # says nothing about contrast, hierarchy, or whether the first screen names what is sold —
+        # and this project has already learned that difference the hard way: its own tab bug was
+        # found in a screenshot and not in the CSS.
+        sees_images=True,
+        shoots_site=True,
         schema={
             "findings": {"type": "list", "default": []},
             "worst": {"type": "str", "default": "", "max_len": 200},
@@ -374,6 +389,8 @@ SPEC: dict[str, ToolSpec] = {
         "Review the generated sales page and say what to change",
         needs_draft=True,
         risk=permissions.READ,
+        sees_images=True,
+        shoots_site=True,
         schema={
             "findings": {"type": "list", "default": []},
             "worst": {"type": "str", "default": "", "max_len": 200},

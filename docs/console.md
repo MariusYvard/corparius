@@ -96,7 +96,7 @@ plus tôt : un client doit pouvoir apprendre à quoi il parle avant de pouvoir s
 Elle ne nomme aucun secret, aucune entreprise et aucune *valeur* de réglage.
 
 ```json
-{"ok": true, "api_version": 1, "app_version": "0.4.0", "schema_version": 21,
+{"ok": true, "api_version": 1, "app_version": "0.5.0", "schema_version": 21,
  "settings_count": 80,
  "capabilities": {"models": true, "mail": false, "payments": false, "skills": true,
                   "memory": true, "secrets_at_rest": false, "plugins": false,

@@ -110,6 +110,37 @@ sans le faire.**
   processus meurt : un programme avec une erreur de syntaxe est parti en un
   dixième de seconde.
 
+- **Changed : `site.apps` devient `site.programs`, parce qu'un mot désignait deux
+  choses.** Une entreprise a des **apps** — des fichiers YAML sous `apps/`, des
+  prompts que `site.faq_app` exécute au moment de la construction — et des
+  **programmes**, du code écrit par l'agent codeur sous `code/`, qui tourne sur
+  un port. Un exploitant qui écrivait `site.apps: [faq]` en pensant au premier
+  lisait « cette entreprise n'a pas d'app de ce nom » pendant que
+  `apps/faq.yaml` était juste là. L'ancienne orthographe répond par la phrase
+  qui nomme les deux dossiers, et la clé est normalisée dans `company.load` au
+  lieu d'être lue telle quelle par le générateur.
+
+- **Fixed : la section des programmes n'avait aucune règle de style.** Toutes ses
+  voisines sur cette page sont dessinées et celle-ci arrivait avec le champ et
+  le bouton par défaut d'un navigateur, ce qui est exactement la manière dont
+  une page générée finit par se lire comme inachevée.
+
+- **Fixed : sur macOS, un programme correct était déclaré cassé.**
+  `HTTPServer.server_bind` appelle `socket.getfqdn()` sur l'adresse qu'il vient
+  de lier, **entre le `bind` et le `listen`**. Là où un résolveur met du temps à
+  dire non, la socket reste liée sans écouter pendant toute la durée de la
+  recherche : chaque connexion est refusée, le programme n'écrit rien, et il est
+  manifestement en vie. Trois symptômes qui décrivaient trois pannes possibles
+  sous une seule phrase, sur une machine que personne ici ne peut atteindre.
+
+  Trouvé en posant les questions une par une : deux sondes permanentes vérifient
+  séparément qu'un enfant démarre et écrit dans son journal, et qu'il peut lier
+  un port et être joint. Les deux passaient sur macOS, ce qui a désigné la
+  couche restante. Le délai de démarrage passe de 20 à 45 secondes, parce que
+  `http.server` est ce vers quoi un modèle se tourne quand on lui demande un
+  petit serveur web — et le délai plus long ne coûte rien quand le programme
+  répond, ni quand il meurt.
+
 - **Fixed : un test a créé un vrai dépôt privé sur le compte GitHub de
   l'exploitant.** Il posait `CORP_REPO_PROVIDERS=github` pour exercer le chemin
   d'échec, en supposant qu'aucun jeton n'était configuré — mais le CLI `gh` est

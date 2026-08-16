@@ -11,7 +11,7 @@ import logging
 import os
 import re
 
-from .. import housestyle
+from .. import housestyle, readiness
 from ..config import cfg
 from .base import esc, norm
 from .companions import companions
@@ -153,6 +153,15 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
         facts.append(f"{price} EUR")
     if billing == "stripe" and pay:
         facts.append(txt["stripe"])
+    # **How you pay, when there is nothing to click.** A company paid by transfer against an invoice
+    # had a page whose only call to action was "talk to us" and which said nothing at all about the
+    # transaction: a visitor could not tell whether that meant a demo, a quote or a shop that was
+    # broken. This is the same kind of chip as the Stripe one, on the other route.
+    #
+    # Only when there is no link, and never both. Two payment claims on one page is a page that has
+    # not decided how it sells, and the checkout is the stronger offer wherever it exists.
+    elif not pay and readiness.invoiced():
+        facts.append(txt["invoice"])
     facts_html = (
         '<div class="facts">' + "".join(f"<span>{esc(f)}</span>" for f in facts) + "</div>"
         if facts

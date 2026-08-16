@@ -109,3 +109,53 @@ def test_a_failing_cli_still_reports_what_it_said(run, monkeypatch):
     with pytest.raises(llm.ProviderError) as exc:
         llm.ClaudeCodeProvider().generate([{"role": "user", "content": "x"}], "opus")
     assert "trop longue" in str(exc.value)
+
+
+def test_a_cli_that_says_nothing_on_stderr_is_still_asked_what_happened(run, monkeypatch):
+    """The message that shipped, reported from a real run: `claude CLI exited 1:` and nothing after
+    the colon, forty times over, on the one role pinned to this provider. The operator could see that
+    design produced nothing all day and had no way at all to learn why.
+
+    `claude` is invoked with `--output-format json` and reports its own refusals on **stdout** — an
+    expired login, an unknown model, a quota. Reading only stderr threw that away in the usual case,
+    which is to say in every case an operator would want to act on.
+    """
+
+    def refused(cmd, **kw):
+        return subprocess.CompletedProcess(
+            cmd, 1, '{"type":"error","message":"Invalid model name: opus-5"}', ""
+        )
+
+    monkeypatch.setattr(subprocess, "run", refused)
+    with pytest.raises(llm.ProviderError) as exc:
+        llm.ClaudeCodeProvider().generate([{"role": "user", "content": "x"}], "opus")
+    said = str(exc.value)
+    assert "Invalid model name" in said
+    assert not said.rstrip().endswith(":"), f"the message stops at the colon again: {said!r}"
+
+
+def test_stderr_still_wins_when_both_streams_spoke(run, monkeypatch):
+    """Order matters and is not arbitrary: a shell or a launcher failure goes to stderr, and that is
+    the more specific fault when both are present. Falling back to stdout must not become preferring
+    it."""
+
+    def both(cmd, **kw):
+        return subprocess.CompletedProcess(cmd, 1, "some json noise", "command not found")
+
+    monkeypatch.setattr(subprocess, "run", both)
+    with pytest.raises(llm.ProviderError) as exc:
+        llm.ClaudeCodeProvider().generate([{"role": "user", "content": "x"}], "opus")
+    assert "command not found" in str(exc.value)
+
+
+def test_silence_on_both_streams_is_reported_as_silence(run, monkeypatch):
+    """The shape a killed process leaves. "No output" is itself a fact worth handing over, and it is
+    a different one from a message that failed to be included."""
+
+    def mute(cmd, **kw):
+        return subprocess.CompletedProcess(cmd, 137, "", "")
+
+    monkeypatch.setattr(subprocess, "run", mute)
+    with pytest.raises(llm.ProviderError) as exc:
+        llm.ClaudeCodeProvider().generate([{"role": "user", "content": "x"}], "opus")
+    assert "137" in str(exc.value) and "no output" in str(exc.value)

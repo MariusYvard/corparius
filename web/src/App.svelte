@@ -24,7 +24,7 @@
   import Overview from "./Overview.svelte";
   import Providers from "./Providers.svelte";
   import Settings from "./Settings.svelte";
-  import { get, Refused } from "./api.js";
+  import { get, post, Refused } from "./api.js";
   import { LANGUAGES, load, translator } from "./i18n.js";
   import { loadTheme } from "./theme.js";
   // The mark as geometry rather than as a bitmap; see `Mark.svelte` for why the raster went.
@@ -49,6 +49,29 @@
   let token = $state(localStorage.getItem("corparius-token") || "");
   let tokenRequired = $state(false);
   let failure = $state(null);
+
+  // Making a company, from the header that switches between them. There was no way to do it from
+  // this console at all: the picker listed what existed and stopped there, so the answer to "start a
+  // second company" was the terminal or the old page. Three fields, which is what
+  // `company.validate` actually requires: a name, what it sells, and a line about it. Everything
+  // else takes a default from the same validator the editor uses, because a wizard that asked for
+  // twelve would be a wall in front of the one gesture that has to be easy.
+  let making = $state(false);
+  let madeName = $state("");
+  let madeLine = $state("");
+  let madeProduct = $state("");
+  let makeFailed = $state("");
+  let makeBusy = $state(false);
+  let dialog = $state(null);
+
+  // The flag drives the element, in one place. Calling `showModal()` on an element that is already
+  // open throws, and `close()` on a closed one fires `close` again, so both are guarded: this effect
+  // has to be able to run whenever anything else in the component changes.
+  $effect(() => {
+    if (!dialog) return;
+    if (making && !dialog.open) dialog.showModal();
+    if (!making && dialog.open) dialog.close();
+  });
 
   // The contract this build was written against. A core that answers a different number is not
   // one this console can talk to, and saying so beats failing one request at a time.
@@ -148,6 +171,35 @@
     }
   }
 
+  async function makeCompany() {
+    const name = madeName.trim();
+    if (!name || makeBusy) return;
+    makeBusy = true;
+    makeFailed = "";
+    try {
+      // `lang` goes with it: a company created from the French console writes French, and the
+      // charter, the site copy and every agent prompt read that field. Leaving it out would make
+      // the operator's own language a setting they have to find afterwards.
+      const made = await post(
+        "/api/v1/companies",
+        { name, product: madeProduct.trim(), one_liner: madeLine.trim(), lang },
+        { token },
+      );
+      companies = made.companies ?? [...companies, made.slug];
+      pickCompany(made.slug);
+      making = false;
+      madeName = "";
+      madeLine = "";
+      madeProduct = "";
+    } catch (e) {
+      // Kept in the dialog rather than thrown at the page: a refused name is something to correct
+      // in the field it came from, and replacing the console with an error screen would lose it.
+      makeFailed = e instanceof Refused ? e.message : String(e);
+    } finally {
+      makeBusy = false;
+    }
+  }
+
   onMount(() => {
     document.documentElement.lang = lang;
     boot();
@@ -181,6 +233,14 @@
         {#each companies as slug}<option value={slug}>{slug}</option>{/each}
       </select>
     {/if}
+    <!-- Outside the `length > 1` guard on purpose: an operator with exactly one company has no
+         picker, and they are the one most likely to want a second.
+
+         `wiz.newOption` rather than a new string. The old page put "+ New company…" *inside* the
+         picker as an extra option, which is where an operator learned to look for it, and the
+         wording is theirs. It is a button here because a `<select>` that sometimes performs an
+         action instead of selecting is a control that lies about what it is. -->
+    <button class="quiet new-co" onclick={() => (making = true)}>{t("wiz.newOption")}</button>
     <!-- The shared control: one outline, one seam, one answer. Two loose buttons said the two
          languages were two independent toggles — and this component's own copy of the rule was the
          reason the *unselected* segment read as active in light mode. -->
@@ -193,6 +253,51 @@
     />
   </div>
 </header>
+
+<!-- A real `<dialog>`, driven by `showModal()` rather than by the `open` attribute. The distinction
+     is the whole reason to use the element: `open` renders it in the normal flow with no backdrop,
+     no focus trap and no Escape, which is a `<div>` wearing a dialog's name. `showModal()` is what
+     the platform gives, and every one of those behaviours written by hand is a thing to get wrong.
+     `onclose` keeps the flag in step with the dismissals this component never hears about. -->
+<dialog class="make-co" bind:this={dialog} onclose={() => (making = false)}>
+  <form
+    onsubmit={(e) => {
+      e.preventDefault();
+      makeCompany();
+    }}
+  >
+    <h2>{t("company.new")}</h2>
+    <p class="muted">{t("wiz.desc")}</p>
+    <label for="new-co-name">{t("wiz.name")}</label>
+    <!-- svelte-ignore a11y_autofocus -->
+    <input id="new-co-name" bind:value={madeName} autocomplete="off" autofocus required />
+    <!-- The product, and it is not optional however much a two-field dialog would like it to be:
+         `company.validate` refuses an offer with no product, so a form that omitted it would post,
+         be refused, and show "offer.product is required" to somebody who was never asked. Measured
+         against the running console, which is how it was found. -->
+    <label for="new-co-product">{t("wiz.product")}</label>
+    <input
+      id="new-co-product"
+      bind:value={madeProduct}
+      placeholder={t("wiz.productPh")}
+      autocomplete="off"
+      required
+    />
+    <label for="new-co-line">{t("company.oneLiner")}</label>
+    <input id="new-co-line" bind:value={madeLine} autocomplete="off" />
+    {#if makeFailed}<p class="bad">{makeFailed}</p>{/if}
+    <div class="row">
+      <button type="button" class="quiet" onclick={() => (making = false)}>{t("task.cancel")}</button>
+      <button
+        type="submit"
+        class="primary"
+        disabled={makeBusy || !madeName.trim() || !madeProduct.trim()}
+      >
+        {t("wiz.create")}
+      </button>
+    </div>
+  </form>
+</dialog>
 
 {#if meta && meta.api_version === SPEAKS && company && !(tokenRequired && !token) && failure?.code !== "unauthenticated"}
   <!-- `role="tablist"` on a `div`, not on the `<nav>` it started as: `nav` already carries an

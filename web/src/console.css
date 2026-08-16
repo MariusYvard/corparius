@@ -736,14 +736,29 @@ footer.foot .rule { border-top: 1px solid var(--border); padding: 16px 0 28px; }
 .hero.no-gate > .pulse-row { padding-top: 0; border-top: 0; }
 .hero > .hero-act { grid-area: act; }
 .hero > .pulse-row { grid-area: stats; }
-/* The badges sit with the run control rather than on a row of their own. */
-.hero > .hero-state { grid-area: act; align-self: end; }
+/* The badges sit with the run control rather than on a row of their own, and they do it by being
+ * *inside* it. They used to be a second element assigned the same `grid-area: act`, which is not a
+ * layout, it is two elements painted over one another: `.hero-act` holds a stop button, a last-run
+ * note and up to three job rows, so as soon as a run was going the badges landed across the feed.
+ * The screenshot that reported this had "session frozen" sitting on top of "looping".
+ *
+ * Kept as its own row rather than dropped into the flow, so an empty state (nothing running, no
+ * freezes) collapses to nothing instead of leaving a gap under the buttons. */
+.hero-act > .hero-state {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.hero-act > .hero-state:empty { display: none; }
 /* The act, at the end of the band. A column of its own rather than a row under the readouts: the run
  * choice is three buttons and the band is 1150px wide, so there is room for the decision beside the
  * numbers it is made from. */
 .hero-act {
   position: relative;
-  z-index: 1;
+  /* No `z-index` here any more. It existed to keep these buttons clickable above the badges that
+     shared their grid area; with nothing overlapping there is nothing to sit above, and a stacking
+     context kept for a defect that is gone is the next person's puzzle. */
   display: grid;
   gap: 8px;
   align-content: start;
@@ -1421,6 +1436,36 @@ a.badge:hover { text-decoration: underline; }
 .enter > :nth-child(4) { animation-delay: 135ms; }
 .enter > :nth-child(5) { animation-delay: 180ms; }
 .enter > :nth-child(n + 6) { animation-delay: 200ms; }
+
+
+/* The first dialog in this console, so the rules are here rather than scoped to one component: the
+ * next one inherits a shape instead of inventing a second. It is a card, because that is what a
+ * surface is in this design, and `::backdrop` is what tells the eye the page behind it is inert.
+ *
+ * `dialog` is `display: none` until it is open, which is why the flex here is on `[open]`: putting
+ * it on the bare selector would make a closed dialog take part in layout. */
+.make-co {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  padding: 22px 24px;
+  width: min(440px, calc(100vw - 32px));
+  margin: auto;
+}
+.make-co::backdrop { background: oklch(0.2 0.02 var(--ui-hue) / 0.45); }
+.make-co h2 { margin: 0 0 4px; font-size: 17px; }
+.make-co p { margin: 0 0 14px; }
+.make-co form { display: flex; flex-direction: column; gap: 6px; }
+.make-co label { font-size: 12.5px; font-weight: 600; }
+.make-co input { width: 100%; }
+.make-co input + label { margin-top: 10px; }
+.make-co .bad { color: var(--danger); margin: 10px 0 0; }
+.make-co .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+/* The header's own entry point. Beside a `<select>` that may not be there at all, so it carries its
+ * own weight rather than leaning on a neighbour for alignment. */
+.new-co { white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -198,6 +198,20 @@ def v1_companies(ctx):
     return 200, {"ok": True, "companies": state.companies()}
 
 
+def v1_companies_post(ctx):
+    """Create one. The other verb on the resource above, and it was missing.
+
+    Measured from the console: the Svelte header rendered a `<select>` of existing slugs and nothing
+    else, so **there was no way to create a company from the new console at all** — the operator had
+    to use the terminal or the old page. The service and the handler both existed (`companies_post`
+    on the legacy path), so this was one line of route table and a header button away the whole time,
+    which is exactly the shape this codebase keeps finding: reachable, and never reached.
+
+    Not slug-scoped, for the obvious reason that the slug is what it returns."""
+    result = adapters.create_company(ctx.state, ctx.body)
+    return (200 if result.get("ok") else 400), result
+
+
 def v1_approvals_post(ctx):
     """Decide an approval, and finish the job.
 

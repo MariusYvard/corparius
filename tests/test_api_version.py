@@ -80,6 +80,12 @@ ALIASED = {
     ("POST", "tasks"): "app_tasks.edit",
     ("POST", "memory"): "app_memory.decide",
     ("POST", "drafts"): "app_drafts.set_state",
+    # Creating a company. The v1 spelling arrived late and for a reason worth recording: the new
+    # console had a `<select>` of existing slugs and no way to make one, so starting a second company
+    # meant the terminal or the old page. Both spellings call `adapters.create_company`, which calls
+    # `app_companies.create` — the same service the terminal's `corparius new` uses, which is what
+    # stops a company made from a browser and one made from a shell being different objects.
+    ("POST", "companies"): "adapters.create_company(",
     # The read too, because both spellings answer the same four keys and the count that gates the
     # agent is one of them: `queued` is `draft` **and** `queued` together, so two spellings of that
     # sum are two chances for one to become just one state. Written out twice, identically, until the

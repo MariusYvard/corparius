@@ -42,7 +42,22 @@ from .kernel import paths
 # The closed set. `roster` validates its `needs` against this, and
 # `tests/test_readiness.py` fails on a fact nothing declares and on a need no fact answers — the
 # both-ends rule this project applies to every registry.
-FACTS = ("offer", "site", "mail", "payment")
+FACTS = ("offer", "site", "mail", "payment", "checkout")
+
+
+def invoiced() -> bool:
+    """A business paid by transfer against an invoice, rather than by a checkout a stranger clicks.
+
+    Public and separate from `facts` because two places need it and it must not be spelled twice:
+    the gate here, and the sales page, which says how a visitor pays. A second copy of "both Qonto
+    keys are set" in `sitegen` would be the kind of duplicated predicate that goes out of step the
+    first time the condition changes, and it would drag `requests` into the site builder to boot.
+
+    Reads the settings rather than the provider module on purpose. The question is what the operator
+    configured, not whether Qonto answered: a bank having an outage does not stop a company being
+    the kind of company that invoices.
+    """
+    return bool(cfg.get("QONTO_LOGIN", "").strip() and cfg.get("QONTO_SECRET_KEY", "").strip())
 
 
 def _offer(company: dict) -> bool:
@@ -101,6 +116,7 @@ def facts(company: dict, data_path: str, slug: str = "") -> dict[str, bool]:
     # that wait for one have no business asking who deployed it. Without this the gate held outreach
     # forever on exactly the companies most ready to use it: the ones that already had a site.
     external = bool(isinstance(site, dict) and site.get("external") and site.get("url"))
+    checkout = link.startswith("http") or bool(cfg.get("STRIPE_API_KEY", "").strip())
     return {
         "offer": _offer(company),
         # Published, not merely built. A site in the data folder is a draft; the marker is written
@@ -117,9 +133,14 @@ def facts(company: dict, data_path: str, slug: str = "") -> dict[str, bool]:
         # Qonto counts because a French company selling to other businesses is paid by transfer
         # against an invoice, not by a checkout link, and a gate that only knew about checkout
         # would hold its finance agent forever on exactly that company.
-        "payment": (
-            link.startswith("http")
-            or bool(cfg.get("STRIPE_API_KEY", "").strip())
-            or bool(cfg.get("QONTO_LOGIN", "").strip() and cfg.get("QONTO_SECRET_KEY", "").strip())
-        ),
+        "payment": checkout or invoiced(),
+        # **And the two are not interchangeable, which is why there are two facts.**
+        #
+        # `payment` answers "can this company be paid at all", which is what finance needs: it has
+        # one reconciler per route and runs whichever applies. `checkout` answers the narrower
+        # question "can a stranger buy without talking to anybody", which is what paid traffic
+        # needs. Sending someone who clicked an ad to a page whose only call to action is "contact
+        # us" is spending money to produce a conversation, and an ads agent gated on `payment`
+        # would do exactly that for every invoiced business.
+        "checkout": checkout,
     }

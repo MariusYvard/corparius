@@ -160,7 +160,19 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # that sells to name who publishes it, corparius can invent none of those identifiers, and
     # until now the only place to write them was `company.yaml` by hand — which this product
     # refuses to ask for, and which a save from the editor would then have destroyed.
-    assert result["counts"] == {"en": 593, "fr": 593}, result["counts"]
+    # 597. The four since 593 are a button that did not exist. The new console's header rendered a
+    # `<select>` of the companies that already exist and nothing beside it, so **there was no way to
+    # create a company from it at all** — an operator wanting a second one had the terminal or this
+    # page. `company.new`, its tooltip, its help line and `company.create`; the route it posts to had
+    # to be added too, because v1 had the read and not the write.
+    # 594. The one since 593 is `company.new`, a heading for a dialog that had to be built because
+    # **the new console could not create a company at all**: its header rendered a `<select>` of the
+    # slugs that already existed and nothing beside it, so a second company meant the terminal or
+    # this page. The other five strings it needed already existed — the `wiz.*` set, including
+    # `wiz.newOption`, which is the "+ New company…" an operator learned to look for in this page's
+    # own picker. Reusing them was the point: a second vocabulary for one gesture is how two screens
+    # come to call the same thing by different names.
+    assert result["counts"] == {"en": 594, "fr": 594}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

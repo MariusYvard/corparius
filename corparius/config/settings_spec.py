@@ -47,8 +47,21 @@ GROUPS: list[dict] = [
         "label_en": "Payments",
         "label_fr": "Encaissement",
         "warn": True,
-        "help_en": "Stripe. A live key reads and reports real money.",
-        "help_fr": "Stripe. Une clé live lit et rapporte de l'argent réel.",
+        # Named both, because the header is what an operator reads before deciding the section is
+        # not the one they wanted. It said "Stripe." while holding Qonto's two fields, which is the
+        # same way a setting goes missing as not having it at all.
+        "help_en": (
+            "Two ways to be paid: a Stripe link a stranger clicks, and a Qonto account a client "
+            "transfers to against an invoice. A live key reads and reports real money. Qonto is "
+            "read only here, and holding its credentials is not e-invoicing: see "
+            "docs/conformite-fr.md."
+        ),
+        "help_fr": (
+            "Deux façons d'être payé : un lien Stripe qu'un inconnu clique, et un compte Qonto "
+            "vers lequel un client vire contre facture. Une clé live lit et rapporte de l'argent "
+            "réel. Qonto est en lecture seule ici, et détenir ses identifiants n'est pas de la "
+            "facturation électronique : voir docs/conformite-fr.md."
+        ),
     },
     {
         "name": "mail",

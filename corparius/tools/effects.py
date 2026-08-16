@@ -21,7 +21,7 @@ from .. import (
     sitegen,
 )
 from ..config import cfg
-from ..kernel import paths, text
+from ..kernel import i18n, paths, text
 from ..kernel.records import ToolResult
 from ..providers import (
     deploy,
@@ -1140,7 +1140,13 @@ def _review_kpis(ctx) -> str:
     stats = store.outreach_stats(slug)
     flow = store.flow_metrics(slug)
     spend = sum(int(row.get("tokens", 0) or 0) for row in store.spend_by_agent(slug))
-    revenue = store.recent_outputs(slug, "reconcile_stripe", 1)
+    # Both reconcilers, because a company paid by transfer has all of its revenue in the bank one
+    # and none in the Stripe one. Reading only Stripe here would have had the KPI review report "no
+    # revenue reading" to the CEO on the same day the bank reconcile found money, which is worse
+    # than silence: it is a measured-looking zero.
+    revenue = store.recent_outputs(slug, "reconcile_stripe", 1) or store.recent_outputs(
+        slug, "reconcile_qonto", 1
+    )
     parts = [f"{flow['throughput']} task(s) completed, {flow['wip']} in progress"]
     if stats.get("sent"):
         parts.append(f"outreach {stats['replied']}/{stats['sent']} answered")
@@ -1151,6 +1157,32 @@ def _review_kpis(ctx) -> str:
         revenue[0].replace("Stripe reconciled: ", "revenue ") if revenue else "no revenue reading"
     )
     return "KPIs: " + "; ".join(parts)
+
+
+def _reconcile_qonto(ctx) -> ToolResult:
+    """What landed in the bank, or why nothing could be read.
+
+    The counterpart to `reconcile_stripe`, and unlike it there is no mock fallback. A reconcile that
+    invents "MRR 27 EUR" when the provider is unreachable is the fabricated-number defect this file
+    already carries a docstring about, three functions up: `review_kpis` used to report two invented
+    figures that then fed the CEO's decisions. A number about money is Measured or it is absent.
+
+    `ok=False` when the read failed, so it counts as a failure the way anything else does rather
+    than as a successful report of nothing.
+    """
+    from ..providers import qonto
+
+    lang = str((ctx.company or {}).get("language") or "en")
+    if not qonto.configured():
+        return _fail(
+            i18n.pick(
+                lang,
+                "No Qonto account connected, so there is no bank to reconcile.",
+                "Aucun compte Qonto connecté, donc pas de banque à rapprocher.",
+            )
+        )
+    answer = qonto.reconcile(lang=lang)
+    return _ok(answer["detail"]) if answer.get("ok") else _fail(answer.get("detail", ""))
 
 
 def _stop_useless_work(ctx) -> str:
@@ -2376,6 +2408,7 @@ BEHAVIOUR: dict[str, Behaviour] = {
             integrations.stripe_reconcile() or "Stripe reconciled: MRR 27 EUR, 3 active subs (mock)"
         ),
     ),
+    "reconcile_qonto": Behaviour(effect=lambda c, d: _reconcile_qonto(c)),
     "send_financial_transaction": Behaviour(
         effect=lambda c, d: _ok("Paid infrastructure invoice 12 EUR (mock)"),
     ),

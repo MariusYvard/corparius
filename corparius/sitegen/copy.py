@@ -122,6 +122,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "oneoff": "one-off",
         "for": "For {segment}",
         "stripe": "Secure payment by Stripe",
+        "invoice": "Paid on invoice, by bank transfer",
         "built": "built with corparius",
     },
     "fr": {
@@ -141,6 +142,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "oneoff": "paiement unique",
         "for": "Pour {segment}",
         "stripe": "Paiement sécurisé par Stripe",
+        "invoice": "Paiement sur facture, par virement",
         "built": "créé avec corparius",
     },
     "es": {
@@ -160,6 +162,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "oneoff": "pago único",
         "for": "Para {segment}",
         "stripe": "Pago seguro con Stripe",
+        "invoice": "Pago contra factura, por transferencia",
         "built": "creado con corparius",
     },
     "de": {
@@ -179,6 +182,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "oneoff": "einmalig",
         "for": "Für {segment}",
         "stripe": "Sichere Zahlung über Stripe",
+        "invoice": "Zahlung auf Rechnung, per Überweisung",
         "built": "erstellt mit corparius",
     },
     "it": {
@@ -198,6 +202,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "oneoff": "pagamento unico",
         "for": "Per {segment}",
         "stripe": "Pagamento sicuro con Stripe",
+        "invoice": "Pagamento su fattura, con bonifico",
         "built": "creato con corparius",
     },
     "pt": {
@@ -217,6 +222,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "oneoff": "pagamento único",
         "for": "Para {segment}",
         "stripe": "Pagamento seguro com Stripe",
+        "invoice": "Pagamento contra fatura, por transferência",
         "built": "criado com corparius",
     },
     "nl": {
@@ -236,6 +242,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "oneoff": "eenmalig",
         "for": "Voor {segment}",
         "stripe": "Veilig betalen met Stripe",
+        "invoice": "Betaling op factuur, per overboeking",
         "built": "gemaakt met corparius",
     },
 }

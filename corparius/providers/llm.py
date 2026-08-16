@@ -554,7 +554,18 @@ class ClaudeCodeProvider(LLMProvider):
         except proc.ProcError as exc:
             raise ProviderError(f"claude CLI unavailable: {exc}") from exc
         if not out.ok:
-            raise ProviderError(f"claude CLI exited {out.returncode}: {out.stderr.strip()[:300]}")
+            # **Both streams, because this exact message shipped ending in a bare colon.** Measured
+            # on a real run: `claude CLI exited 1:` and nothing after it, forty times over, on the
+            # one role that had been pinned to this provider. The operator could see that design was
+            # producing nothing and had no way at all to learn why.
+            #
+            # stderr first because that is where a shell failure goes, then stdout, because `claude`
+            # is invoked with `--output-format json` and reports its own refusals *there* — an
+            # expired login, an unknown model name, a quota. Reading only stderr threw away the
+            # message in the usual case. And when both are genuinely empty, say so: "no output" is
+            # itself a fact worth handing over, and it is the shape a killed process leaves.
+            said = out.stderr.strip() or out.stdout.strip() or "no output on either stream"
+            raise ProviderError(f"claude CLI exited {out.returncode}: {said[:300]}")
         try:
             data = json.loads(out.stdout)
         except json.JSONDecodeError as exc:

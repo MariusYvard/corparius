@@ -363,17 +363,6 @@
         <div class="value">{summary.flow.wip ?? 0}</div>
       </div>
     </div>
-    <div class="hero-state">
-        {#if summary.running}
-          <span class="badge ok">{t("badge.running")}</span>
-          {#if summary.loop}<span class="badge">{t("badge.looping")}</span>{/if}
-          {#if summary.stopping}<span class="badge warn">{t("badge.stopping")}</span>{/if}
-        {/if}
-      {#if summary.freezes > 0}
-        <span class="badge warn">{t("badge.frozen")} · {summary.freezes}</span>
-      {/if}
-    </div>
-
     <!-- The run control, inside the band. Seeing what needs you and starting a day are the two things an
          operator does first, and they were a band and a card two rows apart — so the page opened with a
          number and made you scroll to act on it. -->
@@ -415,6 +404,22 @@
           {/each}
         </ul>
       {/if}
+      <!-- The state badges, as the last row of this column rather than as a second element in the
+           same grid area. They were the latter, and two elements in one `grid-area` are two elements
+           drawn on top of each other the moment either one has more than a line in it: with a run
+           going the feed above is three rows, and "session frozen" landed across the last of them.
+           `.hero-act` even carried a `z-index: 1` so the buttons stayed clickable underneath, which
+           is a note that somebody had seen the overlap and kept the layout. -->
+      <div class="hero-state">
+        {#if summary.running}
+          <span class="badge ok">{t("badge.running")}</span>
+          {#if summary.loop}<span class="badge">{t("badge.looping")}</span>{/if}
+          {#if summary.stopping}<span class="badge warn">{t("badge.stopping")}</span>{/if}
+        {/if}
+        {#if summary.freezes > 0}
+          <span class="badge warn">{t("badge.frozen")} · {summary.freezes}</span>
+        {/if}
+      </div>
     </div>
   </section>
 

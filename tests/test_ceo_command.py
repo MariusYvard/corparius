@@ -221,3 +221,81 @@ def test_the_command_says_what_the_ceo_wants_to_do(home, capsys, monkeypatch):
     )
     assert cli.main(["ceo", "--company", "acme", "on lance ?"]) == 0
     assert "it wants to: Lancer une journée" in capsys.readouterr().out
+
+
+# --- when no model can be reached at all ------------------------------------------
+
+
+def test_a_router_that_reaches_nothing_answers_instead_of_crashing(home, monkeypatch):
+    """Measured on a real console, and it arrived as an HTTP 500 with a traceback.
+
+    The router catches each remote step and moves on ("trying next step"), but the local one is the
+    last resort: it retries once for an Ollama cold start and then lets the exception out. With every
+    cloud key rate-limited and no Ollama running — which is an ordinary Tuesday on free tiers — the
+    exception went all the way through `app_chat.once`, `adapters.chat` and the handler, and the tab
+    whose entire job is to be asked what is going on answered with a stack trace.
+
+    So it is caught, and the operator gets a sentence naming both halves of the cause.
+    """
+    import requests
+
+    from corparius.providers import llm
+
+    def dead(*a, **k):
+        raise requests.RequestException("404 Client Error: Not Found for /api/chat")
+
+    monkeypatch.setattr(llm.HybridRouter, "generate", dead)
+    store = Store(str(home / "data"))
+    out = app_chat.once(store, Settings(), "acme", "où en est le backlog ?", lang="fr")
+
+    assert isinstance(out, dict) and out.get("reply"), out
+    assert "Aucun modèle n'a pu être joint" in out["reply"]
+    assert "Providers" in out["reply"], "the sentence has to name where to go and look"
+    assert "Traceback" not in out["reply"]
+
+
+def test_unreachable_is_not_reported_as_a_silent_model(home, monkeypatch):
+    """The distinction the fix is built around, and the reason it is not repaired in the router.
+
+    "Nothing could be reached" and "the model answered nothing" want different actions from an
+    operator: start Ollama or fix a key, versus try again or pick another tier. Returning an empty
+    answer from the router would collapse the two into the message below, which would send somebody
+    to the wrong place.
+    """
+    import requests
+
+    from corparius.providers import llm
+
+    monkeypatch.setattr(
+        llm.HybridRouter,
+        "generate",
+        lambda *a, **k: (_ for _ in ()).throw(requests.RequestException("down")),
+    )
+    store = Store(str(home / "data"))
+    said = app_chat.once(store, Settings(), "acme", "salut", lang="en")["reply"]
+
+    assert "No model could be reached" in said
+    # A fragment of the *other* message, not the phrase "did not answer": this one says "the local
+    # one did not answer" itself, and asserting on that would have been a test of my own wording
+    # rather than of which of the two branches ran.
+    assert "the tier may be misconfigured" not in said, "reported as a model that stayed silent"
+
+
+def test_the_turn_is_still_recorded_so_the_transcript_has_no_hole(home, monkeypatch):
+    """A question that was asked stays asked. Dropping it would leave the operator scrolling a
+    conversation where their own message is missing and the reason it failed is missing with it."""
+    import requests
+
+    from corparius.providers import llm
+
+    monkeypatch.setattr(
+        llm.HybridRouter,
+        "generate",
+        lambda *a, **k: (_ for _ in ()).throw(requests.RequestException("down")),
+    )
+    store = Store(str(home / "data"))
+    app_chat.once(store, Settings(), "acme", "une question qui a échoué", lang="fr")
+
+    said = [turn["text"] for turn in store.chat_history("acme")]
+    assert "une question qui a échoué" in said
+    assert any("Aucun modèle" in text for text in said)

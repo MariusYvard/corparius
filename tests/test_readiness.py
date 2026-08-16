@@ -54,6 +54,7 @@ def test_a_new_company_has_none_of_them(home):
         "site": False,
         "mail": False,
         "payment": False,
+        "checkout": False,
     }
 
 
@@ -157,18 +158,26 @@ def test_each_fact_releases_exactly_what_waits_on_it():
     assert "outreach" in runs({"site"}) and "ads" not in runs({"site"})
     assert "finance" in runs({"payment"}) and "ads" not in runs({"payment"})
     assert "support" in runs({"mail"})
-    assert "ads" in runs({"site", "payment"}), "ads needs both, and both is what it got"
+    assert "ads" in runs({"site", "checkout"}), "ads needs both, and both is what it got"
+
+    # **And the pair that is deliberately not the same fact.** A company paid by bank transfer has
+    # `payment` and not `checkout`: finance runs, because it has a reconciler for the bank, and ads
+    # does not, because a stranger who clicks an ad cannot buy from a page that says "contact us".
+    # Asserting only `payment` would let ads back through the moment someone simplified the gate.
+    invoiced = runs({"site", "payment"})
+    assert "finance" in invoiced
+    assert "ads" not in invoiced, "paid traffic was sent at a page with nothing to click"
 
 
 def test_a_held_role_says_what_it_is_waiting_for():
     """ "Held" alone is a bug report. A capability that is silently never reached is the failure this
     codebase keeps finding in its own product, and a gate with no explanation would be a new one."""
     waiting = held_roles(ALL_ON, ready=set())
-    assert waiting["ads"] == ["site", "payment"]
+    assert waiting["ads"] == ["site", "checkout"]
     assert waiting["outreach"] == ["site"]
     assert "ceo" not in waiting and "design" not in waiting
 
-    assert held_roles(ALL_ON, ready={"site"})["ads"] == ["payment"]
+    assert held_roles(ALL_ON, ready={"site"})["ads"] == ["checkout"]
     assert "outreach" not in held_roles(ALL_ON, ready={"site"})
     # A role the operator turned off, or paused, is not "waiting" — it is off, and saying otherwise
     # would put a fix in front of somebody who already made the decision.
@@ -314,7 +323,7 @@ def test_a_filed_task_outranks_the_gate(home):
 
     # And it stops calling itself held, because it is not: it is about to run.
     assert "outreach" not in held_roles(ALL_ON, ready=set(), has_work={"outreach"})
-    assert held_roles(ALL_ON, ready=set(), has_work={"outreach"})["ads"] == ["site", "payment"]
+    assert held_roles(ALL_ON, ready=set(), has_work={"outreach"})["ads"] == ["site", "checkout"]
 
 
 def test_an_offer_that_is_not_a_mapping_is_not_an_offer(home):
@@ -364,7 +373,7 @@ def test_the_shipped_budget_covers_the_busiest_day_the_roster_can_produce():
     from corparius.config.settings_spec import BY_KEY
 
     per_call = 1500  # a prompt with documents and skills on it, plus a short structured answer
-    everything = {"offer", "site", "mail", "payment"}
+    everything = {"offer", "site", "mail", "payment", "checkout"}
     calls = sum(
         len(spec.playbook)
         for hour in range(24)

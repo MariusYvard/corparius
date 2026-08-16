@@ -142,7 +142,10 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         Difficulty.TRIVIAL,
         "You manage paid acquisition.",
         ["review_ad_budget", "adjust_bids"],
-        needs=("site", "payment"),
+        # `checkout`, not `payment`. Paid traffic is strangers, and a stranger who clicks an ad and
+        # lands on "contact us" is money spent to produce a conversation the operator then has to
+        # have. An invoiced business is genuinely ready to be paid and genuinely not ready for ads.
+        needs=("site", "checkout"),
         offset_hours=9,
     ),
     AgentRole.FINANCE: AgentSpec(
@@ -152,7 +155,10 @@ ROSTER: dict[AgentRole, AgentSpec] = {
         12,
         Difficulty.TRIVIAL,
         "You keep the books and the cashflow.",
-        ["reconcile_stripe", "send_financial_transaction"],
+        # One reconciler per way of being paid, because a company has one, the other, or both. A
+        # role whose only tools were Stripe tools would run on nothing for an invoiced business,
+        # which is the shape the utility gate exists to prevent and which this role had.
+        ["reconcile_stripe", "reconcile_qonto", "send_financial_transaction"],
         needs=("payment",),
         offset_hours=5,
     ),

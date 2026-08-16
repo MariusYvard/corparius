@@ -90,7 +90,10 @@
     history = [...history, { role: "user", text: message }];
     draft = "";
     try {
-      const done = await post("/api/v1/chat", { message }, { token });
+      // `company` in the **body**, not the query. A POST reads the slug from what it was sent, and
+      // this route declares `needs_slug`, so a body without it is a 404 before any handler runs:
+      // every message to the CEO answered "not found" until this line did.
+      const done = await post("/api/v1/chat", { company, message }, { token });
       history = done.history ?? history;
       proposal = done.proposal ?? null;
     } catch (e) {
@@ -121,7 +124,7 @@
 
   async function forget() {
     try {
-      await post("/api/v1/chat/forget", {}, { token });
+      await post("/api/v1/chat/forget", { company }, { token });
       history = [];
       proposal = null;
     } catch (e) {

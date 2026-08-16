@@ -22,12 +22,18 @@ sentence true, and if it changed something the change is appended — because th
 
 from __future__ import annotations
 
+import logging
+
+import requests
+
 from .. import structured
 from ..kernel import i18n
 from ..kernel.records import AgentRole
 from ..providers.llm import HybridRouter
 from ..roster import ROSTER
 from . import directives
+
+log = logging.getLogger("corparius.app.chat")
 
 
 def once(store, settings, slug: str, message: str, history=None, lang: str = "en") -> dict:
@@ -96,14 +102,42 @@ def once(store, settings, slug: str, message: str, history=None, lang: str = "en
     # returns the same shape whatever model answered; in mock or on a weak model
     # it falls back to intent=answer, so the chat degrades to plain conversation.
     router = HybridRouter(settings)
-    result = structured.ask(router, messages, directives.CEO_SCHEMA, difficulty=spec.difficulty)
+    # **A router that cannot reach anything raises, and this is the caller that has to survive it.**
+    #
+    # The chain catches each remote step and moves on ("trying next step"), but the local step is the
+    # last resort: it retries once for an Ollama cold start and then lets the exception go. Measured
+    # against a real console with every cloud key rate-limited and no Ollama running, that arrived at
+    # the operator as an **HTTP 500 with a traceback in the server log** — from the tab whose whole
+    # job is to be asked what is going on.
+    #
+    # Not repaired in the router, deliberately. Returning an empty answer there would turn "nothing
+    # could be reached" into "the model said nothing", and those want different actions from an
+    # operator: start Ollama or fix a key, versus try again or change tier. So the failure is caught
+    # here, where there is a sentence to put it in, and the two stay distinguishable.
+    unreachable = ""
+    try:
+        result = structured.ask(router, messages, directives.CEO_SCHEMA, difficulty=spec.difficulty)
+    except (requests.RequestException, OSError) as exc:
+        log.warning("chat: no model could be reached (%s)", exc)
+        result = structured.Result({}, ok=False, attempts=0, source="", raw="", usages=[])
+        unreachable = i18n.pick(
+            lang,
+            "No model could be reached. Every cloud step failed or is rate-limited and the local "
+            "one did not answer — check the Providers tab, and that Ollama is running if you use "
+            "it. Nothing was sent and nothing changed.",
+            "Aucun modèle n'a pu être joint. Toutes les étapes cloud ont échoué ou sont limitées "
+            "en débit, et la locale n'a pas répondu — voyez l'onglet Providers, et qu'Ollama "
+            "tourne si vous vous en servez. Rien n'a été envoyé et rien n'a changé.",
+        )
     for u in result.usages:
         store.record_usage(slug, "ceo", u.input_tokens, u.output_tokens)
     # `or message` echoed the operator's own question back at them, which reads
     # like an answer and is not one. When the model said nothing usable, say so.
     reply = (result.data.get("reply") or "").strip()
     unanswered = not reply
-    if unanswered:
+    if unreachable:
+        reply = unreachable
+    elif unanswered:
         reply = i18n.pick(
             lang,
             "The model did not answer. It may be rate-limited or the tier may be "

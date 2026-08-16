@@ -31,6 +31,9 @@ ROUTES: tuple[Route, ...] = (
     Route("GET", "/api/v1/memory", handlers.v1_memory, needs_slug=True),
     Route("GET", "/api/v1/activity", handlers.v1_activity, needs_slug=True),
     Route("GET", "/api/v1/companies", handlers.v1_companies),
+    # Both verbs on the resource. Only the read was here, and the console had no create button as a
+    # direct result: a `<select>` of what already exists is not a way to make one.
+    Route("POST", "/api/v1/companies", handlers.v1_companies_post),
     Route("GET", "/api/v1/jobs", handlers.v1_jobs, needs_slug=True),
     Route("GET", "/api/v1/drafts", handlers.v1_drafts, needs_slug=True),
     # The writes the overview tab needs. Reads moved to v1 first because that is where the cost was;

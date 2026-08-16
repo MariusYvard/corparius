@@ -250,6 +250,15 @@ SPEC: dict[str, ToolSpec] = {
         "Reconcile Stripe cashflow",
         risk=permissions.EXTERNAL,
     ),
+    # The other half of the same question. Stripe answers "what did strangers pay"; this answers
+    # "what landed in the bank", which for a business paid by transfer against an invoice is all of
+    # the revenue. Read-only, so `EXTERNAL` rather than `MONEY`: it reaches the network and moves
+    # nothing, which is exactly what `reconcile_stripe` is.
+    "reconcile_qonto": ToolSpec(
+        "reconcile_qonto",
+        "Reconcile the bank account",
+        risk=permissions.EXTERNAL,
+    ),
     "send_financial_transaction": ToolSpec(
         "send_financial_transaction",
         "Pay an invoice / move money",

@@ -112,6 +112,10 @@ ROUTES: tuple[Route, ...] = (
     # Settling a diverged company repository from the console. The endpoint exists so that the
     # answer to "your repository is behind" is a button rather than a git command to copy into a
     # terminal an operator did not want to open.
+    Route("GET", "/api/v1/repo", handlers.v1_repo, needs_slug=True),
+    # Making one. The service has existed since companies could be versioned at all; what was
+    # missing was the route, so the only way to start was a terminal.
+    Route("POST", "/api/v1/repo", handlers.v1_repo_create, needs_slug=True),
     Route("POST", "/api/v1/repo/resolve", handlers.v1_repo_resolve, needs_slug=True),
     # The first v1 writes. Durable work: a client that loses the answer can ask again with the
     # same `Idempotency-Key` and will not start a second run.

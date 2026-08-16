@@ -299,18 +299,24 @@ def test_an_app_that_is_listed_and_does_not_exist_is_left_out(home):
 # --- and the tools that still do nothing say so --------------------------------------
 
 
-def test_the_one_tool_that_still_reports_work_it_does_not_do_says_so():
-    """`produce_mockup` returns "Mockup produced: landing hero and one ad variant (mock)" and
-    produces no mockup. Its description reads as that now, because an operator scanning a log has no
-    other way to tell it apart from the tools that do something.
+def test_no_tool_advertises_work_it_does_not_do():
+    """The list this file used to keep is **empty**, and the assertion inverts rather than being
+    deleted.
 
-    Its two former neighbours are gone from this list, and that is the point of the file: they were
-    repaired rather than relabelled. `generate_code` reads a broken program's log and writes the
-    corrected file; `publish_production_code` commits the company's source and pushes it.
+    There were three. Each returned a sentence describing work it had not done — `generate_code`
+    asked a model for one sentence about a feature and returned the sentence, `publish_production_code`
+    said "Production code published" and touched nothing, `produce_mockup` said "landing hero and one
+    ad variant (mock)" every time. The first repair was honest labelling: their descriptions began
+    with "Not built", so an operator reading a log could tell them apart from the tools that act.
+    All three do the work now, so the label has nowhere left to sit.
+
+    Kept as an assertion over the whole registry because that is the direction that can fail again:
+    a new tool describing itself as a placeholder is a tool the roster will hand real turns to.
     """
-    assert "Not built" in TOOLS["produce_mockup"].description
-    for repaired in ("generate_code", "publish_production_code", "write_app_code"):
-        assert "Not built" not in TOOLS[repaired].description, repaired
+    placeholders = sorted(n for n, t in TOOLS.items() if "not built" in t.description.lower())
+    assert placeholders == [], placeholders
+    for repaired in ("generate_code", "publish_production_code", "produce_mockup"):
+        assert repaired in TOOLS, repaired
 
 
 def test_the_one_with_hands_is_on_the_coder_s_playbook():

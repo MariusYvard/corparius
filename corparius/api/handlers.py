@@ -866,6 +866,21 @@ def v1_site_post(ctx):
     return 200, {"ok": True, "built": True}
 
 
+def v1_repo(ctx):
+    """Is this company versioned, and could it be. Read-only."""
+    return 200, adapters.repo_status(ctx.slug)
+
+
+def v1_repo_create(ctx):
+    """Version this company and push it, from the console.
+
+    The route that had to exist before `publish_production_code` could stop telling an operator to
+    open a terminal — which a test caught it doing, and which is the rule this product holds itself
+    to: corparius does its own work.
+    """
+    return adapters.create_repo(ctx.state, ctx.slug)
+
+
 def v1_repo_resolve(ctx):
     """Settle a diverged company repository, from the console.
 

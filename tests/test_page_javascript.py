@@ -179,7 +179,7 @@ def test_no_string_renders_as_a_raw_key_in_either_language(tmp_path):
     # has not fixed anything. `ib.fix.repo` / `ib.fix.repoTheirs` are two because a diverged
     # repository is a choice rather than an action, and `ib.next.repo` is the sentence that makes it
     # an informed one: the side you do not keep stays in the history.
-    assert result["counts"] == {"en": 597, "fr": 597}, result["counts"]
+    assert result["counts"] == {"en": 602, "fr": 602}, result["counts"]
     for lang, keys in result["raw"].items():
         assert not keys, f"{lang} would render these as raw keys on screen: {keys[:10]}"
 

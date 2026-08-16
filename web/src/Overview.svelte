@@ -42,6 +42,7 @@
   // this right — `loadPayments()` is in its boot sequence and its interval calls `refresh()` alone.
   let payments = $state(null);
   let golive = $state(null);
+  let repo = $state(null);
   let site = $state(null);
   let failure = $state(null);
   let busy = $state("");
@@ -77,12 +78,16 @@
     const slug = encodeURIComponent(company);
     for (const [key, path] of [
       ["golive", `/api/v1/golive?company=${slug}`],
+      ["repo", `/api/v1/repo?company=${slug}`],
       ["site", `/api/v1/site?company=${slug}`],
       ["payments", "/api/v1/payments"],
     ]) {
       try {
         const got = await get(path, { token });
+        // One chain, and it has to be: inserting `repo` as a second `if` started a new one, so the
+        // `else` at its end fired for `golive` and assigned the go-live payload to `payments`.
         if (key === "golive") golive = got;
+        else if (key === "repo") repo = got;
         else if (key === "site") site = got;
         else payments = got;
       } catch (e) {
@@ -203,6 +208,20 @@
     try {
       await post("/api/v1/repo/resolve", { company, keep }, { token });
       await refresh();
+    } catch (e) {
+      failure = e;
+    } finally {
+      busy = "";
+    }
+  }
+
+  // Version this company and push it. The core picks the provider — GitHub, GitLab, or a bare
+  // repository on this disk when nothing is configured — so the operator chooses to do it rather
+  // than choosing how.
+  async function versionCompany() {
+    busy = "repo";
+    try {
+      repo = await post("/api/v1/repo", { company }, { token });
     } catch (e) {
       failure = e;
     } finally {
@@ -608,6 +627,31 @@
                 <span class="badge warn">{t("live.hostReady")}</span>
               {:else}
                 <span class="badge">{t("live.hostNo")}</span>
+              {/if}
+            </span>
+          </div>
+          <!-- **Versioning, and the button that had to exist.** `publish_production_code` used to
+               end its refusal with "`corparius repo` sets one up", which a test caught: a product
+               that sends somebody who chose a console to a terminal has handed its own work back.
+               The service had existed all along — a private remote with the first configured
+               provider — and only the route and this control were missing.
+
+               Three states, like hosting above: versioned with a remote, versioned locally only,
+               and not versioned. The middle one is a real place to be and reads as progress. -->
+          <div class="kv">
+            <span class="k">{t("live.repo")}</span>
+            <span class="v">
+              {#if repo?.remote}
+                <span class="badge ok">{t("live.repoOn")}</span>
+              {:else if repo?.versioned}
+                <span class="badge warn">{t("live.repoLocal")}</span>
+              {:else}
+                <button
+                  class="quiet"
+                  disabled={busy === "repo" || !(repo?.providers?.length)}
+                  title={repo?.providers?.length ? "" : t("live.repoNoProvider")}
+                  onclick={versionCompany}
+                >{t("live.repoMake")}</button>
               {/if}
             </span>
           </div>

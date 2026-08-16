@@ -444,12 +444,14 @@ SPEC: dict[str, ToolSpec] = {
         # than one argued from the picture.
         sees_images=True,
     ),
-    # Returns "Mockup produced: landing hero and one ad variant (mock)" and produces no mockup. The
-    # design agent's real visual output is `draft_design_brief`, and its real page work is
-    # `review_site` and `edit_site_page`.
+    # `review_site` captures at 1280x800, because that is where a page is read. This one renders at
+    # phone width, because that is where most visitors arrive — and a hero that works at 1280 and
+    # stacks into a wall at 390 is the commonest way a sales page fails. WRITE_LOCAL: it keeps the
+    # picture in the company's documents.
     "produce_mockup": ToolSpec(
         "produce_mockup",
-        "Not built: reports a mockup that is not produced",
+        "Render the page as somebody on a phone sees it, and keep the picture",
+        risk=permissions.WRITE_LOCAL,
     ),
     # The other half of the site loop, and a **separate tool on a different role** rather than a second
     # model call inside the build. Two reasons, and neither is style. A tool effect reaches `company`,

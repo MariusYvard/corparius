@@ -168,3 +168,35 @@ def no_browser(monkeypatch):
     from corparius.providers import screenshot
 
     monkeypatch.setattr(screenshot, "available", lambda: False, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def no_hosted_repositories(monkeypatch):
+    """No test may create a repository on a real account.
+
+    **Written after one did.** A test set `CORP_REPO_PROVIDERS=github` to exercise the failure path,
+    expecting no token to be configured — and this machine has the `gh` CLI signed in, so
+    `GitHubProvider.available()` was true, the call succeeded, and a private repository called
+    `example` appeared on the owner's GitHub. The test asserted a 400 and got a 200, which is the
+    only reason anybody found out.
+
+    The same argument as `CORP_LLM_MOCK` being on by default here, and stronger: a model call spends
+    tokens, this creates something on an account that outlives the test run.
+
+    **It blocks the one verb that reaches out, and leaves the registry alone.** The first version cut
+    the table down to `local` and broke two tests that were right — one asserts the default order
+    puts `local` last, the other that an unconfigured GitLab is reported as *not configured* rather
+    than as unknown. Both are statements about the real table, and a fixture that quietly replaces it
+    makes them describe the fixture. `available()` stays honest for the same reason; `create` is the
+    only call that makes something on somebody's account, so `create` is what refuses.
+    """
+    from corparius.providers import companyrepo
+
+    def refuse(slug: str, description: str) -> str:
+        raise AssertionError(
+            "a test tried to create a hosted repository; patch in a double instead"
+        )
+
+    for name, provider in companyrepo.REGISTRY.items():
+        if name != "local":
+            monkeypatch.setattr(provider, "create", refuse, raising=False)

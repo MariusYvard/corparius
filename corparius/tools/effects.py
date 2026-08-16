@@ -850,6 +850,56 @@ def _owned_pages(slug: str) -> list:
     return pages[:SITE_REVIEW_PAGES]
 
 
+# A phone, in CSS pixels: the iPhone viewport every responsive framework is tuned against, and close
+# enough to an Android that a layout working at both is working. Not a device, a width — a page that
+# reads at 390 reads at 360 and at 430.
+PHONE = (390, 844)
+
+
+def _produce_mockup(ctx) -> ToolResult:
+    """Render the company's own page as somebody on a phone sees it, and keep the picture.
+
+    What this was: `return "Mockup produced: landing hero and one ad variant (mock)"`. No mockup, the
+    same sentence every time, on the role whose subject is what things look like.
+
+    What it is now is the view nothing else in the product produces. `review_site` captures at
+    1280x800 because that is where a page is *read*; most visitors arrive on a phone, and a hero that
+    works at 1280 and stacks into a wall at 390 is the commonest way a sales page fails. The picture
+    lands in the company's documents under a stable name, so it is one file an operator can open
+    rather than one per run — and `documents.save` strips its metadata on the way in, like every
+    other image.
+    """
+    from .. import documents
+    from ..providers import screenshot
+
+    slug = ctx.company.get("slug", "company")
+    pages = _owned_pages(slug)
+    page = str(pages[0]) if pages else ""
+    if not page:
+        generated = Path(paths.site_index(getattr(ctx, "data_path", "") or ".", slug))
+        page = str(generated) if generated.is_file() else ""
+    if not page:
+        return _fail("this company has no page yet, so there is nothing to render")
+    if not screenshot.available():
+        return _fail(
+            "no Chromium-family browser on this machine, so the phone view cannot be rendered"
+        )
+    into = paths.companies_dir() / (slug or "company") / ".shots"
+    # `capture_all`, for one page, because it is the one that **serves** the folder. A site links its
+    # stylesheet absolutely and `file://` resolves a leading slash to the root of the disk: the first
+    # version of this used `capture` directly and produced a picture of the real site with every rule
+    # of its CSS missing — which is precisely the confidently wrong input this whole feature exists
+    # to avoid handing a design agent.
+    made = screenshot.capture_all([page], into, limit=1, width=PHONE[0], height=PHONE[1])
+    if not made:
+        return _fail(f"the page did not render at {PHONE[0]}x{PHONE[1]}")
+    saved, replaced = documents.save(slug, "vue-mobile.png", Path(made[0]).read_bytes())
+    return _ok(
+        f"{Path(page).name} rendered at {PHONE[0]}x{PHONE[1]} and kept as {saved.name}"
+        + (" (replacing the last one)" if replaced else "")
+    )
+
+
 def _broken_app(slug: str):
     """The company's program most in need of attention, or None.
 
@@ -2871,9 +2921,9 @@ BEHAVIOUR: dict[str, Behaviour] = {
         prompt=lambda c: f"Describe a visual direction for {_name(c)} in one sentence.",
         effect=lambda c, d: _ok(_keep(c, "Design brief", d, f"Design brief drafted: {d[:120]}")),
     ),
-    "produce_mockup": Behaviour(
-        effect=lambda c, d: _ok("Mockup produced: landing hero and one ad variant (mock)"),
-    ),
+    # Was: a fixed sentence, on the role whose subject is what things look like. It renders the page
+    # at phone width now — the view nothing else produces, and where most visitors arrive.
+    "produce_mockup": Behaviour(effect=lambda c, d: _produce_mockup(c)),
     "build_sales_site": Behaviour(
         prompt=_build_site_prompt,
         effect=lambda c, d: _ok(_build_site(c, d)),

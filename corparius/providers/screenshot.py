@@ -262,11 +262,19 @@ def _served(root: Path):
         server.server_close()
 
 
-def capture_all(pages: list[str], into: Path | str, limit: int = 4) -> list[str]:
+def capture_all(
+    pages: list[str],
+    into: Path | str,
+    limit: int = 4,
+    width: int = WIDTH,
+    height: int = HEIGHT,
+) -> list[str]:
     """Render several pages of one site, returning the captures that worked.
 
     Served rather than opened, from the folder the pages share, so each renders with its stylesheet,
-    its fonts and its images exactly as a visitor gets them.
+    its fonts and its images exactly as a visitor gets them. **Every caller that wants a picture of a
+    company's site goes through here for that reason**, including the ones rendering a single page:
+    `capture` takes a URL or a file and opening a file is what loses the stylesheet.
 
     Bounded, and the bound is stated rather than silent: a site with forty pages would otherwise
     spend forty seconds and hand a model forty images to pay for. Four is the first screen of the
@@ -294,7 +302,9 @@ def capture_all(pages: list[str], into: Path | str, limit: int = 4) -> list[str]
             except ValueError:
                 log.info("screenshot: %s is outside %s, not captured", page.name, root)
                 continue
-            shot = capture(f"{base}/{where}", into / (page.stem + ".png"))
+            shot = capture(
+                f"{base}/{where}", into / (page.stem + ".png"), width=width, height=height
+            )
             if shot["ok"]:
                 made.append(shot["path"])
             else:

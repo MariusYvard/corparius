@@ -394,3 +394,74 @@ def test_a_render_that_produces_nothing_is_not_an_empty_picture(monkeypatch, tmp
     )
 
     assert ex._pictures_for(TOOLS["review_site"], ROSTER[AgentRole.DESIGN], ctx) == []
+
+
+# --- the phone view, which is a tool of its own -------------------------------------
+
+
+def test_the_mockup_tool_keeps_a_real_picture_of_the_page(monkeypatch, tmp_path):
+    """`produce_mockup` used to return "Mockup produced: landing hero and one ad variant (mock)" and
+    write nothing, on the role whose whole subject is what things look like.
+
+    The picture it takes is the one nothing else in the product produces: `review_site` renders at
+    1280x800 because that is where a page is read, and most visitors arrive on a phone. It lands in
+    the company's documents under a **stable** name, so an operator opens one file rather than
+    finding one per run — asserted here by rendering twice and counting.
+    """
+    import types
+
+    from corparius.tools.registry import TOOLS
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    monkeypatch.setenv("CORP_DATA_PATH", str(tmp_path / "data"))
+    cfg.invalidate()
+    own = tmp_path / "companies" / "t" / "site"
+    own.mkdir(parents=True)
+    (own / "index.html").write_text(PAGE, encoding="utf-8")
+
+    seen: dict = {}
+
+    def fake_capture_all(pages, into, **kw):
+        seen.update(kw)
+        shot = pathlib.Path(into) / "phone.png"
+        shot.parent.mkdir(parents=True, exist_ok=True)
+        shot.write_bytes(_one_pixel_png())
+        return [str(shot)]
+
+    monkeypatch.setattr(screenshot, "available", lambda: True)
+    monkeypatch.setattr(screenshot, "capture_all", fake_capture_all)
+    ctx = types.SimpleNamespace(company={"slug": "t"}, store=None, data_path=str(tmp_path / "data"))
+
+    first = TOOLS["produce_mockup"].run(ctx)
+    assert first.ok, first.output
+    # A phone, not a desktop. The size is the entire reason this tool is separate from `review_site`.
+    assert (seen["width"], seen["height"]) == (390, 844)
+
+    from corparius import documents
+
+    kept = sorted(p.name for p in pathlib.Path(documents.folder("t")).glob("*.png"))
+    assert kept == ["vue-mobile.png"], kept
+
+    TOOLS["produce_mockup"].run(ctx)
+    again = sorted(p.name for p in pathlib.Path(documents.folder("t")).glob("*.png"))
+    assert again == kept, f"a second run left a second file behind: {again}"
+
+
+def test_the_mockup_says_so_rather_than_inventing_one(monkeypatch, tmp_path):
+    """No browser is the normal case on a bare Linux server, and the tool it replaced answered
+    "Mockup produced" there too. A refusal naming the reason is what lets an operator install one."""
+    import types
+
+    from corparius.tools.registry import TOOLS
+
+    monkeypatch.setenv("CORP_HOME", str(tmp_path))
+    cfg.invalidate()
+    own = tmp_path / "companies" / "t" / "site"
+    own.mkdir(parents=True)
+    (own / "index.html").write_text(PAGE, encoding="utf-8")
+    monkeypatch.setattr(screenshot, "available", lambda: False)
+
+    done = TOOLS["produce_mockup"].run(
+        types.SimpleNamespace(company={"slug": "t"}, store=None, data_path=str(tmp_path))
+    )
+    assert not done.ok and "browser" in done.output

@@ -177,3 +177,87 @@ def test_settling_it_also_closes_the_notice_that_asked(server, monkeypatch):
     )
     assert status == 200
     assert store.list_inbox("example", "pending") == [], "the notice outlived the problem"
+
+
+# --- versioning a company, from the console ----------------------------------------
+
+
+def test_a_company_starts_unversioned_and_says_so(server):
+    """The read the button decides on. Three facts, all local: is there a repository, is there a
+    remote, and is there anything configured that could make one."""
+    status, body = _call(server, "GET", "/api/v1/repo?company=example")
+    assert status == 200
+    assert body["versioned"] is False and body["remote"] == ""
+    assert isinstance(body["providers"], list)
+
+
+def test_the_console_can_version_a_company(server, tmp_path, monkeypatch):
+    """**The gap a test named rather than a person noticed.** `publish_production_code` ended its
+    refusal with "`corparius repo` sets one up", which `tests/test_inbox_remedy.py` caught: a product
+    that sends somebody who chose a console to a terminal has handed its own work back.
+
+    The service had existed since companies could be versioned at all — create the local repository,
+    find the first configured provider, make a **private** remote, push. Only the route was missing.
+    The local provider is used here because it is the one that always works with nothing external,
+    which is also why it is last in the real order.
+    """
+    from corparius.config import cfg
+    from corparius.providers import companyrepo
+
+    if not companyrepo.git_available():
+        pytest.skip("git is not on PATH")
+
+    monkeypatch.setenv("CORP_REPO_PROVIDERS", "local")
+    monkeypatch.setenv("CORP_REPO_LOCAL_DIR", str(tmp_path / "remotes"))
+    cfg.invalidate()
+
+    status, body = _call(server, "POST", "/api/v1/repo", {"company": "example"})
+    assert status == 200, body
+    assert body["ok"] is True and body["versioned"] is True
+    assert body["remote"], "versioned with no remote is half the job"
+
+    again = _call(server, "GET", "/api/v1/repo?company=example")[1]
+    assert again["versioned"] is True and again["remote"] == body["remote"]
+
+
+def test_a_failure_to_version_says_what_was_tried(server, monkeypatch):
+    """ "Nothing is configured" and "the host refused" are different problems with different fixes,
+    and one sentence covering both would send an operator to the wrong place.
+
+    **Against a double, and that is not fastidiousness.** The first version of this set
+    `CORP_REPO_PROVIDERS=github` expecting no token to be configured — and this machine has the `gh`
+    CLI signed in, so the provider was available, the call went through, and a private repository
+    appeared on a real GitHub account. The assertion caught it only because it expected a 400 and
+    got a 200. `conftest` now holds the whole suite to the local provider; this test brings its own
+    refusing one.
+    """
+    from corparius.config import cfg
+    from corparius.providers import companyrepo
+
+    class _Refuses(companyrepo.RepoProvider):
+        name = "grumpy"
+
+        def available(self) -> bool:
+            return True
+
+        def create(self, slug: str, description: str) -> str:
+            raise RuntimeError("the host said no")
+
+    monkeypatch.setitem(companyrepo.REGISTRY, "grumpy", _Refuses())
+    monkeypatch.setenv("CORP_REPO_PROVIDERS", "grumpy")
+    cfg.invalidate()
+
+    status, body = _call(server, "POST", "/api/v1/repo", {"company": "example"})
+    assert status == 400
+    assert body["ok"] is False
+    assert "the host said no" in body["error"], body["error"]
+
+
+def test_the_button_is_in_the_console():
+    """The other half. A route with no control is the shape this project keeps finding: the six
+    inbox remedies had labels in two languages and no button for months."""
+    import pathlib
+
+    overview = pathlib.Path("web/src/Overview.svelte").read_text(encoding="utf-8")
+    assert "/api/v1/repo" in overview
+    assert "live.repoMake" in overview

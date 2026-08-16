@@ -66,18 +66,24 @@ def listening(port: int, timeout: float = 0.4) -> bool:
         return False
 
 
-def wait_until_up(port: int, seconds: int = START_GRACE_S) -> bool:
-    """Poll loopback until the port answers or the grace runs out.
+def wait_until_up(port: int, seconds: int = START_GRACE_S, alive=None) -> bool:
+    """Poll loopback until the port answers, the process dies, or the grace runs out.
 
     Named in `tests/test_layers.py` beside the other `time.sleep` owners, for the reason that list
     gives: this is a module waiting for its own outside world. A program whose port is not open has
     not started, and reporting success because the process object exists would hand a caller an
     address that refuses connections.
+
+    `alive` is what stops it waiting on a corpse. A program with a syntax error is gone in a tenth of
+    a second and the twenty that follow tell nobody anything — one final look after it dies, because
+    a program can bind and exit and the answer is still yes.
     """
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         if listening(port):
             return True
+        if alive is not None and not alive():
+            return listening(port)
         time.sleep(0.3)
     return False
 
@@ -142,17 +148,26 @@ def start(key: str, cmd: list[str], *, cwd: str, log_file: str, port: int, env: 
         return {"ok": False, "running": False, "error": str(exc)}
     _running[key] = started
     _started_at[key] = time.monotonic()
-    if not wait_until_up(port):
-        # The last of what it said is the useful half: a traceback on line 3 is what an operator can
-        # act on, where "it did not start" is not.
+    if not wait_until_up(port, alive=started.alive):
+        # **Three facts, because two of them were missing when this failed on a machine nobody here
+        # could reach.** Every macOS job in CI reported "nothing answered within 20s" and an empty
+        # log, which says only that the picture is missing — not whether the program crashed, exited
+        # cleanly, or is still starting. The exit code separates those, and waiting the full grace on
+        # a process that died in the first half second was the other half of the waste.
         said = tail(log_file)
+        code = started.returncode()
         started.stop()
         _running.pop(key, None)
         _started_at.pop(key, None)
+        gone = (
+            f"it exited with {code}"
+            if code is not None
+            else f"it was still running after {START_GRACE_S}s"
+        )
         return {
             "ok": False,
             "running": False,
-            "error": f"nothing answered on {port} within {START_GRACE_S}s. {said}",
+            "error": f"nothing answered on {port}: {gone}. {said or 'it wrote nothing at all'}",
         }
     log.info("%s is answering on 127.0.0.1:%d (pid %d)", key, port, started.pid)
     return {"ok": True, "running": True, "pid": started.pid, "started": True}

@@ -616,6 +616,60 @@ def deploy(ui: UiState, slug: str) -> tuple[int, dict]:
     return 200, {"ok": True, **{k: v for k, v in out.items() if k != "folder"}}
 
 
+def repo_status(slug: str) -> dict:
+    """Whether this company is versioned, where, and which providers could host it.
+
+    Read-only and cheap enough for the console to poll: four local git questions and a look at which
+    credentials are set. It answers the two things a button needs to decide what to say — is there a
+    repository, and is there anything that could make one.
+    """
+    from ..providers import companyrepo
+
+    ready = [name for name, provider in companyrepo.REGISTRY.items() if provider.available()]
+    return {
+        "ok": True,
+        "git": companyrepo.git_available(),
+        "versioned": companyrepo.is_repo(slug),
+        "remote": companyrepo.remote_url(slug),
+        "dirty": companyrepo.dirty(slug),
+        "autocommit": companyrepo.autocommit_enabled(),
+        "providers": ready,
+    }
+
+
+def create_repo(ui: UiState, slug: str) -> tuple[int, dict]:
+    """Version this company and push it, from the console.
+
+    **The gap this closes was named by a test rather than noticed.** `publish_production_code` used
+    to end its refusal with "`corparius repo` sets one up", and `tests/test_inbox_remedy.py` caught
+    it — a product that tells somebody who chose a console to open a terminal has handed its own work
+    back. The service has existed all along: `provision_result` creates the local repository, finds
+    the first configured provider, creates a **private** remote and pushes. Only the route was
+    missing.
+
+    Every failure is reported with what was tried. "No provider is configured" and "GitHub refused
+    the token" are different problems with different fixes, and one sentence covering both would send
+    an operator to the wrong place.
+    """
+    from ..providers import companyrepo
+
+    company = state.load_company(slug) or {}
+    out = companyrepo.provision_result(slug, str(company.get("one_liner") or ""))
+    # **`ok` last, after every spread.** `repo_status` carries its own `ok: True` — it is a payload
+    # in the envelope convention — and spreading it after `"ok": False` overwrote the failure with a
+    # success. A 400 whose body says `ok: true` is the worst of both: a client reading the status
+    # sees a refusal and one reading the body sees a repository that was made. Caught by a test that
+    # asserted both.
+    if out.get("ok"):
+        return 200, {**out, **repo_status(slug), "ok": True}
+    reasons = list(out.get("errors") or []) + list(out.get("skipped") or [])
+    return 400, {
+        **repo_status(slug),
+        "ok": False,
+        "error": "; ".join(reasons) or "no repository provider is configured",
+    }
+
+
 def resolve_repo(ui: UiState, slug: str, keep: str) -> tuple[int, dict]:
     """`companyrepo.resolve`, plus clearing the notice that asked the question.
 

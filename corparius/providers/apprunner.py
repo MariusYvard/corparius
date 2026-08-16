@@ -167,7 +167,10 @@ def start(key: str, cmd: list[str], *, cwd: str, log_file: str, port: int, env: 
         return {
             "ok": False,
             "running": False,
-            "error": f"nothing answered on {port}: {gone}. {said or 'it wrote nothing at all'}",
+            "error": (
+                f"nothing answered on {port}: {gone}. {said or 'it wrote nothing at all'} "
+                f"(ran {' '.join(cmd)} in {cwd})"
+            ),
         }
     log.info("%s is answering on 127.0.0.1:%d (pid %d)", key, port, started.pid)
     return {"ok": True, "running": True, "pid": started.pid, "started": True}

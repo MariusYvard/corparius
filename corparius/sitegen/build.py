@@ -19,12 +19,12 @@ from .copy import clean_headline, opening, strings
 from .head import head_tags
 from .palette import DEFAULT_ACCENT, signature
 from .sections import (
-    apps_html,
     extra_pages,
     faq_html_from,
     faq_pairs,
     legal_html,
     privacy_html,
+    programs_html,
     proof_html,
     steps_html,
     voices_html,
@@ -201,7 +201,7 @@ def build_site(company: dict, out_dir: str, headline: str | None = None, store=N
     parts.append(voices_html(company, txt))
     # Before privacy: a visitor who just used the thing is the one who then asks what
     # happens to what they typed.
-    parts.append(apps_html(company, txt))
+    parts.append(programs_html(company, txt))
     parts.append(privacy_html(company, txt))
     # Last before the footer, which is where a reader looks for it and where every site that
     # carries one puts it.

@@ -114,6 +114,24 @@ Un modèle injoignable omet la section et construit la page quand même : ne pas
 
 Voir [`docs/apps.md`](apps.md) pour écrire l'app, et pour l'autre mode : le même fichier servi à la requête.
 
+## Les programmes de l'entreprise sur sa propre page
+
+Une **app** et un **programme** sont deux choses, et le mot « app » ne désigne que la première : une app est un fichier YAML sous `companies/<slug>/apps/`, un prompt qui passe par le routeur. Un programme est du code que l'agent codeur a écrit, sous `companies/<slug>/code/<nom>/`, dans le langage qu'il a choisi, et qui tourne sur un port de la machine.
+
+```yaml
+site:
+  programs:
+    - listener          # un dossier de companies/<slug>/code/
+```
+
+**C'est la seule section qui met du JavaScript sur une page générée, et elle est facultative pour cette raison.** Tout le reste du générateur défend la même propriété : un fichier statique, rien à joindre, rien à laisser allumé. Une entreprise qui liste un programme ici en a décidé autrement pour son propre site, à propos d'un programme qu'elle a écrit et qui tourne sur sa machine.
+
+L'adresse est en boucle locale, donc la démonstration marche pour l'exploitant et pour personne d'autre. Un visiteur sur internet lit la phrase de repli plutôt qu'un indicateur qui tourne sans fin : un formulaire qui échoue en silence est pire qu'une phrase qui dit qu'il faut que le programme tourne.
+
+Un nom qui ne correspond à aucun programme est écarté avec un avertissement, jamais rendu. Un formulaire qui pointe vers un programme absent échoue au moment où un visiteur s'en sert, pas au moment où la page est construite.
+
+Six programmes au plus par entreprise, six heures de durée de vie chacun, journaux tronqués à 512 Ko. Un programme ne voit ni les réglages `CORP_*` ni rien qui ressemble à un secret ; il reçoit son port dans `PORT` et lit le reste de l'environnement de la machine.
+
 ## Déploiement
 
 La génération produit le fichier. La mise en ligne (Netlify, un compartiment S3, un hébergeur statique) est l'étape suivante et reste sous validation humaine, comme toute action de publication.

@@ -189,6 +189,33 @@ section h2{{font-size:var(--f2);margin:0 0 clamp(26px,3.5vw,40px);max-width:22ch
 .faq summary:focus-visible{{outline:2px solid var(--accent);outline-offset:4px}}
 .faq p{{color:var(--muted);margin-top:14px}}
 
+/* The company's own programs. The only interactive part of a page that is
+   otherwise a static file, so it is the one place a visitor types — and it
+   shipped with no rules at all, which means a browser's default input and
+   button under a section whose every neighbour is designed. Flat is how a
+   generated page reads as unfinished. */
+.programs{{display:grid;gap:22px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}}
+.program{{padding:24px;border:1px solid var(--line);border-radius:10px;
+  display:grid;gap:14px;align-content:start}}
+.program h3{{font-family:var(--display);font-size:var(--f1);margin:0;
+  line-height:1.2}}
+.program p{{margin:0;color:var(--muted);font-size:.95rem;line-height:1.45}}
+.program form{{display:flex;gap:10px;flex-wrap:wrap}}
+.program input{{flex:1 1 12ch;min-width:0;padding:12px 14px;font:inherit;
+  font-size:.95rem;color:var(--fg);background:transparent;
+  border:1px solid var(--line);border-radius:8px}}
+.program input:focus-visible{{outline:2px solid var(--accent);outline-offset:2px}}
+.program button{{padding:12px 20px;font:inherit;font-size:.95rem;font-weight:600;
+  cursor:pointer;color:var(--on-accent);background:var(--accent);border:0;
+  border-radius:8px}}
+.program button:hover{{filter:brightness(1.07)}}
+/* `white-space:pre-wrap` because a program's answer is text it formatted, and
+   a long line must wrap rather than widen the card past its column. */
+.program-out{{margin:0;padding:16px;white-space:pre-wrap;overflow-wrap:anywhere;
+  font:inherit;font-size:.92rem;line-height:1.45;color:var(--fg);
+  background:var(--tint);border-radius:8px}}
+.program-off{{margin:0;color:var(--muted);font-size:.85rem}}
+
 .close{{padding:var(--gap) 0 calc(var(--gap) * .7)}}
 .close h2{{font-size:clamp(2rem,5vw,3.2rem);margin-bottom:34px;max-width:18ch;
   border:0;padding-top:0}}

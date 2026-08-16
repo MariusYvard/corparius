@@ -177,8 +177,8 @@ LEGAL_FIELDS = (
 )
 
 
-def apps_html(company: dict, txt: dict) -> str:
-    """`site.apps`: the company's own programs, on its own page.
+def programs_html(company: dict, txt: dict) -> str:
+    """`site.programs`: the company's own programs, on its own page.
 
     **This is the one section that puts JavaScript on a generated page, and it is opt-in for that
     reason.** The generator's defended property is that the page is a single static file with nothing
@@ -194,7 +194,9 @@ def apps_html(company: dict, txt: dict) -> str:
     from .. import codeapps
 
     wanted = [
-        str(n).strip() for n in ((company.get("site") or {}).get("apps") or []) if str(n).strip()
+        str(n).strip()
+        for n in ((company.get("site") or {}).get("programs") or [])
+        if str(n).strip()
     ]
     if not wanted:
         return ""
@@ -204,22 +206,24 @@ def apps_html(company: dict, txt: dict) -> str:
     for name in wanted:
         app = have.get(text.slugify(name))
         if app is None:
-            log.warning("site: %r is listed under site.apps and this company has no such app", name)
+            log.warning(
+                "site: %r is listed under site.programs and this company has no such program", name
+            )
             continue
         cards.append(
-            f'<article class="app" data-app="{esc(app.name)}" data-url="{esc(app.url)}">'
+            f'<article class="program" data-program="{esc(app.name)}" data-url="{esc(app.url)}">'
             f"<h3>{esc(app.name)}</h3>"
             + (f"<p>{esc(app.description)}</p>" if app.description else "")
-            + f'<form><input name="q" placeholder="{esc(txt["appAsk"])}" autocomplete="off">'
-            f'<button type="submit">{esc(txt["appSend"])}</button></form>'
-            f'<pre class="app-out" hidden></pre>'
-            f'<p class="app-off">{esc(txt["appOff"])}</p></article>'
+            + f'<form><input name="q" placeholder="{esc(txt["progAsk"])}" autocomplete="off">'
+            f'<button type="submit">{esc(txt["progSend"])}</button></form>'
+            f'<pre class="program-out" hidden></pre>'
+            f'<p class="program-off">{esc(txt["progOff"])}</p></article>'
         )
     if not cards:
         return ""
     return (
-        f'<section id="apps"><h2>{esc(txt["apps"])}</h2>'
-        f'<div class="apps">{"".join(cards)}</div>{APPS_SCRIPT}</section>'
+        f'<section id="programs"><h2>{esc(txt["programs"])}</h2>'
+        f'<div class="programs">{"".join(cards)}</div>{PROGRAMS_SCRIPT}</section>'
     )
 
 
@@ -227,9 +231,9 @@ def apps_html(company: dict, txt: dict) -> str:
 # pulled a framework to send one request would be a page whose behaviour lives on somebody else's
 # CDN. It hides the "not running" line only once an answer arrives, so the page is honest before
 # JavaScript has run at all and honest again if the app is not there.
-APPS_SCRIPT = """<script>
-for (const card of document.querySelectorAll('.app')) {
-  const out = card.querySelector('.app-out'), off = card.querySelector('.app-off');
+PROGRAMS_SCRIPT = """<script>
+for (const card of document.querySelectorAll('.program')) {
+  const out = card.querySelector('.program-out'), off = card.querySelector('.program-off');
   card.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const q = new FormData(e.target).get('q') || '';

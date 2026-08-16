@@ -589,6 +589,25 @@ def validate(raw: dict) -> tuple[dict, list[str], list[str]]:
             site["faq_app"] = faq_app
         if faq:
             site["faq"] = faq
+
+        # **`programs`, not `apps`, and the rename is the whole point of normalising it here.**
+        # This company has two kinds of thing and both were called an app: a YAML prompt under
+        # `apps/` that `faq_app` runs at build time, and a program the coder wrote under `code/`
+        # that runs on a port. An operator who wrote `site.apps: [faq]` meaning the first got
+        # "this company has no such app" while `apps/faq.yaml` sat right there.
+        #
+        # And it was read raw in `sitegen` until now, which this function's own comment forty
+        # lines up calls out: a key that survives `load` only by accident is a key that disappears
+        # the next time this dict is rebuilt. A name here that matches no program is a warning
+        # rather than a silent drop, because the failure is a typo and the fix is the spelling.
+        programs = [str(n).strip() for n in (site_in.get("programs") or []) if str(n).strip()]
+        if site_in.get("apps"):
+            warnings.append(
+                "site.apps is now site.programs, for the company's own programs under code/; "
+                "apps/ holds the YAML ones that site.faq_app runs"
+            )
+        if programs:
+            site["programs"] = programs
     elif site_in:
         errors.append("site: expected a mapping")
 

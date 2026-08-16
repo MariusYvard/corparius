@@ -6,6 +6,118 @@ there had never been a release to mark them against, and marking them after
 the fact is more honest than leaving a released changelog claiming nothing
 was released.
 
+## 0.5.0 — l'agent codeur a des mains, l'agent design a des yeux, et le paquet arrive enfin sur PyPI
+
+Une version mineure et pas un correctif, parce que trois modules et cinq outils
+sont neufs. Le fil est le même partout : **des rôles qui décrivaient un travail
+sans le faire.**
+
+- **Fixed : la 0.4.0 n'est jamais arrivée sur PyPI, et le wheel n'était pas en
+  cause.** Docker, les trois binaires natifs et la publication GitHub étaient
+  passés ; seul PyPI a refusé. La raison est que `hatchling` construit le wheel
+  *depuis la sdist*, et la sdist ne déclarait ni `corparius/webui.html` ni
+  `corparius/api/static/` — des fichiers qui ne sont pas suivis par git parce
+  qu'ils sont construits en CI. Reproduit localement avant d'être corrigé :
+  `python -m build --wheel` emportait les cinq fichiers, `python -m build`
+  complet en emportait zéro. Une ligne `artifacts` dans `pyproject.toml`, et la
+  console voyage à nouveau. Vérifié dans un venv neuf : la page se résout depuis
+  le paquet installé, sans Node.
+
+- **Added : l'agent codeur peut écrire un programme, et corparius le lance.**
+  `generate_code` demandait à un modèle de « décrire une petite fonctionnalité
+  en une phrase » et renvoyait la phrase. Le rôle codeur existait, avait un
+  playbook, tournait à chaque cycle, et n'avait aucune main. `write_app_code`
+  écrit un vrai fichier source dans `companies/<slug>/code/<app>/`, dans le
+  langage que le modèle choisit, et **le démarre** ; `generate_code` lit la
+  queue du journal d'un programme cassé et réécrit le fichier ; `fix_app` fait
+  la même chose sur demande. Le programme apparaît ensuite sur le site de
+  l'entreprise avec son adresse, ce qui est la seule chose qui distingue un
+  programme d'un fichier.
+
+- **Added : rien de ce qui démarre ne survit à la console.** Un superviseur qui
+  ne sait rien des entreprises : une clé, une commande, un dossier, un port.
+  Six programmes au plus, journaux tronqués à 512 Ko, six heures de durée de
+  vie maximale, et un `atexit` qui coupe tout. Mesuré en construisant la
+  fonctionnalité : douze consoles oubliées de sessions précédentes tenaient
+  huit ports sur cette machine, aucune n'étant passée par un arrêt propre. Un
+  enfant qui tient un port est pire qu'un fichier périmé, parce que le
+  lancement suivant échoue et qu'il faut aller le chercher dans un gestionnaire
+  de tâches pour savoir pourquoi.
+
+  L'environnement passé à un programme est une **liste de refus** et non une
+  liste d'autorisations : tout `CORP_*` tombe, et tout ce qui ressemble à un
+  secret (`_KEY`, `_TOKEN`, `_SECRET`, `_PASSWORD`, `_PASS`, `_CREDENTIAL`)
+  aussi. La liste d'autorisations que j'avais écrite d'abord marchait sur
+  Windows et cassait les trois runners macOS, parce qu'un environnement minimal
+  n'est pas la même chose sur trois systèmes.
+
+- **Added : l'agent design voit la page qu'il relit.** Il ne l'avait jamais vue.
+  `review_site` retirait les balises et envoyait le texte, ce qui est la bonne
+  entrée pour une question de formulation et ne dit rien du contraste, de la
+  hiérarchie, ni de savoir si le premier écran nomme ce qui est vendu. **Pas
+  Playwright** : un navigateur de la famille Chromium déjà installé fait le même
+  travail, en deux secondes, sans dépendance ni téléchargement de 150 Mo sur un
+  produit qui s'ouvre en double-cliquant un fichier. Windows a toujours Edge ;
+  ailleurs, cinq navigateurs sont cherchés, et là où il n'y en a aucun la revue
+  continue avec le texte qu'elle avait.
+
+  Ce qu'il a fallu mesurer : le lanceur rend la main en 0,1 à 0,3 s et l'image
+  arrive environ 3 s plus tard, écrite par l'instance déjà en cours. La première
+  version regardait au retour du processus et annonçait « le navigateur n'a
+  écrit aucune image » à propos d'une page rendue parfaitement.
+
+- **Fixed : `produce_mockup` renvoyait « Mockup produced: landing hero and one ad
+  variant (mock) » et n'écrivait rien**, sur le rôle dont le sujet entier est
+  l'apparence des choses. Il rend maintenant la page de l'entreprise en 390x844,
+  la vue que rien d'autre ne produit : `review_site` capture en 1280x800 parce
+  que c'est là qu'une page se *lit*, et la plupart des visiteurs arrivent sur un
+  téléphone. Un nom de fichier stable, donc un fichier à ouvrir et non un par
+  cycle.
+
+- **Fixed : `publish_production_code` disait « Production code published » sans
+  rien publier.** Il commite et pousse le code de l'entreprise. Et il a fallu
+  corriger la question sous-jacente : « en retard sur le distant » répondait non
+  pour du code jamais poussé, parce que l'état inconnu était lu du côté
+  optimiste. Un état inconnu se lit maintenant comme *tout est non poussé*.
+
+- **Added : la console crée une entreprise, et un dépôt.** L'en-tête affichait
+  un `<select>` des entreprises existantes et rien à côté : **il n'y avait aucun
+  moyen d'en créer une depuis la console**, la réponse était le terminal. Toutes
+  les couches sous la route existaient depuis longtemps ; il manquait une ligne
+  de table de routes et un bouton. Même forme pour le dépôt : le service savait
+  créer le dépôt local, trouver le premier fournisseur configuré, créer un
+  distant **privé** et pousser, et le refus de `publish_production_code` se
+  terminait par « `corparius repo` en met un en place » — un produit qui renvoie
+  au terminal quelqu'un qui a choisi une console s'est rendu son propre travail.
+
+- **Fixed : un dépôt divergent se règle depuis la console.** Après un cycle de
+  six heures, l'exploitant lisait « le dépôt de l'entreprise est en retard » sans
+  aucun bouton. Le conflit était corparius contre lui-même, sur un document qu'il
+  génère. Deux boutons, parce qu'une divergence est un choix et non une action,
+  et une phrase qui dit que le côté non gardé reste dans l'historique.
+
+- **Fixed : le CEO répondait « not found » à chaque message.** Un `POST` veut
+  `company` dans le **corps** et la console l'envoyait dans l'URL ; derrière ce
+  404 se cachait un 500, l'étape locale du routeur laissant remonter ses
+  exceptions. Les deux corrigés, et tous les `POST` du front revus.
+
+- **Fixed : deux badges se superposaient dans l'aperçu.** Deux éléments dans la
+  même zone de grille. Un `z-index: 1` avait déjà servi à le masquer une fois.
+
+- **Fixed : le programme mort faisait attendre vingt secondes.** « rien n'a
+  répondu en 20 s » avec un journal vide est la seule phrase sur laquelle on ne
+  peut pas agir. Le code de sortie est rapporté, et l'attente s'arrête quand le
+  processus meurt : un programme avec une erreur de syntaxe est parti en un
+  dixième de seconde.
+
+- **Fixed : un test a créé un vrai dépôt privé sur le compte GitHub de
+  l'exploitant.** Il posait `CORP_REPO_PROVIDERS=github` pour exercer le chemin
+  d'échec, en supposant qu'aucun jeton n'était configuré — mais le CLI `gh` est
+  authentifié sur cette machine, donc le fournisseur était disponible et l'appel
+  a réussi. Seule l'assertion, qui attendait un 400, a permis de s'en rendre
+  compte. La suite entière bloque maintenant `create` sur tout fournisseur
+  hébergé.
+
 ## 0.4.0 — sept dossiers, sept rangs, et une console qui n'est plus un fichier
 
 - **Added : la phrase secrète de chiffrement se tape deux fois.**

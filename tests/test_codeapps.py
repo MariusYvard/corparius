@@ -26,7 +26,9 @@ console exits.
 
 import json
 import os
+import sys
 import textwrap
+import time
 import types
 import urllib.error
 import urllib.request
@@ -84,6 +86,69 @@ def _write(source=SERVER, **over):
         structured=types.SimpleNamespace(data=data),
     )
     return TOOLS["write_app_code"].run(ctx)
+
+
+# --- three questions, asked one at a time -------------------------------------------
+#
+# **These exist because a machine nobody here can reach kept saying no.** Every macOS job in CI
+# failed on the tests below with "nothing answered on 8771: it was still running after 20s, it wrote
+# nothing at all", which is three different faults wearing one sentence: the child never really
+# started, or it started and its output does not reach the log, or it started and bound and nothing
+# on this machine can connect to loopback. The whole-stack test cannot tell them apart, and neither
+# could I from here — so the stack is asked one question at a time, in order, and whichever of these
+# three fails names the layer.
+
+
+def test_a_child_started_this_way_writes_to_its_log(home):
+    """Question one: does `proc.start` produce a running program whose output lands in the file we
+    later read back? Everything else assumes it."""
+    from corparius.kernel import proc
+
+    folder = home / "probe"
+    folder.mkdir()
+    (folder / "say.py").write_text("print('hello from the child')\n", encoding="utf-8")
+    log = folder / "out.log"
+    started = proc.start(
+        [sys.executable, "say.py"], cwd=str(folder), log=str(log), env=dict(os.environ)
+    )
+    for _ in range(100):
+        if log.read_text(encoding="utf-8", errors="replace").strip():
+            break
+        time.sleep(0.1)
+    started.stop()
+    assert "hello from the child" in log.read_text(encoding="utf-8", errors="replace")
+
+
+def test_a_child_started_this_way_can_bind_a_port_and_be_reached(home):
+    """Question two: the socket, on its own. A program that prints "bound" and then holds the port,
+    so the log and `listening()` are two independent answers about the same process — and the pair is
+    what separates "it never bound" from "it bound and nothing here can connect"."""
+    from corparius.kernel import proc
+    from corparius.providers import apprunner
+
+    port = 8977
+    folder = home / "probe"
+    folder.mkdir()
+    (folder / "hold.py").write_text(
+        "import os, socket\n"
+        "s = socket.socket()\n"
+        "s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
+        "s.bind(('127.0.0.1', int(os.environ['PORT'])))\n"
+        "s.listen(5)\n"
+        "print('bound', flush=True)\n"
+        "s.accept()\n",
+        encoding="utf-8",
+    )
+    log = folder / "out.log"
+    env = {**os.environ, "PORT": str(port), "PYTHONUNBUFFERED": "1"}
+    started = proc.start([sys.executable, "hold.py"], cwd=str(folder), log=str(log), env=env)
+    reached = apprunner.wait_until_up(port, seconds=15, alive=started.alive)
+    said = log.read_text(encoding="utf-8", errors="replace")
+    code = started.returncode()
+    started.stop()
+
+    assert "bound" in said, f"the child never bound; it said {said!r} and exited with {code}"
+    assert reached, f"the child bound {port} and nothing on this machine could connect: {said!r}"
 
 
 # --- the whole point --------------------------------------------------------------
@@ -243,9 +308,14 @@ def test_everything_stops_when_the_console_does(home):
 # --- and onto the page --------------------------------------------------------------
 
 
-def test_an_app_the_company_lists_appears_on_its_page(home):
-    """`site.apps`, and the address is the app's own. A section that named the program without
-    saying where to reach it would be a heading over nothing."""
+def test_a_program_the_company_lists_appears_on_its_page(home):
+    """`site.programs`, and the address is the program's own. A section that named it without saying
+    where to reach it would be a heading over nothing.
+
+    **`programs` and not `apps`**, because this company already had a thing called an app: a YAML
+    prompt under `apps/` that `site.faq_app` runs at build time. An operator who wrote `site.apps`
+    meaning that one was told "this company has no such app" while the file sat right there.
+    """
     from corparius import codeapps
     from corparius.sitegen.build import build_site
 
@@ -255,13 +325,13 @@ def test_an_app_the_company_lists_appears_on_its_page(home):
         "slug": "acme",
         "name": "Acme",
         "offer": {"product": "A thing", "price_eur": 9},
-        "site": {"apps": ["listener"]},
+        "site": {"programs": ["listener"]},
     }
     page = home / "out" / "index.html"
     build_site(company, str(home / "out"))
     html = page.read_text(encoding="utf-8")
 
-    assert 'id="apps"' in html and "listener" in html
+    assert 'id="programs"' in html and "listener" in html
     assert app.url in html, "the page names the app and not where to reach it"
     assert "Repeats what it was asked." in html
 
@@ -276,10 +346,14 @@ def test_a_page_with_no_apps_listed_stays_a_static_file(home):
     build_site({"slug": "acme", "name": "Acme", "offer": {"product": "A thing"}}, str(home / "out"))
     html = (home / "out" / "index.html").read_text(encoding="utf-8")
 
-    assert 'id="apps"' not in html
+    assert 'id="programs"' not in html
     # The app widget's script, not any script: the page has always carried a JSON-LD block, which is
     # structured data rather than behaviour and reaches nothing.
-    assert "app-out" not in html, "a page nobody asked to be interactive grew a form"
+    # The *markup*, not the word. The stylesheet is one static blob carrying rules for every
+    # section a page might have — `.voices`, `.proof`, `.faq` and now `.program-out` — and the
+    # first version of this assertion looked for the bare class name, so it started failing the
+    # moment those cards got a design. What must be absent is the form, not its rules.
+    assert 'class="program-out"' not in html, "a page nobody asked to be interactive grew a form"
     assert "fetch(" not in html, "a page nobody asked to be interactive grew a request"
 
 
@@ -290,10 +364,15 @@ def test_an_app_that_is_listed_and_does_not_exist_is_left_out(home):
     from corparius.sitegen.build import build_site
 
     build_site(
-        {"slug": "acme", "name": "Acme", "offer": {"product": "x"}, "site": {"apps": ["ghost"]}},
+        {
+            "slug": "acme",
+            "name": "Acme",
+            "offer": {"product": "x"},
+            "site": {"programs": ["ghost"]},
+        },
         str(home / "out"),
     )
-    assert 'id="apps"' not in (home / "out" / "index.html").read_text(encoding="utf-8")
+    assert 'id="programs"' not in (home / "out" / "index.html").read_text(encoding="utf-8")
 
 
 # --- and the tools that still do nothing say so --------------------------------------

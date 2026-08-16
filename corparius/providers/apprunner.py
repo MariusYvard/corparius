@@ -28,9 +28,20 @@ from ..kernel import proc
 log = logging.getLogger("corparius.apprunner")
 
 # How long to wait for a program to open its port, and how long one may live. Six hours because a
-# company runs unattended for days and a program that leaks does it slowly; twenty seconds because a
-# server that has not bound by then has not started.
-START_GRACE_S = 20
+# company runs unattended for days and a program that leaks does it slowly.
+#
+# **Forty-five, and twenty was measured as wrong.** `http.server` is what a model reaches for when
+# asked for a small web program, and `HTTPServer.server_bind` calls `socket.getfqdn()` on the host
+# it just bound — a reverse DNS lookup, run *between* the bind and the listen. On a machine whose
+# resolver is slow to say "no" that lookup takes longer than the grace did, and the socket is bound
+# and not yet listening for the whole time: connections are refused, the program writes nothing, and
+# it is plainly alive. Which is precisely the sentence every macOS job in CI produced, for a program
+# that was correct and would have answered a few seconds later.
+#
+# The cost of the larger number is nothing in the good case, because the poll returns the instant
+# the port answers, and nothing in the crash case either, because `alive` stops the wait at the
+# death. It is only paid by a program that is alive and silent, which is the case that was wrong.
+START_GRACE_S = 45
 MAX_LIFETIME_S = 6 * 3600
 
 _running: dict[str, proc.Started] = {}
@@ -149,11 +160,15 @@ def start(key: str, cmd: list[str], *, cwd: str, log_file: str, port: int, env: 
     _running[key] = started
     _started_at[key] = time.monotonic()
     if not wait_until_up(port, alive=started.alive):
-        # **Three facts, because two of them were missing when this failed on a machine nobody here
-        # could reach.** Every macOS job in CI reported "nothing answered within 20s" and an empty
-        # log, which says only that the picture is missing — not whether the program crashed, exited
-        # cleanly, or is still starting. The exit code separates those, and waiting the full grace on
-        # a process that died in the first half second was the other half of the waste.
+        # **Four facts, because three of them were missing when this failed on a machine nobody here
+        # could reach.** Every macOS job in CI reported "nothing answered within 20s" and nothing
+        # else, which says only that the picture is missing — not whether the program crashed, exited
+        # cleanly, or is still starting, and not what was run. The exit code separates those, the
+        # command says what was launched, and waiting the full grace on a process that died in the
+        # first half second was the other half of the waste.
+        #
+        # It was worth every line: the answer turned out to be none of the guesses, and the message
+        # that named the interpreter and the folder is what let the last one be ruled out.
         said = tail(log_file)
         code = started.returncode()
         started.stop()

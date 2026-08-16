@@ -19,9 +19,9 @@ Three pieces, split by the layer test rather than by taste:
 
 The bound worth stating is the one that is missing. Memory and disk are not capped: `resource` does
 it on POSIX and Windows needs a Job Object, and a limit that exists on one platform is a limit an
-operator would believe on three. What there is instead: loopback only, an environment holding `PATH`
-and `PORT` and nothing else, a lifetime swept at the top of each run, and everything stopped when the
-console exits.
+operator would believe on three. What there is instead: loopback only, an environment with every
+credential removed, a lifetime swept at the top of each run, and everything stopped when the console
+exits.
 """
 
 import json
@@ -40,11 +40,28 @@ from corparius.providers import apprunner
 from corparius.tools.registry import TOOLS
 
 # A server small enough to read, and a real one: it binds the port it was given and answers JSON.
+#
+# **`server_bind` is overridden, and that line is the answer to a week of red macOS jobs.**
+# `HTTPServer.server_bind` calls `socket.getfqdn()` on the address it just bound — a reverse DNS
+# lookup — and it runs *between* the bind and the listen. Where the resolver is slow to answer, the
+# socket sits bound and not listening for the length of that lookup: every connection is refused,
+# the program writes nothing at all, and it is obviously still running. Which is word for word what
+# CI reported, about a program that was correct.
+#
+# The runner's grace went from 20s to 45s for the same reason, because a model asked for a small web
+# program reaches for `http.server` and will hit this. Here the lookup is skipped outright: this
+# fixture exists to prove that corparius starts a program and reaches it, and waiting on somebody's
+# DNS is not part of that claim.
 SERVER = textwrap.dedent(
     """
-    import json, os
+    import json, os, socketserver
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     from urllib.parse import urlparse, parse_qs
+
+    class Server(ThreadingHTTPServer):
+        def server_bind(self):
+            socketserver.TCPServer.server_bind(self)
+            self.server_name, self.server_port = self.server_address[0], self.server_address[1]
 
     class H(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -57,7 +74,7 @@ SERVER = textwrap.dedent(
         def log_message(self, *a):
             pass
 
-    ThreadingHTTPServer(("127.0.0.1", int(os.environ["PORT"])), H).serve_forever()
+    Server(("127.0.0.1", int(os.environ["PORT"])), H).serve_forever()
     """
 ).strip()
 
@@ -90,13 +107,17 @@ def _write(source=SERVER, **over):
 
 # --- three questions, asked one at a time -------------------------------------------
 #
-# **These exist because a machine nobody here can reach kept saying no.** Every macOS job in CI
-# failed on the tests below with "nothing answered on 8771: it was still running after 20s, it wrote
-# nothing at all", which is three different faults wearing one sentence: the child never really
-# started, or it started and its output does not reach the log, or it started and bound and nothing
-# on this machine can connect to loopback. The whole-stack test cannot tell them apart, and neither
-# could I from here — so the stack is asked one question at a time, in order, and whichever of these
-# three fails names the layer.
+# **These exist because a machine nobody here can reach kept saying no**, and they are kept because
+# they answered it. Every macOS job in CI failed on the tests below with "nothing answered on 8771:
+# it was still running after 20s, it wrote nothing at all", which is three different faults wearing
+# one sentence: the child never really started, or its output does not reach the log, or it bound
+# and nothing on that machine could connect. The whole-stack test cannot tell them apart and neither
+# could I from here, so the stack is asked one question at a time and whichever probe fails names
+# the layer.
+#
+# Both of them passed there, which is what made the diagnosis: starting, logging and loopback were
+# all fine, so the fault was in what the program itself does at startup — `HTTPServer.server_bind`
+# doing a reverse DNS lookup between the bind and the listen. See the `SERVER` comment above.
 
 
 def test_a_child_started_this_way_writes_to_its_log(home):
